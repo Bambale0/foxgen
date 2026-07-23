@@ -39,7 +39,35 @@ async def test_service_submits_exact_seedance_provider_model() -> None:
 
 
 @pytest.mark.asyncio
-async def test_service_submits_exact_seedream_provider_model() -> None:
+async def test_service_submits_exact_seedance_mini_provider_model() -> None:
+    client = FakeTaskClient()
+    service = KieModelService(client)
+
+    await service.submit(
+        model_slug="seedance-2-mini",
+        input_data={"prompt": "A short social video"},
+    )
+
+    assert client.calls[0][0] == "bytedance/seedance-2-mini"
+
+
+@pytest.mark.asyncio
+async def test_service_submits_exact_seedream_45_provider_model() -> None:
+    client = FakeTaskClient()
+    service = KieModelService(client)
+
+    await service.submit(
+        model_slug="seedream-4-5",
+        input_data={"prompt": "Premium product shot of a watch"},
+    )
+
+    assert client.calls[0][0] == "seedream/4.5-text-to-image"
+    assert client.calls[0][1]["quality"] == "basic"
+    assert "output_format" not in client.calls[0][1]
+
+
+@pytest.mark.asyncio
+async def test_service_submits_exact_seedream_5_provider_model() -> None:
     client = FakeTaskClient()
     service = KieModelService(client)
 
