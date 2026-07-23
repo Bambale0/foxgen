@@ -32,6 +32,13 @@ ACTIVE_GENERATION_STATUSES: frozenset[GenerationStatus] = frozenset(
 )
 
 
+class OutboxStatus(StrEnum):
+    PENDING = "pending"
+    PROCESSING = "processing"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
 class Capability(StrEnum):
     TEXT_TO_IMAGE = "text_to_image"
     IMAGE_TO_IMAGE = "image_to_image"
