@@ -20,8 +20,23 @@ class Settings(BaseSettings):
     api_port: int = Field(default=8080, ge=1, le=65535)
 
     telegram_bot_token: SecretStr | None = None
+    telegram_fsm_ttl_seconds: int = Field(default=3600, ge=300, le=604_800)
+    telegram_input_max_bytes: int = Field(
+        default=52_428_800,
+        ge=1_048_576,
+        le=2_147_483_648,
+    )
+    telegram_input_presigned_url_ttl_seconds: int = Field(
+        default=21_600,
+        ge=300,
+        le=604_800,
+    )
+
     database_url: str = "postgresql+asyncpg://foxgen:foxgen@localhost:5432/foxgen"
     redis_url: str = "redis://localhost:6379/0"
+
+    internal_api_base_url: AnyHttpUrl = AnyHttpUrl("http://localhost:8080")
+    internal_api_timeout_seconds: float = Field(default=30.0, ge=1, le=300)
 
     kie_api_key: SecretStr | None = None
     kie_base_url: AnyHttpUrl = AnyHttpUrl("https://api.kie.ai")
