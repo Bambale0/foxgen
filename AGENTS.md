@@ -5,6 +5,7 @@ Build FoxGen as a production-grade multimodal generation platform through small,
 
 ## Required discovery
 Before editing, inspect README, open epics, nearby code, tests, configuration examples, migrations and CI.
+Обязательно обновляй документацию. Веди сопровождение доки
 
 ## Engineering rules
 - Do not invent KIE.ai model IDs, request fields or callback payloads. Verify them against official documentation and add a contract test.
