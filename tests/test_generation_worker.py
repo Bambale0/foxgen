@@ -179,6 +179,31 @@ async def test_worker_submits_queued_generation_once() -> None:
 
 
 @pytest.mark.asyncio
+async def test_reclaimed_submit_event_does_not_repeat_billable_post() -> None:
+    repository = FakeLifecycleRepository(
+        OutboxMessage(
+            id=OUTBOX_ID,
+            event_type="generation.submit",
+            aggregate_id=GENERATION_ID,
+            payload={},
+            attempts=2,
+        )
+    )
+    repository.generation = replace(
+        repository.generation,
+        status=GenerationStatus.SUBMITTING,
+    )
+    client = FakeLifecycleClient()
+    worker = GenerationWorker(repository=repository, client=client)
+
+    assert await worker.run_once() == 1
+    assert client.create_calls == 0
+    assert repository.generation.status == GenerationStatus.SUBMITTING
+    assert repository.completed_events == [OUTBOX_ID]
+    assert repository.retried_events == []
+
+
+@pytest.mark.asyncio
 async def test_worker_marks_ambiguous_submission_unknown_without_retry() -> None:
     repository = FakeLifecycleRepository(
         OutboxMessage(
