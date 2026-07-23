@@ -139,6 +139,18 @@ class SqlAlchemyLifecycleRepository:
             generation = await session.get(Generation, generation_id)
             return _generation_item(generation) if generation is not None else None
 
+    async def find_generation_by_provider_task_id(
+        self,
+        provider_task_id: str,
+    ) -> GenerationWorkItem | None:
+        async with self._database.session() as session:
+            generation = await session.scalar(
+                select(Generation).where(
+                    Generation.provider_task_id == provider_task_id
+                )
+            )
+            return _generation_item(generation) if generation is not None else None
+
     async def transition_generation(
         self,
         *,
@@ -199,22 +211,13 @@ class SqlAlchemyLifecycleRepository:
     ) -> bool:
         async with self._database.session() as session:
             async with session.begin():
-                generation = await session.scalar(
-                    select(Generation).where(
-                        Generation.provider_task_id == provider_task_id
-                    )
-                )
-                stored_payload = dict(payload)
-                if generation is not None:
-                    stored_payload["linked_generation_id"] = str(generation.id)
-
                 inserted = await session.scalar(
                     pg_insert(ProviderEvent)
                     .values(
                         provider=provider,
                         provider_task_id=provider_task_id,
                         event_hash=event_hash,
-                        payload=stored_payload,
+                        payload=payload,
                     )
                     .on_conflict_do_nothing(index_elements=[ProviderEvent.event_hash])
                     .returning(ProviderEvent)
