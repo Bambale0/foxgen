@@ -1,12 +1,12 @@
 import json
 from dataclasses import dataclass
 from datetime import timedelta
-from typing import Any, Protocol
+from typing import Protocol
 from uuid import UUID
 
 from foxgen.core.errors import ErrorCode, ProviderError, SubmissionError
 from foxgen.domain.models import GenerationStatus
-from foxgen.providers.kie.client import TaskClient, TaskRecord
+from foxgen.providers.kie.client import TaskCreated, TaskRecord
 from foxgen.providers.kie.registry import ModelRegistry
 
 
@@ -44,6 +44,18 @@ class NormalizedProviderState:
     error_code: str | None
 
 
+class LifecycleTaskClient(Protocol):
+    async def create_task(
+        self,
+        *,
+        model: str,
+        input_data: dict[str, object],
+        callback_url: str | None = None,
+    ) -> TaskCreated: ...
+
+    async def get_task(self, task_id: str) -> TaskRecord: ...
+
+
 class LifecycleRepository(Protocol):
     async def claim_outbox(
         self,
@@ -65,6 +77,11 @@ class LifecycleRepository(Protocol):
     ) -> None: ...
 
     async def get_generation(self, generation_id: UUID) -> GenerationWorkItem | None: ...
+
+    async def find_generation_by_provider_task_id(
+        self,
+        provider_task_id: str,
+    ) -> GenerationWorkItem | None: ...
 
     async def transition_generation(
         self,
@@ -96,7 +113,7 @@ class GenerationWorker:
         self,
         *,
         repository: LifecycleRepository,
-        client: TaskClient,
+        client: LifecycleTaskClient,
         registry: ModelRegistry | None = None,
         callback_url: str | None = None,
         worker_id: str = "foxgen-worker",
@@ -191,7 +208,7 @@ class GenerationWorker:
             )
             await self._repository.complete_outbox(message.id)
             return
-        except Exception as exc:
+        except Exception:
             # The provider may have accepted the POST before the transport failed.
             await self._repository.transition_generation(
                 generation_id=generation.id,
@@ -221,48 +238,32 @@ class GenerationWorker:
             await self._repository.complete_outbox(message.id)
             return
 
-        generation = await self._find_generation_for_event(event)
+        generation = await self._repository.find_generation_by_provider_task_id(
+            event.provider_task_id
+        )
+        if generation is None:
+            raise SubmissionError(
+                ErrorCode.TASK_NOT_FOUND,
+                f"Generation for provider task {event.provider_task_id} is not linked yet",
+                retryable=True,
+            )
+
         state = normalize_provider_payload(event.payload)
         if state.status is not None:
-            expected = frozenset(
-                {
-                    GenerationStatus.SUBMITTED,
-                    GenerationStatus.SUBMISSION_UNKNOWN,
-                }
-            )
             await self._repository.transition_generation(
                 generation_id=generation.id,
-                expected=expected,
+                expected=frozenset(
+                    {
+                        GenerationStatus.SUBMITTED,
+                        GenerationStatus.SUBMISSION_UNKNOWN,
+                    }
+                ),
                 target=state.status,
                 result_payload=state.result_payload,
                 error_code=state.error_code,
             )
         await self._repository.mark_provider_event_processed(event.id)
         await self._repository.complete_outbox(message.id)
-
-    async def _find_generation_for_event(
-        self,
-        event: ProviderEventSnapshot,
-    ) -> GenerationWorkItem:
-        generation_id = event.payload.get("generation_id")
-        if isinstance(generation_id, str):
-            generation = await self._repository.get_generation(UUID(generation_id))
-            if generation is not None:
-                return generation
-
-        # Callback outbox aggregate_id is the provider event, so repository lookup by task
-        # is represented through a synthetic generation-id field when the event is recorded.
-        linked_generation = event.payload.get("linked_generation_id")
-        if isinstance(linked_generation, str):
-            generation = await self._repository.get_generation(UUID(linked_generation))
-            if generation is not None:
-                return generation
-
-        raise SubmissionError(
-            ErrorCode.TASK_NOT_FOUND,
-            f"Generation for provider task {event.provider_task_id} is not linked yet",
-            retryable=True,
-        )
 
     async def _poll_generation(self, generation: GenerationWorkItem) -> None:
         task_id = generation.provider_task_id
