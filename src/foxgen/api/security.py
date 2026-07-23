@@ -29,6 +29,21 @@ def _authenticate_bearer(
         )
 
 
+def authenticate_internal_service(
+    *,
+    settings: Settings,
+    authorization: str | None,
+) -> None:
+    configured_token = settings.internal_api_token
+    if configured_token is None:
+        raise HTTPException(status_code=503, detail="Internal service authentication is not configured")
+    _authenticate_bearer(
+        authorization=authorization,
+        expected_token=configured_token.get_secret_value(),
+        error_detail="Invalid internal API credentials",
+    )
+
+
 def authenticate_submission(
     *,
     settings: Settings,
@@ -38,14 +53,9 @@ def authenticate_submission(
     if not settings.task_submission_enabled:
         raise HTTPException(status_code=503, detail="Task submission is disabled")
 
-    configured_token = settings.internal_api_token
-    if configured_token is None:
-        raise HTTPException(status_code=503, detail="Task submission authentication is not configured")
-
-    _authenticate_bearer(
+    authenticate_internal_service(
+        settings=settings,
         authorization=authorization,
-        expected_token=configured_token.get_secret_value(),
-        error_detail="Invalid internal API credentials",
     )
 
     try:
