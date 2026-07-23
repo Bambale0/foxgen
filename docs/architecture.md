@@ -5,24 +5,53 @@
 FoxGen uses explicit layers:
 
 - `bot`: Telegram transport, navigation and FSM only;
-- `api`: health, provider callbacks and future admin/API transport;
+- `api`: health, authenticated internal submission and provider callbacks;
+- `application`: idempotent use cases coordinating persistence and providers;
 - `domain`: provider-independent capabilities and business state;
 - `infra`: PostgreSQL and Redis integrations;
 - `providers`: external API adapters and protocol validation.
 
 Handlers must not construct KIE.ai payloads directly. They select a product capability, collect validated inputs and hand a draft to an application service.
 
+## Paid submission security
+
+Provider task creation is fail-closed:
+
+1. `FOXGEN_TASK_SUBMISSION_ENABLED` must be explicitly enabled;
+2. the caller must present the configured internal bearer token;
+3. `X-FoxGen-User-Id` identifies the owning user;
+4. every request must carry an `Idempotency-Key`;
+5. Redis enforces user/global request-rate limits;
+6. PostgreSQL enforces one generation per `(user_id, idempotency_key)`;
+7. active-generation limits are checked before admission;
+8. catalog-only passthrough models cannot create paid tasks.
+
+The internal token is intended for trusted FoxGen services such as the Telegram bot and worker. It must not be shipped to Telegram clients, web browsers or mini apps.
+
 ## Reliability model
 
-Every external generation uses a client-generated idempotency key stored before provider submission. The planned orchestration layer will reserve funds, persist an outbox event and submit the task asynchronously. Webhooks and polling converge on the same idempotent completion handler.
+Every external generation uses a client-generated idempotency key stored before provider submission. Reusing the key with the same request returns the original generation. Reusing it with different content returns an idempotency conflict.
 
-KIE callbacks may expose a task ID at the top level or inside `data`, using either `taskId` or `task_id`. The callback endpoint normalizes all supported shapes, verifies the HMAC and acknowledges accepted callbacks with HTTP 200 before durable asynchronous processing.
+KIE `createTask` is submitted exactly once by the synchronous foundation path. A timeout or retryable provider response after submission is ambiguous and moves the local generation to `submission_unknown`; FoxGen does not automatically repeat the billable POST. The next orchestration PR moves submission behind a transactional outbox and worker while preserving the same rule.
 
-Provider retry policy is bounded:
+Read-only provider status requests may use bounded retries. Invalid credentials, insufficient credits and validation failures are never retried without a state change.
 
-- retry network timeouts, HTTP 429, KIE maintenance code 455 and transient 5xx;
-- never retry invalid credentials, insufficient credits or validation failures without a state change;
-- expose user-safe messages while preserving diagnostic details in structured logs.
+KIE callbacks may expose a task ID at the top level or inside `data`, using either `taskId` or `task_id`. The callback endpoint normalizes all supported shapes, verifies the HMAC and acknowledges accepted callbacks with HTTP 200. Durable callback processing, polling convergence and result delivery are tracked by issue #19.
+
+## Generation states
+
+The persisted lifecycle currently defines:
+
+- `draft`;
+- `queued`;
+- `submitting`;
+- `submitted`;
+- `submission_unknown`;
+- `succeeded`;
+- `failed`;
+- `cancelled`.
+
+A database check constraint prevents unknown states. Full transition policy and terminal-result processing are implemented under issue #19.
 
 ## FSM rules
 
@@ -42,6 +71,15 @@ Redis stores active FSM state. Durable drafts that affect money or provider subm
 ## Configuration
 
 Optional empty values from `.env` are ignored. This keeps the documented `cp .env.example .env` flow valid while still requiring non-empty secrets when a feature is enabled.
+
+Production submission requires both:
+
+```env
+FOXGEN_TASK_SUBMISSION_ENABLED=true
+FOXGEN_INTERNAL_API_TOKEN=<long-random-secret>
+```
+
+Do not enable the switch until pricing, balance reservation and the durable worker path are configured.
 
 ## Data ownership
 
