@@ -16,6 +16,8 @@ Handlers must not construct KIE.ai payloads directly. They select a product capa
 
 Every external generation uses a client-generated idempotency key stored before provider submission. The planned orchestration layer will reserve funds, persist an outbox event and submit the task asynchronously. Webhooks and polling converge on the same idempotent completion handler.
 
+KIE callbacks may expose a task ID at the top level or inside `data`, using either `taskId` or `task_id`. The callback endpoint normalizes all supported shapes, verifies the HMAC and acknowledges accepted callbacks with HTTP 200 before durable asynchronous processing.
+
 Provider retry policy is bounded:
 
 - retry network timeouts, HTTP 429, KIE maintenance code 455 and transient 5xx;
@@ -35,7 +37,11 @@ Every flow must support:
 7. duplicate click protection;
 8. timeout/expired draft recovery.
 
-Redis stores active FSM state. Durable drafts that affect money or provider submission must be copied to PostgreSQL before confirmation.
+Redis stores active FSM state. Durable drafts that affect money or provider submission must be copied to PostgreSQL before confirmation. User-provided text is escaped before HTML rendering in Telegram.
+
+## Configuration
+
+Optional empty values from `.env` are ignored. This keeps the documented `cp .env.example .env` flow valid while still requiring non-empty secrets when a feature is enabled.
 
 ## Data ownership
 

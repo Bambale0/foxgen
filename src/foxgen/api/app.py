@@ -20,15 +20,25 @@ class HealthResponse(BaseModel):
     dependencies: dict[str, str] | None = None
 
 
-class KieWebhookPayload(BaseModel):
+class KieWebhookTaskData(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     taskId: str | None = None
     task_id: str | None = None
 
+
+class KieWebhookPayload(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    taskId: str | None = None
+    task_id: str | None = None
+    data: KieWebhookTaskData | None = None
+
     @property
     def resolved_task_id(self) -> str:
         value = self.taskId or self.task_id
+        if not value and self.data is not None:
+            value = self.data.taskId or self.data.task_id
         if not value:
             raise ValueError("task id is missing")
         return value
@@ -98,7 +108,7 @@ def create_app(settings: Settings | None = None, *, manage_resources: bool = Tru
             for item in registry.list()
         ]
 
-    @app.post("/webhooks/kie", status_code=202)
+    @app.post("/webhooks/kie")
     async def kie_webhook(
         payload: KieWebhookPayload,
         x_webhook_timestamp: str | None = Header(default=None),
@@ -113,8 +123,9 @@ def create_app(settings: Settings | None = None, *, manage_resources: bool = Tru
         if not x_webhook_timestamp or not x_webhook_signature:
             raise HTTPException(status_code=401, detail="Missing KIE webhook signature headers")
         try:
+            task_id = payload.resolved_task_id
             verify_kie_webhook(
-                task_id=payload.resolved_task_id,
+                task_id=task_id,
                 timestamp=x_webhook_timestamp,
                 signature=x_webhook_signature,
                 secret=secret_value.get_secret_value(),
@@ -124,7 +135,7 @@ def create_app(settings: Settings | None = None, *, manage_resources: bool = Tru
             raise HTTPException(status_code=401, detail=str(exc)) from exc
 
         # Durable, idempotent processing will be added by EPIC 04.
-        return {"status": "accepted", "task_id": payload.resolved_task_id}
+        return {"status": "accepted", "task_id": task_id}
 
     return app
 

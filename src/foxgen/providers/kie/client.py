@@ -35,9 +35,9 @@ class KieClient:
     ) -> None:
         if not api_key:
             raise ValueError("KIE API key is required")
+        self._authorization = f"Bearer {api_key}"
         self._client = client or httpx.AsyncClient(
             base_url=base_url.rstrip("/"),
-            headers={"Authorization": f"Bearer {api_key}"},
             timeout=httpx.Timeout(timeout_seconds, connect=10.0),
         )
         self._owns_client = client is None
@@ -112,8 +112,11 @@ class KieClient:
         return value
 
     async def _request(self, method: str, path: str, **kwargs: Any) -> dict[str, Any]:
+        supplied_headers = kwargs.pop("headers", None)
+        headers = dict(supplied_headers or {})
+        headers["Authorization"] = self._authorization
         try:
-            response = await self._client.request(method, path, **kwargs)
+            response = await self._client.request(method, path, headers=headers, **kwargs)
         except (httpx.TimeoutException, httpx.NetworkError) as exc:
             raise ProviderError(
                 ErrorCode.PROVIDER_UNAVAILABLE,
