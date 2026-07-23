@@ -6,6 +6,18 @@ from foxgen.providers.kie.catalog import MODEL_SPECS, ModelRegistry as BaseModel
 from foxgen.providers.kie.contracts import InputContract
 
 
+SUBMISSION_MODEL_SLUGS: frozenset[str] = frozenset(
+    {
+        "seedream-5-pro",
+        "seedream-5-pro-edit",
+        "nano-banana-2",
+        "nano-banana-pro",
+        "seedance-2",
+        "seedance-2-mini",
+    }
+)
+
+
 SEEDREAM_45_MODELS: tuple[ModelSpec, ...] = (
     model(
         slug="seedream-4-5",
@@ -37,14 +49,18 @@ SEEDREAM_45_MODELS: tuple[ModelSpec, ...] = (
 
 
 def _active_models() -> tuple[ModelSpec, ...]:
-    """Build the exact active priority set without the unwanted Seedance Fast tier."""
+    """Build the reviewed catalog and apply the explicit paid-submission allowlist."""
 
     models: list[ModelSpec] = list(SEEDREAM_45_MODELS)
     for item in MODEL_SPECS:
         if item.slug == "seedance-2-fast":
             continue
+        values: dict[str, object] = {
+            "enabled_for_submission": item.slug in SUBMISSION_MODEL_SLUGS,
+        }
         if item.slug == "seedance-2-mini":
-            item = replace(item, rank=2)
+            values["rank"] = 2
+        item = replace(item, **values)
         models.append(item)
     return tuple(models)
 
