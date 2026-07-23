@@ -5,7 +5,6 @@ import mimetypes
 import os
 import socket
 import tempfile
-from dataclasses import dataclass
 from pathlib import Path
 from typing import BinaryIO
 from urllib.parse import unquote, urlparse
@@ -15,27 +14,8 @@ import httpx
 from aiogram import Bot
 from botocore.config import Config  # type: ignore[import-untyped]
 
+from foxgen.application.media import DownloadedMedia, StoredMedia
 from foxgen.core.errors import ErrorCode, SubmissionError
-
-
-@dataclass(frozen=True, slots=True)
-class DownloadedMedia:
-    path: Path
-    filename: str
-    content_type: str
-    size_bytes: int
-    checksum_sha256: str
-
-    def cleanup(self) -> None:
-        self.path.unlink(missing_ok=True)
-
-
-@dataclass(frozen=True, slots=True)
-class StoredMedia:
-    storage_key: str
-    content_type: str
-    size_bytes: int
-    checksum_sha256: str
 
 
 class SecureMediaDownloader:
@@ -166,15 +146,27 @@ class S3MediaStorage:
 
     def _put_file(self, key: str, media: DownloadedMedia) -> None:
         with media.path.open("rb") as body:
-            self._put_object(key=key, body=body, content_type=media.content_type)
+            self._put_object(
+                key=key,
+                body=body,
+                content_type=media.content_type,
+                checksum_sha256=media.checksum_sha256,
+            )
 
-    def _put_object(self, *, key: str, body: BinaryIO, content_type: str) -> None:
+    def _put_object(
+        self,
+        *,
+        key: str,
+        body: BinaryIO,
+        content_type: str,
+        checksum_sha256: str,
+    ) -> None:
         self._client.put_object(
             Bucket=self._bucket,
             Key=key,
             Body=body,
             ContentType=content_type,
-            Metadata={"sha256": "foxgen-managed"},
+            Metadata={"sha256": checksum_sha256},
         )
 
     async def presigned_url(self, storage_key: str) -> str:
@@ -216,41 +208,6 @@ class TelegramMediaSender:
             )
             message_ids.append(message.message_id)
         return message_ids
-
-
-def storage_key_for(
-    *,
-    generation_id: str,
-    index: int,
-    media: DownloadedMedia,
-) -> str:
-    suffix = Path(media.filename).suffix.lower()
-    if not suffix:
-        suffix = mimetypes.guess_extension(media.content_type) or ".bin"
-    return (
-        f"generations/{generation_id}/{index:03d}-"
-        f"{media.checksum_sha256[:24]}{suffix[:16]}"
-    )
-
-
-def extract_result_urls(payload: dict[str, object]) -> tuple[str, ...]:
-    collected: list[str] = []
-
-    def visit(value: object, *, key_hint: str = "") -> None:
-        if isinstance(value, str):
-            if "url" in key_hint.lower() and value.startswith("https://"):
-                collected.append(value)
-            return
-        if isinstance(value, list):
-            for item in value:
-                visit(item, key_hint=key_hint)
-            return
-        if isinstance(value, dict):
-            for key, item in value.items():
-                visit(item, key_hint=str(key))
-
-    visit(payload)
-    return tuple(dict.fromkeys(collected))
 
 
 async def _validate_public_https_url(url: str) -> None:
