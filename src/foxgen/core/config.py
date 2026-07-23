@@ -54,6 +54,7 @@ class Settings(BaseSettings):
     s3_access_key_id: SecretStr | None = None
     s3_secret_access_key: SecretStr | None = None
     s3_force_path_style: bool = True
+    s3_create_bucket: bool = False
 
     @property
     def kie_callback_url(self) -> str | None:
