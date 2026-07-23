@@ -67,6 +67,12 @@ jobs:
     needs: quality
     steps:
       - uses: actions/checkout@v4
+      - name: Validate production deployment assets
+        run: |
+          bash -n scripts/deploy-production.sh
+          cp deploy/production.env.example .env
+          docker compose --env-file .env -f docker-compose.prod.yml config --quiet
+          rm -f .env
       - uses: docker/setup-buildx-action@v3
       - name: Build production image
         uses: docker/build-push-action@v6
