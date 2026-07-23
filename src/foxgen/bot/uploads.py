@@ -1,5 +1,5 @@
+import asyncio
 import hashlib
-import os
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -16,7 +16,6 @@ from foxgen.infra.media import S3MediaStorage
 @dataclass(frozen=True, slots=True)
 class UploadedInput:
     kind: str
-    url: str
     storage_key: str
 
 
@@ -33,6 +32,8 @@ class TelegramInputMediaStorage:
         user_id: int,
     ) -> UploadedInput:
         file_id, file_size, filename, content_type, kind = _message_file(message)
+        if user_id <= 0:
+            raise SubmissionError(ErrorCode.VALIDATION, "Не удалось определить пользователя.")
         if file_size is not None and file_size > self._max_bytes:
             raise SubmissionError(
                 ErrorCode.VALIDATION,
@@ -46,13 +47,15 @@ class TelegramInputMediaStorage:
         try:
             await bot.download(file_id, destination=path)
             size_bytes = path.stat().st_size
+            if size_bytes <= 0:
+                raise SubmissionError(ErrorCode.VALIDATION, "Получен пустой файл.")
             if size_bytes > self._max_bytes:
                 raise SubmissionError(
                     ErrorCode.VALIDATION,
                     "Файл превышает допустимый размер.",
                     details={"file_size": size_bytes, "max_bytes": self._max_bytes},
                 )
-            checksum = await _checksum(path)
+            checksum = await asyncio.to_thread(_checksum, path)
             media = DownloadedMedia(
                 path=path,
                 filename=filename,
@@ -66,13 +69,21 @@ class TelegramInputMediaStorage:
                 f"{checksum[:24]}{suffix}"
             )
             stored = await self._storage.store(key=storage_key, media=media)
-            url = await self._storage.presigned_url(stored.storage_key)
-            return UploadedInput(kind=kind, url=url, storage_key=stored.storage_key)
+            return UploadedInput(kind=kind, storage_key=stored.storage_key)
         finally:
             path.unlink(missing_ok=True)
 
+    async def presign(self, storage_key: str) -> str:
+        normalized = storage_key.strip()
+        if not normalized.startswith("inputs/"):
+            raise SubmissionError(
+                ErrorCode.VALIDATION,
+                "Черновик содержит некорректную ссылку на входной файл.",
+            )
+        return await self._storage.presigned_url(normalized)
 
-async def _checksum(path: Path) -> str:
+
+def _checksum(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as source:
         while chunk := source.read(1024 * 1024):
