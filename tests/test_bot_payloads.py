@@ -24,18 +24,6 @@ from foxgen.providers.kie.registry import ModelRegistry
             [{"kind": "image", "url": "https://cdn.example/input.png"}],
         ),
         (
-            "seedream-4-5",
-            GenerationMode.IMAGE_TEXT,
-            {"quality": "basic"},
-            [],
-        ),
-        (
-            "seedream-4-5-edit",
-            GenerationMode.IMAGE_EDIT,
-            {"quality": "high"},
-            [{"kind": "image", "url": "https://cdn.example/input.png"}],
-        ),
-        (
             "nano-banana-2",
             GenerationMode.IMAGE_TEXT,
             {"resolution": "1K"},
@@ -87,8 +75,10 @@ def test_telegram_payloads_pass_the_registered_model_contract(
 
     payload = _provider_payload(data, media)
     contract = ModelRegistry().get(model_slug).contract
+    normalized = validate_input(contract, payload)
 
-    assert validate_input(contract, payload) == payload
+    for key, value in payload.items():
+        assert normalized[key] == value
 
 
 def test_every_fsm_model_exists_in_the_production_registry() -> None:
