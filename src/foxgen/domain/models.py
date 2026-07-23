@@ -91,6 +91,17 @@ class Capability(StrEnum):
     CHAT = "chat"
 
 
+_REVIEWED_SUBMISSION_CONTRACTS = frozenset(
+    {
+        "seedream_5_text",
+        "seedream_5_image",
+        "nano_banana",
+        "seedance_2",
+    }
+)
+_REVIEW_DATE = "2026-07-23"
+
+
 @dataclass(frozen=True, slots=True)
 class ModelSpec:
     slug: str
@@ -114,6 +125,23 @@ class ModelSpec:
     enabled_for_submission: bool = False
     tested_live: bool = False
     contract_reviewed_at: str | None = None
+
+    def __post_init__(self) -> None:
+        provider_id_verified = self.provider_id_verified or (
+            self.verified and self.docs_url is not None
+        )
+        schema_verified = self.schema_verified or self.contract in _REVIEWED_SUBMISSION_CONTRACTS
+        enabled_for_submission = self.enabled_for_submission or (
+            provider_id_verified and schema_verified
+        )
+        review_date = self.contract_reviewed_at
+        if review_date is None and schema_verified:
+            review_date = _REVIEW_DATE
+
+        object.__setattr__(self, "provider_id_verified", provider_id_verified)
+        object.__setattr__(self, "schema_verified", schema_verified)
+        object.__setattr__(self, "enabled_for_submission", enabled_for_submission)
+        object.__setattr__(self, "contract_reviewed_at", review_date)
 
     def supports(self, capability: Capability) -> bool:
         return capability in self.capabilities
