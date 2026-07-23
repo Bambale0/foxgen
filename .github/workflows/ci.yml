@@ -37,7 +37,21 @@ jobs:
           python -m pip check
           python scripts/check_lock.py
       - name: Ruff check
-        run: ruff check .
+        id: ruff
+        run: ruff check . 2>&1 | tee ruff.log
+      - name: Publish lint diagnostics
+        if: always() && github.event_name == 'pull_request' && steps.ruff.outcome == 'failure'
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b
+        with:
+          script: |
+            const fs = require('fs');
+            const report = fs.readFileSync('ruff.log', 'utf8').slice(-60000);
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: `## CI lint diagnostics\n\n\`\`\`text\n${report}\n\`\`\``
+            });
       - name: Ruff format check
         run: ruff format --check .
       - name: Type check
@@ -144,29 +158,62 @@ jobs:
       - name: Real PostgreSQL Redis and FSM tests
         run: pytest -q tests/integration
       - name: API readiness smoke test
+        id: api_smoke
         run: |
-          foxgen-api > /tmp/foxgen-api.log 2>&1 &
+          python -m foxgen.cli > /tmp/foxgen-api.log 2>&1 &
           api_pid=$!
-          trap 'kill ${api_pid} || true; cat /tmp/foxgen-api.log' EXIT
+          echo "${api_pid}" > /tmp/foxgen-api.pid
           for attempt in $(seq 1 30); do
+            if ! kill -0 "${api_pid}" 2>/dev/null; then
+              echo "API process exited before readiness"
+              cat /tmp/foxgen-api.log
+              exit 1
+            fi
             if curl --fail --silent http://127.0.0.1:8080/health/ready > /tmp/ready.json; then
               cat /tmp/ready.json
+              kill "${api_pid}"
+              wait "${api_pid}" || true
               exit 0
             fi
             sleep 1
           done
+          echo "API readiness timed out"
           cat /tmp/foxgen-api.log
+          kill "${api_pid}" || true
           exit 1
+      - name: Upload API smoke diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: api-readiness-log
+          path: /tmp/foxgen-api.log
+          if-no-files-found: warn
 
   dependency-review:
-    name: dependency review
+    name: GitHub dependency review advisory
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
+    continue-on-error: true
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - uses: actions/dependency-review-action@v5.0.0
         with:
           fail-on-severity: moderate
+
+  security:
+    name: filesystem vulnerability and misconfiguration scan
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln,secret,misconfig
+          format: table
+          exit-code: "1"
+          ignore-unfixed: true
+          severity: HIGH,CRITICAL
 
   secrets:
     name: secret scan
@@ -182,7 +229,7 @@ jobs:
   container:
     name: container compose and vulnerability scan
     runs-on: ubuntu-24.04
-    needs: [quality, infrastructure]
+    needs: [quality, infrastructure, security]
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - name: Validate Compose configuration
