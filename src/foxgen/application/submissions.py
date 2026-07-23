@@ -6,7 +6,7 @@ from uuid import UUID
 
 from foxgen.core.errors import ErrorCode, SubmissionError
 from foxgen.domain.models import GenerationStatus, MediaKind, ModelSpec
-from foxgen.providers.kie.contracts import InputContract, validate_input
+from foxgen.providers.kie.contracts import validate_input
 from foxgen.providers.kie.registry import ModelRegistry
 
 
@@ -116,10 +116,19 @@ class SubmissionService:
         idempotency_key: str,
     ) -> SubmissionReceipt:
         model = self._registry.get(model_slug)
-        if model.contract == InputContract.PASSTHROUGH:
+        if not model.production_ready:
             raise SubmissionError(
                 ErrorCode.AUTHORIZATION,
-                "Эта модель пока доступна только в каталоге и не включена для платных задач.",
+                (
+                    "Эта модель доступна только в каталоге: её точный контракт "
+                    "ещё не прошёл production-проверку."
+                ),
+                details={
+                    "model_slug": model.slug,
+                    "provider_id_verified": model.provider_id_verified,
+                    "schema_verified": model.schema_verified,
+                    "enabled_for_submission": model.enabled_for_submission,
+                },
             )
 
         normalized = validate_input(model.contract, input_data)

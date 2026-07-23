@@ -91,6 +91,17 @@ class Capability(StrEnum):
     CHAT = "chat"
 
 
+_REVIEWED_SUBMISSION_CONTRACTS = frozenset(
+    {
+        "seedream_5_text",
+        "seedream_5_image",
+        "nano_banana",
+        "seedance_2",
+    }
+)
+_REVIEW_DATE = "2026-07-23"
+
+
 @dataclass(frozen=True, slots=True)
 class ModelSpec:
     slug: str
@@ -99,6 +110,8 @@ class ModelSpec:
     family: str
     media_kind: MediaKind
     capabilities: frozenset[Capability]
+    # Legacy catalog-review flag retained for API compatibility. New code must use the
+    # explicit statuses below instead of treating one boolean as production readiness.
     verified: bool
     defaults: Mapping[str, object] = MappingProxyType({})
     contract: str = "passthrough"
@@ -107,6 +120,32 @@ class ModelSpec:
     docs_url: str | None = None
     recommended_for: tuple[str, ...] = ()
     api_family: str = "market"
+    provider_id_verified: bool = False
+    schema_verified: bool = False
+    enabled_for_submission: bool = False
+    tested_live: bool = False
+    contract_reviewed_at: str | None = None
+
+    def __post_init__(self) -> None:
+        provider_id_verified = self.provider_id_verified or (
+            self.verified and self.docs_url is not None
+        )
+        schema_verified = self.schema_verified or self.contract in _REVIEWED_SUBMISSION_CONTRACTS
+        review_date = self.contract_reviewed_at
+        if review_date is None and schema_verified:
+            review_date = _REVIEW_DATE
+
+        object.__setattr__(self, "provider_id_verified", provider_id_verified)
+        object.__setattr__(self, "schema_verified", schema_verified)
+        object.__setattr__(self, "contract_reviewed_at", review_date)
 
     def supports(self, capability: Capability) -> bool:
         return capability in self.capabilities
+
+    @property
+    def production_ready(self) -> bool:
+        return (
+            self.provider_id_verified
+            and self.schema_verified
+            and self.enabled_for_submission
+        )

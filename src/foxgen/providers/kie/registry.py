@@ -6,6 +6,18 @@ from foxgen.providers.kie.catalog import MODEL_SPECS, ModelRegistry as BaseModel
 from foxgen.providers.kie.contracts import InputContract
 
 
+SUBMISSION_MODEL_SLUGS: frozenset[str] = frozenset(
+    {
+        "seedream-5-pro",
+        "seedream-5-pro-edit",
+        "nano-banana-2",
+        "nano-banana-pro",
+        "seedance-2",
+        "seedance-2-mini",
+    }
+)
+
+
 SEEDREAM_45_MODELS: tuple[ModelSpec, ...] = (
     model(
         slug="seedream-4-5",
@@ -37,14 +49,18 @@ SEEDREAM_45_MODELS: tuple[ModelSpec, ...] = (
 
 
 def _active_models() -> tuple[ModelSpec, ...]:
-    """Build the exact active priority set without the unwanted Seedance Fast tier."""
+    """Build the reviewed catalog and apply the explicit paid-submission allowlist."""
 
     models: list[ModelSpec] = list(SEEDREAM_45_MODELS)
     for item in MODEL_SPECS:
         if item.slug == "seedance-2-fast":
             continue
+        values: dict[str, object] = {
+            "enabled_for_submission": item.slug in SUBMISSION_MODEL_SLUGS,
+        }
         if item.slug == "seedance-2-mini":
-            item = replace(item, rank=2)
+            values["rank"] = 2
+        item = replace(item, **values)
         models.append(item)
     return tuple(models)
 
@@ -53,7 +69,20 @@ ACTIVE_MODEL_SPECS = _active_models()
 
 
 class ModelRegistry(BaseModelRegistry):
-    """FoxGen registry with exact project priorities applied."""
+    """FoxGen catalog with explicit separation between discovery and paid submission."""
 
     def __init__(self, models: Iterable[ModelSpec] = ACTIVE_MODEL_SPECS) -> None:
-        super().__init__(models)
+        items = tuple(models)
+        for item in items:
+            if item.enabled_for_submission and not item.provider_id_verified:
+                raise ValueError(
+                    f"Submission model {item.slug} has an unverified provider identifier"
+                )
+            if item.enabled_for_submission and not item.schema_verified:
+                raise ValueError(f"Submission model {item.slug} has no verified schema")
+            if item.enabled_for_submission and item.contract == InputContract.PASSTHROUGH:
+                raise ValueError(f"Submission model {item.slug} cannot use passthrough validation")
+        super().__init__(items)
+
+    def submission_models(self) -> tuple[ModelSpec, ...]:
+        return tuple(item for item in self.list() if item.production_ready)
