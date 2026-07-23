@@ -42,6 +42,18 @@ class Settings(BaseSettings):
     worker_outbox_lease_seconds: int = Field(default=120, ge=30, le=3600)
     worker_outbox_max_attempts: int = Field(default=8, ge=1, le=100)
     provider_poll_interval_seconds: int = Field(default=20, ge=5, le=3600)
+    stale_submitting_seconds: int = Field(default=600, ge=60, le=86_400)
+
+    media_download_timeout_seconds: float = Field(default=60.0, ge=5, le=600)
+    media_max_bytes: int = Field(default=536_870_912, ge=1_048_576, le=2_147_483_648)
+    media_presigned_url_ttl_seconds: int = Field(default=3600, ge=60, le=86_400)
+
+    s3_endpoint_url: AnyHttpUrl | None = None
+    s3_region: str = "us-east-1"
+    s3_bucket: str = "foxgen-media"
+    s3_access_key_id: SecretStr | None = None
+    s3_secret_access_key: SecretStr | None = None
+    s3_force_path_style: bool = True
 
     @property
     def kie_callback_url(self) -> str | None:
