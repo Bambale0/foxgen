@@ -53,7 +53,20 @@ ACTIVE_MODEL_SPECS = _active_models()
 
 
 class ModelRegistry(BaseModelRegistry):
-    """FoxGen registry with exact project priorities applied."""
+    """FoxGen catalog with explicit separation between discovery and paid submission."""
 
     def __init__(self, models: Iterable[ModelSpec] = ACTIVE_MODEL_SPECS) -> None:
-        super().__init__(models)
+        items = tuple(models)
+        for item in items:
+            if item.enabled_for_submission and not item.provider_id_verified:
+                raise ValueError(
+                    f"Submission model {item.slug} has an unverified provider identifier"
+                )
+            if item.enabled_for_submission and not item.schema_verified:
+                raise ValueError(f"Submission model {item.slug} has no verified schema")
+            if item.enabled_for_submission and item.contract == InputContract.PASSTHROUGH:
+                raise ValueError(f"Submission model {item.slug} cannot use passthrough validation")
+        super().__init__(items)
+
+    def submission_models(self) -> tuple[ModelSpec, ...]:
+        return tuple(item for item in self.list() if item.production_ready)
