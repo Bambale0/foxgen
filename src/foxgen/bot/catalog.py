@@ -99,6 +99,10 @@ def mode_supports_multiple_media(mode: GenerationMode) -> bool:
     return mode == GenerationMode.VIDEO_REFERENCE
 
 
+def model_uses_seedream_quality(slug: str) -> bool:
+    return slug.startswith("seedream-4-5") or slug.startswith("seedream-5-pro")
+
+
 def model_choice(mode: GenerationMode, slug: str) -> ModelChoice:
     for choice in MODELS_BY_MODE[mode]:
         if choice.slug == slug:
