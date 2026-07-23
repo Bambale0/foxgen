@@ -6,6 +6,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from foxgen.application.submissions import GenerationSnapshot
 from foxgen.core.errors import ErrorCode, SubmissionError
 from foxgen.domain.models import ACTIVE_GENERATION_STATUSES, GenerationStatus, MediaKind
+from foxgen.infra.billing import reserve_generation_charge
 from foxgen.infra.database import Database, Generation, OutboxEvent, User
 
 
@@ -122,6 +123,14 @@ class SqlAlchemyGenerationRepository:
                 )
                 generation = insert_result.scalar_one_or_none()
                 if generation is not None:
+                    # Price lookup, wallet lock, reserve movement, immutable ledger entry,
+                    # generation and outbox are committed as one transaction.
+                    await reserve_generation_charge(
+                        session,
+                        generation_id=generation.id,
+                        user_id=user_id,
+                        model_slug=model_slug,
+                    )
                     await session.execute(
                         pg_insert(OutboxEvent)
                         .values(

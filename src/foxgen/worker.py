@@ -10,8 +10,8 @@ from aiogram.enums import ParseMode
 from foxgen.application.delivery import MediaPipeline
 from foxgen.application.lifecycle import GenerationWorker
 from foxgen.core.config import Settings, get_settings
+from foxgen.infra.billing_lifecycle_repository import BillingAwareLifecycleRepository
 from foxgen.infra.database import Database
-from foxgen.infra.lifecycle_repository import SqlAlchemyLifecycleRepository
 from foxgen.infra.media import SecureMediaDownloader, S3MediaStorage, TelegramMediaSender
 from foxgen.providers.kie.client import KieClient
 from foxgen.providers.kie.registry import ModelRegistry
@@ -27,7 +27,7 @@ async def run(settings: Settings | None = None) -> None:
         raise RuntimeError("FOXGEN_TELEGRAM_BOT_TOKEN is required for result delivery")
 
     database = Database(resolved.database_url)
-    repository = SqlAlchemyLifecycleRepository(database)
+    repository = BillingAwareLifecycleRepository(database)
     client = KieClient(
         api_key=api_key.get_secret_value(),
         base_url=str(resolved.kie_base_url),

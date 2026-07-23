@@ -8,6 +8,7 @@ class ErrorCode(StrEnum):
     AUTHENTICATION = "authentication_error"
     AUTHORIZATION = "authorization_error"
     SUBMISSION_DISABLED = "submission_disabled"
+    PRICING_UNAVAILABLE = "pricing_unavailable"
     IDEMPOTENCY_CONFLICT = "idempotency_conflict"
     CONCURRENCY_LIMITED = "concurrency_limited"
     INSUFFICIENT_CREDITS = "insufficient_credits"
