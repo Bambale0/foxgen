@@ -14,7 +14,7 @@ def main_menu() -> InlineKeyboardMarkup:
 
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="Мини-апп", callback_data="planned:mini_app")],
+            [InlineKeyboardButton(text="Мини апп", callback_data="planned:mini_app")],
             [
                 InlineKeyboardButton(text="Создать видео", callback_data="create:video"),
                 InlineKeyboardButton(
@@ -35,7 +35,7 @@ def main_menu() -> InlineKeyboardMarkup:
             ],
             [
                 InlineKeyboardButton(text="Gemini Omni", callback_data="planned:gemini_omni"),
-                InlineKeyboardButton(text="AI-компаньон", callback_data="planned:companion"),
+                InlineKeyboardButton(text="AI-помощник", callback_data="planned:assistant"),
             ],
             [
                 InlineKeyboardButton(text="Скучная работа", callback_data="planned:boring_work"),
