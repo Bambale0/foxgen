@@ -11,6 +11,24 @@ class SubmissionPrincipal:
     user_id: int
 
 
+def _authenticate_bearer(
+    *,
+    authorization: str | None,
+    expected_token: str,
+    error_detail: str,
+) -> None:
+    scheme, _, supplied_token = (authorization or "").partition(" ")
+    if scheme.lower() != "bearer" or not supplied_token or not compare_digest(
+        supplied_token,
+        expected_token,
+    ):
+        raise HTTPException(
+            status_code=401,
+            detail=error_detail,
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+
 def authenticate_submission(
     *,
     settings: Settings,
@@ -24,17 +42,11 @@ def authenticate_submission(
     if configured_token is None:
         raise HTTPException(status_code=503, detail="Task submission authentication is not configured")
 
-    scheme, _, supplied_token = (authorization or "").partition(" ")
-    expected_token = configured_token.get_secret_value()
-    if scheme.lower() != "bearer" or not supplied_token or not compare_digest(
-        supplied_token,
-        expected_token,
-    ):
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid internal API credentials",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+    _authenticate_bearer(
+        authorization=authorization,
+        expected_token=configured_token.get_secret_value(),
+        error_detail="Invalid internal API credentials",
+    )
 
     try:
         user_id = int(user_id_header or "")
@@ -44,6 +56,23 @@ def authenticate_submission(
         raise HTTPException(status_code=400, detail="X-FoxGen-User-Id must be positive")
 
     return SubmissionPrincipal(user_id=user_id)
+
+
+def authenticate_billing_admin(
+    *,
+    settings: Settings,
+    authorization: str | None,
+) -> None:
+    if not settings.billing_admin_api_enabled:
+        raise HTTPException(status_code=503, detail="Billing administration is disabled")
+    configured_token = settings.billing_admin_api_token
+    if configured_token is None:
+        raise HTTPException(status_code=503, detail="Billing administration is not configured")
+    _authenticate_bearer(
+        authorization=authorization,
+        expected_token=configured_token.get_secret_value(),
+        error_detail="Invalid billing administrator credentials",
+    )
 
 
 def validate_idempotency_key(value: str | None) -> str:
