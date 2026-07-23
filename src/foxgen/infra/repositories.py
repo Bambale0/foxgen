@@ -6,7 +6,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from foxgen.application.submissions import GenerationSnapshot
 from foxgen.core.errors import ErrorCode, SubmissionError
 from foxgen.domain.models import ACTIVE_GENERATION_STATUSES, GenerationStatus, MediaKind
-from foxgen.infra.database import Database, Generation, User
+from foxgen.infra.database import Database, Generation, OutboxEvent, User
 
 
 _ACTIVE_STATUS_VALUES = tuple(status.value for status in ACTIVE_GENERATION_STATUSES)
@@ -122,6 +122,18 @@ class SqlAlchemyGenerationRepository:
                 )
                 generation = insert_result.scalar_one_or_none()
                 if generation is not None:
+                    await session.execute(
+                        pg_insert(OutboxEvent)
+                        .values(
+                            event_type="generation.submit",
+                            aggregate_id=generation.id,
+                            deduplication_key=f"generation.submit:{generation.id}",
+                            payload={"generation_id": str(generation.id)},
+                        )
+                        .on_conflict_do_nothing(
+                            index_elements=[OutboxEvent.deduplication_key]
+                        )
+                    )
                     return _snapshot(generation), True
 
                 existing = await session.scalar(
