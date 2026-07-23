@@ -37,6 +37,12 @@ class Settings(BaseSettings):
     submission_user_concurrency_limit: int = Field(default=2, ge=1, le=100)
     submission_global_concurrency_limit: int = Field(default=20, ge=1, le=10_000)
 
+    worker_loop_interval_seconds: float = Field(default=1.0, ge=0.1, le=60)
+    worker_outbox_batch_size: int = Field(default=10, ge=1, le=500)
+    worker_outbox_lease_seconds: int = Field(default=120, ge=30, le=3600)
+    worker_outbox_max_attempts: int = Field(default=8, ge=1, le=100)
+    provider_poll_interval_seconds: int = Field(default=20, ge=5, le=3600)
+
     @property
     def kie_callback_url(self) -> str | None:
         if self.kie_callback_base_url is None:
