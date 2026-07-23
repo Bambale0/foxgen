@@ -10,9 +10,9 @@ from foxgen.core.config import Settings, get_settings
 from foxgen.core.errors import WebhookVerificationError
 from foxgen.infra.database import Database
 from foxgen.infra.redis import RedisPool
-from foxgen.providers.kie.catalog import ModelRegistry
 from foxgen.providers.kie.client import KieClient
 from foxgen.providers.kie.contracts import contract_schema, validate_input
+from foxgen.providers.kie.registry import ModelRegistry
 from foxgen.providers.kie.service import KieModelService
 from foxgen.providers.kie.webhooks import verify_kie_webhook
 
