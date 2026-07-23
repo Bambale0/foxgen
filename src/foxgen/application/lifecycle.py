@@ -188,6 +188,12 @@ class GenerationWorker:
             expected=frozenset({GenerationStatus.QUEUED}),
             target=GenerationStatus.SUBMITTING,
         )
+
+        # This event must never be replayed automatically after the billable POST starts.
+        # If the process crashes after this point, the generation stays `submitting` and a
+        # watchdog/operator can move it to `submission_unknown` without creating a duplicate.
+        await self._repository.complete_outbox(message.id)
+
         try:
             task = await self._client.create_task(
                 model=model.provider_model,
@@ -206,7 +212,6 @@ class GenerationWorker:
                 target=target,
                 error_code=exc.code,
             )
-            await self._repository.complete_outbox(message.id)
             return
         except Exception:
             # The provider may have accepted the POST before the transport failed.
@@ -216,7 +221,6 @@ class GenerationWorker:
                 target=GenerationStatus.SUBMISSION_UNKNOWN,
                 error_code=ErrorCode.SUBMISSION_UNKNOWN,
             )
-            await self._repository.complete_outbox(message.id)
             return
 
         await self._repository.transition_generation(
@@ -225,7 +229,6 @@ class GenerationWorker:
             target=GenerationStatus.SUBMITTED,
             provider_task_id=task.task_id,
         )
-        await self._repository.complete_outbox(message.id)
 
     async def _process_callback(self, message: OutboxMessage) -> None:
         event_id_value = message.payload.get("provider_event_id")
