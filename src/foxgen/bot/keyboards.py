@@ -10,26 +10,42 @@ from foxgen.bot.catalog import (
 
 
 def main_menu() -> InlineKeyboardMarkup:
+    """Return the product menu in the exact row order from the approved sketch."""
+
     return InlineKeyboardMarkup(
         inline_keyboard=[
+            [InlineKeyboardButton(text="Мини-апп", callback_data="planned:mini_app")],
             [
-                InlineKeyboardButton(text="🎬 Создать видео", callback_data="create:video"),
-                InlineKeyboardButton(text="🖼 Создать фото", callback_data="create:image"),
+                InlineKeyboardButton(text="Создать видео", callback_data="create:video"),
+                InlineKeyboardButton(
+                    text="Создать озвучку (голос)",
+                    callback_data="planned:voice",
+                ),
             ],
             [
-                InlineKeyboardButton(text="🗣 Озвучка", callback_data="planned:voice"),
-                InlineKeyboardButton(text="🎵 Музыка", callback_data="planned:music"),
-            ],
-            [InlineKeyboardButton(text="🕺 Motion Control", callback_data="planned:motion")],
-            [
-                InlineKeyboardButton(text="✨ Промпт AI", callback_data="planned:prompt"),
-                InlineKeyboardButton(text="🤖 AI-помощник", callback_data="planned:assistant"),
+                InlineKeyboardButton(text="Создать фото", callback_data="create:image"),
+                InlineKeyboardButton(
+                    text="Создать музыку (песню)",
+                    callback_data="planned:music",
+                ),
             ],
             [
-                InlineKeyboardButton(text="💳 Баланс", callback_data="account:balance"),
-                InlineKeyboardButton(text="👥 Рефералы", callback_data="planned:referrals"),
+                InlineKeyboardButton(text="Motion Control", callback_data="planned:motion"),
+                InlineKeyboardButton(text="Промпты AI", callback_data="planned:prompt"),
             ],
-            [InlineKeyboardButton(text="🤝 Партнёры", callback_data="planned:partners")],
+            [
+                InlineKeyboardButton(text="Gemini Omni", callback_data="planned:gemini_omni"),
+                InlineKeyboardButton(text="AI-компаньон", callback_data="planned:companion"),
+            ],
+            [
+                InlineKeyboardButton(text="Скучная работа", callback_data="planned:boring_work"),
+                InlineKeyboardButton(text="Поддержка", callback_data="planned:support"),
+            ],
+            [
+                InlineKeyboardButton(text="Баланс", callback_data="account:balance"),
+                InlineKeyboardButton(text="Партнёры", callback_data="planned:partners"),
+            ],
+            [InlineKeyboardButton(text="Тарифы", callback_data="planned:tariffs")],
         ]
     )
 
