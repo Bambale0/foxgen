@@ -134,15 +134,25 @@ def video_audio_keyboard() -> InlineKeyboardMarkup:
     )
 
 
-def confirmation_keyboard() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [InlineKeyboardButton(text="🚀 Запустить", callback_data="draft:confirm")],
+def confirmation_keyboard(*, can_submit: bool = True) -> InlineKeyboardMarkup:
+    rows: list[list[InlineKeyboardButton]] = []
+    if can_submit:
+        rows.append([InlineKeyboardButton(text="🚀 Запустить", callback_data="draft:confirm")])
+    else:
+        rows.extend(
+            [
+                [InlineKeyboardButton(text="🔄 Обновить цену и баланс", callback_data="draft:refresh")],
+                [InlineKeyboardButton(text="💳 Открыть баланс", callback_data="account:balance")],
+            ]
+        )
+    rows.extend(
+        [
             [InlineKeyboardButton(text="✏️ Изменить описание", callback_data="draft:edit")],
             [InlineKeyboardButton(text="⬅️ Назад", callback_data="nav:back")],
             [InlineKeyboardButton(text="❌ Отмена", callback_data="nav:cancel")],
         ]
     )
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def after_submit_keyboard() -> InlineKeyboardMarkup:
