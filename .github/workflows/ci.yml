@@ -52,8 +52,23 @@ jobs:
               issue_number: context.issue.number,
               body: `## CI lint diagnostics\n\n\`\`\`text\n${report}\n\`\`\``
             });
-      - name: Ruff format check
-        run: ruff format --check .
+      - name: Generate Ruff formatting patch
+        id: format
+        run: |
+          ruff format .
+          git diff --binary > ruff-format.patch
+          if test -s ruff-format.patch; then
+            echo "Ruff formatting changes are required"
+            git diff --stat
+            exit 1
+          fi
+      - name: Upload Ruff formatting patch
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ruff-format-patch
+          path: ruff-format.patch
+          if-no-files-found: warn
       - name: Type check
         id: mypy
         run: mypy src 2>&1 | tee mypy.log
