@@ -46,12 +46,6 @@ class KieClient:
         if self._owns_client:
             await self._client.aclose()
 
-    @retry(
-        retry=retry_if_exception(_is_retryable),
-        stop=stop_after_attempt(3),
-        wait=wait_exponential_jitter(initial=0.5, max=5),
-        reraise=True,
-    )
     async def create_task(
         self,
         *,
@@ -59,6 +53,12 @@ class KieClient:
         input_data: Mapping[str, object],
         callback_url: str | None = None,
     ) -> TaskCreated:
+        """Submit once.
+
+        A timeout after provider acceptance is ambiguous. Retrying this POST can create a
+        second billable task, so orchestration persists `submission_unknown` instead.
+        """
+
         payload: dict[str, object] = {"model": model, "input": dict(input_data)}
         if callback_url:
             payload["callBackUrl"] = callback_url
