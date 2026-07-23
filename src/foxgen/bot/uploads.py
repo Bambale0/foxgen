@@ -83,6 +83,10 @@ class TelegramInputMediaStorage:
         return await self._storage.presigned_url(normalized)
 
 
+def message_media_kind(message: Message) -> str:
+    return _message_file(message)[4]
+
+
 def _checksum(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as source:
