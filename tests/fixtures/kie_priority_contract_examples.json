@@ -1,0 +1,33 @@
+{
+  "seedream_5_text": {
+    "prompt": "Premium product photo of a black watch",
+    "aspect_ratio": "1:1",
+    "quality": "high",
+    "output_format": "png",
+    "nsfw_checker": false
+  },
+  "seedream_5_image": {
+    "prompt": "Replace the background with a winter forest",
+    "image_urls": ["https://cdn.example/source.png"],
+    "aspect_ratio": "16:9",
+    "quality": "basic",
+    "output_format": "jpg",
+    "nsfw_checker": false
+  },
+  "nano_banana": {
+    "prompt": "Replace the background with a winter forest",
+    "image_input": ["https://cdn.example/source.png"],
+    "aspect_ratio": "16:9",
+    "resolution": "2K",
+    "output_format": "jpg"
+  },
+  "seedance_2": {
+    "prompt": "A cinematic fox running through snow",
+    "return_last_frame": false,
+    "generate_audio": true,
+    "resolution": "720p",
+    "aspect_ratio": "16:9",
+    "duration": 15,
+    "web_search": false
+  }
+}
