@@ -10,10 +10,12 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, ValidationError
 
 from foxgen import __version__
+from foxgen.api.billing import BillingServiceProtocol, create_billing_router
 from foxgen.api.security import authenticate_submission, validate_idempotency_key
 from foxgen.application.submissions import SubmissionReceipt, SubmissionService
 from foxgen.core.config import Settings, get_settings
 from foxgen.core.errors import ErrorCode, FoxGenError, WebhookVerificationError
+from foxgen.infra.billing import SqlAlchemyBillingRepository
 from foxgen.infra.database import Database
 from foxgen.infra.lifecycle_repository import SqlAlchemyLifecycleRepository
 from foxgen.infra.rate_limit import RedisSubmissionRateLimiter
@@ -161,6 +163,7 @@ def create_app(
     manage_resources: bool = True,
     submission_service: SubmissionServiceProtocol | None = None,
     callback_recorder: CallbackRecorderProtocol | None = None,
+    billing_service: BillingServiceProtocol | None = None,
 ) -> FastAPI:
     resolved_settings = settings or get_settings()
     registry = ModelRegistry()
@@ -194,6 +197,8 @@ def create_app(
             )
         if app.state.callback_recorder is None:
             app.state.callback_recorder = SqlAlchemyLifecycleRepository(database)
+        if app.state.billing_service is None:
+            app.state.billing_service = SqlAlchemyBillingRepository(database)
 
         try:
             yield
@@ -210,6 +215,8 @@ def create_app(
     app.state.registry = registry
     app.state.submission_service = submission_service
     app.state.callback_recorder = callback_recorder
+    app.state.billing_service = billing_service
+    app.include_router(create_billing_router(resolved_settings))
 
     @app.exception_handler(FoxGenError)
     async def foxgen_error_handler(request: Request, exc: FoxGenError) -> JSONResponse:
