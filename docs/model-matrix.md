@@ -15,6 +15,8 @@ Every model returned by `GET /v1/models` exposes:
 
 `tested_live=false` is not hidden or inferred. It remains false until a real provider request is run in a controlled environment and recorded.
 
+`enabled_for_submission` is also independent: a model may have a verified provider ID and strict schema while remaining disabled after a provider regression, before product launch or during an emergency rollback. The production registry uses an explicit slug allowlist rather than deriving this switch from other fields.
+
 ## Production-enabled Market models
 
 | FoxGen slug | KIE model | Supported subset | Local validation |
