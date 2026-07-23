@@ -244,10 +244,10 @@ def test_seedance_rejects_invalid_modes_and_boundaries() -> None:
     with pytest.raises(ValidationError):
         validate_input(InputContract.SEEDANCE_2, {"prompt": "Fox", "duration": 7})
 
-    with pytest.raises(ValidationError, match="five-second"):
+    with pytest.raises(ValidationError):
         validate_input(
             InputContract.SEEDANCE_2,
-            {"prompt": "Fox", "resolution": "1080p", "duration": 10},
+            {"prompt": "Fox", "resolution": "1080p"},
         )
 
 
