@@ -1,60 +1,64 @@
 # KIE.ai model matrix
 
-FoxGen treats the KIE catalog as a versioned provider contract, not a list of marketing names. Every enabled entry has an exact provider `model` identifier, an official documentation page, capabilities, defaults and an input-contract level.
+FoxGen treats the KIE catalog as a versioned provider contract, not a list of marketing names. Discovering a provider model does **not** automatically make it safe for paid submission.
 
-## Integration levels
+## Independent readiness fields
 
-- **Strict contract** — model-specific Pydantic schema, defaults and cross-field validation.
-- **Documented contract** — exact provider ID and capability are verified; a reusable preflight schema validates the required media category while allowing documented provider-specific fields.
-- **Dedicated adapter required** — the model does not use the Market `createTask` protocol and must not be routed through the generic adapter.
+Every model returned by `GET /v1/models` exposes:
 
-## Exact project priorities — strict contracts
+- `provider_id_verified` — the exact KIE provider identifier and API family were checked;
+- `schema_verified` — FoxGen has a strict reviewed request schema for the supported subset;
+- `enabled_for_submission` — paid task admission is allowed;
+- `tested_live` — a credentialed provider smoke test was recorded;
+- `production_ready` — provider ID, schema and submission gate are all true;
+- `contract_reviewed_at` — date of the latest explicit contract review.
 
-| FoxGen slug | KIE model | Modes | Important validation |
+`tested_live=false` is not hidden or inferred. It remains false until a real provider request is run in a controlled environment and recorded.
+
+## Production-enabled Market models
+
+| FoxGen slug | KIE model | Supported subset | Local validation |
 |---|---|---|---|
-| `seedream-4-5` | `seedream/4.5-text-to-image` | text to image | prompt, ratio, quality and NSFW checker |
-| `seedream-4-5-edit` | `seedream/4.5-edit` | image editing | requires at least one `image_urls` value; 4.5 has no `output_format` field |
-| `seedream-5-pro` | `seedream/5-pro-text-to-image` | text to image | prompt, ratio, quality, output format and NSFW checker |
-| `seedream-5-pro-edit` | `seedream/5-pro-image-to-image` | image generation/edit | requires at least one `image_urls` value |
-| `seedance-2` | `bytedance/seedance-2` | text, first/last frame, multimodal references | frame mode and multimodal-reference mode are mutually exclusive |
-| `seedance-2-mini` | `bytedance/seedance-2-mini` | same modes as Seedance 2 | same strict contract, lower-cost tier |
+| `seedream-5-pro` | `seedream/5-pro-text-to-image` | text to image | strict prompt, ratio, quality and output-format enums |
+| `seedream-5-pro-edit` | `seedream/5-pro-image-to-image` | image editing | strict text contract plus 1–10 image URLs |
+| `nano-banana-2` | `nano-banana-2` | text generation and image editing | strict ratio, resolution and output-format enums; FoxGen cap of 14 images |
+| `nano-banana-pro` | `nano-banana-pro` | text generation and image editing | same reviewed normalized contract with the Pro provider ID |
+| `seedance-2` | `bytedance/seedance-2` | text, first/last frame and multimodal references | strict ratio, resolution and duration enums; mutually exclusive generation modes |
+| `seedance-2-mini` | `bytedance/seedance-2-mini` | same supported subset as Seedance 2 | same reviewed schema with the Mini provider ID |
+
+The Seedance contract additionally requires a first frame when a last frame is supplied. FoxGen accepts at most six multimodal references in total. Individual list limits and media-count caps are conservative FoxGen safety limits; they are not presented as provider-wide maxima.
 
 `Seedance 2 Fast` is intentionally excluded from the active FoxGen registry. The product priority is the full Seedance 2 model plus Seedance 2 Mini.
 
-## Additional strict models
+## Catalog-only models
 
-| FoxGen slug | KIE model | Modes | Important validation |
-|---|---|---|---|
-| `nano-banana-2` | `nano-banana-2` | text generation and image edit | empty `image_input` means text mode |
-| `nano-banana-pro` | `nano-banana-pro` | text generation and image edit | same normalized contract with Pro provider ID |
-| `kling-3` | `kling-3.0/video` | single/multi-shot, element references | single shot requires prompt; multi-shot requires shot array |
+The catalog also contains provider IDs and capability metadata for Seedream 4.5, GPT Image 2, Flux 2 Pro, Imagen 4 Ultra, Ideogram V3, Qwen2, Wan 2.7, Grok Imagine, Kling, Hailuo, Topaz, Recraft and ElevenLabs operations.
 
-## Current Market flagship pack
+These entries remain useful for discovery and roadmap planning, but their paid submission gate stays off until their exact model-specific schema is reviewed. Generic `PROMPT`, `PROMPT_IMAGES`, media-category and `PASSTHROUGH` contracts are not considered production schemas.
 
-### Image
+A request to a catalog-only model is rejected before rate limiting, persistence, balance reservation, outbox creation or KIE access.
 
-Seedream 4.5, Seedream 5 Pro, Nano Banana 2/Pro, GPT Image 2, Flux 2 Pro, Imagen 4 Ultra, Ideogram V3, Qwen2, Wan 2.7 Image Pro, Grok Imagine, Topaz and Recraft enhancement tools.
+## API behavior
 
-### Video
-
-Seedance 2 and Seedance 2 Mini, Kling 3.0 and V3 Turbo, Wan 2.7 text/image/reference/edit flows, Grok Imagine Video, Hailuo 2.3 Pro and Topaz Video Upscale.
-
-### Voice and audio
-
-ElevenLabs Dialogue V3, Multilingual V2, Turbo 2.5 and Audio Isolation.
-
-The full machine-readable list is returned by `GET /v1/models`. `GET /v1/models/{slug}` returns the JSON schema required to build Telegram FSM steps or a web form dynamically. `POST /v1/models/{slug}/validate` performs free local preflight validation. `POST /v1/models/{slug}/tasks` validates again and submits the exact provider ID to KIE.
+- `GET /v1/models` returns catalog metadata and independent readiness fields.
+- `GET /v1/models/{slug}` also returns the current JSON schema.
+- `POST /v1/models/{slug}/validate` performs free local schema validation.
+- `POST /v1/models/{slug}/tasks` admits only `production_ready` models and validates again before the atomic billing transaction.
 
 ## Models intentionally not sent through the Market adapter
 
-Veo 3.1, Runway/Aleph, Suno music operations, Gemini Omni resource creation and current chat endpoints use dedicated paths and response formats. They remain separate adapters; routing them through `/api/v1/jobs/createTask` would be incorrect. Their implementation is tracked under the provider and product epics.
+Veo 3.1, Runway/Aleph, Suno music operations, Gemini Omni resource creation and current chat endpoints use dedicated paths and response formats. They remain separate adapters; routing them through `/api/v1/jobs/createTask` would be incorrect.
 
-## Maintenance rule
+## Maintenance and drift review
 
 Before enabling a new model or version:
 
-1. verify the exact provider ID and endpoint in official KIE documentation;
-2. record its capability and API family;
-3. add or select an input contract;
-4. add a contract test that asserts the outbound model ID;
-5. update this matrix and the user-facing recommendation order.
+1. verify the exact provider ID and API family in official KIE documentation;
+2. record the documentation page and review date;
+3. implement a strict model-specific schema with enum, range and cross-field rules;
+4. add valid provider-example fixtures and invalid boundary tests;
+5. ensure no enabled entry uses passthrough or broad open validation;
+6. run a controlled live smoke test when credentials and budget are available;
+7. update this matrix and recommendation order.
+
+Contract review is required whenever the provider documentation changes, a live request starts returning a previously unseen validation error, or six months pass since `contract_reviewed_at`.
