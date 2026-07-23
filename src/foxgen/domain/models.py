@@ -131,16 +131,12 @@ class ModelSpec:
             self.verified and self.docs_url is not None
         )
         schema_verified = self.schema_verified or self.contract in _REVIEWED_SUBMISSION_CONTRACTS
-        enabled_for_submission = self.enabled_for_submission or (
-            provider_id_verified and schema_verified
-        )
         review_date = self.contract_reviewed_at
         if review_date is None and schema_verified:
             review_date = _REVIEW_DATE
 
         object.__setattr__(self, "provider_id_verified", provider_id_verified)
         object.__setattr__(self, "schema_verified", schema_verified)
-        object.__setattr__(self, "enabled_for_submission", enabled_for_submission)
         object.__setattr__(self, "contract_reviewed_at", review_date)
 
     def supports(self, capability: Capability) -> bool:
