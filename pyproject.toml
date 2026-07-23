@@ -36,6 +36,7 @@ dev = [
 [project.scripts]
 foxgen-api = "foxgen.cli:run_api"
 foxgen-bot = "foxgen.cli:run_bot"
+foxgen-worker = "foxgen.cli:run_worker"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
