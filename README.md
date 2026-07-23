@@ -19,24 +19,26 @@ The product is designed around a simple rule: a user should reach the target act
 
 ## Current implementation
 
-This first implementation PR provides:
-
 - async FastAPI and aiogram application entry points;
 - Redis-backed Telegram FSM with menu, cancel, back, edit and stale-callback fallbacks;
 - PostgreSQL entities and Alembic baseline migration;
 - typed KIE.ai Market API client with bounded retries and normalized errors;
 - KIE webhook HMAC-SHA256 verification with replay-window protection;
-- verified model registry and public model catalog endpoint;
+- versioned flagship model registry with exact provider IDs;
+- strict contracts for Seedance 2 / Fast / Mini, Seedream 5 Pro and Nano Banana 2 / Pro;
+- curated current image, video and ElevenLabs Market model pack;
+- JSON schemas, preflight validation and model-specific task submission endpoints;
 - Docker Compose for API, bot, PostgreSQL, Redis and migrations;
-- GitHub Actions CI for Ruff, formatting, mypy, pytest and Docker build.
+- GitHub Actions CI for Ruff, mypy, pytest and Docker build.
 
-Generation submission, billing and durable workers are deliberately split into subsequent reviewable PRs tracked by the epics.
+Generation billing and durable workers are deliberately split into subsequent reviewable PRs tracked by the epics.
 
 ## Architecture
 
 ```text
 Telegram update
     -> aiogram router + Redis FSM
+    -> model registry + typed input contract
     -> application service
     -> PostgreSQL transaction/outbox
     -> worker queue
@@ -64,7 +66,18 @@ API endpoints:
 - `GET /health/live`
 - `GET /health/ready`
 - `GET /v1/models`
+- `GET /v1/models/{slug}`
+- `POST /v1/models/{slug}/validate`
+- `POST /v1/models/{slug}/tasks`
 - `POST /webhooks/kie`
+
+Example preflight validation:
+
+```bash
+curl -X POST http://localhost:8080/v1/models/seedance-2/validate \
+  -H 'Content-Type: application/json' \
+  -d '{"input":{"prompt":"A cinematic fox running through snow"}}'
+```
 
 Local quality checks:
 
@@ -96,6 +109,7 @@ FOXGEN_KIE_WEBHOOK_HMAC_KEY=...
 8. [Referrals, partners and growth mechanics](../../issues/8)
 9. [Admin, moderation, support and analytics](../../issues/9)
 10. [Reliability, security, observability and delivery](../../issues/10)
+11. [Flagship KIE model pack](../../issues/12)
 
 ## Repository rules
 

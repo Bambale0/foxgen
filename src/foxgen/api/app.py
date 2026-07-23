@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from typing import Any
 
 from fastapi import FastAPI, Header, HTTPException, Request
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, ValidationError
 
 from foxgen import __version__
 from foxgen.core.config import Settings, get_settings
@@ -11,6 +11,9 @@ from foxgen.core.errors import WebhookVerificationError
 from foxgen.infra.database import Database
 from foxgen.infra.redis import RedisPool
 from foxgen.providers.kie.catalog import ModelRegistry
+from foxgen.providers.kie.client import KieClient
+from foxgen.providers.kie.contracts import contract_schema, validate_input
+from foxgen.providers.kie.service import KieModelService
 from foxgen.providers.kie.webhooks import verify_kie_webhook
 
 
@@ -18,6 +21,10 @@ class HealthResponse(BaseModel):
     status: str
     version: str
     dependencies: dict[str, str] | None = None
+
+
+class ModelInputRequest(BaseModel):
+    input: dict[str, Any]
 
 
 class KieWebhookTaskData(BaseModel):
@@ -42,6 +49,42 @@ class KieWebhookPayload(BaseModel):
         if not value:
             raise ValueError("task id is missing")
         return value
+
+
+def model_payload(item: Any, *, include_schema: bool = False) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "slug": item.slug,
+        "provider_model": item.provider_model,
+        "title": item.title,
+        "family": item.family,
+        "media_kind": item.media_kind,
+        "capabilities": sorted(item.capabilities),
+        "verified": item.verified,
+        "tier": item.tier,
+        "rank": item.rank,
+        "contract": item.contract,
+        "defaults": dict(item.defaults),
+        "recommended_for": list(item.recommended_for),
+        "docs_url": item.docs_url,
+        "api_family": item.api_family,
+    }
+    if include_schema:
+        payload["input_schema"] = contract_schema(item.contract)
+    return payload
+
+
+def model_or_404(registry: ModelRegistry, slug: str) -> Any:
+    try:
+        return registry.get(slug)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+def validated_input_or_422(contract: str, payload: dict[str, Any]) -> dict[str, Any]:
+    try:
+        return validate_input(contract, payload)
+    except ValidationError as exc:
+        raise HTTPException(status_code=422, detail=exc.errors(include_url=False)) from exc
 
 
 def create_app(settings: Settings | None = None, *, manage_resources: bool = True) -> FastAPI:
@@ -95,18 +138,40 @@ def create_app(settings: Settings | None = None, *, manage_resources: bool = Tru
 
     @app.get("/v1/models")
     async def models() -> list[dict[str, Any]]:
-        return [
-            {
-                "slug": item.slug,
-                "title": item.title,
-                "family": item.family,
-                "media_kind": item.media_kind,
-                "capabilities": sorted(item.capabilities),
-                "verified": item.verified,
-                "defaults": dict(item.defaults),
-            }
-            for item in registry.list()
-        ]
+        return [model_payload(item) for item in registry.list()]
+
+    @app.get("/v1/models/{slug}")
+    async def model_detail(slug: str) -> dict[str, Any]:
+        return model_payload(model_or_404(registry, slug), include_schema=True)
+
+    @app.post("/v1/models/{slug}/validate")
+    async def validate_model_input(slug: str, request: ModelInputRequest) -> dict[str, Any]:
+        item = model_or_404(registry, slug)
+        normalized = validated_input_or_422(item.contract, request.input)
+        return {"model": item.provider_model, "input": normalized}
+
+    @app.post("/v1/models/{slug}/tasks", status_code=202)
+    async def create_model_task(slug: str, request: ModelInputRequest) -> dict[str, str]:
+        item = model_or_404(registry, slug)
+        validated_input_or_422(item.contract, request.input)
+        api_key = resolved_settings.kie_api_key
+        if api_key is None:
+            raise HTTPException(status_code=503, detail="KIE API key is not configured")
+
+        client = KieClient(
+            api_key=api_key.get_secret_value(),
+            base_url=str(resolved_settings.kie_base_url),
+        )
+        service = KieModelService(client, registry)
+        try:
+            task = await service.submit(
+                model_slug=slug,
+                input_data=request.input,
+                callback_url=resolved_settings.kie_callback_url,
+            )
+        finally:
+            await client.aclose()
+        return {"task_id": task.task_id, "model": item.provider_model}
 
     @app.post("/webhooks/kie")
     async def kie_webhook(

@@ -42,6 +42,12 @@ class ModelSpec:
     capabilities: frozenset[Capability]
     verified: bool
     defaults: Mapping[str, object] = MappingProxyType({})
+    contract: str = "passthrough"
+    tier: str = "standard"
+    rank: int = 100
+    docs_url: str | None = None
+    recommended_for: tuple[str, ...] = ()
+    api_family: str = "market"
 
     def supports(self, capability: Capability) -> bool:
         return capability in self.capabilities
