@@ -16,7 +16,15 @@ down_revision: str | None = None
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
-media_kind = sa.Enum("IMAGE", "VIDEO", "AUDIO", "CHAT", name="media_kind")
+media_kind = postgresql.ENUM("IMAGE", "VIDEO", "AUDIO", "CHAT", name="media_kind")
+media_kind_column = postgresql.ENUM(
+    "IMAGE",
+    "VIDEO",
+    "AUDIO",
+    "CHAT",
+    name="media_kind",
+    create_type=False,
+)
 
 
 def upgrade() -> None:
@@ -43,7 +51,7 @@ def upgrade() -> None:
             nullable=False,
         ),
         sa.Column("user_id", sa.BigInteger(), nullable=False),
-        sa.Column("media_kind", media_kind, nullable=False),
+        sa.Column("media_kind", media_kind_column, nullable=False),
         sa.Column("model_slug", sa.String(length=128), nullable=False),
         sa.Column("prompt", sa.Text(), nullable=True),
         sa.Column("status", sa.String(length=32), nullable=False),

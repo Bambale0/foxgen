@@ -5,6 +5,7 @@ from html import escape
 from aiogram import Bot, Dispatcher, F, Router
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command, CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.storage.redis import RedisStorage
@@ -167,10 +168,14 @@ async def confirm_draft(callback: CallbackQuery, state: FSMContext) -> None:
 )
 async def planned_section(callback: CallbackQuery) -> None:
     if callback.message:
-        await callback.message.edit_text(
-            "Раздел уже включён в дорожную карту и будет подключён отдельным PR.",
-            reply_markup=main_menu(),
-        )
+        try:
+            await callback.message.edit_text(
+                "Раздел уже включён в дорожную карту и будет подключён отдельным PR.",
+                reply_markup=main_menu(),
+            )
+        except TelegramBadRequest as exc:
+            if "message is not modified" not in str(exc):
+                raise
     await callback.answer()
 
 
