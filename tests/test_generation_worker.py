@@ -1,5 +1,5 @@
 from dataclasses import replace
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 import pytest
@@ -29,6 +29,7 @@ class FakeLifecycleRepository:
             model_slug="seedream-5-pro",
             status=GenerationStatus.QUEUED,
             input_payload={"prompt": "A fox"},
+            result_payload=None,
             provider_task_id=None,
         )
         self.provider_event: ProviderEventSnapshot | None = None
@@ -36,6 +37,7 @@ class FakeLifecycleRepository:
         self.retried_events: list[UUID] = []
         self.transitions: list[GenerationStatus] = []
         self.poll_schedules = 0
+        self.stale = False
 
     async def claim_outbox(
         self,
@@ -86,12 +88,15 @@ class FakeLifecycleRepository:
         result_payload: dict[str, object] | None = None,
         error_code: str | None = None,
     ) -> GenerationWorkItem:
-        del result_payload, error_code
+        del error_code
         assert generation_id == self.generation.id
         assert self.generation.status in expected
         self.generation = replace(
             self.generation,
             status=target,
+            result_payload=(
+                result_payload if result_payload is not None else self.generation.result_payload
+            ),
             provider_task_id=provider_task_id or self.generation.provider_task_id,
         )
         self.transitions.append(target)
@@ -123,6 +128,17 @@ class FakeLifecycleRepository:
         assert delay.total_seconds() > 0
         self.poll_schedules += 1
 
+    async def list_stale_submitting(
+        self,
+        *,
+        older_than: datetime,
+        limit: int,
+    ) -> tuple[GenerationWorkItem, ...]:
+        del older_than, limit
+        if self.stale and self.generation.status == GenerationStatus.SUBMITTING:
+            return (self.generation,)
+        return ()
+
 
 class FakeLifecycleClient:
     def __init__(
@@ -135,6 +151,7 @@ class FakeLifecycleClient:
         self.task_record = task_record or TaskRecord(task_id="provider-task-1", state="processing")
         self.create_calls = 0
         self.poll_calls = 0
+        self.callback_url: str | None = None
 
     async def create_task(
         self,
@@ -143,9 +160,10 @@ class FakeLifecycleClient:
         input_data: dict[str, object],
         callback_url: str | None = None,
     ) -> TaskCreated:
-        del input_data, callback_url
+        del input_data
         assert model == "seedream/5-pro-text-to-image"
         self.create_calls += 1
+        self.callback_url = callback_url
         if self.create_error is not None:
             raise self.create_error
         return TaskCreated(task_id="provider-task-1")
@@ -157,7 +175,7 @@ class FakeLifecycleClient:
 
 
 @pytest.mark.asyncio
-async def test_worker_submits_queued_generation_once() -> None:
+async def test_worker_submits_queued_generation_once_with_local_callback_identity() -> None:
     repository = FakeLifecycleRepository(
         OutboxMessage(
             id=OUTBOX_ID,
@@ -168,10 +186,17 @@ async def test_worker_submits_queued_generation_once() -> None:
         )
     )
     client = FakeLifecycleClient()
-    worker = GenerationWorker(repository=repository, client=client)
+    worker = GenerationWorker(
+        repository=repository,
+        client=client,
+        callback_url="https://foxgen.example.com/webhooks/kie",
+    )
 
     assert await worker.run_once() == 1
     assert client.create_calls == 1
+    assert client.callback_url == (
+        "https://foxgen.example.com/webhooks/kie?generation_id=" f"{GENERATION_ID}"
+    )
     assert repository.generation.status == GenerationStatus.SUBMITTED
     assert repository.generation.provider_task_id == "provider-task-1"
     assert repository.completed_events == [OUTBOX_ID]
@@ -232,7 +257,7 @@ async def test_worker_marks_ambiguous_submission_unknown_without_retry() -> None
 
 
 @pytest.mark.asyncio
-async def test_worker_processes_success_callback_idempotently() -> None:
+async def test_callback_can_recover_lost_provider_response_by_local_generation_id() -> None:
     repository = FakeLifecycleRepository(
         OutboxMessage(
             id=OUTBOX_ID,
@@ -244,14 +269,14 @@ async def test_worker_processes_success_callback_idempotently() -> None:
     )
     repository.generation = replace(
         repository.generation,
-        status=GenerationStatus.SUBMITTED,
-        provider_task_id="provider-task-1",
+        status=GenerationStatus.SUBMISSION_UNKNOWN,
     )
     repository.provider_event = ProviderEventSnapshot(
         id=PROVIDER_EVENT_ID,
-        provider_task_id="provider-task-1",
+        provider_task_id="provider-task-after-lost-response",
         payload={
-            "taskId": "provider-task-1",
+            "_foxgen_generation_id": str(GENERATION_ID),
+            "taskId": "provider-task-after-lost-response",
             "state": "success",
             "resultJson": '{"resultUrls":["https://example.com/result.png"]}',
         },
@@ -262,8 +287,8 @@ async def test_worker_processes_success_callback_idempotently() -> None:
     await worker.run_once()
 
     assert repository.generation.status == GenerationStatus.SUCCEEDED
+    assert repository.generation.provider_task_id == "provider-task-after-lost-response"
     assert repository.provider_event.processed is True
-    assert repository.completed_events == [OUTBOX_ID]
 
 
 @pytest.mark.asyncio
@@ -286,3 +311,25 @@ async def test_polling_fallback_completes_submitted_generation() -> None:
     assert await worker.poll_once() == 1
     assert repository.generation.status == GenerationStatus.SUCCEEDED
     assert client.poll_calls == 1
+
+
+@pytest.mark.asyncio
+async def test_watchdog_moves_stale_submitting_to_unknown_without_resubmission() -> None:
+    repository = FakeLifecycleRepository()
+    repository.generation = replace(
+        repository.generation,
+        status=GenerationStatus.SUBMITTING,
+    )
+    repository.stale = True
+    client = FakeLifecycleClient()
+    worker = GenerationWorker(
+        repository=repository,
+        client=client,
+        stale_submitting_after=timedelta(minutes=5),
+    )
+
+    reconciled = await worker.reconcile_once(datetime.now(timezone.utc))
+
+    assert reconciled == 1
+    assert repository.generation.status == GenerationStatus.SUBMISSION_UNKNOWN
+    assert client.create_calls == 0

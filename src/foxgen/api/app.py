@@ -3,6 +3,7 @@ import json
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any, Protocol
+from uuid import UUID
 
 from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.responses import JSONResponse
@@ -326,7 +327,13 @@ def create_app(
         recorder: CallbackRecorderProtocol | None = request.app.state.callback_recorder
         if recorder is None:
             raise HTTPException(status_code=503, detail="Callback persistence is not configured")
-        raw_payload = payload.model_dump(mode="json", exclude_none=True)
+        raw_payload: dict[str, object] = payload.model_dump(mode="json", exclude_none=True)
+        generation_id_value = request.query_params.get("generation_id")
+        if generation_id_value:
+            try:
+                raw_payload["_foxgen_generation_id"] = str(UUID(generation_id_value))
+            except ValueError as exc:
+                raise HTTPException(status_code=400, detail="Invalid generation_id") from exc
         inserted = await recorder.record_provider_event(
             provider="kie",
             provider_task_id=task_id,

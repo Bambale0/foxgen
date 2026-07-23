@@ -36,12 +36,19 @@ The product is designed around a simple rule: a user should reach the target act
 - durable, deduplicated KIE callback inbox;
 - worker leasing with `FOR UPDATE SKIP LOCKED`, retry scheduling and dead-letter state;
 - single-attempt KIE `createTask` submission with `submission_unknown` recovery state;
+- local-generation callback correlation after a lost provider response;
+- stale-`submitting` watchdog without automatic resubmission;
 - polling fallback when a callback is delayed or missing;
 - structured parsing of provider `resultJson` payloads;
-- Docker Compose services for API, worker, bot, PostgreSQL, Redis and migrations;
+- SSRF-resistant result downloading with byte and timeout limits;
+- S3-compatible object storage with SHA-256 metadata and presigned delivery URLs;
+- persisted media assets and Telegram delivery state;
+- duplicate-safe Telegram delivery with explicit `delivery_unknown` state;
+- local MinIO service and bucket bootstrap in Docker Compose;
+- Docker Compose services for API, worker, bot, PostgreSQL, Redis, MinIO and migrations;
 - GitHub Actions CI for Ruff, mypy, pytest and Docker build.
 
-Object storage, expiring-media download, Telegram result delivery and the billing ledger remain under active implementation in issues #19 and #7.
+The remaining commercial release blocker is the atomic billing ledger in issue #7. Full image/video Telegram product FSMs and production hardening remain in issues #2, #5, #21 and #10.
 
 ## Current request path
 
@@ -58,10 +65,16 @@ Trusted FoxGen service
     -> one KIE createTask attempt
     -> submitted OR submission_unknown OR failed
     -> verified callback inbox OR polling fallback
-    -> durable terminal generation state
+    -> generation(status=succeeded)
+    -> outbox(generation.archive)
+    -> secure download + S3-compatible storage
+    -> outbox(generation.deliver)
+    -> presigned URL + Telegram delivery
 ```
 
-The billable provider POST is never automatically replayed. After a worker changes a generation to `submitting`, it completes the submission outbox event before contacting KIE. A transport failure therefore leaves an auditable `submission_unknown` state rather than risking a duplicate charge.
+The billable provider POST is never automatically replayed. The callback URL carries the local generation ID, allowing a later callback to recover an accepted task even when the original provider response was lost.
+
+Telegram send is also treated as non-idempotent. Delivery work is consumed immediately before sending. A transport-ambiguous send becomes `delivery_unknown` instead of producing duplicate files in the user's chat.
 
 See [architecture notes](docs/architecture.md). Provider-specific payloads stay inside provider adapters; Telegram handlers work with product capabilities rather than raw model APIs.
 
@@ -73,6 +86,8 @@ cp .env.example .env
 
 docker compose up --build
 ```
+
+The local stack starts PostgreSQL, Redis and MinIO. The MinIO API is exposed on port `9000`; its console is exposed on `9001` for development only.
 
 API endpoints:
 
@@ -110,9 +125,9 @@ curl -X POST http://localhost:8080/v1/models/seedream-5-pro/tasks \
   -d '{"input":{"prompt":"Premium product photo of a black watch"}}'
 ```
 
-A successful admission returns a local generation in `queued` state. The worker performs the provider call asynchronously.
+A successful admission returns a local generation in `queued` state. The worker performs the provider call asynchronously, archives the result and delivers stored media to the originating Telegram user.
 
-Never expose the internal token to Telegram clients, browsers or mini apps. Keep submission disabled until pricing, balance reservation and the complete result-delivery path are configured.
+Never expose the internal token or object-storage credentials to Telegram clients, browsers or mini apps. Keep paid admission disabled until issue #7 provides balance reservation and refund guarantees.
 
 Local quality checks:
 
@@ -123,7 +138,7 @@ make ci
 
 ## Configuration
 
-All settings use the `FOXGEN_` prefix. Secrets are read from environment variables and must never be committed. The `.env.example` file documents the required configuration, including worker batch, lease and polling settings.
+All settings use the `FOXGEN_` prefix. Secrets are read from environment variables and must never be committed. The `.env.example` file documents KIE, worker, media limits and S3-compatible storage settings.
 
 For production callbacks set:
 
@@ -131,6 +146,8 @@ For production callbacks set:
 FOXGEN_KIE_CALLBACK_BASE_URL=https://foxgen.example.com
 FOXGEN_KIE_WEBHOOK_HMAC_KEY=...
 ```
+
+For production storage, replace the local MinIO endpoint and development credentials with managed S3-compatible storage and keep the bucket private. Telegram receives temporary presigned URLs rather than provider URLs.
 
 ## Delivery plan
 
