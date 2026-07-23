@@ -29,6 +29,14 @@ class Settings(BaseSettings):
     kie_webhook_hmac_key: SecretStr | None = None
     webhook_max_age_seconds: int = Field(default=300, ge=30, le=3600)
 
+    # Paid task creation is disabled unless both the switch and an internal token are set.
+    task_submission_enabled: bool = False
+    internal_api_token: SecretStr | None = None
+    submission_user_rate_limit_per_minute: int = Field(default=10, ge=1, le=10_000)
+    submission_global_rate_limit_per_minute: int = Field(default=100, ge=1, le=100_000)
+    submission_user_concurrency_limit: int = Field(default=2, ge=1, le=100)
+    submission_global_concurrency_limit: int = Field(default=20, ge=1, le=10_000)
+
     @property
     def kie_callback_url(self) -> str | None:
         if self.kie_callback_base_url is None:

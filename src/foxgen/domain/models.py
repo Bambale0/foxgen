@@ -11,6 +11,27 @@ class MediaKind(StrEnum):
     CHAT = "chat"
 
 
+class GenerationStatus(StrEnum):
+    DRAFT = "draft"
+    QUEUED = "queued"
+    SUBMITTING = "submitting"
+    SUBMITTED = "submitted"
+    SUBMISSION_UNKNOWN = "submission_unknown"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+
+ACTIVE_GENERATION_STATUSES: frozenset[GenerationStatus] = frozenset(
+    {
+        GenerationStatus.QUEUED,
+        GenerationStatus.SUBMITTING,
+        GenerationStatus.SUBMITTED,
+        GenerationStatus.SUBMISSION_UNKNOWN,
+    }
+)
+
+
 class Capability(StrEnum):
     TEXT_TO_IMAGE = "text_to_image"
     IMAGE_TO_IMAGE = "image_to_image"

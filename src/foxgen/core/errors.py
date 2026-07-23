@@ -6,11 +6,16 @@ from typing import Any
 class ErrorCode(StrEnum):
     VALIDATION = "validation_error"
     AUTHENTICATION = "authentication_error"
+    AUTHORIZATION = "authorization_error"
+    SUBMISSION_DISABLED = "submission_disabled"
+    IDEMPOTENCY_CONFLICT = "idempotency_conflict"
+    CONCURRENCY_LIMITED = "concurrency_limited"
     INSUFFICIENT_CREDITS = "insufficient_credits"
     RATE_LIMITED = "rate_limited"
     PROVIDER_UNAVAILABLE = "provider_unavailable"
     PROVIDER_REJECTED = "provider_rejected"
     PROVIDER_PROTOCOL = "provider_protocol_error"
+    SUBMISSION_UNKNOWN = "submission_unknown"
     TASK_NOT_FOUND = "task_not_found"
     WEBHOOK_INVALID = "webhook_invalid"
 
@@ -27,6 +32,10 @@ class FoxGenError(Exception):
 
 
 class ProviderError(FoxGenError):
+    pass
+
+
+class SubmissionError(FoxGenError):
     pass
 
 
