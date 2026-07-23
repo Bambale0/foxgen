@@ -1,6 +1,7 @@
 from collections.abc import Mapping
 from typing import Protocol
 
+from foxgen.core.errors import ErrorCode, SubmissionError
 from foxgen.providers.kie.client import TaskCreated
 from foxgen.providers.kie.contracts import validate_input
 from foxgen.providers.kie.registry import ModelRegistry
@@ -29,6 +30,12 @@ class KieModelService:
         callback_url: str | None = None,
     ) -> TaskCreated:
         model = self._registry.get(model_slug)
+        if not model.production_ready:
+            raise SubmissionError(
+                ErrorCode.AUTHORIZATION,
+                "Эта модель не включена для production-задач.",
+                details={"model_slug": model.slug},
+            )
         normalized = validate_input(model.contract, input_data)
         return await self._client.create_task(
             model=model.provider_model,

@@ -22,6 +22,35 @@ class InputContract(StrEnum):
     KLING_3 = "kling_3"
 
 
+SeedreamAspectRatio = Literal[
+    "1:1",
+    "16:9",
+    "9:16",
+    "4:3",
+    "3:4",
+    "3:2",
+    "2:3",
+    "21:9",
+]
+SeedreamQuality = Literal["basic", "high"]
+ImageOutputFormat = Literal["png", "jpg"]
+NanoBananaAspectRatio = Literal[
+    "auto",
+    "1:1",
+    "16:9",
+    "9:16",
+    "4:3",
+    "3:4",
+    "3:2",
+    "2:3",
+    "21:9",
+]
+NanoBananaResolution = Literal["1K", "2K", "4K"]
+SeedanceResolution = Literal["720p"]
+SeedanceAspectRatio = Literal["16:9", "9:16", "1:1"]
+SeedanceDuration = Literal[5, 10, 15]
+
+
 class OpenInput(BaseModel):
     model_config = ConfigDict(extra="allow")
 
@@ -97,52 +126,56 @@ class DialogueInput(OpenInput):
 
 
 class Seedream45TextInput(StrictInput):
-    """Exact KIE Market contract for Seedream 4.5 text-to-image."""
-
     prompt: str = Field(min_length=1, max_length=10_000)
-    aspect_ratio: str = "1:1"
-    quality: str = "basic"
+    aspect_ratio: SeedreamAspectRatio = "1:1"
+    quality: SeedreamQuality = "basic"
     nsfw_checker: bool = False
 
 
 class Seedream45EditInput(Seedream45TextInput):
-    """Exact KIE Market contract for Seedream 4.5 image editing."""
-
-    image_urls: list[AnyHttpUrl] = Field(min_length=1)
+    image_urls: list[AnyHttpUrl] = Field(min_length=1, max_length=10)
 
 
 class Seedream5TextInput(StrictInput):
+    """Reviewed KIE Market request contract for Seedream 5 Pro text-to-image."""
+
     prompt: str = Field(min_length=1, max_length=10_000)
-    aspect_ratio: str = "1:1"
-    quality: str = "basic"
-    output_format: Literal["png", "jpg", "jpeg"] = "png"
+    aspect_ratio: SeedreamAspectRatio = "1:1"
+    quality: SeedreamQuality = "basic"
+    output_format: ImageOutputFormat = "png"
     nsfw_checker: bool = False
 
 
 class Seedream5ImageInput(Seedream5TextInput):
-    image_urls: list[AnyHttpUrl] = Field(min_length=1)
+    """Reviewed KIE Market request contract for Seedream 5 Pro image-to-image."""
+
+    image_urls: list[AnyHttpUrl] = Field(min_length=1, max_length=10)
 
 
 class NanoBananaInput(StrictInput):
+    """Shared reviewed KIE contract for Nano Banana 2 and Nano Banana Pro."""
+
     prompt: str = Field(min_length=1, max_length=10_000)
-    image_input: list[AnyHttpUrl] = Field(default_factory=list)
-    aspect_ratio: str = "auto"
-    resolution: str = "1K"
-    output_format: Literal["png", "jpg", "jpeg"] = "png"
+    image_input: list[AnyHttpUrl] = Field(default_factory=list, max_length=14)
+    aspect_ratio: NanoBananaAspectRatio = "auto"
+    resolution: NanoBananaResolution = "1K"
+    output_format: ImageOutputFormat = "png"
 
 
 class Seedance2Input(StrictInput):
+    """Reviewed safe request subset for Seedance 2 and Mini."""
+
     prompt: str = Field(min_length=1, max_length=10_000)
     first_frame_url: AnyHttpUrl | None = None
     last_frame_url: AnyHttpUrl | None = None
-    reference_image_urls: list[AnyHttpUrl] = Field(default_factory=list)
-    reference_video_urls: list[AnyHttpUrl] = Field(default_factory=list)
-    reference_audio_urls: list[AnyHttpUrl] = Field(default_factory=list)
+    reference_image_urls: list[AnyHttpUrl] = Field(default_factory=list, max_length=6)
+    reference_video_urls: list[AnyHttpUrl] = Field(default_factory=list, max_length=3)
+    reference_audio_urls: list[AnyHttpUrl] = Field(default_factory=list, max_length=3)
     return_last_frame: bool = False
     generate_audio: bool = False
-    resolution: str = "720p"
-    aspect_ratio: str = "16:9"
-    duration: int = Field(default=5, gt=0)
+    resolution: SeedanceResolution = "720p"
+    aspect_ratio: SeedanceAspectRatio = "16:9"
+    duration: SeedanceDuration = 5
     web_search: bool = False
 
     @model_validator(mode="after")
@@ -151,15 +184,17 @@ class Seedance2Input(StrictInput):
             raise ValueError("last_frame_url requires first_frame_url")
 
         frame_mode = self.first_frame_url is not None or self.last_frame_url is not None
-        reference_mode = bool(
-            self.reference_image_urls
-            or self.reference_video_urls
-            or self.reference_audio_urls
+        reference_count = (
+            len(self.reference_image_urls)
+            + len(self.reference_video_urls)
+            + len(self.reference_audio_urls)
         )
-        if frame_mode and reference_mode:
+        if frame_mode and reference_count:
             raise ValueError(
                 "first/last frame mode and multimodal reference mode are mutually exclusive"
             )
+        if reference_count > 6:
+            raise ValueError("multimodal reference mode accepts at most six references")
         return self
 
 
@@ -214,12 +249,29 @@ CONTRACT_MODELS: dict[InputContract, type[BaseModel]] = {
 }
 
 
+SCHEMA_VERIFIED_CONTRACTS: frozenset[InputContract] = frozenset(
+    {
+        InputContract.SEEDREAM_5_TEXT,
+        InputContract.SEEDREAM_5_IMAGE,
+        InputContract.NANO_BANANA,
+        InputContract.SEEDANCE_2,
+    }
+)
+
+
 def get_contract(name: str) -> type[BaseModel]:
     try:
         contract = InputContract(name)
         return CONTRACT_MODELS[contract]
     except (ValueError, KeyError) as exc:
         raise KeyError(f"Unknown input contract: {name}") from exc
+
+
+def is_schema_verified_contract(name: str) -> bool:
+    try:
+        return InputContract(name) in SCHEMA_VERIFIED_CONTRACTS
+    except ValueError:
+        return False
 
 
 def validate_input(name: str, payload: dict[str, Any]) -> dict[str, Any]:
