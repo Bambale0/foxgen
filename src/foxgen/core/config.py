@@ -37,6 +37,10 @@ class Settings(BaseSettings):
     submission_user_concurrency_limit: int = Field(default=2, ge=1, le=100)
     submission_global_concurrency_limit: int = Field(default=20, ge=1, le=10_000)
 
+    # Price and balance mutations use a separate credential and are disabled by default.
+    billing_admin_api_enabled: bool = False
+    billing_admin_api_token: SecretStr | None = None
+
     worker_loop_interval_seconds: float = Field(default=1.0, ge=0.1, le=60)
     worker_outbox_batch_size: int = Field(default=10, ge=1, le=500)
     worker_outbox_lease_seconds: int = Field(default=120, ge=30, le=3600)
