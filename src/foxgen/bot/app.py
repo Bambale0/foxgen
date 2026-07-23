@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from html import escape
 
 from aiogram import Bot, Dispatcher, F, Router
 from aiogram.client.default import DefaultBotProperties
@@ -63,6 +64,15 @@ def confirmation_keyboard() -> InlineKeyboardMarkup:
     )
 
 
+def render_prompt_confirmation(product: str, prompt: str) -> str:
+    return (
+        "<b>Черновик готов</b>\n\n"
+        f"Тип: <code>{escape(product)}</code>\n"
+        f"Описание: {escape(prompt)}\n\n"
+        "Следующим шагом выберем модель и покажем точную стоимость."
+    )
+
+
 @router.message(CommandStart())
 @router.message(Command("menu"))
 async def show_menu(message: Message, state: FSMContext) -> None:
@@ -117,18 +127,13 @@ async def receive_prompt(message: Message, state: FSMContext) -> None:
     if len(prompt) < 3:
         await message.answer("Описание слишком короткое. Добавьте хотя бы несколько слов.")
         return
-    if len(prompt) > 4000:
-        await message.answer("Описание длиннее 4000 символов. Сократите его и отправьте снова.")
+    if len(prompt) > 3500:
+        await message.answer("Описание длиннее 3500 символов. Сократите его и отправьте снова.")
         return
     await state.update_data(prompt=prompt)
     await state.set_state(GenerationStates.confirming)
     data = await state.get_data()
-    text = (
-        "<b>Черновик готов</b>\n\n"
-        f"Тип: <code>{data['product']}</code>\n"
-        f"Описание: {prompt}\n\n"
-        "Следующим шагом выберем модель и покажем точную стоимость."
-    )
+    text = render_prompt_confirmation(str(data.get("product", "unknown")), prompt)
     await message.answer(text, reply_markup=confirmation_keyboard())
 
 
@@ -151,7 +156,7 @@ async def confirm_draft(callback: CallbackQuery, state: FSMContext) -> None:
         text = (
             "Черновик сохранён. Подключение каталога моделей и расчёта цены "
             "выполняется в следующем PR.\n\n"
-            f"Сценарий: <code>{data.get('product', 'unknown')}</code>"
+            f"Сценарий: <code>{escape(str(data.get('product', 'unknown')))}</code>"
         )
         await callback.message.edit_text(text, reply_markup=main_menu())
     await callback.answer("Черновик сохранён")
