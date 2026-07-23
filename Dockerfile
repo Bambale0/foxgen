@@ -1,20 +1,26 @@
-FROM python:3.12-slim AS runtime
+FROM python:3.12-slim-bookworm AS runtime
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PIP_NO_CACHE_DIR=1
 
 WORKDIR /app
 
 RUN addgroup --system foxgen && adduser --system --ingroup foxgen foxgen
 
-COPY pyproject.toml README.md ./
+COPY requirements.lock pyproject.toml README.md ./
 COPY src ./src
 COPY migrations ./migrations
 COPY alembic.ini ./
 
-RUN pip install --upgrade pip && pip install .
+RUN python -m pip install --requirement requirements.lock \
+    && python -m pip install --no-deps . \
+    && python -m pip check
 
 USER foxgen
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health/live', timeout=3)" || exit 1
 
 CMD ["foxgen-api"]
