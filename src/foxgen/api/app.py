@@ -1,3 +1,5 @@
+import hashlib
+import json
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any, Protocol
@@ -12,10 +14,10 @@ from foxgen.application.submissions import SubmissionReceipt, SubmissionService
 from foxgen.core.config import Settings, get_settings
 from foxgen.core.errors import ErrorCode, FoxGenError, WebhookVerificationError
 from foxgen.infra.database import Database
+from foxgen.infra.lifecycle_repository import SqlAlchemyLifecycleRepository
 from foxgen.infra.rate_limit import RedisSubmissionRateLimiter
 from foxgen.infra.redis import RedisPool
 from foxgen.infra.repositories import SqlAlchemyGenerationRepository
-from foxgen.providers.kie.client import KieClient
 from foxgen.providers.kie.contracts import contract_schema, validate_input
 from foxgen.providers.kie.registry import ModelRegistry
 from foxgen.providers.kie.webhooks import verify_kie_webhook
@@ -41,6 +43,17 @@ class SubmissionServiceProtocol(Protocol):
         input_data: dict[str, object],
         idempotency_key: str,
     ) -> SubmissionReceipt: ...
+
+
+class CallbackRecorderProtocol(Protocol):
+    async def record_provider_event(
+        self,
+        *,
+        provider: str,
+        provider_task_id: str,
+        event_hash: str,
+        payload: dict[str, object],
+    ) -> bool: ...
 
 
 class KieWebhookTaskData(BaseModel):
@@ -131,11 +144,22 @@ def receipt_payload(receipt: SubmissionReceipt) -> dict[str, Any]:
     }
 
 
+def _webhook_hash(payload: dict[str, object]) -> str:
+    canonical = json.dumps(
+        payload,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return hashlib.sha256(canonical).hexdigest()
+
+
 def create_app(
     settings: Settings | None = None,
     *,
     manage_resources: bool = True,
     submission_service: SubmissionServiceProtocol | None = None,
+    callback_recorder: CallbackRecorderProtocol | None = None,
 ) -> FastAPI:
     resolved_settings = settings or get_settings()
     registry = ModelRegistry()
@@ -148,19 +172,12 @@ def create_app(
 
         database = Database(resolved_settings.database_url)
         redis = RedisPool(resolved_settings.redis_url)
-        kie_client: KieClient | None = None
         app.state.database = database
         app.state.redis = redis
 
-        api_key = resolved_settings.kie_api_key
-        if app.state.submission_service is None and api_key is not None:
-            kie_client = KieClient(
-                api_key=api_key.get_secret_value(),
-                base_url=str(resolved_settings.kie_base_url),
-            )
+        if app.state.submission_service is None:
             app.state.submission_service = SubmissionService(
                 repository=SqlAlchemyGenerationRepository(database),
-                client=kie_client,
                 rate_limiter=RedisSubmissionRateLimiter(
                     redis.client,
                     user_limit_per_minute=(
@@ -171,16 +188,15 @@ def create_app(
                     ),
                 ),
                 registry=registry,
-                callback_url=resolved_settings.kie_callback_url,
                 user_concurrency_limit=resolved_settings.submission_user_concurrency_limit,
                 global_concurrency_limit=resolved_settings.submission_global_concurrency_limit,
             )
+        if app.state.callback_recorder is None:
+            app.state.callback_recorder = SqlAlchemyLifecycleRepository(database)
 
         try:
             yield
         finally:
-            if kie_client is not None:
-                await kie_client.aclose()
             await redis.close()
             await database.close()
 
@@ -192,6 +208,7 @@ def create_app(
     app.state.settings = resolved_settings
     app.state.registry = registry
     app.state.submission_service = submission_service
+    app.state.callback_recorder = callback_recorder
 
     @app.exception_handler(FoxGenError)
     async def foxgen_error_handler(request: Request, exc: FoxGenError) -> JSONResponse:
@@ -258,6 +275,8 @@ def create_app(
             authorization=authorization,
             user_id_header=user_id_header,
         )
+        if resolved_settings.kie_api_key is None:
+            raise HTTPException(status_code=503, detail="KIE API key is not configured")
         idempotency_key = validate_idempotency_key(idempotency_key_header)
         item = model_or_404(registry, slug)
         validated_input_or_422(item.contract, body.input)
@@ -280,9 +299,10 @@ def create_app(
     @app.post("/webhooks/kie")
     async def kie_webhook(
         payload: KieWebhookPayload,
+        request: Request,
         x_webhook_timestamp: str | None = Header(default=None),
         x_webhook_signature: str | None = Header(default=None),
-    ) -> dict[str, str]:
+    ) -> dict[str, object]:
         secret_value = resolved_settings.kie_webhook_hmac_key
         if secret_value is None:
             raise HTTPException(
@@ -303,8 +323,17 @@ def create_app(
         except (WebhookVerificationError, ValueError) as exc:
             raise HTTPException(status_code=401, detail=str(exc)) from exc
 
-        # Durable, idempotent result processing is implemented in the next lifecycle PR.
-        return {"status": "accepted", "task_id": task_id}
+        recorder: CallbackRecorderProtocol | None = request.app.state.callback_recorder
+        if recorder is None:
+            raise HTTPException(status_code=503, detail="Callback persistence is not configured")
+        raw_payload = payload.model_dump(mode="json", exclude_none=True)
+        inserted = await recorder.record_provider_event(
+            provider="kie",
+            provider_task_id=task_id,
+            event_hash=_webhook_hash(raw_payload),
+            payload=raw_payload,
+        )
+        return {"status": "accepted", "task_id": task_id, "duplicate": not inserted}
 
     return app
 
