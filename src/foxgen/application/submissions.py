@@ -4,9 +4,8 @@ from dataclasses import dataclass
 from typing import Protocol
 from uuid import UUID
 
-from foxgen.core.errors import ErrorCode, ProviderError, SubmissionError
+from foxgen.core.errors import ErrorCode, SubmissionError
 from foxgen.domain.models import GenerationStatus, MediaKind, ModelSpec
-from foxgen.providers.kie.client import TaskCreated
 from foxgen.providers.kie.contracts import InputContract, validate_input
 from foxgen.providers.kie.registry import ModelRegistry
 
@@ -55,29 +54,9 @@ class GenerationRepository(Protocol):
         global_concurrency_limit: int,
     ) -> tuple[GenerationSnapshot, bool]: ...
 
-    async def transition(
-        self,
-        *,
-        generation_id: UUID,
-        expected: frozenset[GenerationStatus],
-        target: GenerationStatus,
-        provider_task_id: str | None = None,
-        error_code: str | None = None,
-    ) -> GenerationSnapshot: ...
-
 
 class SubmissionRateLimiter(Protocol):
     async def check(self, user_id: int) -> None: ...
-
-
-class TaskClient(Protocol):
-    async def create_task(
-        self,
-        *,
-        model: str,
-        input_data: dict[str, object],
-        callback_url: str | None = None,
-    ) -> TaskCreated: ...
 
 
 class NoopSubmissionRateLimiter:
@@ -116,18 +95,14 @@ class SubmissionService:
         self,
         *,
         repository: GenerationRepository,
-        client: TaskClient,
         rate_limiter: SubmissionRateLimiter,
         registry: ModelRegistry | None = None,
-        callback_url: str | None = None,
         user_concurrency_limit: int = 2,
         global_concurrency_limit: int = 20,
     ) -> None:
         self._repository = repository
-        self._client = client
         self._rate_limiter = rate_limiter
         self._registry = registry or ModelRegistry()
-        self._callback_url = callback_url
         self._user_concurrency_limit = user_concurrency_limit
         self._global_concurrency_limit = global_concurrency_limit
 
@@ -171,46 +146,8 @@ class SubmissionService:
             user_concurrency_limit=self._user_concurrency_limit,
             global_concurrency_limit=self._global_concurrency_limit,
         )
-        if not created:
-            self._assert_same_request(generation, request_hash)
-            return _receipt(generation, model, replayed=True)
-
-        generation = await self._repository.transition(
-            generation_id=generation.id,
-            expected=frozenset({GenerationStatus.QUEUED}),
-            target=GenerationStatus.SUBMITTING,
-        )
-        try:
-            task = await self._client.create_task(
-                model=model.provider_model,
-                input_data=normalized,
-                callback_url=self._callback_url,
-            )
-        except ProviderError as exc:
-            if exc.retryable:
-                generation = await self._repository.transition(
-                    generation_id=generation.id,
-                    expected=frozenset({GenerationStatus.SUBMITTING}),
-                    target=GenerationStatus.SUBMISSION_UNKNOWN,
-                    error_code=exc.code,
-                )
-                return _receipt(generation, model, replayed=False)
-
-            await self._repository.transition(
-                generation_id=generation.id,
-                expected=frozenset({GenerationStatus.SUBMITTING}),
-                target=GenerationStatus.FAILED,
-                error_code=exc.code,
-            )
-            raise
-
-        generation = await self._repository.transition(
-            generation_id=generation.id,
-            expected=frozenset({GenerationStatus.SUBMITTING}),
-            target=GenerationStatus.SUBMITTED,
-            provider_task_id=task.task_id,
-        )
-        return _receipt(generation, model, replayed=False)
+        self._assert_same_request(generation, request_hash)
+        return _receipt(generation, model, replayed=not created)
 
     @staticmethod
     def _assert_same_request(generation: GenerationSnapshot, request_hash: str) -> None:
