@@ -6,9 +6,9 @@ from uuid import UUID
 
 from foxgen.core.errors import ErrorCode, ProviderError, SubmissionError
 from foxgen.domain.models import GenerationStatus, MediaKind, ModelSpec
-from foxgen.providers.kie.catalog import ModelRegistry
 from foxgen.providers.kie.client import TaskCreated
 from foxgen.providers.kie.contracts import InputContract, validate_input
+from foxgen.providers.kie.registry import ModelRegistry
 
 
 @dataclass(frozen=True, slots=True)
