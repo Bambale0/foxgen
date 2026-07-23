@@ -46,7 +46,7 @@ NanoBananaAspectRatio = Literal[
     "21:9",
 ]
 NanoBananaResolution = Literal["1K", "2K", "4K"]
-SeedanceResolution = Literal["720p", "1080p"]
+SeedanceResolution = Literal["720p"]
 SeedanceAspectRatio = Literal["16:9", "9:16", "1:1"]
 SeedanceDuration = Literal[5, 10, 15]
 
@@ -163,7 +163,7 @@ class NanoBananaInput(StrictInput):
 
 
 class Seedance2Input(StrictInput):
-    """Reviewed safe request contract for Seedance 2, Fast and Mini."""
+    """Reviewed safe request subset for Seedance 2 and Mini."""
 
     prompt: str = Field(min_length=1, max_length=10_000)
     first_frame_url: AnyHttpUrl | None = None
@@ -195,8 +195,6 @@ class Seedance2Input(StrictInput):
             )
         if reference_count > 6:
             raise ValueError("multimodal reference mode accepts at most six references")
-        if self.resolution == "1080p" and self.duration != 5:
-            raise ValueError("1080p is supported only for five-second requests")
         return self
 
 
