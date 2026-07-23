@@ -24,6 +24,30 @@ services:
     volumes:
       - redis_data:/data
 
+  minio:
+    image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: foxgen
+      MINIO_ROOT_PASSWORD: foxgen-development-secret
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+
+  minio-init:
+    image: minio/mc:RELEASE.2025-08-13T08-35-41Z
+    depends_on:
+      minio:
+        condition: service_started
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        until mc alias set local http://minio:9000 foxgen foxgen-development-secret; do sleep 2; done
+        mc mb --ignore-existing local/foxgen-media
+
   migrate:
     build: .
     env_file: .env
@@ -54,6 +78,8 @@ services:
         condition: service_completed_successfully
       redis:
         condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
 
   bot:
     build: .
@@ -68,3 +94,4 @@ services:
 volumes:
   postgres_data:
   redis_data:
+  minio_data:

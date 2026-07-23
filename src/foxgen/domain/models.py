@@ -39,6 +39,20 @@ class OutboxStatus(StrEnum):
     FAILED = "failed"
 
 
+class MediaAssetStatus(StrEnum):
+    PENDING = "pending"
+    STORED = "stored"
+    FAILED = "failed"
+
+
+class DeliveryStatus(StrEnum):
+    PENDING = "pending"
+    SENDING = "sending"
+    SENT = "sent"
+    DELIVERY_UNKNOWN = "delivery_unknown"
+    FAILED = "failed"
+
+
 class Capability(StrEnum):
     TEXT_TO_IMAGE = "text_to_image"
     IMAGE_TO_IMAGE = "image_to_image"

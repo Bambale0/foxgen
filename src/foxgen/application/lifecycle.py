@@ -1,7 +1,8 @@
 import json
 from dataclasses import dataclass
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Protocol
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from uuid import UUID
 
 from foxgen.core.errors import ErrorCode, ProviderError, SubmissionError
@@ -26,6 +27,7 @@ class GenerationWorkItem:
     model_slug: str
     status: GenerationStatus
     input_payload: dict[str, object]
+    result_payload: dict[str, object] | None
     provider_task_id: str | None
 
 
@@ -54,6 +56,10 @@ class LifecycleTaskClient(Protocol):
     ) -> TaskCreated: ...
 
     async def get_task(self, task_id: str) -> TaskRecord: ...
+
+
+class OutboxProcessor(Protocol):
+    async def process(self, message: OutboxMessage) -> None: ...
 
 
 class LifecycleRepository(Protocol):
@@ -107,6 +113,13 @@ class LifecycleRepository(Protocol):
         delay: timedelta,
     ) -> None: ...
 
+    async def list_stale_submitting(
+        self,
+        *,
+        older_than: datetime,
+        limit: int,
+    ) -> tuple[GenerationWorkItem, ...]: ...
+
 
 class GenerationWorker:
     def __init__(
@@ -116,21 +129,25 @@ class GenerationWorker:
         client: LifecycleTaskClient,
         registry: ModelRegistry | None = None,
         callback_url: str | None = None,
+        media_pipeline: OutboxProcessor | None = None,
         worker_id: str = "foxgen-worker",
         batch_size: int = 10,
         lease_seconds: int = 120,
         max_attempts: int = 8,
         poll_interval: timedelta = timedelta(seconds=20),
+        stale_submitting_after: timedelta = timedelta(minutes=10),
     ) -> None:
         self._repository = repository
         self._client = client
         self._registry = registry or ModelRegistry()
         self._callback_url = callback_url
+        self._media_pipeline = media_pipeline
         self._worker_id = worker_id
         self._batch_size = batch_size
         self._lease_seconds = lease_seconds
         self._max_attempts = max_attempts
         self._poll_interval = poll_interval
+        self._stale_submitting_after = stale_submitting_after
 
     async def run_once(self) -> int:
         messages = await self._repository.claim_outbox(
@@ -148,12 +165,34 @@ class GenerationWorker:
             await self._poll_generation(generation)
         return len(generations)
 
+    async def reconcile_once(self, now: datetime) -> int:
+        stale = await self._repository.list_stale_submitting(
+            older_than=now - self._stale_submitting_after,
+            limit=self._batch_size,
+        )
+        for generation in stale:
+            await self._repository.transition_generation(
+                generation_id=generation.id,
+                expected=frozenset({GenerationStatus.SUBMITTING}),
+                target=GenerationStatus.SUBMISSION_UNKNOWN,
+                error_code=ErrorCode.SUBMISSION_UNKNOWN,
+            )
+        return len(stale)
+
     async def _process_message(self, message: OutboxMessage) -> None:
         try:
             if message.event_type == "generation.submit":
                 await self._submit_generation(message)
             elif message.event_type == "kie.callback":
                 await self._process_callback(message)
+            elif message.event_type in {"generation.archive", "generation.deliver"}:
+                if self._media_pipeline is None:
+                    raise SubmissionError(
+                        ErrorCode.PROVIDER_UNAVAILABLE,
+                        "Media pipeline is not configured",
+                        retryable=True,
+                    )
+                await self._media_pipeline.process(message)
             else:
                 raise SubmissionError(
                     ErrorCode.VALIDATION,
@@ -190,15 +229,14 @@ class GenerationWorker:
         )
 
         # This event must never be replayed automatically after the billable POST starts.
-        # If the process crashes after this point, the generation stays `submitting` and a
-        # watchdog/operator can move it to `submission_unknown` without creating a duplicate.
         await self._repository.complete_outbox(message.id)
 
+        callback_url = _callback_url_for_generation(self._callback_url, generation.id)
         try:
             task = await self._client.create_task(
                 model=model.provider_model,
                 input_data=generation.input_payload,
-                callback_url=self._callback_url,
+                callback_url=callback_url,
             )
         except ProviderError as exc:
             target = (
@@ -214,7 +252,6 @@ class GenerationWorker:
             )
             return
         except Exception:
-            # The provider may have accepted the POST before the transport failed.
             await self._repository.transition_generation(
                 generation_id=generation.id,
                 expected=frozenset({GenerationStatus.SUBMITTING}),
@@ -241,32 +278,49 @@ class GenerationWorker:
             await self._repository.complete_outbox(message.id)
             return
 
-        generation = await self._repository.find_generation_by_provider_task_id(
-            event.provider_task_id
-        )
-        if generation is None:
-            raise SubmissionError(
-                ErrorCode.TASK_NOT_FOUND,
-                f"Generation for provider task {event.provider_task_id} is not linked yet",
-                retryable=True,
-            )
-
+        generation = await self._generation_for_event(event)
         state = normalize_provider_payload(event.payload)
         if state.status is not None:
             await self._repository.transition_generation(
                 generation_id=generation.id,
                 expected=frozenset(
                     {
+                        GenerationStatus.SUBMITTING,
                         GenerationStatus.SUBMITTED,
                         GenerationStatus.SUBMISSION_UNKNOWN,
                     }
                 ),
                 target=state.status,
+                provider_task_id=event.provider_task_id,
                 result_payload=state.result_payload,
                 error_code=state.error_code,
             )
         await self._repository.mark_provider_event_processed(event.id)
         await self._repository.complete_outbox(message.id)
+
+    async def _generation_for_event(
+        self,
+        event: ProviderEventSnapshot,
+    ) -> GenerationWorkItem:
+        local_id = event.payload.get("_foxgen_generation_id")
+        if isinstance(local_id, str):
+            try:
+                generation = await self._repository.get_generation(UUID(local_id))
+            except ValueError:
+                generation = None
+            if generation is not None:
+                return generation
+
+        generation = await self._repository.find_generation_by_provider_task_id(
+            event.provider_task_id
+        )
+        if generation is not None:
+            return generation
+        raise SubmissionError(
+            ErrorCode.TASK_NOT_FOUND,
+            f"Generation for provider task {event.provider_task_id} is not linked yet",
+            retryable=True,
+        )
 
     async def _poll_generation(self, generation: GenerationWorkItem) -> None:
         task_id = generation.provider_task_id
@@ -295,6 +349,15 @@ class GenerationWorker:
             result_payload=state.result_payload,
             error_code=state.error_code,
         )
+
+
+def _callback_url_for_generation(base_url: str | None, generation_id: UUID) -> str | None:
+    if base_url is None:
+        return None
+    parts = urlsplit(base_url)
+    query = dict(parse_qsl(parts.query, keep_blank_values=True))
+    query["generation_id"] = str(generation_id)
+    return urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(query), parts.fragment))
 
 
 def _retry_delay(attempts: int) -> timedelta:
