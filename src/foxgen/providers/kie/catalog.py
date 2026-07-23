@@ -1,75 +1,511 @@
 from collections.abc import Iterable
 
 from foxgen.domain.models import Capability, MediaKind, ModelSpec
+from foxgen.providers.kie.contracts import InputContract
+
+DOCS = "https://docs.kie.ai"
+
+
+def model(
+    *,
+    slug: str,
+    provider_model: str,
+    title: str,
+    family: str,
+    media_kind: MediaKind,
+    capabilities: frozenset[Capability],
+    contract: InputContract,
+    docs_path: str,
+    tier: str = "flagship",
+    rank: int = 100,
+    defaults: dict[str, object] | None = None,
+    recommended_for: tuple[str, ...] = (),
+) -> ModelSpec:
+    return ModelSpec(
+        slug=slug,
+        provider_model=provider_model,
+        title=title,
+        family=family,
+        media_kind=media_kind,
+        capabilities=capabilities,
+        verified=True,
+        defaults=defaults or {},
+        contract=contract,
+        tier=tier,
+        rank=rank,
+        docs_url=f"{DOCS}{docs_path}",
+        recommended_for=recommended_for,
+    )
 
 
 MODEL_SPECS: tuple[ModelSpec, ...] = (
-    ModelSpec(
+    # Priority image models: strict contracts verified against KIE documentation.
+    model(
+        slug="seedream-5-pro",
+        provider_model="seedream/5-pro-text-to-image",
+        title="Seedream 5 Pro",
+        family="Seedream",
+        media_kind=MediaKind.IMAGE,
+        capabilities=frozenset({Capability.TEXT_TO_IMAGE}),
+        contract=InputContract.SEEDREAM_5_TEXT,
+        docs_path="/market/seedream/5-pro-text-to-image",
+        rank=1,
+        defaults={"aspect_ratio": "1:1", "quality": "basic", "output_format": "png"},
+        recommended_for=("photorealism", "commercial design", "text rendering"),
+    ),
+    model(
+        slug="seedream-5-pro-edit",
+        provider_model="seedream/5-pro-image-to-image",
+        title="Seedream 5 Pro Edit",
+        family="Seedream",
+        media_kind=MediaKind.IMAGE,
+        capabilities=frozenset({Capability.IMAGE_TO_IMAGE, Capability.IMAGE_EDIT}),
+        contract=InputContract.SEEDREAM_5_IMAGE,
+        docs_path="/market/seedream/5-pro-image-to-image",
+        rank=2,
+        defaults={"aspect_ratio": "1:1", "quality": "basic", "output_format": "png"},
+        recommended_for=("image editing", "product visuals", "style transfer"),
+    ),
+    model(
+        slug="nano-banana-2",
+        provider_model="nano-banana-2",
+        title="Nano Banana 2",
+        family="Nano Banana",
+        media_kind=MediaKind.IMAGE,
+        capabilities=frozenset(
+            {Capability.TEXT_TO_IMAGE, Capability.IMAGE_TO_IMAGE, Capability.IMAGE_EDIT}
+        ),
+        contract=InputContract.NANO_BANANA,
+        docs_path="/market/google/nanobanana2",
+        rank=3,
+        defaults={"aspect_ratio": "auto", "resolution": "1K", "output_format": "png"},
+        recommended_for=("general generation", "fast editing", "multilingual text"),
+    ),
+    model(
+        slug="nano-banana-pro",
+        provider_model="nano-banana-pro",
+        title="Nano Banana Pro",
+        family="Nano Banana",
+        media_kind=MediaKind.IMAGE,
+        capabilities=frozenset(
+            {Capability.TEXT_TO_IMAGE, Capability.IMAGE_TO_IMAGE, Capability.IMAGE_EDIT}
+        ),
+        contract=InputContract.NANO_BANANA,
+        docs_path="/market/google/pro-image-to-image",
+        rank=4,
+        defaults={"aspect_ratio": "1:1", "resolution": "1K", "output_format": "png"},
+        recommended_for=("complex composition", "consistent subjects", "high-quality text"),
+    ),
+    model(
         slug="gpt-image-2",
         provider_model="gpt-image-2-text-to-image",
         title="GPT Image 2",
         family="GPT Image",
         media_kind=MediaKind.IMAGE,
         capabilities=frozenset({Capability.TEXT_TO_IMAGE}),
-        verified=True,
+        contract=InputContract.PROMPT,
+        docs_path="/market/gpt/gpt-image-2-text-to-image",
+        rank=10,
         defaults={"aspect_ratio": "auto"},
+        recommended_for=("instruction following", "design", "text rendering"),
     ),
-    ModelSpec(
+    model(
         slug="gpt-image-2-edit",
         provider_model="gpt-image-2-image-to-image",
         title="GPT Image 2 Edit",
         family="GPT Image",
         media_kind=MediaKind.IMAGE,
         capabilities=frozenset({Capability.IMAGE_TO_IMAGE, Capability.IMAGE_EDIT}),
-        verified=True,
+        contract=InputContract.PROMPT_IMAGES,
+        docs_path="/market/gpt/gpt-image-2-image-to-image",
+        rank=11,
         defaults={"aspect_ratio": "auto"},
     ),
-    ModelSpec(
+    model(
+        slug="flux-2-pro",
+        provider_model="flux-2/pro-text-to-image",
+        title="Flux 2 Pro",
+        family="Flux 2",
+        media_kind=MediaKind.IMAGE,
+        capabilities=frozenset({Capability.TEXT_TO_IMAGE}),
+        contract=InputContract.PROMPT,
+        docs_path="/market/flux2/pro-text-to-image",
+        rank=12,
+        defaults={"aspect_ratio": "1:1", "resolution": "1K", "nsfw_checker": False},
+        recommended_for=("photorealism", "materials", "product shots"),
+    ),
+    model(
+        slug="flux-2-pro-edit",
+        provider_model="flux-2/pro-image-to-image",
+        title="Flux 2 Pro Edit",
+        family="Flux 2",
+        media_kind=MediaKind.IMAGE,
+        capabilities=frozenset({Capability.IMAGE_TO_IMAGE, Capability.IMAGE_EDIT}),
+        contract=InputContract.PROMPT_IMAGES,
+        docs_path="/market/flux2/pro-image-to-image",
+        rank=13,
+    ),
+    model(
+        slug="imagen-4-ultra",
+        provider_model="google/imagen4-ultra",
+        title="Imagen 4 Ultra",
+        family="Google Imagen",
+        media_kind=MediaKind.IMAGE,
+        capabilities=frozenset({Capability.TEXT_TO_IMAGE}),
+        contract=InputContract.PROMPT,
+        docs_path="/market/google/imagen4-ultra",
+        rank=14,
+        defaults={"aspect_ratio": "1:1"},
+        recommended_for=("premium image quality", "illustration", "advertising"),
+    ),
+    model(
+        slug="ideogram-v3",
+        provider_model="ideogram/v3-text-to-image",
+        title="Ideogram V3",
+        family="Ideogram",
+        media_kind=MediaKind.IMAGE,
+        capabilities=frozenset({Capability.TEXT_TO_IMAGE}),
+        contract=InputContract.PROMPT,
+        docs_path="/market/ideogram/v3-text-to-image",
+        rank=15,
+        recommended_for=("typography", "posters", "logos"),
+    ),
+    model(
+        slug="ideogram-v3-edit",
+        provider_model="ideogram/v3-edit",
+        title="Ideogram V3 Edit",
+        family="Ideogram",
+        media_kind=MediaKind.IMAGE,
+        capabilities=frozenset({Capability.IMAGE_EDIT}),
+        contract=InputContract.PASSTHROUGH,
+        docs_path="/market/ideogram/v3-edit",
+        rank=16,
+    ),
+    model(
+        slug="ideogram-v3-remix",
+        provider_model="ideogram/v3-remix",
+        title="Ideogram V3 Remix",
+        family="Ideogram",
+        media_kind=MediaKind.IMAGE,
+        capabilities=frozenset({Capability.IMAGE_TO_IMAGE}),
+        contract=InputContract.PASSTHROUGH,
+        docs_path="/market/ideogram/v3-remix",
+        rank=17,
+    ),
+    model(
+        slug="qwen2-image",
+        provider_model="qwen2/text-to-image",
+        title="Qwen2 Image",
+        family="Qwen",
+        media_kind=MediaKind.IMAGE,
+        capabilities=frozenset({Capability.TEXT_TO_IMAGE}),
+        contract=InputContract.PROMPT,
+        docs_path="/market/qwen2/text-to-image",
+        rank=18,
+        recommended_for=("multilingual prompts", "illustration", "creative concepts"),
+    ),
+    model(
+        slug="qwen2-image-edit",
+        provider_model="qwen2/image-edit",
+        title="Qwen2 Image Edit",
+        family="Qwen",
+        media_kind=MediaKind.IMAGE,
+        capabilities=frozenset({Capability.IMAGE_EDIT}),
+        contract=InputContract.PASSTHROUGH,
+        docs_path="/market/qwen2/image-edit",
+        rank=19,
+    ),
+    model(
+        slug="wan-2-7-image-pro",
+        provider_model="wan/2-7-image-pro",
+        title="Wan 2.7 Image Pro",
+        family="Wan",
+        media_kind=MediaKind.IMAGE,
+        capabilities=frozenset(
+            {Capability.TEXT_TO_IMAGE, Capability.IMAGE_TO_IMAGE, Capability.IMAGE_EDIT}
+        ),
+        contract=InputContract.PROMPT,
+        docs_path="/market/wan/2-7-image-pro",
+        rank=20,
+        recommended_for=("multi-image editing", "high resolution", "reasoned edits"),
+    ),
+    model(
         slug="grok-imagine-image",
         provider_model="grok-imagine/text-to-image",
         title="Grok Imagine Image",
         family="Grok Imagine",
         media_kind=MediaKind.IMAGE,
         capabilities=frozenset({Capability.TEXT_TO_IMAGE}),
-        verified=True,
+        contract=InputContract.PROMPT,
+        docs_path="/market/grok-imagine/text-to-image",
+        rank=21,
     ),
-    ModelSpec(
-        slug="qwen-image",
-        provider_model="qwen/text-to-image",
-        title="Qwen Image",
-        family="Qwen",
+    model(
+        slug="grok-imagine-image-edit",
+        provider_model="grok-imagine/image-to-image",
+        title="Grok Imagine Image Edit",
+        family="Grok Imagine",
         media_kind=MediaKind.IMAGE,
-        capabilities=frozenset({Capability.TEXT_TO_IMAGE}),
-        verified=True,
+        capabilities=frozenset({Capability.IMAGE_TO_IMAGE, Capability.IMAGE_EDIT}),
+        contract=InputContract.PASSTHROUGH,
+        docs_path="/market/grok-imagine/image-to-image",
+        rank=22,
     ),
-    ModelSpec(
+    model(
+        slug="topaz-image-upscale",
+        provider_model="topaz/image-upscale",
+        title="Topaz Image Upscale",
+        family="Topaz",
+        media_kind=MediaKind.IMAGE,
+        capabilities=frozenset({Capability.IMAGE_UPSCALE}),
+        contract=InputContract.IMAGE,
+        docs_path="/market/topaz/image-upscale",
+        rank=30,
+    ),
+    model(
+        slug="recraft-remove-background",
+        provider_model="recraft/remove-background",
+        title="Recraft Remove Background",
+        family="Recraft",
+        media_kind=MediaKind.IMAGE,
+        capabilities=frozenset({Capability.REMOVE_BACKGROUND}),
+        contract=InputContract.IMAGE,
+        docs_path="/market/recraft/remove-background",
+        rank=31,
+    ),
+    model(
         slug="recraft-crisp-upscale",
         provider_model="recraft/crisp-upscale",
         title="Recraft Crisp Upscale",
         family="Recraft",
         media_kind=MediaKind.IMAGE,
         capabilities=frozenset({Capability.IMAGE_UPSCALE}),
-        verified=True,
+        contract=InputContract.IMAGE,
+        docs_path="/market/recraft/crisp-upscale",
+        rank=32,
     ),
-    ModelSpec(
+    # Priority video models: one strict multimodal contract across all Seedance 2 tiers.
+    model(
+        slug="seedance-2",
+        provider_model="bytedance/seedance-2",
+        title="Seedance 2.0",
+        family="Seedance",
+        media_kind=MediaKind.VIDEO,
+        capabilities=frozenset(
+            {Capability.TEXT_TO_VIDEO, Capability.IMAGE_TO_VIDEO, Capability.REFERENCE_TO_VIDEO}
+        ),
+        contract=InputContract.SEEDANCE_2,
+        docs_path="/market/bytedance/seedance-2",
+        rank=1,
+        defaults={
+            "resolution": "720p",
+            "aspect_ratio": "16:9",
+            "duration": 5,
+            "generate_audio": False,
+        },
+        recommended_for=("cinematic video", "multimodal references", "generated audio"),
+    ),
+    model(
+        slug="seedance-2-fast",
+        provider_model="bytedance/seedance-2-fast",
+        title="Seedance 2.0 Fast",
+        family="Seedance",
+        media_kind=MediaKind.VIDEO,
+        capabilities=frozenset(
+            {Capability.TEXT_TO_VIDEO, Capability.IMAGE_TO_VIDEO, Capability.REFERENCE_TO_VIDEO}
+        ),
+        contract=InputContract.SEEDANCE_2,
+        docs_path="/market/bytedance/seedance-2-fast",
+        rank=2,
+        defaults={"resolution": "720p", "aspect_ratio": "16:9", "duration": 5},
+        recommended_for=("fast previews", "iteration", "social video"),
+    ),
+    model(
+        slug="seedance-2-mini",
+        provider_model="bytedance/seedance-2-mini",
+        title="Seedance 2.0 Mini",
+        family="Seedance",
+        media_kind=MediaKind.VIDEO,
+        capabilities=frozenset(
+            {Capability.TEXT_TO_VIDEO, Capability.IMAGE_TO_VIDEO, Capability.REFERENCE_TO_VIDEO}
+        ),
+        contract=InputContract.SEEDANCE_2,
+        docs_path="/market/bytedance/seedance-2-mini",
+        rank=3,
+        defaults={"resolution": "720p", "aspect_ratio": "16:9", "duration": 5},
+        recommended_for=("budget generation", "fast drafts", "batch content"),
+    ),
+    model(
+        slug="kling-3",
+        provider_model="kling-3.0/video",
+        title="Kling 3.0",
+        family="Kling",
+        media_kind=MediaKind.VIDEO,
+        capabilities=frozenset(
+            {Capability.TEXT_TO_VIDEO, Capability.IMAGE_TO_VIDEO, Capability.REFERENCE_TO_VIDEO}
+        ),
+        contract=InputContract.KLING_3,
+        docs_path="/market/kling/kling-3-0",
+        rank=10,
+        defaults={"duration": "5", "aspect_ratio": "16:9", "mode": "pro"},
+        recommended_for=("multi-shot video", "element consistency", "4K output"),
+    ),
+    model(
+        slug="kling-v3-turbo",
+        provider_model="kling/v3-turbo-text-to-video",
+        title="Kling V3 Turbo",
+        family="Kling",
+        media_kind=MediaKind.VIDEO,
+        capabilities=frozenset({Capability.TEXT_TO_VIDEO}),
+        contract=InputContract.PROMPT,
+        docs_path="/market/kling/v3-turbo-text-to-video",
+        rank=11,
+    ),
+    model(
+        slug="kling-v3-turbo-image",
+        provider_model="kling/v3-turbo-image-to-video",
+        title="Kling V3 Turbo Image",
+        family="Kling",
+        media_kind=MediaKind.VIDEO,
+        capabilities=frozenset({Capability.IMAGE_TO_VIDEO}),
+        contract=InputContract.PROMPT_IMAGES,
+        docs_path="/market/kling/v3-turbo-image-to-video",
+        rank=12,
+    ),
+    model(
+        slug="wan-2-7-video",
+        provider_model="wan/2-7-text-to-video",
+        title="Wan 2.7 Text to Video",
+        family="Wan",
+        media_kind=MediaKind.VIDEO,
+        capabilities=frozenset({Capability.TEXT_TO_VIDEO}),
+        contract=InputContract.PROMPT,
+        docs_path="/market/wan/2-7-text-to-video",
+        rank=13,
+        defaults={"resolution": "1080p", "ratio": "16:9", "duration": 5},
+    ),
+    model(
+        slug="wan-2-7-image-video",
+        provider_model="wan/2-7-image-to-video",
+        title="Wan 2.7 Image to Video",
+        family="Wan",
+        media_kind=MediaKind.VIDEO,
+        capabilities=frozenset({Capability.IMAGE_TO_VIDEO, Capability.VIDEO_EXTEND}),
+        contract=InputContract.PASSTHROUGH,
+        docs_path="/market/wan/2-7-image-to-video",
+        rank=14,
+    ),
+    model(
+        slug="wan-2-7-video-edit",
+        provider_model="wan/2-7-videoedit",
+        title="Wan 2.7 Video Edit",
+        family="Wan",
+        media_kind=MediaKind.VIDEO,
+        capabilities=frozenset({Capability.VIDEO_TO_VIDEO}),
+        contract=InputContract.PASSTHROUGH,
+        docs_path="/market/wan/2-7-videoedit",
+        rank=15,
+    ),
+    model(
+        slug="wan-2-7-reference-video",
+        provider_model="wan/2-7-r2v",
+        title="Wan 2.7 Reference to Video",
+        family="Wan",
+        media_kind=MediaKind.VIDEO,
+        capabilities=frozenset({Capability.REFERENCE_TO_VIDEO}),
+        contract=InputContract.PASSTHROUGH,
+        docs_path="/market/wan/2-7-r2v",
+        rank=16,
+    ),
+    model(
         slug="grok-imagine-video",
         provider_model="grok-imagine/text-to-video",
         title="Grok Imagine Video",
         family="Grok Imagine",
         media_kind=MediaKind.VIDEO,
         capabilities=frozenset({Capability.TEXT_TO_VIDEO}),
-        verified=True,
+        contract=InputContract.PROMPT,
+        docs_path="/market/grok-imagine/text-to-video",
+        rank=20,
     ),
-    ModelSpec(
-        slug="gemini-omni-video",
-        provider_model="gemini-omni-video",
-        title="Gemini Omni Video",
-        family="Gemini Omni",
+    model(
+        slug="grok-imagine-image-video",
+        provider_model="grok-imagine/image-to-video",
+        title="Grok Imagine Image to Video",
+        family="Grok Imagine",
         media_kind=MediaKind.VIDEO,
-        capabilities=frozenset(
-            {Capability.TEXT_TO_VIDEO, Capability.IMAGE_TO_VIDEO, Capability.REFERENCE_TO_VIDEO}
-        ),
-        verified=False,
+        capabilities=frozenset({Capability.IMAGE_TO_VIDEO}),
+        contract=InputContract.PROMPT_IMAGES,
+        docs_path="/market/grok-imagine/image-to-video",
+        rank=21,
+    ),
+    model(
+        slug="hailuo-2-3-pro",
+        provider_model="hailuo/2-3-image-to-video-pro",
+        title="Hailuo 2.3 Pro",
+        family="Hailuo",
+        media_kind=MediaKind.VIDEO,
+        capabilities=frozenset({Capability.IMAGE_TO_VIDEO}),
+        contract=InputContract.PASSTHROUGH,
+        docs_path="/market/hailuo/2-3-image-to-video-pro",
+        rank=22,
+    ),
+    model(
+        slug="topaz-video-upscale",
+        provider_model="topaz/video-upscale",
+        title="Topaz Video Upscale",
+        family="Topaz",
+        media_kind=MediaKind.VIDEO,
+        capabilities=frozenset({Capability.VIDEO_UPSCALE}),
+        contract=InputContract.VIDEO,
+        docs_path="/market/topaz/video-upscale",
+        rank=30,
+    ),
+    # Current Market audio leaders.
+    model(
+        slug="elevenlabs-dialogue-v3",
+        provider_model="elevenlabs/text-to-dialogue-v3",
+        title="ElevenLabs Dialogue V3",
+        family="ElevenLabs",
+        media_kind=MediaKind.AUDIO,
+        capabilities=frozenset({Capability.TEXT_TO_SPEECH}),
+        contract=InputContract.DIALOGUE,
+        docs_path="/market/elevenlabs/text-to-dialogue-v3",
+        rank=1,
+        recommended_for=("multi-speaker dialogue", "podcasts", "voice scenes"),
+    ),
+    model(
+        slug="elevenlabs-multilingual-v2",
+        provider_model="elevenlabs/text-to-speech-multilingual-v2",
+        title="ElevenLabs Multilingual V2",
+        family="ElevenLabs",
+        media_kind=MediaKind.AUDIO,
+        capabilities=frozenset({Capability.TEXT_TO_SPEECH}),
+        contract=InputContract.TEXT_TO_SPEECH,
+        docs_path="/market/elevenlabs/text-to-speech-multilingual-v2",
+        rank=2,
+    ),
+    model(
+        slug="elevenlabs-turbo-2-5",
+        provider_model="elevenlabs/text-to-speech-turbo-2-5",
+        title="ElevenLabs Turbo 2.5",
+        family="ElevenLabs",
+        media_kind=MediaKind.AUDIO,
+        capabilities=frozenset({Capability.TEXT_TO_SPEECH}),
+        contract=InputContract.TEXT_TO_SPEECH,
+        docs_path="/market/elevenlabs/text-to-speech-turbo-2-5",
+        rank=3,
+    ),
+    model(
+        slug="elevenlabs-audio-isolation",
+        provider_model="elevenlabs/audio-isolation",
+        title="ElevenLabs Audio Isolation",
+        family="ElevenLabs",
+        media_kind=MediaKind.AUDIO,
+        capabilities=frozenset({Capability.AUDIO_SEPARATION}),
+        contract=InputContract.AUDIO,
+        docs_path="/market/elevenlabs/audio-isolation",
+        rank=10,
     ),
 )
 
@@ -80,6 +516,9 @@ class ModelRegistry:
         self._by_slug = {item.slug: item for item in items}
         if len(self._by_slug) != len(items):
             raise ValueError("Model slugs must be unique")
+        provider_keys = {(item.api_family, item.provider_model) for item in items}
+        if len(provider_keys) != len(items):
+            raise ValueError("Provider model identifiers must be unique per API family")
 
     def get(self, slug: str) -> ModelSpec:
         try:
@@ -95,12 +534,23 @@ class ModelRegistry:
         verified_only: bool = True,
     ) -> tuple[ModelSpec, ...]:
         result = []
-        for model in self._by_slug.values():
-            if verified_only and not model.verified:
+        for item in self._by_slug.values():
+            if verified_only and not item.verified:
                 continue
-            if media_kind is not None and model.media_kind != media_kind:
+            if media_kind is not None and item.media_kind != media_kind:
                 continue
-            if capability is not None and not model.supports(capability):
+            if capability is not None and not item.supports(capability):
                 continue
-            result.append(model)
-        return tuple(result)
+            result.append(item)
+        return tuple(sorted(result, key=lambda item: (item.rank, item.title)))
+
+    def recommend(
+        self,
+        *,
+        media_kind: MediaKind,
+        capability: Capability,
+        limit: int = 3,
+    ) -> tuple[ModelSpec, ...]:
+        if limit < 1:
+            return ()
+        return self.list(media_kind=media_kind, capability=capability)[:limit]
