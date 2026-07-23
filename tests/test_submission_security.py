@@ -34,8 +34,8 @@ class FakeSubmissionService:
             generation_id=UUID("11111111-1111-1111-1111-111111111111"),
             model_slug=model_slug,
             provider_model="seedream/5-pro-text-to-image",
-            status=GenerationStatus.SUBMITTED,
-            provider_task_id="provider-task-1",
+            status=GenerationStatus.QUEUED,
+            provider_task_id=None,
             replayed=False,
         )
 
@@ -84,6 +84,7 @@ def test_valid_internal_request_requires_user_and_idempotency_identity() -> None
         env="test",
         task_submission_enabled=True,
         internal_api_token="correct-token",
+        kie_api_key="test-kie-key",
     )
     app = create_app(settings, manage_resources=False, submission_service=service)
 
@@ -104,8 +105,8 @@ def test_valid_internal_request_requires_user_and_idempotency_identity() -> None
         "generation_id": "11111111-1111-1111-1111-111111111111",
         "model": "seedream-5-pro",
         "provider_model": "seedream/5-pro-text-to-image",
-        "status": "submitted",
-        "provider_task_id": "provider-task-1",
+        "status": "queued",
+        "provider_task_id": None,
         "replayed": False,
     }
     assert service.calls == [

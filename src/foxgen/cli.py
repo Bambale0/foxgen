@@ -1,7 +1,8 @@
 import uvicorn
 
-from foxgen.bot.app import run_sync
+from foxgen.bot.app import run_sync as run_bot_sync
 from foxgen.core.config import get_settings
+from foxgen.worker import run_sync as run_worker_sync
 
 
 def run_api() -> None:
@@ -15,4 +16,8 @@ def run_api() -> None:
 
 
 def run_bot() -> None:
-    run_sync()
+    run_bot_sync()
+
+
+def run_worker() -> None:
+    run_worker_sync()
