@@ -160,7 +160,7 @@ jobs:
       - name: API readiness smoke test
         id: api_smoke
         run: |
-          python -m foxgen.cli > /tmp/foxgen-api.log 2>&1 &
+          python -c "from foxgen.cli import run_api; run_api()" > /tmp/foxgen-api.log 2>&1 &
           api_pid=$!
           echo "${api_pid}" > /tmp/foxgen-api.pid
           for attempt in $(seq 1 30); do
