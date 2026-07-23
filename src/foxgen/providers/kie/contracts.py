@@ -13,6 +13,8 @@ class InputContract(StrEnum):
     AUDIO = "audio"
     TEXT_TO_SPEECH = "text_to_speech"
     DIALOGUE = "dialogue"
+    SEEDREAM_45_TEXT = "seedream_45_text"
+    SEEDREAM_45_EDIT = "seedream_45_edit"
     SEEDREAM_5_TEXT = "seedream_5_text"
     SEEDREAM_5_IMAGE = "seedream_5_image"
     NANO_BANANA = "nano_banana"
@@ -92,6 +94,21 @@ class DialogueLine(StrictInput):
 
 class DialogueInput(OpenInput):
     dialogue: list[DialogueLine] = Field(min_length=1)
+
+
+class Seedream45TextInput(StrictInput):
+    """Exact KIE Market contract for Seedream 4.5 text-to-image."""
+
+    prompt: str = Field(min_length=1, max_length=10_000)
+    aspect_ratio: str = "1:1"
+    quality: str = "basic"
+    nsfw_checker: bool = False
+
+
+class Seedream45EditInput(Seedream45TextInput):
+    """Exact KIE Market contract for Seedream 4.5 image editing."""
+
+    image_urls: list[AnyHttpUrl] = Field(min_length=1)
 
 
 class Seedream5TextInput(StrictInput):
@@ -187,6 +204,8 @@ CONTRACT_MODELS: dict[InputContract, type[BaseModel]] = {
     InputContract.AUDIO: AudioInput,
     InputContract.TEXT_TO_SPEECH: TextToSpeechInput,
     InputContract.DIALOGUE: DialogueInput,
+    InputContract.SEEDREAM_45_TEXT: Seedream45TextInput,
+    InputContract.SEEDREAM_45_EDIT: Seedream45EditInput,
     InputContract.SEEDREAM_5_TEXT: Seedream5TextInput,
     InputContract.SEEDREAM_5_IMAGE: Seedream5ImageInput,
     InputContract.NANO_BANANA: NanoBananaInput,
