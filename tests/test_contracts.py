@@ -39,7 +39,29 @@ def test_seedance_last_frame_requires_first_frame() -> None:
         )
 
 
-def test_seedream_edit_requires_an_input_image() -> None:
+def test_seedream_45_text_applies_exact_documented_defaults() -> None:
+    payload = validate_input(
+        InputContract.SEEDREAM_45_TEXT,
+        {"prompt": "Premium editorial portrait"},
+    )
+
+    assert payload == {
+        "prompt": "Premium editorial portrait",
+        "aspect_ratio": "1:1",
+        "quality": "basic",
+        "nsfw_checker": False,
+    }
+
+
+def test_seedream_45_edit_requires_an_input_image() -> None:
+    with pytest.raises(ValidationError):
+        validate_input(
+            InputContract.SEEDREAM_45_EDIT,
+            {"prompt": "Replace the background"},
+        )
+
+
+def test_seedream_5_edit_requires_an_input_image() -> None:
     with pytest.raises(ValidationError):
         validate_input(
             InputContract.SEEDREAM_5_IMAGE,
