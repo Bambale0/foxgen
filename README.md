@@ -21,36 +21,37 @@ The product is designed around a simple rule: a user should reach the target act
 
 - async FastAPI and aiogram application entry points;
 - Redis-backed Telegram FSM with menu, cancel, back, edit and stale-callback fallbacks;
-- PostgreSQL entities and Alembic baseline migration;
-- typed KIE.ai Market API client with bounded retries and normalized errors;
+- PostgreSQL entities and Alembic migrations;
+- typed KIE.ai Market API client and normalized provider errors;
 - KIE webhook HMAC-SHA256 verification with replay-window protection;
 - versioned flagship model registry with exact provider IDs;
-- strict contracts for Seedance 2 / Fast / Mini, Seedream 5 Pro and Nano Banana 2 / Pro;
-- curated current image, video and ElevenLabs Market model pack;
+- strict contracts for Seedream 4.5, Seedream 5 Pro, Seedance 2, Seedance 2 Mini and Nano Banana 2/Pro;
+- curated image, video and ElevenLabs Market model pack;
 - JSON schemas, preflight validation and model-specific task submission endpoints;
+- fail-closed internal authentication for paid provider submission;
+- mandatory user identity and idempotency key for every paid request;
+- persisted generation fingerprints, statuses and provider task IDs;
+- Redis user/global rate limits and PostgreSQL active-generation limits;
+- single-attempt KIE `createTask` submission with `submission_unknown` recovery state;
 - Docker Compose for API, bot, PostgreSQL, Redis and migrations;
 - GitHub Actions CI for Ruff, mypy, pytest and Docker build.
 
-Generation billing and durable workers are deliberately split into subsequent reviewable PRs tracked by the epics.
+The full outbox/worker lifecycle, callback persistence, storage, Telegram result delivery and billing ledger remain under active implementation in issues #19 and #7.
 
-## Architecture
+## Current request path
 
 ```text
-Telegram update
-    -> aiogram router + Redis FSM
+Trusted FoxGen service
+    -> internal bearer authentication
+    -> user identity + Idempotency-Key
     -> model registry + typed input contract
-    -> application service
-    -> PostgreSQL transaction/outbox
-    -> worker queue
-    -> typed KIE.ai adapter
-    -> verified webhook or polling fallback
-    -> durable result
-    -> Telegram delivery
+    -> Redis rate limit
+    -> PostgreSQL generation admission
+    -> one KIE createTask attempt
+    -> submitted OR submission_unknown OR failed
 ```
 
-PostgreSQL stores durable business state. Redis is limited to ephemeral state, locks, cache and queues. Provider-specific payloads stay inside provider adapters; Telegram handlers work with product capabilities rather than raw model APIs.
-
-See [architecture notes](docs/architecture.md) and the [model matrix](docs/model-matrix.md).
+The target asynchronous path is documented in [architecture notes](docs/architecture.md). Provider-specific payloads stay inside provider adapters; Telegram handlers work with product capabilities rather than raw model APIs.
 
 ## Local start
 
@@ -78,6 +79,26 @@ curl -X POST http://localhost:8080/v1/models/seedance-2/validate \
   -H 'Content-Type: application/json' \
   -d '{"input":{"prompt":"A cinematic fox running through snow"}}'
 ```
+
+Paid task creation is disabled by default. A trusted internal service must explicitly enable it and provide authentication:
+
+```env
+FOXGEN_TASK_SUBMISSION_ENABLED=true
+FOXGEN_INTERNAL_API_TOKEN=<long-random-secret>
+```
+
+Example authenticated task request:
+
+```bash
+curl -X POST http://localhost:8080/v1/models/seedream-5-pro/tasks \
+  -H 'Authorization: Bearer <internal-token>' \
+  -H 'X-FoxGen-User-Id: 123456789' \
+  -H 'Idempotency-Key: generation-123456789-0001' \
+  -H 'Content-Type: application/json' \
+  -d '{"input":{"prompt":"Premium product photo of a black watch"}}'
+```
+
+Never expose the internal token to Telegram clients, browsers or mini apps. Keep submission disabled until pricing, balance reservation and the durable worker path are configured.
 
 Local quality checks:
 
@@ -110,6 +131,9 @@ FOXGEN_KIE_WEBHOOK_HMAC_KEY=...
 9. [Admin, moderation, support and analytics](../../issues/9)
 10. [Reliability, security, observability and delivery](../../issues/10)
 11. [Flagship KIE model pack](../../issues/12)
+12. [Secure paid task submission](../../issues/17)
+13. [Idempotent provider submission](../../issues/18)
+14. [Durable generation lifecycle](../../issues/19)
 
 ## Repository rules
 
