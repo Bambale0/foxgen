@@ -53,6 +53,23 @@ class DeliveryStatus(StrEnum):
     FAILED = "failed"
 
 
+class ReservationStatus(StrEnum):
+    RESERVED = "reserved"
+    CAPTURED = "captured"
+    RELEASED = "released"
+    REFUNDED = "refunded"
+
+
+class LedgerEntryType(StrEnum):
+    CREDIT = "credit"
+    DEBIT = "debit"
+    RESERVE = "reserve"
+    CAPTURE = "capture"
+    RELEASE = "release"
+    REFUND = "refund"
+    ADJUSTMENT = "adjustment"
+
+
 class Capability(StrEnum):
     TEXT_TO_IMAGE = "text_to_image"
     IMAGE_TO_IMAGE = "image_to_image"
