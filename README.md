@@ -30,13 +30,18 @@ The product is designed around a simple rule: a user should reach the target act
 - JSON schemas, preflight validation and model-specific task submission endpoints;
 - fail-closed internal authentication for paid provider submission;
 - mandatory user identity and idempotency key for every paid request;
-- persisted generation fingerprints, statuses and provider task IDs;
-- Redis user/global rate limits and PostgreSQL active-generation limits;
+- persisted generation fingerprints and explicit lifecycle states;
+- Redis request-rate limits and PostgreSQL active-generation limits;
+- transactional PostgreSQL outbox for provider submission;
+- durable, deduplicated KIE callback inbox;
+- worker leasing with `FOR UPDATE SKIP LOCKED`, retry scheduling and dead-letter state;
 - single-attempt KIE `createTask` submission with `submission_unknown` recovery state;
-- Docker Compose for API, bot, PostgreSQL, Redis and migrations;
+- polling fallback when a callback is delayed or missing;
+- structured parsing of provider `resultJson` payloads;
+- Docker Compose services for API, worker, bot, PostgreSQL, Redis and migrations;
 - GitHub Actions CI for Ruff, mypy, pytest and Docker build.
 
-The full outbox/worker lifecycle, callback persistence, storage, Telegram result delivery and billing ledger remain under active implementation in issues #19 and #7.
+Object storage, expiring-media download, Telegram result delivery and the billing ledger remain under active implementation in issues #19 and #7.
 
 ## Current request path
 
@@ -46,12 +51,19 @@ Trusted FoxGen service
     -> user identity + Idempotency-Key
     -> model registry + typed input contract
     -> Redis rate limit
-    -> PostgreSQL generation admission
+    -> PostgreSQL transaction
+         -> generation(status=queued)
+         -> outbox(generation.submit)
+    -> foxgen-worker claims outbox row
     -> one KIE createTask attempt
     -> submitted OR submission_unknown OR failed
+    -> verified callback inbox OR polling fallback
+    -> durable terminal generation state
 ```
 
-The target asynchronous path is documented in [architecture notes](docs/architecture.md). Provider-specific payloads stay inside provider adapters; Telegram handlers work with product capabilities rather than raw model APIs.
+The billable provider POST is never automatically replayed. After a worker changes a generation to `submitting`, it completes the submission outbox event before contacting KIE. A transport failure therefore leaves an auditable `submission_unknown` state rather than risking a duplicate charge.
+
+See [architecture notes](docs/architecture.md). Provider-specific payloads stay inside provider adapters; Telegram handlers work with product capabilities rather than raw model APIs.
 
 ## Local start
 
@@ -98,7 +110,9 @@ curl -X POST http://localhost:8080/v1/models/seedream-5-pro/tasks \
   -d '{"input":{"prompt":"Premium product photo of a black watch"}}'
 ```
 
-Never expose the internal token to Telegram clients, browsers or mini apps. Keep submission disabled until pricing, balance reservation and the durable worker path are configured.
+A successful admission returns a local generation in `queued` state. The worker performs the provider call asynchronously.
+
+Never expose the internal token to Telegram clients, browsers or mini apps. Keep submission disabled until pricing, balance reservation and the complete result-delivery path are configured.
 
 Local quality checks:
 
@@ -109,7 +123,7 @@ make ci
 
 ## Configuration
 
-All settings use the `FOXGEN_` prefix. Secrets are read from environment variables and must never be committed. The `.env.example` file documents the required configuration.
+All settings use the `FOXGEN_` prefix. Secrets are read from environment variables and must never be committed. The `.env.example` file documents the required configuration, including worker batch, lease and polling settings.
 
 For production callbacks set:
 
