@@ -99,6 +99,8 @@ class ModelSpec:
     family: str
     media_kind: MediaKind
     capabilities: frozenset[Capability]
+    # Legacy catalog-review flag retained for API compatibility. New code must use the
+    # explicit statuses below instead of treating one boolean as production readiness.
     verified: bool
     defaults: Mapping[str, object] = MappingProxyType({})
     contract: str = "passthrough"
@@ -107,6 +109,19 @@ class ModelSpec:
     docs_url: str | None = None
     recommended_for: tuple[str, ...] = ()
     api_family: str = "market"
+    provider_id_verified: bool = False
+    schema_verified: bool = False
+    enabled_for_submission: bool = False
+    tested_live: bool = False
+    contract_reviewed_at: str | None = None
 
     def supports(self, capability: Capability) -> bool:
         return capability in self.capabilities
+
+    @property
+    def production_ready(self) -> bool:
+        return (
+            self.provider_id_verified
+            and self.schema_verified
+            and self.enabled_for_submission
+        )
