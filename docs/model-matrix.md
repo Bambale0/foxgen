@@ -8,15 +8,23 @@ FoxGen treats the KIE catalog as a versioned provider contract, not a list of ma
 - **Documented contract** — exact provider ID and capability are verified; a reusable preflight schema validates the required media category while allowing documented provider-specific fields.
 - **Dedicated adapter required** — the model does not use the Market `createTask` protocol and must not be routed through the generic adapter.
 
-## Priority models — strict contracts
+## Exact project priorities — strict contracts
 
 | FoxGen slug | KIE model | Modes | Important validation |
 |---|---|---|---|
-| `seedance-2` | `bytedance/seedance-2` | text, first/last frame, multimodal references | frame mode and multimodal-reference mode are mutually exclusive |
-| `seedance-2-fast` | `bytedance/seedance-2-fast` | same as Seedance 2 | same contract, optimized tier |
-| `seedance-2-mini` | `bytedance/seedance-2-mini` | same as Seedance 2 | same contract, budget tier |
-| `seedream-5-pro` | `seedream/5-pro-text-to-image` | text to image | prompt, ratio, quality, output format, NSFW checker |
+| `seedream-4-5` | `seedream/4.5-text-to-image` | text to image | prompt, ratio, quality and NSFW checker |
+| `seedream-4-5-edit` | `seedream/4.5-edit` | image editing | requires at least one `image_urls` value; 4.5 has no `output_format` field |
+| `seedream-5-pro` | `seedream/5-pro-text-to-image` | text to image | prompt, ratio, quality, output format and NSFW checker |
 | `seedream-5-pro-edit` | `seedream/5-pro-image-to-image` | image generation/edit | requires at least one `image_urls` value |
+| `seedance-2` | `bytedance/seedance-2` | text, first/last frame, multimodal references | frame mode and multimodal-reference mode are mutually exclusive |
+| `seedance-2-mini` | `bytedance/seedance-2-mini` | same modes as Seedance 2 | same strict contract, lower-cost tier |
+
+`Seedance 2 Fast` is intentionally excluded from the active FoxGen registry. The product priority is the full Seedance 2 model plus Seedance 2 Mini.
+
+## Additional strict models
+
+| FoxGen slug | KIE model | Modes | Important validation |
+|---|---|---|---|
 | `nano-banana-2` | `nano-banana-2` | text generation and image edit | empty `image_input` means text mode |
 | `nano-banana-pro` | `nano-banana-pro` | text generation and image edit | same normalized contract with Pro provider ID |
 | `kling-3` | `kling-3.0/video` | single/multi-shot, element references | single shot requires prompt; multi-shot requires shot array |
@@ -25,11 +33,11 @@ FoxGen treats the KIE catalog as a versioned provider contract, not a list of ma
 
 ### Image
 
-Seedream 5 Pro, Nano Banana 2/Pro, GPT Image 2, Flux 2 Pro, Imagen 4 Ultra, Ideogram V3, Qwen2, Wan 2.7 Image Pro, Grok Imagine, Topaz and Recraft enhancement tools.
+Seedream 4.5, Seedream 5 Pro, Nano Banana 2/Pro, GPT Image 2, Flux 2 Pro, Imagen 4 Ultra, Ideogram V3, Qwen2, Wan 2.7 Image Pro, Grok Imagine, Topaz and Recraft enhancement tools.
 
 ### Video
 
-Seedance 2/ Fast / Mini, Kling 3.0 and V3 Turbo, Wan 2.7 text/image/reference/edit flows, Grok Imagine Video, Hailuo 2.3 Pro and Topaz Video Upscale.
+Seedance 2 and Seedance 2 Mini, Kling 3.0 and V3 Turbo, Wan 2.7 text/image/reference/edit flows, Grok Imagine Video, Hailuo 2.3 Pro and Topaz Video Upscale.
 
 ### Voice and audio
 
