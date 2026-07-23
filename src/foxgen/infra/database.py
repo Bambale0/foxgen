@@ -25,7 +25,13 @@ from sqlalchemy.ext.asyncio import (
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
-from foxgen.domain.models import GenerationStatus, MediaKind, OutboxStatus
+from foxgen.domain.models import (
+    DeliveryStatus,
+    GenerationStatus,
+    MediaAssetStatus,
+    MediaKind,
+    OutboxStatus,
+)
 
 
 class Base(DeclarativeBase):
@@ -88,6 +94,8 @@ class Generation(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
     user: Mapped[User] = relationship(back_populates="generations")
+    media_assets: Mapped[list["MediaAsset"]] = relationship(back_populates="generation")
+    delivery: Mapped["GenerationDelivery | None"] = relationship(back_populates="generation")
 
 
 class OutboxEvent(Base):
@@ -145,6 +153,84 @@ class ProviderEvent(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+
+
+class MediaAsset(Base):
+    __tablename__ = "media_assets"
+    __table_args__ = (
+        UniqueConstraint(
+            "generation_id",
+            "source_url",
+            name="uq_media_assets_generation_id_source_url",
+        ),
+        UniqueConstraint("storage_key", name="uq_media_assets_storage_key"),
+        CheckConstraint(
+            "status IN ('pending', 'stored', 'failed')",
+            name="ck_media_assets_status",
+        ),
+    )
+
+    id: Mapped[UUIDValue] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid()
+    )
+    generation_id: Mapped[UUIDValue] = mapped_column(
+        ForeignKey("generations.id", ondelete="CASCADE"), index=True
+    )
+    source_url: Mapped[str] = mapped_column(Text)
+    storage_key: Mapped[str] = mapped_column(String(512))
+    content_type: Mapped[str] = mapped_column(String(255))
+    size_bytes: Mapped[int] = mapped_column(BigInteger)
+    checksum_sha256: Mapped[str] = mapped_column(String(64))
+    status: Mapped[MediaAssetStatus] = mapped_column(
+        String(32),
+        default=MediaAssetStatus.PENDING,
+        server_default=MediaAssetStatus.PENDING,
+        index=True,
+    )
+    error_code: Mapped[str | None] = mapped_column(String(64))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+    generation: Mapped[Generation] = relationship(back_populates="media_assets")
+
+
+class GenerationDelivery(Base):
+    __tablename__ = "generation_deliveries"
+    __table_args__ = (
+        UniqueConstraint("generation_id", name="uq_generation_deliveries_generation_id"),
+        CheckConstraint(
+            "status IN ('pending', 'sending', 'sent', 'delivery_unknown', 'failed')",
+            name="ck_generation_deliveries_status",
+        ),
+    )
+
+    id: Mapped[UUIDValue] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid()
+    )
+    generation_id: Mapped[UUIDValue] = mapped_column(
+        ForeignKey("generations.id", ondelete="CASCADE"), index=True
+    )
+    recipient_id: Mapped[int] = mapped_column(BigInteger)
+    status: Mapped[DeliveryStatus] = mapped_column(
+        String(32),
+        default=DeliveryStatus.PENDING,
+        server_default=DeliveryStatus.PENDING,
+        index=True,
+    )
+    attempts: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    telegram_message_ids: Mapped[list[int]] = mapped_column(JSONB, default=list)
+    last_error: Mapped[str | None] = mapped_column(Text)
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+    generation: Mapped[Generation] = relationship(back_populates="delivery")
 
 
 class Database:
