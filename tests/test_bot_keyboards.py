@@ -38,7 +38,7 @@ def test_launch_button_is_hidden_until_quote_and_balance_are_valid() -> None:
 
 def test_main_menu_matches_approved_product_sketch() -> None:
     assert _rows(main_menu()) == [
-        [("Мини-апп", "planned:mini_app")],
+        [("Мини апп", "planned:mini_app")],
         [
             ("Создать видео", "create:video"),
             ("Создать озвучку (голос)", "planned:voice"),
@@ -53,7 +53,7 @@ def test_main_menu_matches_approved_product_sketch() -> None:
         ],
         [
             ("Gemini Omni", "planned:gemini_omni"),
-            ("AI-компаньон", "planned:companion"),
+            ("AI-помощник", "planned:assistant"),
         ],
         [
             ("Скучная работа", "planned:boring_work"),
