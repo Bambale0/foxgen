@@ -17,6 +17,14 @@ def _callbacks(markup: object) -> set[str]:
     }
 
 
+def _rows(markup: object) -> list[list[tuple[str, str | None]]]:
+    inline_keyboard = getattr(markup, "inline_keyboard")
+    return [
+        [(button.text, button.callback_data) for button in row]
+        for row in inline_keyboard
+    ]
+
+
 def test_launch_button_is_hidden_until_quote_and_balance_are_valid() -> None:
     blocked = _callbacks(confirmation_keyboard(can_submit=False))
     allowed = _callbacks(confirmation_keyboard(can_submit=True))
@@ -26,6 +34,37 @@ def test_launch_button_is_hidden_until_quote_and_balance_are_valid() -> None:
     assert "account:balance" in blocked
     assert "draft:confirm" in allowed
     assert "draft:refresh" not in allowed
+
+
+def test_main_menu_matches_approved_product_sketch() -> None:
+    assert _rows(main_menu()) == [
+        [("Мини апп", "planned:mini_app")],
+        [
+            ("Создать видео", "create:video"),
+            ("Создать озвучку (голос)", "planned:voice"),
+        ],
+        [
+            ("Создать фото", "create:image"),
+            ("Создать музыку (песню)", "planned:music"),
+        ],
+        [
+            ("Motion Control", "planned:motion"),
+            ("Промпты AI", "planned:prompt"),
+        ],
+        [
+            ("Gemini Omni", "planned:gemini_omni"),
+            ("AI-помощник", "planned:assistant"),
+        ],
+        [
+            ("Скучная работа", "planned:boring_work"),
+            ("Поддержка", "planned:support"),
+        ],
+        [
+            ("Баланс", "account:balance"),
+            ("Партнёры", "planned:partners"),
+        ],
+        [("Тарифы", "planned:tariffs")],
+    ]
 
 
 def test_main_menu_exposes_image_video_and_balance_actions() -> None:

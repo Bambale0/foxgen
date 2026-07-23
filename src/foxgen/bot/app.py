@@ -27,10 +27,7 @@ router = Router(name="foxgen-shell")
 async def show_menu(message: Message, state: FSMContext) -> None:
     await state.clear()
     await message.answer(
-        (
-            "<b>FoxGen</b> — что создаём?\n\n"
-            "Выберите действие. Я проведу по шагам и покажу точную стоимость до запуска."
-        ),
+        "<b>FoxGen</b>\n\nВыберите раздел.",
         reply_markup=main_menu(),
     )
 
@@ -40,7 +37,7 @@ async def return_to_menu(callback: CallbackQuery, state: FSMContext) -> None:
     await state.clear()
     if callback.message:
         try:
-            await callback.message.edit_text("Что создаём?", reply_markup=main_menu())
+            await callback.message.edit_text("Главное меню", reply_markup=main_menu())
         except TelegramBadRequest as exc:
             if "message is not modified" not in str(exc):
                 raise
@@ -52,7 +49,7 @@ async def cancel_flow(callback: CallbackQuery, state: FSMContext) -> None:
     await state.clear()
     if callback.message:
         await callback.message.edit_text(
-            "Действие отменено. Выберите новый сценарий.",
+            "Действие отменено. Главное меню:",
             reply_markup=main_menu(),
         )
     await callback.answer("Отменено")
@@ -78,7 +75,7 @@ async def stale_callback(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer("Эта кнопка устарела. Открыл главное меню.", show_alert=True)
     if callback.message:
         try:
-            await callback.message.edit_text("Что создаём?", reply_markup=main_menu())
+            await callback.message.edit_text("Главное меню", reply_markup=main_menu())
         except TelegramBadRequest as exc:
             if "message is not modified" not in str(exc):
                 raise
@@ -87,7 +84,7 @@ async def stale_callback(callback: CallbackQuery, state: FSMContext) -> None:
 @router.message()
 async def fallback_message(message: Message) -> None:
     await message.answer(
-        "Не понял действие. Используйте кнопки — так быстрее и без ошибок.",
+        "Не понял действие. Выберите нужный раздел кнопкой.",
         reply_markup=main_menu(),
     )
 
