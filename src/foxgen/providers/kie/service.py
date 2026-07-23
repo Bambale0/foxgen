@@ -1,9 +1,9 @@
 from collections.abc import Mapping
 from typing import Protocol
 
-from foxgen.providers.kie.catalog import ModelRegistry
 from foxgen.providers.kie.client import TaskCreated
 from foxgen.providers.kie.contracts import validate_input
+from foxgen.providers.kie.registry import ModelRegistry
 
 
 class TaskClient(Protocol):
