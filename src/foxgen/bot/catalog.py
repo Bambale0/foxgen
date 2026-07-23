@@ -34,13 +34,11 @@ MODE_TITLES: dict[GenerationMode, str] = {
 MODELS_BY_MODE: dict[GenerationMode, tuple[ModelChoice, ...]] = {
     GenerationMode.IMAGE_TEXT: (
         ModelChoice("seedream-5-pro", "Seedream 5 Pro", "максимальное качество и текст"),
-        ModelChoice("seedream-4-5", "Seedream 4.5", "стабильный коммерческий результат"),
         ModelChoice("nano-banana-2", "Nano Banana 2", "быстро и универсально"),
         ModelChoice("nano-banana-pro", "Nano Banana Pro", "сложные композиции"),
     ),
     GenerationMode.IMAGE_EDIT: (
         ModelChoice("seedream-5-pro-edit", "Seedream 5 Pro Edit", "точное премиальное редактирование"),
-        ModelChoice("seedream-4-5-edit", "Seedream 4.5 Edit", "надёжная ретушь и замены"),
         ModelChoice("nano-banana-2", "Nano Banana 2", "быстрые правки по фото"),
         ModelChoice("nano-banana-pro", "Nano Banana Pro", "сложные изменения и консистентность"),
     ),
@@ -100,7 +98,7 @@ def mode_supports_multiple_media(mode: GenerationMode) -> bool:
 
 
 def model_uses_seedream_quality(slug: str) -> bool:
-    return slug.startswith("seedream-4-5") or slug.startswith("seedream-5-pro")
+    return slug.startswith("seedream-5-pro")
 
 
 def model_choice(mode: GenerationMode, slug: str) -> ModelChoice:
