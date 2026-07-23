@@ -3,6 +3,7 @@ name: Bootstrap dependency lock
 on:
   push:
     branches: [feat/reproducible-real-infra-ci]
+  workflow_dispatch:
 
 permissions:
   contents: read
