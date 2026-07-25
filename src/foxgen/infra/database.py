@@ -58,8 +58,9 @@ class Generation(Base):
             name="uq_generations_user_id_idempotency_key",
         ),
         CheckConstraint(
-            "status IN ('draft', 'queued', 'submitting', 'submitted', "
-            "'submission_unknown', 'succeeded', 'failed', 'cancelled')",
+            "status IN ('draft', 'queued', 'submitting', 'submitted', 'processing', "
+            "'submission_unknown', 'result_ready', 'storing_media', 'delivery_pending', "
+            "'succeeded', 'failed', 'cancelled')",
             name="ck_generations_status",
         ),
     )
@@ -83,10 +84,19 @@ class Generation(Base):
     input_payload: Mapped[dict[str, object]] = mapped_column(JSONB, default=dict)
     result_payload: Mapped[dict[str, object] | None] = mapped_column(JSONB)
     error_code: Mapped[str | None] = mapped_column(String(64))
+    failure_stage: Mapped[str | None] = mapped_column(String(64))
+    status_reason: Mapped[str | None] = mapped_column(String(128))
     submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    processing_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    result_ready_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    storage_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    delivery_pending_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     last_polled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     next_poll_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
+    status_changed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
