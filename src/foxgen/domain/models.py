@@ -16,7 +16,11 @@ class GenerationStatus(StrEnum):
     QUEUED = "queued"
     SUBMITTING = "submitting"
     SUBMITTED = "submitted"
+    PROCESSING = "processing"
     SUBMISSION_UNKNOWN = "submission_unknown"
+    RESULT_READY = "result_ready"
+    STORING_MEDIA = "storing_media"
+    DELIVERY_PENDING = "delivery_pending"
     SUCCEEDED = "succeeded"
     FAILED = "failed"
     CANCELLED = "cancelled"
@@ -27,7 +31,11 @@ ACTIVE_GENERATION_STATUSES: frozenset[GenerationStatus] = frozenset(
         GenerationStatus.QUEUED,
         GenerationStatus.SUBMITTING,
         GenerationStatus.SUBMITTED,
+        GenerationStatus.PROCESSING,
         GenerationStatus.SUBMISSION_UNKNOWN,
+        GenerationStatus.RESULT_READY,
+        GenerationStatus.STORING_MEDIA,
+        GenerationStatus.DELIVERY_PENDING,
     }
 )
 
