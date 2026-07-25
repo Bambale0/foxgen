@@ -6,7 +6,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from aiogram import Bot
-from aiogram.types import Message
+from aiogram.types import Message, PhotoSize
 
 from foxgen.application.media import DownloadedMedia
 from foxgen.core.errors import ErrorCode, SubmissionError
@@ -32,6 +32,47 @@ class TelegramInputMediaStorage:
         user_id: int,
     ) -> UploadedInput:
         file_id, file_size, filename, content_type, kind = _message_file(message)
+        return await self._download_and_store(
+            bot=bot,
+            file_id=file_id,
+            file_size=file_size,
+            filename=filename,
+            content_type=content_type,
+            kind=kind,
+            user_id=user_id,
+        )
+
+    async def upload_photo_size(
+        self,
+        *,
+        bot: Bot,
+        photo: PhotoSize,
+        user_id: int,
+        filename: str = "video-reference.jpg",
+    ) -> UploadedInput:
+        """Store a Telegram-generated video thumbnail as an explicit image reference."""
+
+        return await self._download_and_store(
+            bot=bot,
+            file_id=photo.file_id,
+            file_size=photo.file_size,
+            filename=filename,
+            content_type="image/jpeg",
+            kind="image",
+            user_id=user_id,
+        )
+
+    async def _download_and_store(
+        self,
+        *,
+        bot: Bot,
+        file_id: str,
+        file_size: int | None,
+        filename: str,
+        content_type: str,
+        kind: str,
+        user_id: int,
+    ) -> UploadedInput:
         if user_id <= 0:
             raise SubmissionError(ErrorCode.VALIDATION, "Не удалось определить пользователя.")
         if file_size is not None and file_size > self._max_bytes:
