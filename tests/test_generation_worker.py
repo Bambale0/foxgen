@@ -35,7 +35,7 @@ class FakeLifecycleRepository:
         )
         self.provider_event: ProviderEventSnapshot | None = None
         self.completed_events: list[UUID] = []
-        self.retried_events: list[UUID] = []
+        self.retried_events: list[tuple[UUID, bool, str]] = []
         self.transitions: list[GenerationStatus] = []
         self.poll_schedules = 0
         self.stale = False
@@ -64,9 +64,11 @@ class FakeLifecycleRepository:
         error: str,
         delay: timedelta,
         max_attempts: int,
+        retryable: bool,
+        failure_class: str,
     ) -> None:
         del error, delay, max_attempts
-        self.retried_events.append(event_id)
+        self.retried_events.append((event_id, retryable, failure_class))
 
     async def get_generation(self, generation_id: UUID) -> GenerationWorkItem | None:
         return self.generation if generation_id == self.generation.id else None
@@ -263,6 +265,26 @@ async def test_worker_marks_ambiguous_submission_unknown_without_retry() -> None
     assert repository.generation.failure_stage == "submission"
     assert repository.completed_events == [OUTBOX_ID]
     assert repository.retried_events == []
+
+
+@pytest.mark.asyncio
+async def test_unknown_outbox_event_is_classified_as_terminal_validation_failure() -> None:
+    repository = FakeLifecycleRepository(
+        OutboxMessage(
+            id=OUTBOX_ID,
+            event_type="unknown.event",
+            aggregate_id=GENERATION_ID,
+            payload={},
+            attempts=1,
+        )
+    )
+    worker = GenerationWorker(repository=repository, client=FakeLifecycleClient())
+
+    await worker.run_once()
+
+    assert repository.retried_events == [
+        (OUTBOX_ID, False, ErrorCode.VALIDATION.value)
+    ]
 
 
 @pytest.mark.asyncio
