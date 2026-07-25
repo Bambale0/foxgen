@@ -5,19 +5,34 @@ from aiogram.types import CallbackQuery, Message
 
 from foxgen.bot.app import fallback_message, stale_callback
 from foxgen.bot.states import GenerationStates
+from foxgen.bot.uploads import InputCleanupResult, TelegramInputMediaStorage
 
 
 class StubState:
-    def __init__(self, current: str | None) -> None:
+    def __init__(self, current: str | None, data: dict[str, object] | None = None) -> None:
         self.current = current
+        self.data = data or {}
         self.cleared = False
 
     async def get_state(self) -> str | None:
         return self.current
 
+    async def get_data(self) -> dict[str, object]:
+        return dict(self.data)
+
     async def clear(self) -> None:
         self.cleared = True
         self.current = None
+        self.data = {}
+
+
+class StubInputMedia:
+    def __init__(self) -> None:
+        self.deleted: tuple[str, ...] = ()
+
+    async def delete_many(self, storage_keys: tuple[str, ...]) -> InputCleanupResult:
+        self.deleted = storage_keys
+        return InputCleanupResult(deleted=storage_keys, failed=())
 
 
 class StubCallback:
@@ -40,13 +55,16 @@ class StubMessage:
 async def test_stale_callback_does_not_destroy_an_active_draft() -> None:
     state = StubState(GenerationStates.choosing_aspect_ratio.state)
     callback = StubCallback()
+    media = StubInputMedia()
 
     await stale_callback(
         cast(CallbackQuery, callback),
         cast(FSMContext, state),
+        cast(TelegramInputMediaStorage, media),
     )
 
     assert state.cleared is False
+    assert media.deleted == ()
     assert callback.answers == [
         (
             "Эта кнопка не относится к текущему шагу. Используйте кнопки в последнем сообщении или /menu.",
@@ -58,10 +76,12 @@ async def test_stale_callback_does_not_destroy_an_active_draft() -> None:
 async def test_stale_callback_recovers_to_menu_after_ttl_expiry() -> None:
     state = StubState(None)
     callback = StubCallback()
+    media = StubInputMedia()
 
     await stale_callback(
         cast(CallbackQuery, callback),
         cast(FSMContext, state),
+        cast(TelegramInputMediaStorage, media),
     )
 
     assert state.cleared is True
@@ -72,26 +92,35 @@ async def test_stale_callback_recovers_to_menu_after_ttl_expiry() -> None:
 async def test_fallback_message_preserves_known_active_state() -> None:
     state = StubState(GenerationStates.reference_choosing_product.state)
     message = StubMessage()
+    media = StubInputMedia()
 
     await fallback_message(
         cast(Message, message),
         cast(FSMContext, state),
+        cast(TelegramInputMediaStorage, media),
     )
 
     assert state.cleared is False
+    assert media.deleted == ()
     assert "незавершённый шаг" in message.answers[0][0]
     assert message.answers[0][1] == {}
 
 
-async def test_fallback_message_clears_unknown_state_from_old_release() -> None:
-    state = StubState("GenerationStates:removed_state")
+async def test_fallback_message_cleans_unknown_state_from_old_release() -> None:
+    state = StubState(
+        "GenerationStates:removed_state",
+        data={"media": [{"kind": "image", "storage_key": "inputs/7/file.jpg"}]},
+    )
     message = StubMessage()
+    media = StubInputMedia()
 
     await fallback_message(
         cast(Message, message),
         cast(FSMContext, state),
+        cast(TelegramInputMediaStorage, media),
     )
 
     assert state.cleared is True
+    assert media.deleted == ("inputs/7/file.jpg",)
     assert "старой версии" in message.answers[0][0]
     assert "reply_markup" in message.answers[0][1]
