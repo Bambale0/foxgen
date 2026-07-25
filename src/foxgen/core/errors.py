@@ -13,6 +13,8 @@ class ErrorCode(StrEnum):
     CONCURRENCY_LIMITED = "concurrency_limited"
     INSUFFICIENT_CREDITS = "insufficient_credits"
     RATE_LIMITED = "rate_limited"
+    INPUT_DOWNLOAD_FAILED = "input_download_failed"
+    INPUT_STORAGE_FAILED = "input_storage_failed"
     PROVIDER_UNAVAILABLE = "provider_unavailable"
     PROVIDER_REJECTED = "provider_rejected"
     PROVIDER_PROTOCOL = "provider_protocol_error"

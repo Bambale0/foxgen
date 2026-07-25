@@ -19,7 +19,7 @@ confirming
 submitting
 ```
 
-Added in the first Quick Start slice:
+Added in the Quick Start cycle:
 
 ```text
 quick_start_waiting_media
@@ -43,24 +43,22 @@ incoming photo/video with no active FSM
   -> submitting
 ```
 
-A received image can start image-edit or image-to-video. A received video can start reference-to-video. Photo generation from a video uses the Telegram-provided video cover and the UI states this explicitly; when Telegram provides no cover, the bot asks for a separate frame instead of silently sending a video URL to an image model.
+A received image can start image-edit or image-to-video. A received video can start reference-to-video. Photo generation from a video uses the Telegram-provided video cover and fails closed when no cover exists.
 
-### Completed Telegram recovery slices — epic #35
+### Completed — epic #35
 
-- a typed state table now covers success, back, cancel, timeout, invalid input and stale callbacks for every declared state;
+- a typed state table covers success, back, cancel, timeout, invalid input and stale callbacks for every declared state;
 - reference-prefilled back/edit navigation preserves the uploaded object key and selected settings;
-- invalid input in reference product/model/prompt states keeps the draft and repeats the expected action;
+- invalid input keeps the active draft and repeats the expected action;
 - stale callbacks no longer destroy a known active draft;
 - callbacks after Redis TTL expiry explain the expiry and recover to the main menu;
 - unknown state names from older releases are cleared safely;
-- Redis event isolation serializes updates for one FSM key across concurrent polling tasks and bot replicas, preventing duplicate media uploads caused by simultaneous updates.
-
-### Remaining Telegram gaps — epic #35
-
-- album/media-group aggregation policy;
-- cleanup/retention policy for abandoned input objects;
-- common retryable/terminal upload and Telegram transport error contract;
-- operational metrics for lock timeouts, expired drafts and abandoned objects.
+- Redis event isolation serializes updates for one FSM key across concurrent polling tasks and bot replicas;
+- Telegram albums are rejected before download with an explicit single-file policy;
+- Telegram download failures and object-storage failures have separate retryable error codes;
+- explicit menu/cancel/reference replacement deletes known `inputs/` objects;
+- the production bucket lifecycle rule for abandoned `inputs/` objects is documented in `docs/input-media-lifecycle.md`;
+- cleanup failures emit a low-cardinality operational warning and remain covered by the bucket lifecycle safety net.
 
 ## 2. Durable generation state
 
@@ -113,9 +111,9 @@ reservation: reserved, captured, released, refunded
 
 ## Implementation order
 
-1. #34 — Quick Start and inbound reference routing.
-2. #35 — complete Telegram FSM/recovery matrix.
-3. #36 — durable generation lifecycle expansion.
+1. #34 — Quick Start and inbound reference routing — completed.
+2. #35 — complete Telegram FSM/recovery matrix — completed.
+3. #36 — durable generation lifecycle expansion — next.
 4. #37 — billing/outbox/media/delivery reconciliation.
 
 Each stage is delivered as a separate reviewable branch and pull request. Production deployment remains gated by CI and the production deployment workflow.
