@@ -16,7 +16,7 @@ from foxgen.bot.flows import router as generation_router
 from foxgen.bot.fsm_contract import contract_for
 from foxgen.bot.keyboards import main_menu
 from foxgen.bot.quick_start import router as quick_start_router
-from foxgen.bot.uploads import TelegramInputMediaStorage
+from foxgen.bot.uploads import TelegramInputMediaStorage, stored_input_keys
 from foxgen.core.config import Settings, get_settings
 from foxgen.infra.media import S3MediaStorage
 
@@ -26,10 +26,28 @@ router = Router(name="foxgen-shell")
 FSM_EVENT_LOCK_TIMEOUT_SECONDS = 180
 
 
+async def clear_state_with_inputs(
+    state: FSMContext,
+    input_media: TelegramInputMediaStorage,
+) -> None:
+    data = await state.get_data()
+    cleanup = await input_media.delete_many(stored_input_keys(data))
+    if cleanup.failed:
+        logger.warning(
+            "telegram_input_cleanup_failed",
+            extra={"failed_count": len(cleanup.failed)},
+        )
+    await state.clear()
+
+
 @router.message(CommandStart())
 @router.message(Command("menu"))
-async def show_menu(message: Message, state: FSMContext) -> None:
-    await state.clear()
+async def show_menu(
+    message: Message,
+    state: FSMContext,
+    input_media: TelegramInputMediaStorage,
+) -> None:
+    await clear_state_with_inputs(state, input_media)
     await message.answer(
         "<b>FoxGen</b>\n\nВыберите раздел.",
         reply_markup=main_menu(),
@@ -37,8 +55,12 @@ async def show_menu(message: Message, state: FSMContext) -> None:
 
 
 @router.callback_query(F.data == "nav:menu")
-async def return_to_menu(callback: CallbackQuery, state: FSMContext) -> None:
-    await state.clear()
+async def return_to_menu(
+    callback: CallbackQuery,
+    state: FSMContext,
+    input_media: TelegramInputMediaStorage,
+) -> None:
+    await clear_state_with_inputs(state, input_media)
     if callback.message:
         try:
             await callback.message.edit_text("Главное меню", reply_markup=main_menu())
@@ -49,8 +71,12 @@ async def return_to_menu(callback: CallbackQuery, state: FSMContext) -> None:
 
 
 @router.callback_query(F.data == "nav:cancel")
-async def cancel_flow(callback: CallbackQuery, state: FSMContext) -> None:
-    await state.clear()
+async def cancel_flow(
+    callback: CallbackQuery,
+    state: FSMContext,
+    input_media: TelegramInputMediaStorage,
+) -> None:
+    await clear_state_with_inputs(state, input_media)
     if callback.message:
         await callback.message.edit_text(
             "Действие отменено. Главное меню:",
@@ -74,7 +100,11 @@ async def planned_section(callback: CallbackQuery) -> None:
 
 
 @router.callback_query()
-async def stale_callback(callback: CallbackQuery, state: FSMContext) -> None:
+async def stale_callback(
+    callback: CallbackQuery,
+    state: FSMContext,
+    input_media: TelegramInputMediaStorage,
+) -> None:
     current = await state.get_state()
     if contract_for(current) is not None:
         await callback.answer(
@@ -83,7 +113,7 @@ async def stale_callback(callback: CallbackQuery, state: FSMContext) -> None:
         )
         return
 
-    await state.clear()
+    await clear_state_with_inputs(state, input_media)
     await callback.answer(
         "Срок действия кнопки истёк. Открыл главное меню.",
         show_alert=True,
@@ -100,7 +130,11 @@ async def stale_callback(callback: CallbackQuery, state: FSMContext) -> None:
 
 
 @router.message()
-async def fallback_message(message: Message, state: FSMContext) -> None:
+async def fallback_message(
+    message: Message,
+    state: FSMContext,
+    input_media: TelegramInputMediaStorage,
+) -> None:
     current = await state.get_state()
     if contract_for(current) is not None:
         await message.answer(
@@ -109,7 +143,7 @@ async def fallback_message(message: Message, state: FSMContext) -> None:
         )
         return
     if current is not None:
-        await state.clear()
+        await clear_state_with_inputs(state, input_media)
         await message.answer(
             "Черновик относится к старой версии и был безопасно сброшен.",
             reply_markup=main_menu(),
