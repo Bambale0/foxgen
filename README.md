@@ -53,7 +53,7 @@ The product is designed around a simple rule: a user should reach the target act
 - duplicate-safe Telegram delivery with explicit `delivery_unknown` state;
 - local MinIO service and bucket bootstrap in Docker Compose;
 - Docker Compose services for API, worker, bot, PostgreSQL, Redis, MinIO and migrations;
-- GitHub Actions CI for Ruff, mypy, pytest and Docker build.
+- GitHub Actions CI for Ruff, mypy, pytest and Docker build, followed by gated production autodeploy for successful pushes to `main`.
 
 Payment-provider webhooks, the remaining media products, exact contracts for the wider model catalog and production hardening remain tracked in issues #7, #5, #20, #21 and #10.
 
