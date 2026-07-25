@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import func, or_, select, update
+from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -721,7 +721,7 @@ class BillingAwareLifecycleRepository(SqlAlchemyLifecycleRepository):
                         )
                     ).all()
                 )
-                for reservation, generation in reservation_rows:
+                for _, generation in reservation_rows:
                     generation_status = GenerationStatus(generation.status)
                     target = (
                         generation_status
