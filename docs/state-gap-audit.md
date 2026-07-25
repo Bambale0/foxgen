@@ -45,15 +45,22 @@ incoming photo/video with no active FSM
 
 A received image can start image-edit or image-to-video. A received video can start reference-to-video. Photo generation from a video uses the Telegram-provided video cover and the UI states this explicitly; when Telegram provides no cover, the bot asks for a separate frame instead of silently sending a video URL to an image model.
 
+### Completed Telegram recovery slices — epic #35
+
+- a typed state table now covers success, back, cancel, timeout, invalid input and stale callbacks for every declared state;
+- reference-prefilled back/edit navigation preserves the uploaded object key and selected settings;
+- invalid input in reference product/model/prompt states keeps the draft and repeats the expected action;
+- stale callbacks no longer destroy a known active draft;
+- callbacks after Redis TTL expiry explain the expiry and recover to the main menu;
+- unknown state names from older releases are cleared safely;
+- Redis event isolation serializes updates for one FSM key across concurrent polling tasks and bot replicas, preventing duplicate media uploads caused by simultaneous updates.
+
 ### Remaining Telegram gaps — epic #35
 
-- explicit expired-draft and recovery UX after Redis TTL;
-- upload-in-progress state and duplicate update protection;
-- album/media-group aggregation;
-- common retryable/terminal error state contract;
-- complete back navigation for reference-prefilled option screens;
+- album/media-group aggregation policy;
 - cleanup/retention policy for abandoned input objects;
-- formal state table covering success, back, cancel, timeout, invalid input and stale callback for every state.
+- common retryable/terminal upload and Telegram transport error contract;
+- operational metrics for lock timeouts, expired drafts and abandoned objects.
 
 ## 2. Durable generation state
 
