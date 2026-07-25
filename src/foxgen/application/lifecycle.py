@@ -29,6 +29,17 @@ class GenerationWorkItem:
     input_payload: dict[str, object]
     result_payload: dict[str, object] | None
     provider_task_id: str | None
+    error_code: str | None = None
+    failure_stage: str | None = None
+    status_reason: str | None = None
+    status_changed_at: datetime | None = None
+    submitted_at: datetime | None = None
+    processing_at: datetime | None = None
+    result_ready_at: datetime | None = None
+    storage_started_at: datetime | None = None
+    delivery_pending_at: datetime | None = None
+    completed_at: datetime | None = None
+    next_poll_at: datetime | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -44,6 +55,7 @@ class NormalizedProviderState:
     status: GenerationStatus | None
     result_payload: dict[str, object] | None
     error_code: str | None
+    status_reason: str | None = None
 
 
 class LifecycleTaskClient(Protocol):
@@ -98,6 +110,8 @@ class LifecycleRepository(Protocol):
         provider_task_id: str | None = None,
         result_payload: dict[str, object] | None = None,
         error_code: str | None = None,
+        failure_stage: str | None = None,
+        status_reason: str | None = None,
     ) -> GenerationWorkItem: ...
 
     async def get_provider_event(self, event_id: UUID) -> ProviderEventSnapshot | None: ...
@@ -176,6 +190,8 @@ class GenerationWorker:
                 expected=frozenset({GenerationStatus.SUBMITTING}),
                 target=GenerationStatus.SUBMISSION_UNKNOWN,
                 error_code=ErrorCode.SUBMISSION_UNKNOWN,
+                failure_stage="submission",
+                status_reason="submission_lease_expired",
             )
         return len(stale)
 
@@ -226,6 +242,7 @@ class GenerationWorker:
             generation_id=generation.id,
             expected=frozenset({GenerationStatus.QUEUED}),
             target=GenerationStatus.SUBMITTING,
+            status_reason="provider_submission_started",
         )
 
         # This event must never be replayed automatically after the billable POST starts.
@@ -249,6 +266,12 @@ class GenerationWorker:
                 expected=frozenset({GenerationStatus.SUBMITTING}),
                 target=target,
                 error_code=exc.code,
+                failure_stage="submission",
+                status_reason=(
+                    "provider_submission_ambiguous"
+                    if target == GenerationStatus.SUBMISSION_UNKNOWN
+                    else "provider_submission_rejected"
+                ),
             )
             return
         except Exception:
@@ -257,6 +280,8 @@ class GenerationWorker:
                 expected=frozenset({GenerationStatus.SUBMITTING}),
                 target=GenerationStatus.SUBMISSION_UNKNOWN,
                 error_code=ErrorCode.SUBMISSION_UNKNOWN,
+                failure_stage="submission",
+                status_reason="provider_submission_exception",
             )
             return
 
@@ -265,6 +290,7 @@ class GenerationWorker:
             expected=frozenset({GenerationStatus.SUBMITTING}),
             target=GenerationStatus.SUBMITTED,
             provider_task_id=task.task_id,
+            status_reason="provider_task_accepted",
         )
 
     async def _process_callback(self, message: OutboxMessage) -> None:
@@ -287,6 +313,7 @@ class GenerationWorker:
                     {
                         GenerationStatus.SUBMITTING,
                         GenerationStatus.SUBMITTED,
+                        GenerationStatus.PROCESSING,
                         GenerationStatus.SUBMISSION_UNKNOWN,
                     }
                 ),
@@ -294,6 +321,8 @@ class GenerationWorker:
                 provider_task_id=event.provider_task_id,
                 result_payload=state.result_payload,
                 error_code=state.error_code,
+                failure_stage=("provider" if state.status == GenerationStatus.FAILED else None),
+                status_reason=state.status_reason,
             )
         await self._repository.mark_provider_event_processed(event.id)
         await self._repository.complete_outbox(message.id)
@@ -344,10 +373,14 @@ class GenerationWorker:
             return
         await self._repository.transition_generation(
             generation_id=generation.id,
-            expected=frozenset({GenerationStatus.SUBMITTED}),
+            expected=frozenset(
+                {GenerationStatus.SUBMITTED, GenerationStatus.PROCESSING}
+            ),
             target=state.status,
             result_payload=state.result_payload,
             error_code=state.error_code,
+            failure_stage=("provider" if state.status == GenerationStatus.FAILED else None),
+            status_reason=state.status_reason,
         )
 
 
@@ -383,9 +416,17 @@ def normalize_provider_payload(payload: dict[str, object]) -> NormalizedProvider
     if state in {"success", "succeeded", "completed", "complete", "done"}:
         raw_result = source.get("resultJson") or source.get("result") or source.get("output")
         return NormalizedProviderState(
-            status=GenerationStatus.SUCCEEDED,
+            status=GenerationStatus.RESULT_READY,
             result_payload=_normalize_result(raw_result),
             error_code=None,
+            status_reason="provider_result_ready",
+        )
+    if state in {"processing", "running", "in_progress", "in-progress", "queued"}:
+        return NormalizedProviderState(
+            status=GenerationStatus.PROCESSING,
+            result_payload=None,
+            error_code=None,
+            status_reason="provider_processing",
         )
     if state in {"failed", "failure", "error", "cancelled", "canceled"}:
         raw_error = source.get("failCode") or source.get("errorCode") or source.get("code")
@@ -393,6 +434,7 @@ def normalize_provider_payload(payload: dict[str, object]) -> NormalizedProvider
             status=GenerationStatus.FAILED,
             result_payload=None,
             error_code=str(raw_error or ErrorCode.PROVIDER_REJECTED),
+            status_reason="provider_terminal_failure",
         )
     return NormalizedProviderState(status=None, result_payload=None, error_code=None)
 

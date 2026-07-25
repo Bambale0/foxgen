@@ -15,6 +15,7 @@ from foxgen.application.lifecycle import (
     ProviderEventSnapshot,
 )
 from foxgen.core.errors import ErrorCode, SubmissionError
+from foxgen.domain.lifecycle import require_transition
 from foxgen.domain.models import (
     DeliveryStatus,
     GenerationStatus,
@@ -42,6 +43,17 @@ def _generation_item(generation: Generation) -> GenerationWorkItem:
             dict(generation.result_payload) if generation.result_payload is not None else None
         ),
         provider_task_id=generation.provider_task_id,
+        error_code=generation.error_code,
+        failure_stage=generation.failure_stage,
+        status_reason=generation.status_reason,
+        status_changed_at=generation.status_changed_at,
+        submitted_at=generation.submitted_at,
+        processing_at=generation.processing_at,
+        result_ready_at=generation.result_ready_at,
+        storage_started_at=generation.storage_started_at,
+        delivery_pending_at=generation.delivery_pending_at,
+        completed_at=generation.completed_at,
+        next_poll_at=generation.next_poll_at,
     )
 
 
@@ -74,6 +86,70 @@ def _delivery_snapshot(delivery: GenerationDelivery) -> DeliverySnapshot:
         recipient_id=delivery.recipient_id,
         status=DeliveryStatus(delivery.status),
     )
+
+
+def generation_transition_values(
+    *,
+    target: GenerationStatus,
+    provider_task_id: str | None = None,
+    result_payload: dict[str, object] | None = None,
+    error_code: str | None = None,
+    failure_stage: str | None = None,
+    status_reason: str | None = None,
+) -> dict[str, object]:
+    now = datetime.now(timezone.utc)
+    values: dict[str, object] = {
+        "status": target.value,
+        "error_code": error_code,
+        "failure_stage": failure_stage,
+        "status_reason": status_reason,
+        "status_changed_at": now,
+        "updated_at": func.now(),
+    }
+    if provider_task_id is not None:
+        values["provider_task_id"] = provider_task_id
+    if result_payload is not None:
+        values["result_payload"] = result_payload
+
+    if target == GenerationStatus.SUBMITTED:
+        values["submitted_at"] = func.coalesce(Generation.submitted_at, func.now())
+        values["next_poll_at"] = now + timedelta(seconds=20)
+    elif target == GenerationStatus.PROCESSING:
+        values["processing_at"] = func.coalesce(Generation.processing_at, func.now())
+        values["next_poll_at"] = now + timedelta(seconds=20)
+    elif target == GenerationStatus.RESULT_READY:
+        values["result_ready_at"] = func.coalesce(Generation.result_ready_at, func.now())
+        values["next_poll_at"] = None
+    elif target == GenerationStatus.STORING_MEDIA:
+        values["storage_started_at"] = func.coalesce(
+            Generation.storage_started_at,
+            func.now(),
+        )
+        values["next_poll_at"] = None
+    elif target == GenerationStatus.DELIVERY_PENDING:
+        values["delivery_pending_at"] = func.coalesce(
+            Generation.delivery_pending_at,
+            func.now(),
+        )
+        values["next_poll_at"] = None
+    elif target in {
+        GenerationStatus.SUCCEEDED,
+        GenerationStatus.FAILED,
+        GenerationStatus.CANCELLED,
+    }:
+        values["completed_at"] = func.coalesce(Generation.completed_at, func.now())
+        values["next_poll_at"] = None
+    return values
+
+
+def validate_transition_set(
+    expected: frozenset[GenerationStatus],
+    target: GenerationStatus,
+) -> None:
+    if not expected:
+        raise ValueError("Expected generation status set must not be empty")
+    for source in expected:
+        require_transition(source, target)
 
 
 class SqlAlchemyLifecycleRepository:
@@ -199,26 +275,18 @@ class SqlAlchemyLifecycleRepository:
         provider_task_id: str | None = None,
         result_payload: dict[str, object] | None = None,
         error_code: str | None = None,
+        failure_stage: str | None = None,
+        status_reason: str | None = None,
     ) -> GenerationWorkItem:
-        values: dict[str, object] = {
-            "status": target.value,
-            "error_code": error_code,
-            "updated_at": func.now(),
-        }
-        if provider_task_id is not None:
-            values["provider_task_id"] = provider_task_id
-        if result_payload is not None:
-            values["result_payload"] = result_payload
-        if target == GenerationStatus.SUBMITTED:
-            values["submitted_at"] = func.now()
-            values["next_poll_at"] = datetime.now(timezone.utc) + timedelta(seconds=20)
-        if target in {
-            GenerationStatus.SUCCEEDED,
-            GenerationStatus.FAILED,
-            GenerationStatus.CANCELLED,
-        }:
-            values["completed_at"] = func.now()
-            values["next_poll_at"] = None
+        validate_transition_set(expected, target)
+        values = generation_transition_values(
+            target=target,
+            provider_task_id=provider_task_id,
+            result_payload=result_payload,
+            error_code=error_code,
+            failure_stage=failure_stage,
+            status_reason=status_reason,
+        )
 
         async with self._database.session() as session:
             async with session.begin():
@@ -240,7 +308,7 @@ class SqlAlchemyLifecycleRepository:
                         "Локальная задача генерации не найдена.",
                     )
 
-                if changed is not None and target == GenerationStatus.SUCCEEDED:
+                if changed is not None and target == GenerationStatus.RESULT_READY:
                     await session.execute(
                         pg_insert(OutboxEvent)
                         .values(
@@ -322,7 +390,12 @@ class SqlAlchemyLifecycleRepository:
                     await session.scalars(
                         select(Generation)
                         .where(
-                            Generation.status == GenerationStatus.SUBMITTED.value,
+                            Generation.status.in_(
+                                (
+                                    GenerationStatus.SUBMITTED.value,
+                                    GenerationStatus.PROCESSING.value,
+                                )
+                            ),
                             Generation.provider_task_id.is_not(None),
                             or_(
                                 Generation.next_poll_at.is_(None),
@@ -347,7 +420,15 @@ class SqlAlchemyLifecycleRepository:
             async with session.begin():
                 await session.execute(
                     update(Generation)
-                    .where(Generation.id == generation_id)
+                    .where(
+                        Generation.id == generation_id,
+                        Generation.status.in_(
+                            (
+                                GenerationStatus.SUBMITTED.value,
+                                GenerationStatus.PROCESSING.value,
+                            )
+                        ),
+                    )
                     .values(
                         last_polled_at=now,
                         next_poll_at=now + delay,
@@ -368,9 +449,9 @@ class SqlAlchemyLifecycleRepository:
                         select(Generation)
                         .where(
                             Generation.status == GenerationStatus.SUBMITTING.value,
-                            Generation.updated_at < older_than,
+                            Generation.status_changed_at < older_than,
                         )
-                        .order_by(Generation.updated_at)
+                        .order_by(Generation.status_changed_at)
                         .limit(limit)
                     )
                 ).all()
@@ -570,7 +651,7 @@ class SqlAlchemyLifecycleRepository:
     ) -> None:
         async with self._database.session() as session:
             async with session.begin():
-                await session.execute(
+                delivery = await session.scalar(
                     update(GenerationDelivery)
                     .where(GenerationDelivery.id == delivery_id)
                     .values(
@@ -579,6 +660,22 @@ class SqlAlchemyLifecycleRepository:
                         sent_at=func.now(),
                         last_error=None,
                         updated_at=func.now(),
+                    )
+                    .returning(GenerationDelivery)
+                )
+                if delivery is None:
+                    return
+                await session.execute(
+                    update(Generation)
+                    .where(
+                        Generation.id == delivery.generation_id,
+                        Generation.status == GenerationStatus.DELIVERY_PENDING.value,
+                    )
+                    .values(
+                        **generation_transition_values(
+                            target=GenerationStatus.SUCCEEDED,
+                            status_reason="telegram_delivery_sent",
+                        )
                     )
                 )
 

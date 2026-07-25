@@ -1,7 +1,6 @@
-from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
-from sqlalchemy import func, update
+from sqlalchemy import update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from foxgen.application.lifecycle import GenerationWorkItem
@@ -12,6 +11,8 @@ from foxgen.infra.database import Database, Generation, OutboxEvent
 from foxgen.infra.lifecycle_repository import (
     SqlAlchemyLifecycleRepository,
     _generation_item,
+    generation_transition_values,
+    validate_transition_set,
 )
 
 
@@ -31,26 +32,18 @@ class BillingAwareLifecycleRepository(SqlAlchemyLifecycleRepository):
         provider_task_id: str | None = None,
         result_payload: dict[str, object] | None = None,
         error_code: str | None = None,
+        failure_stage: str | None = None,
+        status_reason: str | None = None,
     ) -> GenerationWorkItem:
-        values: dict[str, object] = {
-            "status": target.value,
-            "error_code": error_code,
-            "updated_at": func.now(),
-        }
-        if provider_task_id is not None:
-            values["provider_task_id"] = provider_task_id
-        if result_payload is not None:
-            values["result_payload"] = result_payload
-        if target == GenerationStatus.SUBMITTED:
-            values["submitted_at"] = func.now()
-            values["next_poll_at"] = datetime.now(timezone.utc) + timedelta(seconds=20)
-        if target in {
-            GenerationStatus.SUCCEEDED,
-            GenerationStatus.FAILED,
-            GenerationStatus.CANCELLED,
-        }:
-            values["completed_at"] = func.now()
-            values["next_poll_at"] = None
+        validate_transition_set(expected, target)
+        values = generation_transition_values(
+            target=target,
+            provider_task_id=provider_task_id,
+            result_payload=result_payload,
+            error_code=error_code,
+            failure_stage=failure_stage,
+            status_reason=status_reason,
+        )
 
         async with self._billing_database.session() as session:
             async with session.begin():
@@ -78,7 +71,7 @@ class BillingAwareLifecycleRepository(SqlAlchemyLifecycleRepository):
                         generation_id=generation.id,
                         target=target,
                     )
-                    if target == GenerationStatus.SUCCEEDED:
+                    if target == GenerationStatus.RESULT_READY:
                         await session.execute(
                             pg_insert(OutboxEvent)
                             .values(

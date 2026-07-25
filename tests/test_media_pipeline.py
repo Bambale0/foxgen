@@ -11,7 +11,7 @@ from foxgen.application.delivery import (
     MediaAssetSnapshot,
     MediaPipeline,
 )
-from foxgen.application.lifecycle import OutboxMessage
+from foxgen.application.lifecycle import GenerationWorkItem, OutboxMessage
 from foxgen.application.media import DownloadedMedia, StoredMedia
 from foxgen.domain.models import DeliveryStatus, GenerationStatus
 
@@ -29,7 +29,7 @@ class FakePipelineRepository:
         self.generation = DeliveryGeneration(
             id=GENERATION_ID,
             user_id=42,
-            status=GenerationStatus.SUCCEEDED,
+            status=GenerationStatus.RESULT_READY,
             result_payload={"resultUrls": [SOURCE_URL]},
         )
         self.assets: dict[str, MediaAssetSnapshot] = {}
@@ -37,12 +37,46 @@ class FakePipelineRepository:
         self.completed_events: list[UUID] = []
         self.sent_message_ids: list[int] = []
         self.unknown_error: str | None = None
+        self.transitions: list[GenerationStatus] = []
 
     async def get_delivery_generation(
         self,
         generation_id: UUID,
     ) -> DeliveryGeneration | None:
         return self.generation if generation_id == GENERATION_ID else None
+
+    async def transition_generation(
+        self,
+        *,
+        generation_id: UUID,
+        expected: frozenset[GenerationStatus],
+        target: GenerationStatus,
+        provider_task_id: str | None = None,
+        result_payload: dict[str, object] | None = None,
+        error_code: str | None = None,
+        failure_stage: str | None = None,
+        status_reason: str | None = None,
+    ) -> GenerationWorkItem:
+        del provider_task_id, error_code, failure_stage, status_reason
+        assert generation_id == GENERATION_ID
+        assert self.generation.status in expected
+        self.generation = replace(
+            self.generation,
+            status=target,
+            result_payload=(
+                result_payload if result_payload is not None else self.generation.result_payload
+            ),
+        )
+        self.transitions.append(target)
+        return GenerationWorkItem(
+            id=self.generation.id,
+            user_id=self.generation.user_id,
+            model_slug="seedream-5-pro",
+            status=target,
+            input_payload={},
+            result_payload=self.generation.result_payload,
+            provider_task_id=None,
+        )
 
     async def find_media_asset(
         self,
@@ -123,6 +157,7 @@ class FakePipelineRepository:
         assert self.delivery is not None
         assert delivery_id == self.delivery.id
         self.delivery = replace(self.delivery, status=DeliveryStatus.SENT)
+        self.generation = replace(self.generation, status=GenerationStatus.SUCCEEDED)
         self.sent_message_ids = message_ids
 
     async def mark_delivery_unknown(
@@ -196,7 +231,7 @@ class FakeSender:
 
 
 @pytest.mark.asyncio
-async def test_archive_downloads_stores_and_enqueues_delivery() -> None:
+async def test_archive_downloads_stores_and_advances_to_delivery_pending() -> None:
     repository = FakePipelineRepository()
     downloader = FakeDownloader()
     storage = FakeStorage()
@@ -222,12 +257,21 @@ async def test_archive_downloads_stores_and_enqueues_delivery() -> None:
     assert repository.assets[SOURCE_URL].storage_key == storage.stored_keys[0]
     assert repository.delivery is not None
     assert repository.delivery.recipient_id == 42
+    assert repository.transitions == [
+        GenerationStatus.STORING_MEDIA,
+        GenerationStatus.DELIVERY_PENDING,
+    ]
+    assert repository.generation.status == GenerationStatus.DELIVERY_PENDING
     assert repository.completed_events == [ARCHIVE_EVENT_ID]
 
 
 @pytest.mark.asyncio
-async def test_delivery_uses_presigned_storage_url_and_marks_sent() -> None:
+async def test_delivery_uses_presigned_storage_url_and_finalizes_generation() -> None:
     repository = FakePipelineRepository()
+    repository.generation = replace(
+        repository.generation,
+        status=GenerationStatus.DELIVERY_PENDING,
+    )
     repository.assets[SOURCE_URL] = MediaAssetSnapshot(
         id=ASSET_ID,
         generation_id=GENERATION_ID,
@@ -260,6 +304,7 @@ async def test_delivery_uses_presigned_storage_url_and_marks_sent() -> None:
     assert sender.calls[0][1][0].startswith("https://storage.example.com/")
     assert repository.delivery is not None
     assert repository.delivery.status == DeliveryStatus.SENT
+    assert repository.generation.status == GenerationStatus.SUCCEEDED
     assert repository.sent_message_ids == [1234]
     assert repository.completed_events == [DELIVERY_EVENT_ID]
 
@@ -267,6 +312,10 @@ async def test_delivery_uses_presigned_storage_url_and_marks_sent() -> None:
 @pytest.mark.asyncio
 async def test_ambiguous_telegram_send_is_not_automatically_replayed() -> None:
     repository = FakePipelineRepository()
+    repository.generation = replace(
+        repository.generation,
+        status=GenerationStatus.DELIVERY_PENDING,
+    )
     repository.assets[SOURCE_URL] = MediaAssetSnapshot(
         id=ASSET_ID,
         generation_id=GENERATION_ID,
@@ -296,5 +345,6 @@ async def test_ambiguous_telegram_send_is_not_automatically_replayed() -> None:
 
     assert repository.delivery is not None
     assert repository.delivery.status == DeliveryStatus.DELIVERY_UNKNOWN
+    assert repository.generation.status == GenerationStatus.DELIVERY_PENDING
     assert repository.unknown_error is not None
     assert repository.completed_events == [DELIVERY_EVENT_ID]
