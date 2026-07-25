@@ -3,6 +3,7 @@ import hashlib
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Mapping
 from uuid import uuid4
 
 from aiogram import Bot
@@ -19,6 +20,12 @@ class UploadedInput:
     storage_key: str
 
 
+@dataclass(frozen=True, slots=True)
+class InputCleanupResult:
+    deleted: tuple[str, ...]
+    failed: tuple[str, ...]
+
+
 class TelegramInputMediaStorage:
     def __init__(self, *, storage: S3MediaStorage, max_bytes: int) -> None:
         self._storage = storage
@@ -31,6 +38,11 @@ class TelegramInputMediaStorage:
         message: Message,
         user_id: int,
     ) -> UploadedInput:
+        if message.media_group_id is not None:
+            raise SubmissionError(
+                ErrorCode.VALIDATION,
+                "Альбомы пока не поддерживаются. Отправьте один файл отдельным сообщением.",
+            )
         file_id, file_size, filename, content_type, kind = _message_file(message)
         return await self._download_and_store(
             bot=bot,
@@ -86,7 +98,14 @@ class TelegramInputMediaStorage:
         path = Path(temporary.name)
         temporary.close()
         try:
-            await bot.download(file_id, destination=path)
+            try:
+                await bot.download(file_id, destination=path)
+            except Exception as exc:
+                raise SubmissionError(
+                    ErrorCode.INPUT_DOWNLOAD_FAILED,
+                    "Не удалось скачать файл из Telegram. Отправьте его ещё раз.",
+                    retryable=True,
+                ) from exc
             size_bytes = path.stat().st_size
             if size_bytes <= 0:
                 raise SubmissionError(ErrorCode.VALIDATION, "Получен пустой файл.")
@@ -109,7 +128,16 @@ class TelegramInputMediaStorage:
                 f"inputs/{user_id}/{uuid4().hex[:16]}-"
                 f"{checksum[:24]}{suffix}"
             )
-            stored = await self._storage.store(key=storage_key, media=media)
+            try:
+                stored = await self._storage.store(key=storage_key, media=media)
+            except SubmissionError:
+                raise
+            except Exception as exc:
+                raise SubmissionError(
+                    ErrorCode.INPUT_STORAGE_FAILED,
+                    "Не удалось сохранить файл. Повторите попытку позже.",
+                    retryable=True,
+                ) from exc
             return UploadedInput(kind=kind, storage_key=stored.storage_key)
         finally:
             path.unlink(missing_ok=True)
@@ -122,6 +150,40 @@ class TelegramInputMediaStorage:
                 "Черновик содержит некорректную ссылку на входной файл.",
             )
         return await self._storage.presigned_url(normalized)
+
+    async def delete_many(self, storage_keys: tuple[str, ...]) -> InputCleanupResult:
+        deleted: list[str] = []
+        failed: list[str] = []
+        for storage_key in dict.fromkeys(storage_keys):
+            normalized = storage_key.strip()
+            if not normalized.startswith("inputs/"):
+                continue
+            try:
+                await self._storage.delete(normalized)
+            except Exception:
+                failed.append(normalized)
+            else:
+                deleted.append(normalized)
+        return InputCleanupResult(deleted=tuple(deleted), failed=tuple(failed))
+
+
+def stored_input_keys(data: Mapping[str, object]) -> tuple[str, ...]:
+    keys: list[str] = []
+
+    def visit(value: object) -> None:
+        if isinstance(value, dict):
+            storage_key = value.get("storage_key")
+            if isinstance(storage_key, str) and storage_key.startswith("inputs/"):
+                keys.append(storage_key)
+            for item in value.values():
+                visit(item)
+        elif isinstance(value, list):
+            for item in value:
+                visit(item)
+
+    for field in ("media", "reference_original", "reference_preview"):
+        visit(data.get(field))
+    return tuple(dict.fromkeys(keys))
 
 
 def message_media_kind(message: Message) -> str:
