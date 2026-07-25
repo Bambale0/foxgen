@@ -169,6 +169,15 @@ class S3MediaStorage:
             Metadata={"sha256": checksum_sha256},
         )
 
+    async def delete(self, storage_key: str) -> None:
+        """Delete one object. S3 delete is idempotent when the key is already absent."""
+
+        await asyncio.to_thread(
+            self._client.delete_object,
+            Bucket=self._bucket,
+            Key=storage_key,
+        )
+
     async def presigned_url(self, storage_key: str) -> str:
         value = await asyncio.to_thread(
             self._client.generate_presigned_url,
