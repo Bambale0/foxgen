@@ -1,9 +1,11 @@
 from dataclasses import dataclass
+from datetime import datetime, timedelta
 from typing import Protocol
 from uuid import UUID
 
 from foxgen.application.lifecycle import GenerationWorkItem, OutboxMessage
 from foxgen.application.media import (
+    DownloadedMedia,
     MediaDownloader,
     MediaSender,
     MediaStorage,
@@ -11,7 +13,11 @@ from foxgen.application.media import (
     storage_key_for,
 )
 from foxgen.core.errors import ErrorCode, SubmissionError
-from foxgen.domain.models import DeliveryStatus, GenerationStatus
+from foxgen.domain.models import (
+    DeliveryStatus,
+    GenerationStatus,
+    MediaAssetStatus,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -31,6 +37,11 @@ class MediaAssetSnapshot:
     content_type: str
     size_bytes: int
     checksum_sha256: str
+    status: MediaAssetStatus = MediaAssetStatus.STORED
+    attempts: int = 0
+    next_retry_at: datetime | None = None
+    error_code: str | None = None
+    last_error: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -39,6 +50,10 @@ class DeliverySnapshot:
     generation_id: UUID
     recipient_id: int
     status: DeliveryStatus
+    attempts: int = 0
+    next_retry_at: datetime | None = None
+    last_error: str | None = None
+    telegram_message_ids: tuple[int, ...] = ()
 
 
 class MediaPipelineRepository(Protocol):
@@ -67,6 +82,25 @@ class MediaPipelineRepository(Protocol):
         source_url: str,
     ) -> MediaAssetSnapshot | None: ...
 
+    async def ensure_media_asset_attempt(
+        self,
+        *,
+        generation_id: UUID,
+        source_url: str,
+        index: int,
+    ) -> MediaAssetSnapshot: ...
+
+    async def mark_media_asset_failure(
+        self,
+        *,
+        generation_id: UUID,
+        source_url: str,
+        error_code: str,
+        error: str,
+        retryable: bool,
+        delay: timedelta,
+    ) -> None: ...
+
     async def record_media_asset(
         self,
         *,
@@ -91,6 +125,8 @@ class MediaPipelineRepository(Protocol):
     ) -> DeliverySnapshot: ...
 
     async def get_delivery(self, generation_id: UUID) -> DeliverySnapshot | None: ...
+
+    async def resume_delivery_retry(self, delivery_id: UUID) -> bool: ...
 
     async def begin_delivery(
         self,
@@ -189,11 +225,17 @@ class MediaPipeline:
                 generation_id=generation.id,
                 source_url=source_url,
             )
-            if existing is not None:
+            if existing is not None and existing.status == MediaAssetStatus.STORED:
                 continue
+            await self._repository.ensure_media_asset_attempt(
+                generation_id=generation.id,
+                source_url=source_url,
+                index=index,
+            )
 
-            downloaded = await self._downloader.download(source_url)
+            downloaded: DownloadedMedia | None = None
             try:
+                downloaded = await self._downloader.download(source_url)
                 key = storage_key_for(
                     generation_id=str(generation.id),
                     index=index,
@@ -208,8 +250,29 @@ class MediaPipeline:
                     size_bytes=stored.size_bytes,
                     checksum_sha256=stored.checksum_sha256,
                 )
+            except SubmissionError as exc:
+                await self._repository.mark_media_asset_failure(
+                    generation_id=generation.id,
+                    source_url=source_url,
+                    error_code=exc.code.value,
+                    error=str(exc),
+                    retryable=exc.retryable,
+                    delay=timedelta(seconds=30),
+                )
+                raise
+            except Exception as exc:
+                await self._repository.mark_media_asset_failure(
+                    generation_id=generation.id,
+                    source_url=source_url,
+                    error_code=type(exc).__name__,
+                    error=f"{type(exc).__name__}: {exc}",
+                    retryable=True,
+                    delay=timedelta(seconds=30),
+                )
+                raise
             finally:
-                downloaded.cleanup()
+                if downloaded is not None:
+                    downloaded.cleanup()
 
         await self._repository.ensure_delivery(
             generation_id=generation.id,
@@ -234,6 +297,21 @@ class MediaPipeline:
         }:
             await self._repository.complete_outbox(message.id)
             return
+        if delivery.status == DeliveryStatus.RETRY_WAIT:
+            resumed = await self._repository.resume_delivery_retry(delivery.id)
+            if not resumed:
+                raise SubmissionError(
+                    ErrorCode.CONCURRENCY_LIMITED,
+                    "Delivery retry is already being processed.",
+                    retryable=True,
+                )
+            delivery = DeliverySnapshot(
+                id=delivery.id,
+                generation_id=delivery.generation_id,
+                recipient_id=delivery.recipient_id,
+                status=DeliveryStatus.PENDING,
+                attempts=delivery.attempts,
+            )
         if delivery.status != DeliveryStatus.PENDING:
             raise SubmissionError(
                 ErrorCode.VALIDATION,

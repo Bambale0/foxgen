@@ -1,7 +1,8 @@
 from dataclasses import replace
+from datetime import timedelta
 from pathlib import Path
 from tempfile import NamedTemporaryFile
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import pytest
 
@@ -13,7 +14,12 @@ from foxgen.application.delivery import (
 )
 from foxgen.application.lifecycle import GenerationWorkItem, OutboxMessage
 from foxgen.application.media import DownloadedMedia, StoredMedia
-from foxgen.domain.models import DeliveryStatus, GenerationStatus
+from foxgen.core.errors import ErrorCode, SubmissionError
+from foxgen.domain.models import (
+    DeliveryStatus,
+    GenerationStatus,
+    MediaAssetStatus,
+)
 
 
 GENERATION_ID = UUID("66666666-6666-6666-6666-666666666666")
@@ -22,6 +28,7 @@ DELIVERY_EVENT_ID = UUID("88888888-8888-8888-8888-888888888888")
 DELIVERY_ID = UUID("99999999-9999-9999-9999-999999999999")
 ASSET_ID = UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
 SOURCE_URL = "https://cdn.example.com/result.png"
+SECOND_SOURCE_URL = "https://cdn.example.com/result-2.png"
 
 
 class FakePipelineRepository:
@@ -87,6 +94,53 @@ class FakePipelineRepository:
         assert generation_id == GENERATION_ID
         return self.assets.get(source_url)
 
+    async def ensure_media_asset_attempt(
+        self,
+        *,
+        generation_id: UUID,
+        source_url: str,
+        index: int,
+    ) -> MediaAssetSnapshot:
+        assert generation_id == GENERATION_ID
+        existing = self.assets.get(source_url)
+        if existing is not None and existing.status == MediaAssetStatus.STORED:
+            return existing
+        asset = MediaAssetSnapshot(
+            id=existing.id if existing is not None else uuid4(),
+            generation_id=generation_id,
+            source_url=source_url,
+            storage_key=f"generations/{generation_id}/pending-{index:03d}",
+            content_type="application/octet-stream",
+            size_bytes=0,
+            checksum_sha256="0" * 64,
+            status=MediaAssetStatus.PENDING,
+            attempts=(existing.attempts + 1 if existing is not None else 1),
+        )
+        self.assets[source_url] = asset
+        return asset
+
+    async def mark_media_asset_failure(
+        self,
+        *,
+        generation_id: UUID,
+        source_url: str,
+        error_code: str,
+        error: str,
+        retryable: bool,
+        delay: timedelta,
+    ) -> None:
+        del delay
+        assert generation_id == GENERATION_ID
+        existing = self.assets[source_url]
+        self.assets[source_url] = replace(
+            existing,
+            status=(
+                MediaAssetStatus.RETRY_WAIT if retryable else MediaAssetStatus.FAILED
+            ),
+            error_code=error_code,
+            last_error=error,
+        )
+
     async def record_media_asset(
         self,
         *,
@@ -97,14 +151,17 @@ class FakePipelineRepository:
         size_bytes: int,
         checksum_sha256: str,
     ) -> MediaAssetSnapshot:
+        existing = self.assets.get(source_url)
         asset = MediaAssetSnapshot(
-            id=ASSET_ID,
+            id=existing.id if existing is not None else ASSET_ID,
             generation_id=generation_id,
             source_url=source_url,
             storage_key=storage_key,
             content_type=content_type,
             size_bytes=size_bytes,
             checksum_sha256=checksum_sha256,
+            status=MediaAssetStatus.STORED,
+            attempts=existing.attempts if existing is not None else 1,
         )
         self.assets[source_url] = asset
         return asset
@@ -114,7 +171,9 @@ class FakePipelineRepository:
         generation_id: UUID,
     ) -> tuple[MediaAssetSnapshot, ...]:
         assert generation_id == GENERATION_ID
-        return tuple(self.assets.values())
+        return tuple(
+            asset for asset in self.assets.values() if asset.status == MediaAssetStatus.STORED
+        )
 
     async def ensure_delivery(
         self,
@@ -135,6 +194,18 @@ class FakePipelineRepository:
         assert generation_id == GENERATION_ID
         return self.delivery
 
+    async def resume_delivery_retry(self, delivery_id: UUID) -> bool:
+        assert self.delivery is not None
+        assert delivery_id == self.delivery.id
+        if self.delivery.status != DeliveryStatus.RETRY_WAIT:
+            return False
+        self.delivery = replace(
+            self.delivery,
+            status=DeliveryStatus.PENDING,
+            next_retry_at=None,
+        )
+        return True
+
     async def begin_delivery(
         self,
         *,
@@ -144,7 +215,11 @@ class FakePipelineRepository:
         assert self.delivery is not None
         assert delivery_id == self.delivery.id
         assert self.delivery.status == DeliveryStatus.PENDING
-        self.delivery = replace(self.delivery, status=DeliveryStatus.SENDING)
+        self.delivery = replace(
+            self.delivery,
+            status=DeliveryStatus.SENDING,
+            attempts=self.delivery.attempts + 1,
+        )
         self.completed_events.append(outbox_event_id)
         return True
 
@@ -156,7 +231,11 @@ class FakePipelineRepository:
     ) -> None:
         assert self.delivery is not None
         assert delivery_id == self.delivery.id
-        self.delivery = replace(self.delivery, status=DeliveryStatus.SENT)
+        self.delivery = replace(
+            self.delivery,
+            status=DeliveryStatus.SENT,
+            telegram_message_ids=tuple(message_ids),
+        )
         self.generation = replace(self.generation, status=GenerationStatus.SUCCEEDED)
         self.sent_message_ids = message_ids
 
@@ -168,7 +247,11 @@ class FakePipelineRepository:
     ) -> None:
         assert self.delivery is not None
         assert delivery_id == self.delivery.id
-        self.delivery = replace(self.delivery, status=DeliveryStatus.DELIVERY_UNKNOWN)
+        self.delivery = replace(
+            self.delivery,
+            status=DeliveryStatus.DELIVERY_UNKNOWN,
+            last_error=error,
+        )
         self.unknown_error = error
 
     async def complete_outbox(self, event_id: UUID) -> None:
@@ -176,11 +259,24 @@ class FakePipelineRepository:
 
 
 class FakeDownloader:
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        *,
+        fail_url: str | None = None,
+        retryable: bool = True,
+    ) -> None:
         self.calls: list[str] = []
+        self.fail_url = fail_url
+        self.retryable = retryable
 
     async def download(self, url: str) -> DownloadedMedia:
         self.calls.append(url)
+        if url == self.fail_url:
+            raise SubmissionError(
+                ErrorCode.PROVIDER_UNAVAILABLE,
+                "download failed",
+                retryable=self.retryable,
+            )
         temporary = NamedTemporaryFile(delete=False)
         temporary.write(b"fox-image")
         temporary.close()
@@ -255,6 +351,7 @@ async def test_archive_downloads_stores_and_advances_to_delivery_pending() -> No
     assert downloader.calls == [SOURCE_URL]
     assert len(storage.stored_keys) == 1
     assert repository.assets[SOURCE_URL].storage_key == storage.stored_keys[0]
+    assert repository.assets[SOURCE_URL].status == MediaAssetStatus.STORED
     assert repository.delivery is not None
     assert repository.delivery.recipient_id == 42
     assert repository.transitions == [
@@ -263,6 +360,37 @@ async def test_archive_downloads_stores_and_advances_to_delivery_pending() -> No
     ]
     assert repository.generation.status == GenerationStatus.DELIVERY_PENDING
     assert repository.completed_events == [ARCHIVE_EVENT_ID]
+
+
+@pytest.mark.asyncio
+async def test_partial_archive_preserves_stored_asset_and_marks_retry_wait() -> None:
+    repository = FakePipelineRepository()
+    repository.generation = replace(
+        repository.generation,
+        result_payload={"resultUrls": [SOURCE_URL, SECOND_SOURCE_URL]},
+    )
+    pipeline = MediaPipeline(
+        repository=repository,
+        downloader=FakeDownloader(fail_url=SECOND_SOURCE_URL),
+        storage=FakeStorage(),
+        sender=FakeSender(),
+    )
+
+    with pytest.raises(SubmissionError):
+        await pipeline.process(
+            OutboxMessage(
+                id=ARCHIVE_EVENT_ID,
+                event_type="generation.archive",
+                aggregate_id=GENERATION_ID,
+                payload={},
+                attempts=1,
+            )
+        )
+
+    assert repository.assets[SOURCE_URL].status == MediaAssetStatus.STORED
+    assert repository.assets[SECOND_SOURCE_URL].status == MediaAssetStatus.RETRY_WAIT
+    assert repository.generation.status == GenerationStatus.STORING_MEDIA
+    assert repository.delivery is None
 
 
 @pytest.mark.asyncio
@@ -307,6 +435,49 @@ async def test_delivery_uses_presigned_storage_url_and_finalizes_generation() ->
     assert repository.generation.status == GenerationStatus.SUCCEEDED
     assert repository.sent_message_ids == [1234]
     assert repository.completed_events == [DELIVERY_EVENT_ID]
+
+
+@pytest.mark.asyncio
+async def test_retry_wait_delivery_is_resumed_before_send() -> None:
+    repository = FakePipelineRepository()
+    repository.generation = replace(
+        repository.generation,
+        status=GenerationStatus.DELIVERY_PENDING,
+    )
+    repository.assets[SOURCE_URL] = MediaAssetSnapshot(
+        id=ASSET_ID,
+        generation_id=GENERATION_ID,
+        source_url=SOURCE_URL,
+        storage_key="generations/id/result.png",
+        content_type="image/png",
+        size_bytes=9,
+        checksum_sha256="a" * 64,
+    )
+    await repository.ensure_delivery(generation_id=GENERATION_ID, recipient_id=42)
+    assert repository.delivery is not None
+    repository.delivery = replace(
+        repository.delivery,
+        status=DeliveryStatus.RETRY_WAIT,
+    )
+    pipeline = MediaPipeline(
+        repository=repository,
+        downloader=FakeDownloader(),
+        storage=FakeStorage(),
+        sender=FakeSender(),
+    )
+
+    await pipeline.process(
+        OutboxMessage(
+            id=DELIVERY_EVENT_ID,
+            event_type="generation.deliver",
+            aggregate_id=GENERATION_ID,
+            payload={},
+            attempts=2,
+        )
+    )
+
+    assert repository.delivery.status == DeliveryStatus.SENT
+    assert repository.delivery.attempts == 1
 
 
 @pytest.mark.asyncio
