@@ -3,6 +3,7 @@ from uuid import UUID
 
 from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from foxgen.application.delivery import (
     DeliveryGeneration,
@@ -76,15 +77,27 @@ def _asset_snapshot(asset: MediaAsset) -> MediaAssetSnapshot:
         content_type=asset.content_type,
         size_bytes=asset.size_bytes,
         checksum_sha256=asset.checksum_sha256,
+        status=MediaAssetStatus(asset.status),
+        attempts=asset.attempts,
+        next_retry_at=asset.next_retry_at,
+        error_code=asset.error_code,
+        last_error=asset.last_error,
     )
 
 
 def _delivery_snapshot(delivery: GenerationDelivery) -> DeliverySnapshot:
+    raw_message_ids = delivery.telegram_message_ids or []
     return DeliverySnapshot(
         id=delivery.id,
         generation_id=delivery.generation_id,
         recipient_id=delivery.recipient_id,
         status=DeliveryStatus(delivery.status),
+        attempts=delivery.attempts,
+        next_retry_at=delivery.next_retry_at,
+        last_error=delivery.last_error,
+        telegram_message_ids=tuple(
+            item for item in raw_message_ids if isinstance(item, int)
+        ),
     )
 
 
@@ -174,7 +187,12 @@ class SqlAlchemyLifecycleRepository:
                             .where(
                                 or_(
                                     and_(
-                                        OutboxEvent.status == OutboxStatus.PENDING.value,
+                                        OutboxEvent.status.in_(
+                                            (
+                                                OutboxStatus.PENDING.value,
+                                                OutboxStatus.RETRY_WAIT.value,
+                                            )
+                                        ),
                                         OutboxEvent.available_at <= now,
                                     ),
                                     and_(
@@ -204,6 +222,7 @@ class SqlAlchemyLifecycleRepository:
             status=OutboxStatus.COMPLETED,
             available_at=None,
             last_error=None,
+            failure_class=None,
         )
 
     async def retry_outbox(
@@ -213,20 +232,61 @@ class SqlAlchemyLifecycleRepository:
         error: str,
         delay: timedelta,
         max_attempts: int,
+        retryable: bool,
+        failure_class: str,
     ) -> None:
+        now = datetime.now(timezone.utc)
         async with self._database.session() as session:
             async with session.begin():
                 event = await session.get(OutboxEvent, event_id, with_for_update=True)
                 if event is None:
                     return
-                if event.attempts >= max_attempts:
-                    event.status = OutboxStatus.FAILED
+                exhausted = event.attempts >= max_attempts
+                if retryable and not exhausted:
+                    event.status = OutboxStatus.RETRY_WAIT
+                    event.available_at = now + delay
+                    if event.event_type == "generation.deliver":
+                        await session.execute(
+                            update(GenerationDelivery)
+                            .where(
+                                GenerationDelivery.generation_id == event.aggregate_id,
+                                GenerationDelivery.status.in_(
+                                    (
+                                        DeliveryStatus.PENDING.value,
+                                        DeliveryStatus.RETRY_WAIT.value,
+                                    )
+                                ),
+                            )
+                            .values(
+                                status=DeliveryStatus.RETRY_WAIT.value,
+                                next_retry_at=now + delay,
+                                last_error=error[:10_000],
+                                updated_at=func.now(),
+                            )
+                        )
                 else:
-                    event.status = OutboxStatus.PENDING
-                    event.available_at = datetime.now(timezone.utc) + delay
+                    event.status = OutboxStatus.DEAD_LETTER
+                    event.dead_lettered_at = now
+                    await self._on_outbox_dead_letter(
+                        session,
+                        event=event,
+                        error=error,
+                        failure_class=failure_class,
+                    )
                 event.last_error = error[:10_000]
+                event.failure_class = failure_class[:64]
                 event.locked_at = None
                 event.worker_id = None
+
+    async def _on_outbox_dead_letter(
+        self,
+        session: AsyncSession,
+        *,
+        event: OutboxEvent,
+        error: str,
+        failure_class: str,
+    ) -> None:
+        del session, event, error, failure_class
 
     async def _set_outbox_state(
         self,
@@ -235,12 +295,15 @@ class SqlAlchemyLifecycleRepository:
         status: OutboxStatus,
         available_at: datetime | None,
         last_error: str | None,
+        failure_class: str | None,
     ) -> None:
         values: dict[str, object] = {
             "status": status.value,
             "locked_at": None,
             "worker_id": None,
             "last_error": last_error,
+            "failure_class": failure_class,
+            "dead_lettered_at": None,
             "updated_at": func.now(),
         }
         if available_at is not None:
@@ -492,6 +555,77 @@ class SqlAlchemyLifecycleRepository:
             )
             return _asset_snapshot(asset) if asset is not None else None
 
+    async def ensure_media_asset_attempt(
+        self,
+        *,
+        generation_id: UUID,
+        source_url: str,
+        index: int,
+    ) -> MediaAssetSnapshot:
+        async with self._database.session() as session:
+            async with session.begin():
+                asset = await session.scalar(
+                    select(MediaAsset)
+                    .where(
+                        MediaAsset.generation_id == generation_id,
+                        MediaAsset.source_url == source_url,
+                    )
+                    .with_for_update()
+                )
+                if asset is None:
+                    asset = MediaAsset(
+                        generation_id=generation_id,
+                        source_url=source_url,
+                        storage_key=f"generations/{generation_id}/pending-{index:03d}",
+                        content_type="application/octet-stream",
+                        size_bytes=0,
+                        checksum_sha256="0" * 64,
+                        status=MediaAssetStatus.PENDING.value,
+                        attempts=1,
+                    )
+                    session.add(asset)
+                    await session.flush()
+                elif MediaAssetStatus(asset.status) != MediaAssetStatus.STORED:
+                    asset.status = MediaAssetStatus.PENDING
+                    asset.attempts += 1
+                    asset.next_retry_at = None
+                    asset.error_code = None
+                    asset.last_error = None
+                return _asset_snapshot(asset)
+
+    async def mark_media_asset_failure(
+        self,
+        *,
+        generation_id: UUID,
+        source_url: str,
+        error_code: str,
+        error: str,
+        retryable: bool,
+        delay: timedelta,
+    ) -> None:
+        now = datetime.now(timezone.utc)
+        async with self._database.session() as session:
+            async with session.begin():
+                await session.execute(
+                    update(MediaAsset)
+                    .where(
+                        MediaAsset.generation_id == generation_id,
+                        MediaAsset.source_url == source_url,
+                        MediaAsset.status != MediaAssetStatus.STORED.value,
+                    )
+                    .values(
+                        status=(
+                            MediaAssetStatus.RETRY_WAIT.value
+                            if retryable
+                            else MediaAssetStatus.FAILED.value
+                        ),
+                        next_retry_at=(now + delay if retryable else None),
+                        error_code=error_code[:64],
+                        last_error=error[:10_000],
+                        updated_at=func.now(),
+                    )
+                )
+
     async def record_media_asset(
         self,
         *,
@@ -504,9 +638,16 @@ class SqlAlchemyLifecycleRepository:
     ) -> MediaAssetSnapshot:
         async with self._database.session() as session:
             async with session.begin():
-                inserted = await session.scalar(
-                    pg_insert(MediaAsset)
-                    .values(
+                asset = await session.scalar(
+                    select(MediaAsset)
+                    .where(
+                        MediaAsset.generation_id == generation_id,
+                        MediaAsset.source_url == source_url,
+                    )
+                    .with_for_update()
+                )
+                if asset is None:
+                    asset = MediaAsset(
                         generation_id=generation_id,
                         source_url=source_url,
                         storage_key=storage_key,
@@ -514,25 +655,19 @@ class SqlAlchemyLifecycleRepository:
                         size_bytes=size_bytes,
                         checksum_sha256=checksum_sha256,
                         status=MediaAssetStatus.STORED.value,
+                        attempts=1,
                     )
-                    .on_conflict_do_nothing(
-                        index_elements=[MediaAsset.generation_id, MediaAsset.source_url]
-                    )
-                    .returning(MediaAsset)
-                )
-                asset = inserted
-                if asset is None:
-                    asset = await session.scalar(
-                        select(MediaAsset).where(
-                            MediaAsset.generation_id == generation_id,
-                            MediaAsset.source_url == source_url,
-                        )
-                    )
-                if asset is None:
-                    raise SubmissionError(
-                        ErrorCode.PROVIDER_PROTOCOL,
-                        "Не удалось сохранить метаданные результата генерации.",
-                    )
+                    session.add(asset)
+                else:
+                    asset.storage_key = storage_key
+                    asset.content_type = content_type
+                    asset.size_bytes = size_bytes
+                    asset.checksum_sha256 = checksum_sha256
+                    asset.status = MediaAssetStatus.STORED
+                    asset.next_retry_at = None
+                    asset.error_code = None
+                    asset.last_error = None
+                await session.flush()
                 return _asset_snapshot(asset)
 
     async def list_media_assets(
@@ -609,6 +744,29 @@ class SqlAlchemyLifecycleRepository:
             )
             return _delivery_snapshot(delivery) if delivery is not None else None
 
+    async def resume_delivery_retry(self, delivery_id: UUID) -> bool:
+        now = datetime.now(timezone.utc)
+        async with self._database.session() as session:
+            async with session.begin():
+                delivery = await session.scalar(
+                    update(GenerationDelivery)
+                    .where(
+                        GenerationDelivery.id == delivery_id,
+                        GenerationDelivery.status == DeliveryStatus.RETRY_WAIT.value,
+                        or_(
+                            GenerationDelivery.next_retry_at.is_(None),
+                            GenerationDelivery.next_retry_at <= now,
+                        ),
+                    )
+                    .values(
+                        status=DeliveryStatus.PENDING.value,
+                        next_retry_at=None,
+                        updated_at=func.now(),
+                    )
+                    .returning(GenerationDelivery)
+                )
+                return delivery is not None
+
     async def begin_delivery(
         self,
         *,
@@ -626,6 +784,7 @@ class SqlAlchemyLifecycleRepository:
                     .values(
                         status=DeliveryStatus.SENDING.value,
                         attempts=GenerationDelivery.attempts + 1,
+                        next_retry_at=None,
                         updated_at=func.now(),
                     )
                     .returning(GenerationDelivery)
@@ -638,6 +797,8 @@ class SqlAlchemyLifecycleRepository:
                         locked_at=None,
                         worker_id=None,
                         last_error=None,
+                        failure_class=None,
+                        dead_lettered_at=None,
                         updated_at=func.now(),
                     )
                 )
@@ -658,6 +819,7 @@ class SqlAlchemyLifecycleRepository:
                         status=DeliveryStatus.SENT.value,
                         telegram_message_ids=message_ids,
                         sent_at=func.now(),
+                        next_retry_at=None,
                         last_error=None,
                         updated_at=func.now(),
                     )
@@ -692,6 +854,7 @@ class SqlAlchemyLifecycleRepository:
                     .where(GenerationDelivery.id == delivery_id)
                     .values(
                         status=DeliveryStatus.DELIVERY_UNKNOWN.value,
+                        next_retry_at=None,
                         last_error=error[:10_000],
                         updated_at=func.now(),
                     )
