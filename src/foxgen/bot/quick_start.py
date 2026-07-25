@@ -4,11 +4,13 @@ from uuid import uuid4
 
 from aiogram import Bot, F, Router
 from aiogram.exceptions import TelegramBadRequest
-from aiogram.filters import StateFilter
+from aiogram.filters import Filter, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message, PhotoSize
 
-from foxgen.bot.catalog import GenerationMode, Product, model_choice, product_for_mode
+from foxgen.bot.api_client import FoxGenApiClient
+from foxgen.bot.catalog import GenerationMode, model_choice, product_for_mode
+from foxgen.bot.flows import _show_confirmation_message
 from foxgen.bot.keyboards import (
     aspect_ratio_keyboard,
     main_menu,
@@ -28,6 +30,15 @@ router = Router(name="quick-start")
 class StoredInput(TypedDict):
     kind: str
     storage_key: str
+
+
+class ReferenceDraftFilter(Filter):
+    async def __call__(self, state: FSMContext) -> bool:
+        data = await state.get_data()
+        return data.get("entrypoint") == "reference"
+
+
+REFERENCE_DRAFT = ReferenceDraftFilter()
 
 
 @router.callback_query(F.data == "quick:start")
@@ -159,6 +170,16 @@ async def choose_reference_product(callback: CallbackQuery, state: FSMContext) -
     )
 
 
+@router.message(GenerationStates.reference_choosing_product)
+async def invalid_reference_product(message: Message, state: FSMContext) -> None:
+    data = await state.get_data()
+    reference_kind = str(data.get("reference_kind") or "image")
+    await message.answer(
+        "Выберите кнопкой, что создать по референсу.",
+        reply_markup=reference_product_keyboard(reference_kind),
+    )
+
+
 @router.callback_query(
     GenerationStates.reference_choosing_model,
     F.data.startswith("model:"),
@@ -204,8 +225,27 @@ async def choose_reference_model(callback: CallbackQuery, state: FSMContext) -> 
     )
 
 
+@router.message(GenerationStates.reference_choosing_model)
+async def invalid_reference_model(message: Message, state: FSMContext) -> None:
+    data = await state.get_data()
+    try:
+        mode = GenerationMode(_required_str(data, "mode"))
+    except ValueError:
+        await state.clear()
+        await message.answer(
+            "Черновик устарел. Начните быстрый запуск заново.",
+            reply_markup=main_menu(),
+        )
+        return
+    await message.answer("Выберите модель кнопкой.", reply_markup=model_keyboard(mode))
+
+
 @router.message(GenerationStates.reference_waiting_prompt, F.text)
-async def receive_reference_prompt(message: Message, state: FSMContext) -> None:
+async def receive_reference_prompt(
+    message: Message,
+    state: FSMContext,
+    api_client: FoxGenApiClient,
+) -> None:
     prompt = (message.text or "").strip()
     if len(prompt) < 3:
         await message.answer("Описание слишком короткое. Добавьте хотя бы несколько слов.")
@@ -224,11 +264,24 @@ async def receive_reference_prompt(message: Message, state: FSMContext) -> None:
             reply_markup=main_menu(),
         )
         return
-    await state.update_data(prompt=prompt, can_submit=False)
+    editing = bool(data.get("editing_prompt"))
+    await state.update_data(prompt=prompt, editing_prompt=False, can_submit=False)
+    if editing and isinstance(data.get("aspect_ratio"), str):
+        await state.set_state(GenerationStates.confirming)
+        await _show_confirmation_message(message, state, api_client)
+        return
     await state.set_state(GenerationStates.choosing_aspect_ratio)
     await message.answer(
         "Референс и описание сохранены. Выберите формат результата:",
         reply_markup=aspect_ratio_keyboard(product_for_mode(mode)),
+    )
+
+
+@router.message(GenerationStates.reference_waiting_prompt)
+async def invalid_reference_prompt(message: Message) -> None:
+    await message.answer(
+        "Отправьте текстовое описание результата.",
+        reply_markup=navigation_keyboard(),
     )
 
 
@@ -268,6 +321,40 @@ async def back_to_reference_model(callback: CallbackQuery, state: FSMContext) ->
         return
     await state.set_state(GenerationStates.reference_choosing_model)
     await _edit_callback(callback, "Выберите модель:", model_keyboard(mode))
+
+
+@router.callback_query(
+    GenerationStates.choosing_aspect_ratio,
+    REFERENCE_DRAFT,
+    F.data == "nav:back",
+)
+async def back_from_reference_aspect(callback: CallbackQuery, state: FSMContext) -> None:
+    data = await state.get_data()
+    await state.update_data(
+        editing_prompt=isinstance(data.get("aspect_ratio"), str),
+        can_submit=False,
+    )
+    await state.set_state(GenerationStates.reference_waiting_prompt)
+    await _edit_callback(
+        callback,
+        "Отправьте описание результата по сохранённому референсу.",
+        navigation_keyboard(),
+    )
+
+
+@router.callback_query(
+    GenerationStates.confirming,
+    REFERENCE_DRAFT,
+    F.data == "draft:edit",
+)
+async def edit_reference_prompt(callback: CallbackQuery, state: FSMContext) -> None:
+    await state.update_data(editing_prompt=True, can_submit=False)
+    await state.set_state(GenerationStates.reference_waiting_prompt)
+    await _edit_callback(
+        callback,
+        "Отправьте новое описание. Референс и настройки сохранятся.",
+        navigation_keyboard(),
+    )
 
 
 def _reference_choice_text(reference_kind: str, has_preview: bool) -> str:
