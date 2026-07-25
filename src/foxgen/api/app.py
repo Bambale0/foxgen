@@ -11,9 +11,14 @@ from pydantic import BaseModel, ConfigDict, ValidationError
 
 from foxgen import __version__
 from foxgen.api.billing import BillingServiceProtocol, create_billing_router
-from foxgen.api.generations import GenerationOperationsProtocol, create_generation_router
+from foxgen.api.generations import (
+    GenerationOperationsProtocol,
+    ReconciliationProtocol,
+    create_generation_router,
+)
 from foxgen.api.security import authenticate_submission, validate_idempotency_key
 from foxgen.application.generation_ops import GenerationOperationsService
+from foxgen.application.reconciliation import ReconciliationService
 from foxgen.application.submissions import SubmissionReceipt, SubmissionService
 from foxgen.core.config import Settings, get_settings
 from foxgen.core.errors import ErrorCode, FoxGenError, WebhookVerificationError
@@ -141,6 +146,7 @@ def _error_status(code: ErrorCode) -> int:
         ErrorCode.PROVIDER_REJECTED: 422,
         ErrorCode.TASK_NOT_FOUND: 404,
         ErrorCode.WEBHOOK_INVALID: 401,
+        ErrorCode.VALIDATION: 422,
     }.get(code, 500)
 
 
@@ -173,6 +179,7 @@ def create_app(
     callback_recorder: CallbackRecorderProtocol | None = None,
     billing_service: BillingServiceProtocol | None = None,
     generation_operations: GenerationOperationsProtocol | None = None,
+    reconciliation_service: ReconciliationProtocol | None = None,
 ) -> FastAPI:
     resolved_settings = settings or get_settings()
     registry = ModelRegistry()
@@ -211,6 +218,8 @@ def create_app(
             app.state.billing_service = SqlAlchemyBillingRepository(database)
         if app.state.generation_operations is None:
             app.state.generation_operations = GenerationOperationsService(lifecycle_repository)
+        if app.state.reconciliation_service is None:
+            app.state.reconciliation_service = ReconciliationService(lifecycle_repository)
 
         try:
             yield
@@ -229,6 +238,7 @@ def create_app(
     app.state.callback_recorder = callback_recorder
     app.state.billing_service = billing_service
     app.state.generation_operations = generation_operations
+    app.state.reconciliation_service = reconciliation_service
     app.include_router(create_billing_router(resolved_settings))
     app.include_router(create_generation_router(resolved_settings))
 
