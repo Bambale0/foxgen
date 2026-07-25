@@ -18,6 +18,8 @@ _ALLOWED: dict[GenerationStatus, frozenset[GenerationStatus]] = {
     GenerationStatus.SUBMITTING: frozenset(
         {
             GenerationStatus.SUBMITTED,
+            GenerationStatus.PROCESSING,
+            GenerationStatus.RESULT_READY,
             GenerationStatus.SUBMISSION_UNKNOWN,
             GenerationStatus.FAILED,
         }
