@@ -7,6 +7,7 @@ from aiogram.enums import ParseMode
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command, CommandStart
 from aiogram.fsm.context import FSMContext
+from aiogram.fsm.storage.base import BaseEventIsolation
 from aiogram.fsm.storage.redis import RedisStorage
 from aiogram.types import CallbackQuery, ErrorEvent, Message
 
@@ -22,6 +23,7 @@ from foxgen.infra.media import S3MediaStorage
 
 logger = logging.getLogger(__name__)
 router = Router(name="foxgen-shell")
+FSM_EVENT_LOCK_TIMEOUT_SECONDS = 180
 
 
 @router.message(CommandStart())
@@ -137,6 +139,14 @@ async def global_error(event: ErrorEvent) -> bool:
     return True
 
 
+def create_event_isolation(storage: RedisStorage) -> BaseEventIsolation:
+    """Serialize updates for one FSM key across polling tasks and bot replicas."""
+
+    return storage.create_isolation(
+        lock_kwargs={"timeout": FSM_EVENT_LOCK_TIMEOUT_SECONDS}
+    )
+
+
 async def run(settings: Settings | None = None) -> None:
     resolved = settings or get_settings()
     telegram_token = resolved.telegram_bot_token
@@ -183,6 +193,7 @@ async def run(settings: Settings | None = None) -> None:
     )
     dispatcher = Dispatcher(
         storage=storage,
+        events_isolation=create_event_isolation(storage),
         api_client=api_client,
         input_media=input_media,
     )
