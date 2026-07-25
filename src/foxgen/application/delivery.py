@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from typing import Protocol
 from uuid import UUID
 
-from foxgen.application.lifecycle import OutboxMessage
+from foxgen.application.lifecycle import GenerationWorkItem, OutboxMessage
 from foxgen.application.media import (
     MediaDownloader,
     MediaSender,
@@ -46,6 +46,19 @@ class MediaPipelineRepository(Protocol):
         self,
         generation_id: UUID,
     ) -> DeliveryGeneration | None: ...
+
+    async def transition_generation(
+        self,
+        *,
+        generation_id: UUID,
+        expected: frozenset[GenerationStatus],
+        target: GenerationStatus,
+        provider_task_id: str | None = None,
+        result_payload: dict[str, object] | None = None,
+        error_code: str | None = None,
+        failure_stage: str | None = None,
+        status_reason: str | None = None,
+    ) -> GenerationWorkItem: ...
 
     async def find_media_asset(
         self,
@@ -133,9 +146,31 @@ class MediaPipeline:
         generation = await self._repository.get_delivery_generation(message.aggregate_id)
         if generation is None:
             raise SubmissionError(ErrorCode.TASK_NOT_FOUND, "Generation not found")
-        if generation.status != GenerationStatus.SUCCEEDED:
+        if generation.status in {
+            GenerationStatus.DELIVERY_PENDING,
+            GenerationStatus.SUCCEEDED,
+        }:
             await self._repository.complete_outbox(message.id)
             return
+        if generation.status in {
+            GenerationStatus.FAILED,
+            GenerationStatus.CANCELLED,
+        }:
+            await self._repository.complete_outbox(message.id)
+            return
+        if generation.status == GenerationStatus.RESULT_READY:
+            await self._repository.transition_generation(
+                generation_id=generation.id,
+                expected=frozenset({GenerationStatus.RESULT_READY}),
+                target=GenerationStatus.STORING_MEDIA,
+                status_reason="result_storage_started",
+            )
+        elif generation.status != GenerationStatus.STORING_MEDIA:
+            raise SubmissionError(
+                ErrorCode.VALIDATION,
+                f"Generation is not ready for storage: {generation.status}",
+                retryable=True,
+            )
         if generation.result_payload is None:
             raise SubmissionError(
                 ErrorCode.PROVIDER_PROTOCOL,
@@ -180,6 +215,12 @@ class MediaPipeline:
             generation_id=generation.id,
             recipient_id=generation.user_id,
         )
+        await self._repository.transition_generation(
+            generation_id=generation.id,
+            expected=frozenset({GenerationStatus.STORING_MEDIA}),
+            target=GenerationStatus.DELIVERY_PENDING,
+            status_reason="result_stored_delivery_pending",
+        )
         await self._repository.complete_outbox(message.id)
 
     async def _deliver(self, message: OutboxMessage) -> None:
@@ -197,6 +238,19 @@ class MediaPipeline:
             raise SubmissionError(
                 ErrorCode.VALIDATION,
                 f"Delivery is not ready: {delivery.status}",
+                retryable=True,
+            )
+
+        generation = await self._repository.get_delivery_generation(delivery.generation_id)
+        if generation is None:
+            raise SubmissionError(ErrorCode.TASK_NOT_FOUND, "Generation not found")
+        if generation.status == GenerationStatus.SUCCEEDED:
+            await self._repository.complete_outbox(message.id)
+            return
+        if generation.status != GenerationStatus.DELIVERY_PENDING:
+            raise SubmissionError(
+                ErrorCode.VALIDATION,
+                f"Generation delivery stage is not ready: {generation.status}",
                 retryable=True,
             )
 

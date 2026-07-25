@@ -9,6 +9,7 @@ from foxgen.application.lifecycle import (
     GenerationWorker,
     OutboxMessage,
     ProviderEventSnapshot,
+    normalize_provider_payload,
 )
 from foxgen.core.errors import ErrorCode, ProviderError
 from foxgen.domain.models import GenerationStatus
@@ -87,8 +88,9 @@ class FakeLifecycleRepository:
         provider_task_id: str | None = None,
         result_payload: dict[str, object] | None = None,
         error_code: str | None = None,
+        failure_stage: str | None = None,
+        status_reason: str | None = None,
     ) -> GenerationWorkItem:
-        del error_code
         assert generation_id == self.generation.id
         assert self.generation.status in expected
         self.generation = replace(
@@ -98,6 +100,9 @@ class FakeLifecycleRepository:
                 result_payload if result_payload is not None else self.generation.result_payload
             ),
             provider_task_id=provider_task_id or self.generation.provider_task_id,
+            error_code=error_code,
+            failure_stage=failure_stage,
+            status_reason=status_reason,
         )
         self.transitions.append(target)
         return self.generation
@@ -114,7 +119,10 @@ class FakeLifecycleRepository:
 
     async def list_pollable(self, limit: int) -> tuple[GenerationWorkItem, ...]:
         del limit
-        if self.generation.status == GenerationStatus.SUBMITTED:
+        if self.generation.status in {
+            GenerationStatus.SUBMITTED,
+            GenerationStatus.PROCESSING,
+        }:
             return (self.generation,)
         return ()
 
@@ -252,6 +260,7 @@ async def test_worker_marks_ambiguous_submission_unknown_without_retry() -> None
 
     assert client.create_calls == 1
     assert repository.generation.status == GenerationStatus.SUBMISSION_UNKNOWN
+    assert repository.generation.failure_stage == "submission"
     assert repository.completed_events == [OUTBOX_ID]
     assert repository.retried_events == []
 
@@ -286,13 +295,13 @@ async def test_callback_can_recover_lost_provider_response_by_local_generation_i
 
     await worker.run_once()
 
-    assert repository.generation.status == GenerationStatus.SUCCEEDED
+    assert repository.generation.status == GenerationStatus.RESULT_READY
     assert repository.generation.provider_task_id == "provider-task-after-lost-response"
     assert repository.provider_event.processed is True
 
 
 @pytest.mark.asyncio
-async def test_polling_fallback_completes_submitted_generation() -> None:
+async def test_polling_fallback_moves_submitted_generation_to_result_ready() -> None:
     repository = FakeLifecycleRepository()
     repository.generation = replace(
         repository.generation,
@@ -309,8 +318,23 @@ async def test_polling_fallback_completes_submitted_generation() -> None:
     worker = GenerationWorker(repository=repository, client=client)
 
     assert await worker.poll_once() == 1
-    assert repository.generation.status == GenerationStatus.SUCCEEDED
+    assert repository.generation.status == GenerationStatus.RESULT_READY
     assert client.poll_calls == 1
+
+
+@pytest.mark.asyncio
+async def test_polling_records_observable_provider_processing_state() -> None:
+    repository = FakeLifecycleRepository()
+    repository.generation = replace(
+        repository.generation,
+        status=GenerationStatus.SUBMITTED,
+        provider_task_id="provider-task-1",
+    )
+    worker = GenerationWorker(repository=repository, client=FakeLifecycleClient())
+
+    assert await worker.poll_once() == 1
+    assert repository.generation.status == GenerationStatus.PROCESSING
+    assert repository.generation.status_reason == "provider_processing"
 
 
 @pytest.mark.asyncio
@@ -332,4 +356,17 @@ async def test_watchdog_moves_stale_submitting_to_unknown_without_resubmission()
 
     assert reconciled == 1
     assert repository.generation.status == GenerationStatus.SUBMISSION_UNKNOWN
+    assert repository.generation.status_reason == "submission_lease_expired"
     assert client.create_calls == 0
+
+
+def test_provider_payload_normalization_exposes_intermediate_and_result_stages() -> None:
+    processing = normalize_provider_payload({"state": "running"})
+    ready = normalize_provider_payload(
+        {"state": "done", "result": {"resultUrls": ["https://example.com/a.png"]}}
+    )
+
+    assert processing.status == GenerationStatus.PROCESSING
+    assert processing.status_reason == "provider_processing"
+    assert ready.status == GenerationStatus.RESULT_READY
+    assert ready.result_payload == {"resultUrls": ["https://example.com/a.png"]}
