@@ -10,11 +10,12 @@ from foxgen.bot.catalog import (
 
 
 def main_menu() -> InlineKeyboardMarkup:
-    """Return the product menu in the exact row order from the approved sketch."""
+    """Return the product menu in the approved row order plus Quick Start."""
 
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(text="Мини апп", callback_data="planned:mini_app")],
+            [InlineKeyboardButton(text="Быстрый запуск", callback_data="quick:start")],
             [
                 InlineKeyboardButton(text="Создать видео", callback_data="create:video"),
                 InlineKeyboardButton(
@@ -46,6 +47,37 @@ def main_menu() -> InlineKeyboardMarkup:
                 InlineKeyboardButton(text="Партнёры", callback_data="planned:partners"),
             ],
             [InlineKeyboardButton(text="Тарифы", callback_data="planned:tariffs")],
+        ]
+    )
+
+
+def quick_start_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="⬅️ В меню", callback_data="nav:menu")],
+            [InlineKeyboardButton(text="❌ Отмена", callback_data="nav:cancel")],
+        ]
+    )
+
+
+def reference_product_keyboard(reference_kind: str) -> InlineKeyboardMarkup:
+    image_title = "Создать фото"
+    if reference_kind == "video":
+        image_title = "Создать фото по обложке"
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text=image_title,
+                    callback_data="reference:product:image",
+                ),
+                InlineKeyboardButton(
+                    text="Создать видео",
+                    callback_data="reference:product:video",
+                ),
+            ],
+            [InlineKeyboardButton(text="⬅️ Другой референс", callback_data="nav:back")],
+            [InlineKeyboardButton(text="❌ Отмена", callback_data="nav:cancel")],
         ]
     )
 
