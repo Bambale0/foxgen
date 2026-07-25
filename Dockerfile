@@ -11,6 +11,7 @@ RUN addgroup --system foxgen && adduser --system --ingroup foxgen foxgen
 COPY pyproject.toml README.md ./
 COPY src ./src
 COPY migrations ./migrations
+COPY scripts ./scripts
 COPY alembic.ini ./
 
 RUN pip install --upgrade pip && pip install .
