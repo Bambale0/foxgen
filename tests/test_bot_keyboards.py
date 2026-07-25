@@ -4,6 +4,8 @@ from foxgen.bot.keyboards import (
     main_menu,
     mode_keyboard,
     model_keyboard,
+    quick_start_keyboard,
+    reference_product_keyboard,
 )
 
 
@@ -36,9 +38,10 @@ def test_launch_button_is_hidden_until_quote_and_balance_are_valid() -> None:
     assert "draft:refresh" not in allowed
 
 
-def test_main_menu_matches_approved_product_sketch() -> None:
+def test_main_menu_matches_approved_product_sketch_with_quick_start() -> None:
     assert _rows(main_menu()) == [
         [("Мини апп", "planned:mini_app")],
+        [("Быстрый запуск", "quick:start")],
         [
             ("Создать видео", "create:video"),
             ("Создать озвучку (голос)", "planned:voice"),
@@ -67,10 +70,27 @@ def test_main_menu_matches_approved_product_sketch() -> None:
     ]
 
 
-def test_main_menu_exposes_image_video_and_balance_actions() -> None:
+def test_main_menu_exposes_quick_image_video_and_balance_actions() -> None:
     callbacks = _callbacks(main_menu())
 
-    assert {"create:image", "create:video", "account:balance"} <= callbacks
+    assert {"quick:start", "create:image", "create:video", "account:balance"} <= callbacks
+
+
+def test_reference_choice_keeps_photo_and_video_actions_visible() -> None:
+    assert _rows(reference_product_keyboard("image"))[0] == [
+        ("Создать фото", "reference:product:image"),
+        ("Создать видео", "reference:product:video"),
+    ]
+    assert _rows(reference_product_keyboard("video"))[0] == [
+        ("Создать фото по обложке", "reference:product:image"),
+        ("Создать видео", "reference:product:video"),
+    ]
+
+
+def test_quick_start_has_safe_exit() -> None:
+    callbacks = _callbacks(quick_start_keyboard())
+
+    assert {"nav:menu", "nav:cancel"} <= callbacks
 
 
 def test_every_mode_and_model_screen_has_a_safe_exit() -> None:
