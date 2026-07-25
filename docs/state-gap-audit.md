@@ -1,12 +1,16 @@
 # FoxGen state gap audit
 
-This audit records the current state machines, missing states and the implementation order approved for the next delivery cycle.
+This audit records the state machines and the completed implementation order for the production generation lifecycle.
 
 ## 1. Telegram conversation state
 
-Current generation FSM before this cycle:
+The generation FSM includes the standard photo/video flow and the Quick Start reference path:
 
 ```text
+quick_start_waiting_media
+reference_choosing_product
+reference_choosing_model
+reference_waiting_prompt
 choosing_mode
 choosing_model
 waiting_prompt
@@ -19,101 +23,79 @@ confirming
 submitting
 ```
 
-Added in the Quick Start cycle:
-
-```text
-quick_start_waiting_media
-reference_choosing_product
-reference_choosing_model
-reference_waiting_prompt
-```
-
-The reference entry path is:
-
-```text
-/menu -> Быстрый запуск -> incoming photo/video
-incoming photo/video with no active FSM
-  -> private object upload
-  -> reference_choosing_product
-  -> reference_choosing_model
-  -> reference_waiting_prompt (or caption reuse)
-  -> choosing_aspect_ratio
-  -> existing model-specific options
-  -> confirming
-  -> submitting
-```
-
-A received image can start image-edit or image-to-video. A received video can start reference-to-video. Photo generation from a video uses the Telegram-provided video cover and fails closed when no cover exists.
-
 ### Completed — epic #35
 
 - a typed state table covers success, back, cancel, timeout, invalid input and stale callbacks for every declared state;
-- reference-prefilled back/edit navigation preserves the uploaded object key and selected settings;
+- reference-prefilled navigation preserves the uploaded object key and selected settings;
 - invalid input keeps the active draft and repeats the expected action;
-- stale callbacks no longer destroy a known active draft;
-- callbacks after Redis TTL expiry explain the expiry and recover to the main menu;
-- unknown state names from older releases are cleared safely;
-- Redis event isolation serializes updates for one FSM key across concurrent polling tasks and bot replicas;
-- Telegram albums are rejected before download with an explicit single-file policy;
-- Telegram download failures and object-storage failures have separate retryable error codes;
+- stale callbacks do not destroy a known active draft;
+- Redis event isolation serializes updates for one FSM key across concurrent polling tasks and replicas;
+- Telegram albums fail closed before download;
+- Telegram download and object-storage failures have separate retryable error codes;
 - explicit menu/cancel/reference replacement deletes known `inputs/` objects;
-- the production bucket lifecycle rule for abandoned `inputs/` objects is documented in `docs/input-media-lifecycle.md`;
-- cleanup failures emit a low-cardinality operational warning and remain covered by the bucket lifecycle safety net.
+- object-storage lifecycle rules cover abandoned inputs after Redis TTL.
 
 ## 2. Durable generation state
-
-Current states:
 
 ```text
 draft
 queued
 submitting
 submitted
+processing
 submission_unknown
+result_ready
+storing_media
+delivery_pending
 succeeded
 failed
 cancelled
 ```
 
-### Remaining lifecycle gaps — epic #36
+### Completed — epic #36
 
-- observable provider `processing` stage;
-- polling/waiting mode when callback delivery is delayed;
-- result-ready and media-storage stages;
-- product-level delivery pending stage;
-- structured failure reason codes;
-- manual resolution for `submission_unknown`;
-- reconciliation for expired leases and stuck generations;
-- explicit cancellation policy before and after provider acceptance.
+- a central transition graph validates every durable state change;
+- provider processing is visible through callback and polling paths;
+- provider success becomes `result_ready`, not premature product success;
+- result storage and Telegram delivery are separate durable stages;
+- stage timestamps, safe reason codes and failure stages are persisted;
+- success is recorded only after confirmed Telegram delivery;
+- stale submitting leases move to `submission_unknown` without another provider POST;
+- owner-bound status and pre-submit cancellation APIs are available;
+- cancellation atomically releases billing reservations and suppresses pending submission work;
+- evidence-based operator resolution is available for `submission_unknown`;
+- provider-started work cannot be cancelled through the user endpoint.
 
-The billable provider POST must remain single-attempt. `submission_unknown` must never trigger automatic resubmission.
+The billable provider POST remains single-attempt. `submission_unknown` is never automatically resubmitted.
 
-## 3. Outbox, media and delivery
-
-Current states:
+## 3. Outbox, media, delivery and billing
 
 ```text
-outbox: pending, processing, completed, failed
-media: pending, stored, failed
-delivery: pending, sending, sent, delivery_unknown, failed
+outbox: pending, retry_wait, processing, completed, dead_letter
+media: pending, retry_wait, stored, failed
+delivery: pending, retry_wait, sending, sent, delivery_unknown, failed
 reservation: reserved, captured, released, refunded
 ```
 
-### Remaining consistency gaps — epic #37
+### Completed — epic #37
 
-- retryable versus terminal failure classification;
-- dead-letter/reconciliation visibility for outbox work;
-- partial storage state for multi-file results;
-- scheduled retry state and `next_retry_at`;
-- manual resolution for `delivery_unknown`;
-- cross-table invariant checks for generation, reservation, outbox, media and delivery;
-- periodic reconciliation of stale reservations and post-processing work.
+- retryable and terminal outbox failures are classified separately;
+- exhausted or terminal work enters observable `dead_letter` state;
+- dead-lettered submission, storage and delivery work settles generation and billing atomically;
+- each result URL has independent attempts, retry time and failure metadata;
+- partial multi-file storage skips already durable assets on retry;
+- delivery retry is allowed only before the non-idempotent Telegram send starts;
+- `delivery_unknown` is never replayed automatically;
+- operator controls support verified mark-sent, confirmed-not-sent retry and terminal failure/refund;
+- reconciliation reports outbox, media, delivery, generation and reservation mismatches;
+- safe reconciliation fixes only deterministic local invariants;
+- operational procedure is documented in `docs/postprocessing-reconciliation.md`.
 
 ## Implementation order
 
 1. #34 — Quick Start and inbound reference routing — completed.
-2. #35 — complete Telegram FSM/recovery matrix — completed.
-3. #36 — durable generation lifecycle expansion — next.
-4. #37 — billing/outbox/media/delivery reconciliation.
+2. #35 — Telegram FSM and recovery matrix — completed.
+3. #36 — durable generation lifecycle — completed.
+4. #37 — billing/outbox/media/delivery reconciliation — completed.
 
-Each stage is delivered as a separate reviewable branch and pull request. Production deployment remains gated by CI and the production deployment workflow.
+Production deployment remains gated by migration checks, the full CI workflow and the protected production deployment workflow.
