@@ -12,6 +12,7 @@ from aiogram.types import CallbackQuery, ErrorEvent, Message
 
 from foxgen.bot.api_client import FoxGenApiClient
 from foxgen.bot.flows import router as generation_router
+from foxgen.bot.fsm_contract import contract_for
 from foxgen.bot.keyboards import main_menu
 from foxgen.bot.quick_start import router as quick_start_router
 from foxgen.bot.uploads import TelegramInputMediaStorage
@@ -72,18 +73,46 @@ async def planned_section(callback: CallbackQuery) -> None:
 
 @router.callback_query()
 async def stale_callback(callback: CallbackQuery, state: FSMContext) -> None:
+    current = await state.get_state()
+    if contract_for(current) is not None:
+        await callback.answer(
+            "Эта кнопка не относится к текущему шагу. Используйте кнопки в последнем сообщении или /menu.",
+            show_alert=True,
+        )
+        return
+
     await state.clear()
-    await callback.answer("Эта кнопка устарела. Открыл главное меню.", show_alert=True)
+    await callback.answer(
+        "Срок действия кнопки истёк. Открыл главное меню.",
+        show_alert=True,
+    )
     if callback.message:
         try:
-            await callback.message.edit_text("Главное меню", reply_markup=main_menu())
+            await callback.message.edit_text(
+                "Черновик уже недоступен. Главное меню:",
+                reply_markup=main_menu(),
+            )
         except TelegramBadRequest as exc:
             if "message is not modified" not in str(exc):
                 raise
 
 
 @router.message()
-async def fallback_message(message: Message) -> None:
+async def fallback_message(message: Message, state: FSMContext) -> None:
+    current = await state.get_state()
+    if contract_for(current) is not None:
+        await message.answer(
+            "Сейчас открыт незавершённый шаг. Используйте кнопки или формат ввода из последнего сообщения. "
+            "Команда /menu отменит черновик и вернёт в главное меню."
+        )
+        return
+    if current is not None:
+        await state.clear()
+        await message.answer(
+            "Черновик относится к старой версии и был безопасно сброшен.",
+            reply_markup=main_menu(),
+        )
+        return
     await message.answer(
         "Не понял действие. Выберите нужный раздел кнопкой.",
         reply_markup=main_menu(),
