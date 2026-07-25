@@ -13,6 +13,7 @@ from aiogram.types import CallbackQuery, ErrorEvent, Message
 from foxgen.bot.api_client import FoxGenApiClient
 from foxgen.bot.flows import router as generation_router
 from foxgen.bot.keyboards import main_menu
+from foxgen.bot.quick_start import router as quick_start_router
 from foxgen.bot.uploads import TelegramInputMediaStorage
 from foxgen.core.config import Settings, get_settings
 from foxgen.infra.media import S3MediaStorage
@@ -156,6 +157,7 @@ async def run(settings: Settings | None = None) -> None:
         api_client=api_client,
         input_media=input_media,
     )
+    dispatcher.include_router(quick_start_router)
     dispatcher.include_router(generation_router)
     dispatcher.include_router(router)
     bot = Bot(
