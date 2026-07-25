@@ -20,7 +20,11 @@ from foxgen.bot.keyboards import (
     reference_product_keyboard,
 )
 from foxgen.bot.states import GenerationStates
-from foxgen.bot.uploads import TelegramInputMediaStorage, message_media_kind
+from foxgen.bot.uploads import (
+    TelegramInputMediaStorage,
+    message_media_kind,
+    stored_input_keys,
+)
 from foxgen.core.errors import SubmissionError
 
 
@@ -42,8 +46,12 @@ REFERENCE_DRAFT = ReferenceDraftFilter()
 
 
 @router.callback_query(F.data == "quick:start")
-async def start_quick_launch(callback: CallbackQuery, state: FSMContext) -> None:
-    await state.clear()
+async def start_quick_launch(
+    callback: CallbackQuery,
+    state: FSMContext,
+    input_media: TelegramInputMediaStorage,
+) -> None:
+    await _clear_reference_inputs(state, input_media)
     await state.set_state(GenerationStates.quick_start_waiting_media)
     await _edit_callback(
         callback,
@@ -69,18 +77,23 @@ async def receive_reference_entry(
     bot: Bot,
     input_media: TelegramInputMediaStorage,
 ) -> None:
+    uploaded: StoredInput | None = None
+    preview: StoredInput | None = None
     try:
         kind = message_media_kind(message)
         if kind not in {"image", "video"}:
             await message.answer("Для быстрого запуска отправьте фото или видео.")
             return
         user_id = message.from_user.id if message.from_user is not None else 0
-        uploaded = await input_media.upload(
+        original_upload = await input_media.upload(
             bot=bot,
             message=message,
             user_id=user_id,
         )
-        preview: StoredInput | None = None
+        uploaded = {
+            "kind": original_upload.kind,
+            "storage_key": original_upload.storage_key,
+        }
         thumbnail = _video_thumbnail(message) if kind == "video" else None
         if thumbnail is not None:
             preview_upload = await input_media.upload_photo_size(
@@ -93,21 +106,22 @@ async def receive_reference_entry(
                 "storage_key": preview_upload.storage_key,
             }
     except SubmissionError as exc:
+        if uploaded is not None:
+            await input_media.delete_many((uploaded["storage_key"],))
         await message.answer(exc.public_message)
         return
 
-    original: StoredInput = {
-        "kind": uploaded.kind,
-        "storage_key": uploaded.storage_key,
-    }
+    if uploaded is None:
+        await message.answer("Не удалось сохранить референс. Повторите попытку.")
+        return
     await state.clear()
     await state.update_data(
         entrypoint="reference",
         reference_kind=kind,
-        reference_original=original,
+        reference_original=uploaded,
         reference_preview=preview,
         reference_caption=(message.caption or "").strip(),
-        media=[original],
+        media=[uploaded],
         idempotency_key=f"generation:{user_id}:{uuid4().hex}",
         can_submit=False,
     )
@@ -286,8 +300,12 @@ async def invalid_reference_prompt(message: Message) -> None:
 
 
 @router.callback_query(GenerationStates.reference_choosing_product, F.data == "nav:back")
-async def choose_another_reference(callback: CallbackQuery, state: FSMContext) -> None:
-    await state.clear()
+async def choose_another_reference(
+    callback: CallbackQuery,
+    state: FSMContext,
+    input_media: TelegramInputMediaStorage,
+) -> None:
+    await _clear_reference_inputs(state, input_media)
     await state.set_state(GenerationStates.quick_start_waiting_media)
     await _edit_callback(
         callback,
@@ -355,6 +373,15 @@ async def edit_reference_prompt(callback: CallbackQuery, state: FSMContext) -> N
         "Отправьте новое описание. Референс и настройки сохранятся.",
         navigation_keyboard(),
     )
+
+
+async def _clear_reference_inputs(
+    state: FSMContext,
+    input_media: TelegramInputMediaStorage,
+) -> None:
+    data = await state.get_data()
+    await input_media.delete_many(stored_input_keys(data))
+    await state.clear()
 
 
 def _reference_choice_text(reference_kind: str, has_preview: bool) -> str:
