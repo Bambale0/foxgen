@@ -92,6 +92,8 @@ class LifecycleRepository(Protocol):
         error: str,
         delay: timedelta,
         max_attempts: int,
+        retryable: bool,
+        failure_class: str,
     ) -> None: ...
 
     async def get_generation(self, generation_id: UUID) -> GenerationWorkItem | None: ...
@@ -220,6 +222,8 @@ class GenerationWorker:
                 error=str(exc),
                 delay=_retry_delay(message.attempts),
                 max_attempts=self._max_attempts,
+                retryable=exc.retryable,
+                failure_class=exc.code.value,
             )
         except Exception as exc:
             await self._repository.retry_outbox(
@@ -227,6 +231,8 @@ class GenerationWorker:
                 error=f"{type(exc).__name__}: {exc}",
                 delay=_retry_delay(message.attempts),
                 max_attempts=self._max_attempts,
+                retryable=True,
+                failure_class=type(exc).__name__,
             )
 
     async def _submit_generation(self, message: OutboxMessage) -> None:
