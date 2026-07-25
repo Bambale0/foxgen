@@ -11,13 +11,15 @@ from pydantic import BaseModel, ConfigDict, ValidationError
 
 from foxgen import __version__
 from foxgen.api.billing import BillingServiceProtocol, create_billing_router
+from foxgen.api.generations import GenerationOperationsProtocol, create_generation_router
 from foxgen.api.security import authenticate_submission, validate_idempotency_key
+from foxgen.application.generation_ops import GenerationOperationsService
 from foxgen.application.submissions import SubmissionReceipt, SubmissionService
 from foxgen.core.config import Settings, get_settings
 from foxgen.core.errors import ErrorCode, FoxGenError, WebhookVerificationError
 from foxgen.infra.billing import SqlAlchemyBillingRepository
+from foxgen.infra.billing_lifecycle_repository import BillingAwareLifecycleRepository
 from foxgen.infra.database import Database
-from foxgen.infra.lifecycle_repository import SqlAlchemyLifecycleRepository
 from foxgen.infra.rate_limit import RedisSubmissionRateLimiter
 from foxgen.infra.redis import RedisPool
 from foxgen.infra.repositories import SqlAlchemyGenerationRepository
@@ -170,6 +172,7 @@ def create_app(
     submission_service: SubmissionServiceProtocol | None = None,
     callback_recorder: CallbackRecorderProtocol | None = None,
     billing_service: BillingServiceProtocol | None = None,
+    generation_operations: GenerationOperationsProtocol | None = None,
 ) -> FastAPI:
     resolved_settings = settings or get_settings()
     registry = ModelRegistry()
@@ -182,6 +185,7 @@ def create_app(
 
         database = Database(resolved_settings.database_url)
         redis = RedisPool(resolved_settings.redis_url)
+        lifecycle_repository = BillingAwareLifecycleRepository(database)
         app.state.database = database
         app.state.redis = redis
 
@@ -202,9 +206,11 @@ def create_app(
                 global_concurrency_limit=resolved_settings.submission_global_concurrency_limit,
             )
         if app.state.callback_recorder is None:
-            app.state.callback_recorder = SqlAlchemyLifecycleRepository(database)
+            app.state.callback_recorder = lifecycle_repository
         if app.state.billing_service is None:
             app.state.billing_service = SqlAlchemyBillingRepository(database)
+        if app.state.generation_operations is None:
+            app.state.generation_operations = GenerationOperationsService(lifecycle_repository)
 
         try:
             yield
@@ -222,7 +228,9 @@ def create_app(
     app.state.submission_service = submission_service
     app.state.callback_recorder = callback_recorder
     app.state.billing_service = billing_service
+    app.state.generation_operations = generation_operations
     app.include_router(create_billing_router(resolved_settings))
+    app.include_router(create_generation_router(resolved_settings))
 
     @app.exception_handler(FoxGenError)
     async def foxgen_error_handler(request: Request, exc: FoxGenError) -> JSONResponse:
