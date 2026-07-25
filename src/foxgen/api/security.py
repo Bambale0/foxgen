@@ -44,6 +44,25 @@ def authenticate_internal_service(
     )
 
 
+def authenticate_user_context(
+    *,
+    settings: Settings,
+    authorization: str | None,
+    user_id_header: str | None,
+) -> SubmissionPrincipal:
+    authenticate_internal_service(
+        settings=settings,
+        authorization=authorization,
+    )
+    try:
+        user_id = int(user_id_header or "")
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="X-FoxGen-User-Id must be an integer") from exc
+    if user_id <= 0:
+        raise HTTPException(status_code=400, detail="X-FoxGen-User-Id must be positive")
+    return SubmissionPrincipal(user_id=user_id)
+
+
 def authenticate_submission(
     *,
     settings: Settings,
@@ -52,20 +71,11 @@ def authenticate_submission(
 ) -> SubmissionPrincipal:
     if not settings.task_submission_enabled:
         raise HTTPException(status_code=503, detail="Task submission is disabled")
-
-    authenticate_internal_service(
+    return authenticate_user_context(
         settings=settings,
         authorization=authorization,
+        user_id_header=user_id_header,
     )
-
-    try:
-        user_id = int(user_id_header or "")
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail="X-FoxGen-User-Id must be an integer") from exc
-    if user_id <= 0:
-        raise HTTPException(status_code=400, detail="X-FoxGen-User-Id must be positive")
-
-    return SubmissionPrincipal(user_id=user_id)
 
 
 def authenticate_billing_admin(
