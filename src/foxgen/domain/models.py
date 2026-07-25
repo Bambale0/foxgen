@@ -42,19 +42,23 @@ ACTIVE_GENERATION_STATUSES: frozenset[GenerationStatus] = frozenset(
 
 class OutboxStatus(StrEnum):
     PENDING = "pending"
+    RETRY_WAIT = "retry_wait"
     PROCESSING = "processing"
     COMPLETED = "completed"
+    DEAD_LETTER = "dead_letter"
     FAILED = "failed"
 
 
 class MediaAssetStatus(StrEnum):
     PENDING = "pending"
+    RETRY_WAIT = "retry_wait"
     STORED = "stored"
     FAILED = "failed"
 
 
 class DeliveryStatus(StrEnum):
     PENDING = "pending"
+    RETRY_WAIT = "retry_wait"
     SENDING = "sending"
     SENT = "sent"
     DELIVERY_UNKNOWN = "delivery_unknown"
