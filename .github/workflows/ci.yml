@@ -9,32 +9,99 @@ permissions:
   contents: read
   issues: write
   pull-requests: write
+  security-events: write
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  PYTHON_VERSION: "3.12"
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+
 jobs:
   quality:
-    runs-on: ubuntu-latest
+    name: quality
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          python-version: "3.12"
+          fetch-depth: 0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
-      - name: Install
-        run: python -m pip install -e '.[dev]'
-      - name: Normalize and lint
+          cache-dependency-path: requirements.lock
+      - name: Install exact lock
         run: |
-          ruff check --fix .
-          ruff format .
+          python -m pip install --requirement requirements.lock
+          python -m pip install --no-deps --editable .
+          python -m pip check
+          python scripts/check_lock.py
+      - name: Ruff check
+        id: ruff
+        run: ruff check . 2>&1 | tee ruff.log
+      - name: Publish lint diagnostics
+        if: always() && github.event_name == 'pull_request' && steps.ruff.outcome == 'failure'
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b
+        with:
+          script: |
+            const fs = require('fs');
+            const report = fs.readFileSync('ruff.log', 'utf8').slice(-60000);
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: `## CI lint diagnostics\n\n\`\`\`text\n${report}\n\`\`\``
+            });
+      - name: Collect changed Python files
+        id: changed_python
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            base_sha="${{ github.event.pull_request.base.sha }}"
+          else
+            base_sha="${{ github.event.before }}"
+            if [ -z "$base_sha" ] || [ "$base_sha" = "0000000000000000000000000000000000000000" ]; then
+              base_sha="HEAD^"
+            fi
+          fi
+          git diff --name-only --diff-filter=ACMRT "$base_sha" HEAD -- '*.py' > changed-python.txt
+          if test -s changed-python.txt; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            cat changed-python.txt
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "No changed Python files"
+          fi
+      - name: Ruff formatting check for changed files
+        id: format
+        if: steps.changed_python.outputs.changed == 'true'
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mapfile -t files < changed-python.txt
+          ruff format --check "${files[@]}"
+      - name: Generate Ruff formatting patch
+        if: always() && steps.format.outcome == 'failure'
+        shell: bash
+        run: |
+          mapfile -t files < changed-python.txt
+          ruff format --diff "${files[@]}" > ruff-format.patch || true
+      - name: Upload Ruff formatting patch
+        if: always() && steps.format.outcome == 'failure'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ruff-format-patch
+          path: ruff-format.patch
+          if-no-files-found: error
       - name: Type check
         id: mypy
         run: mypy src 2>&1 | tee mypy.log
       - name: Publish type-check diagnostics
         if: always() && github.event_name == 'pull_request' && steps.mypy.outcome == 'failure'
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b
         with:
           script: |
             const fs = require('fs');
@@ -45,12 +112,24 @@ jobs:
               issue_number: context.issue.number,
               body: `## CI type-check diagnostics\n\n\`\`\`text\n${report}\n\`\`\``
             });
-      - name: Tests
+      - name: Unit and contract tests with coverage
         id: tests
-        run: pytest -q 2>&1 | tee pytest.log
+        run: |
+          pytest -q \
+            --cov=foxgen \
+            --cov-report=term-missing \
+            --cov-report=xml:coverage.xml \
+            2>&1 | tee pytest.log
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: coverage-report
+          path: coverage.xml
+          if-no-files-found: warn
       - name: Publish test diagnostics
         if: always() && github.event_name == 'pull_request' && steps.tests.outcome == 'failure'
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b
         with:
           script: |
             const fs = require('fs');
@@ -62,23 +141,175 @@ jobs:
               body: `## CI test diagnostics\n\n\`\`\`text\n${report}\n\`\`\``
             });
 
-  container:
-    runs-on: ubuntu-latest
-    needs: quality
+  infrastructure:
+    name: PostgreSQL Redis migrations and lifecycle
+    runs-on: ubuntu-24.04
+    env:
+      FOXGEN_ENV: test
+      FOXGEN_DATABASE_URL: postgresql+asyncpg://foxgen:foxgen@localhost:5432/foxgen_ci
+      FOXGEN_REDIS_URL: redis://localhost:6379/15
+      FOXGEN_RUN_INTEGRATION: "1"
+      FOXGEN_API_HOST: 127.0.0.1
+      FOXGEN_API_PORT: "8080"
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: foxgen_ci
+          POSTGRES_USER: foxgen
+          POSTGRES_PASSWORD: foxgen
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U foxgen -d foxgen_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: requirements.lock
+      - name: Install exact lock
+        run: |
+          python -m pip install --requirement requirements.lock
+          python -m pip install --no-deps --editable .
+          python -m pip check
+          python scripts/check_lock.py
+      - name: Upgrade all migrations
+        run: alembic upgrade head
+      - name: Verify migration head and critical schema
+        run: |
+          alembic current --check-heads
+          python scripts/check_schema.py
+      - name: Exercise downgrade and re-upgrade
+        run: |
+          alembic downgrade -1
+          alembic upgrade head
+          alembic current --check-heads
+          python scripts/check_schema.py
+      - name: Real PostgreSQL Redis and lifecycle tests
+        id: integration_tests
+        run: |
+          pytest -vv --maxfail=1 \
+            --junitxml=/tmp/foxgen-integration.xml \
+            tests/integration \
+            2>&1 | tee /tmp/foxgen-integration.log
+      - name: API readiness smoke test
+        id: api_smoke
+        run: |
+          python -c "from foxgen.cli import run_api; run_api()" > /tmp/foxgen-api.log 2>&1 &
+          api_pid=$!
+          trap 'kill "${api_pid}" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 30); do
+            if ! kill -0 "${api_pid}" 2>/dev/null; then
+              echo "API process exited before readiness"
+              cat /tmp/foxgen-api.log
+              exit 1
+            fi
+            if curl --fail --silent http://127.0.0.1:8080/health/ready > /tmp/ready.json; then
+              cat /tmp/ready.json
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "API readiness timed out"
+          cat /tmp/foxgen-api.log
+          exit 1
+      - name: Upload infrastructure diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: infrastructure-diagnostics
+          path: |
+            /tmp/foxgen-integration.log
+            /tmp/foxgen-integration.xml
+            /tmp/foxgen-api.log
+          if-no-files-found: warn
+
+  dependency-review:
+    name: dependency review advisory
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Review dependency changes
+        continue-on-error: true
+        uses: actions/dependency-review-action@v5.0.0
+        with:
+          fail-on-severity: moderate
+
+  security:
+    name: filesystem vulnerability and misconfiguration scan
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln,secret,misconfig
+          format: table
+          exit-code: "1"
+          ignore-unfixed: true
+          severity: HIGH,CRITICAL
+
+  secrets:
+    name: secret scan
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2.3.9
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  container:
+    name: container compose and vulnerability scan
+    runs-on: ubuntu-24.04
+    needs: [quality, infrastructure, security, secrets]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Validate development Compose configuration
+        run: |
+          cp .env.example .env
+          docker compose config --quiet
+          rm -f .env
       - name: Validate production deployment assets
         run: |
           bash -n scripts/deploy-production.sh
           cp deploy/production.env.example .env
           docker compose --env-file .env -f docker-compose.prod.yml config --quiet
           rm -f .env
-      - uses: docker/setup-buildx-action@v3
-      - name: Build production image
-        uses: docker/build-push-action@v6
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
+      - name: Build deterministic production image
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8
         with:
           context: .
+          load: true
           push: false
           tags: foxgen:ci
           cache-from: type=gha
           cache-to: type=gha,mode=max
+      - name: Image import smoke test
+        run: docker run --rm foxgen:ci python -c "import foxgen; print(foxgen.__version__)"
+      - name: Scan production image
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: foxgen:ci
+          format: table
+          exit-code: "1"
+          ignore-unfixed: true
+          severity: HIGH,CRITICAL
