@@ -12,11 +12,19 @@ Telegram references are stored under the private object prefix `inputs/` and are
 - input objects are not deleted immediately after queue admission because the provider may still need the presigned URL;
 - failed cleanup is non-destructive and is emitted as `telegram_input_cleanup_failed` with a low-cardinality failed count.
 
-## Required bucket lifecycle rule
+## Enforced bucket lifecycle rule
 
-Redis TTL expiry removes conversation state, so the application can no longer enumerate abandoned object keys after that point. The production bucket must therefore include a lifecycle rule for the `inputs/` prefix.
+Redis TTL expiry removes conversation state, so the application can no longer enumerate abandoned object keys after that point. Both Compose stacks run `scripts/configure_minio_input_lifecycle.py` before API, worker and bot startup.
 
-Recommended initial policy:
+The initializer:
+
+- creates the private bucket when necessary;
+- preserves every unrelated lifecycle rule;
+- replaces only the FoxGen-managed rule with ID `foxgen-expire-telegram-inputs`;
+- scopes expiration and multipart cleanup to `inputs/`;
+- reads the lifecycle configuration back and fails startup if verification does not match.
+
+Default policy:
 
 ```text
 prefix: inputs/
@@ -24,14 +32,22 @@ expire current objects after: 2 days
 abort incomplete multipart uploads after: 1 day
 ```
 
-The retention window must be longer than the maximum provider fetch delay and longer than `FOXGEN_TELEGRAM_FSM_TTL_SECONDS`. Generation results under `generations/` must not use this short retention rule.
+Configuration:
+
+```env
+FOXGEN_INPUT_RETENTION_DAYS=2
+FOXGEN_INPUT_MULTIPART_ABORT_DAYS=1
+```
+
+The retention window must remain longer than the maximum provider fetch delay and longer than `FOXGEN_TELEGRAM_FSM_TTL_SECONDS`. Durable generation results under `generations/` are not targeted by this short-retention rule.
 
 ## Failure classification
 
 - `validation_error`: permanent user input error, including albums, unsupported type, empty file and size limit;
 - `input_download_failed`: retryable Telegram transfer failure;
 - `input_storage_failed`: retryable object-storage failure;
-- cleanup failure: logged for operations, but the user action still completes because S3 lifecycle remains the final safety net.
+- cleanup failure: logged for operations, but the user action still completes because S3 lifecycle remains the final safety net;
+- lifecycle bootstrap failure: fail closed before application services start.
 
 ## Verification checklist
 
@@ -40,4 +56,6 @@ The retention window must be longer than the maximum provider fetch delay and lo
 3. Send an album and confirm no object is created.
 4. Simulate a Telegram download failure and confirm the draft remains at the same input step.
 5. Simulate an S3 write failure and confirm no FSM transition occurs.
-6. Verify the bucket lifecycle rule applies only to `inputs/`.
+6. Inspect the bucket lifecycle configuration and confirm exactly one enabled FoxGen rule targets `inputs/`.
+7. Confirm unrelated `generations/` lifecycle rules remain unchanged.
+8. Confirm API, worker and bot do not start when the lifecycle rule cannot be applied or verified.
