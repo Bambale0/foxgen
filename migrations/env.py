@@ -7,6 +7,7 @@ from sqlalchemy import Connection, pool
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from foxgen.core.config import get_settings
+from foxgen.infra import billing_models as _billing_models  # noqa: F401
 from foxgen.infra.database import Base
 
 config = context.config
