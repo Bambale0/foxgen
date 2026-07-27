@@ -12,6 +12,7 @@ RUN addgroup --system foxgen && adduser --system --ingroup foxgen foxgen
 COPY requirements.lock pyproject.toml README.md ./
 COPY src ./src
 COPY migrations ./migrations
+COPY scripts ./scripts
 COPY alembic.ini ./
 
 RUN python -m pip install --requirement requirements.lock \
