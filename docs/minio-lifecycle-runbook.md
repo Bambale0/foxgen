@@ -19,7 +19,7 @@ docker compose --env-file .env -f docker-compose.prod.yml run --rm minio-init
 docker compose --env-file .env -f docker-compose.prod.yml up -d api worker bot
 ```
 
-A normal production deployment already performs the initializer before application startup through Compose dependencies.
+A normal production deployment already performs the initializer before application startup through Compose dependencies. Bootstrap retries default to 30 attempts with a two-second delay and may be tuned with `FOXGEN_MINIO_INIT_ATTEMPTS` and `FOXGEN_MINIO_INIT_RETRY_SECONDS` during incident recovery.
 
 ## Verification
 
