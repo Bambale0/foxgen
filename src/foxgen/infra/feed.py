@@ -1,14 +1,13 @@
 from datetime import datetime, timedelta, timezone
+from typing import Any
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
-    BigInteger,
     Boolean,
     CheckConstraint,
     DateTime,
     ForeignKey,
     String,
-    Text,
     UniqueConstraint,
     cast,
     delete,
@@ -212,22 +211,13 @@ class SqlAlchemyFeedRepository:
     ) -> FeedProfile:
         async with self._database.session() as session:
             async with session.begin():
-                await self._ensure_user(session, user_id=user_id, username=username)
-                existing = await session.get(UserProfile, user_id)
-                if existing is None:
-                    name = (display_name or username or "Автор").strip()[:80] or "Автор"
-                    existing = UserProfile(
-                        user_id=user_id,
-                        public_slug=f"p{uuid4().hex[:15]}",
-                        display_name=name,
-                    )
-                    session.add(existing)
-                    await session.flush()
-                elif display_name:
-                    existing.display_name = display_name.strip()[:80] or existing.display_name
-                await session.flush()
-                user = await session.get(User, user_id)
-                return self._profile(existing, user)
+                profile, user = await self._ensure_profile_in_session(
+                    session,
+                    user_id=user_id,
+                    username=username,
+                    display_name=display_name,
+                )
+                return self._profile(profile, user)
 
     async def update_profile(
         self,
@@ -237,18 +227,18 @@ class SqlAlchemyFeedRepository:
         avatar_url: str | None,
         bio: str | None,
     ) -> FeedProfile:
-        await self.ensure_profile(user_id=user_id)
         async with self._database.session() as session:
             async with session.begin():
-                profile = await session.get(UserProfile, user_id, with_for_update=True)
-                if profile is None:
-                    raise FeedError(ErrorCode.TASK_NOT_FOUND, "Профиль не найден.")
+                profile, user = await self._ensure_profile_in_session(
+                    session,
+                    user_id=user_id,
+                )
+                await session.refresh(profile, with_for_update=True)
                 if display_name is not None:
                     profile.display_name = display_name
                 profile.avatar_url = avatar_url
                 profile.bio = bio
                 await session.flush()
-                user = await session.get(User, user_id)
                 return self._profile(profile, user)
 
     async def get_profile_by_slug(self, public_slug: str) -> FeedProfile | None:
@@ -269,13 +259,13 @@ class SqlAlchemyFeedRepository:
         scope: PublicationScope,
         prompt_visible: bool,
     ) -> PublicationRecord:
-        await self.ensure_profile(user_id=user_id)
         async with self._database.session() as session:
             async with session.begin():
+                await self._ensure_profile_in_session(session, user_id=user_id)
                 generation = await session.get(Generation, generation_id, with_for_update=True)
                 if generation is None or generation.user_id != user_id:
                     raise FeedError(ErrorCode.TASK_NOT_FOUND, "Генерация не найдена.")
-                if str(generation.status) != GenerationStatus.SUCCEEDED.value:
+                if _enum_value(generation.status) != GenerationStatus.SUCCEEDED.value:
                     raise FeedError(
                         ErrorCode.VALIDATION,
                         "Публиковать можно только полностью завершённую генерацию.",
@@ -289,7 +279,7 @@ class SqlAlchemyFeedRepository:
                     ).all()
                 )
                 if not assets or any(
-                    str(asset.status) != MediaAssetStatus.STORED.value for asset in assets
+                    _enum_value(asset.status) != MediaAssetStatus.STORED.value for asset in assets
                 ):
                     raise FeedError(
                         ErrorCode.VALIDATION,
@@ -590,7 +580,7 @@ class SqlAlchemyFeedRepository:
     ) -> FeedComment:
         async with self._database.session() as session:
             async with session.begin():
-                await self._ensure_user(session, user_id=user_id)
+                await self._ensure_profile_in_session(session, user_id=user_id)
                 await self._require_published_surface(session, publication_id, surface)
                 comment = PublicationComment(
                     publication_id=publication_id,
@@ -747,24 +737,19 @@ class SqlAlchemyFeedRepository:
         viewer_user_id: int,
     ) -> FeedComment:
         profile = await session.get(UserProfile, comment.user_id)
-        if profile is None:
-            user = await session.get(User, comment.user_id)
-            display = user.username if user is not None and user.username else "Автор"
-            profile = UserProfile(
-                user_id=comment.user_id,
-                public_slug=f"p{uuid4().hex[:15]}",
-                display_name=display,
-            )
-            session.add(profile)
-            await session.flush()
+        user = await session.get(User, comment.user_id)
         return FeedComment(
             id=comment.id,
             publication_id=comment.publication_id,
             user_id=comment.user_id,
             surface=CommentSurface(comment.surface),
             text=comment.text,
-            author_display_name=profile.display_name,
-            author_slug=profile.public_slug,
+            author_display_name=(
+                profile.display_name
+                if profile is not None
+                else (user.username if user is not None and user.username else "Автор")
+            ),
+            author_slug=profile.public_slug if profile is not None else "",
             is_mine=comment.user_id == viewer_user_id,
             created_at=comment.created_at,
         )
@@ -787,6 +772,32 @@ class SqlAlchemyFeedRepository:
             raise FeedError(ErrorCode.TASK_NOT_FOUND, "Публикация недоступна.")
         return publication
 
+    async def _ensure_profile_in_session(
+        self,
+        session: AsyncSession,
+        *,
+        user_id: int,
+        username: str | None = None,
+        display_name: str | None = None,
+    ) -> tuple[UserProfile, User | None]:
+        await self._ensure_user(session, user_id=user_id, username=username)
+        profile = await session.get(UserProfile, user_id)
+        if profile is None:
+            name = (display_name or username or "Автор").strip()[:80] or "Автор"
+            profile = UserProfile(
+                user_id=user_id,
+                public_slug=f"p{uuid4().hex[:15]}",
+                display_name=name,
+            )
+            session.add(profile)
+            await session.flush()
+        elif display_name:
+            normalized_name = display_name.strip()[:80]
+            if normalized_name:
+                profile.display_name = normalized_name
+        user = await session.get(User, user_id)
+        return profile, user
+
     @staticmethod
     async def _ensure_user(
         session: AsyncSession,
@@ -807,22 +818,22 @@ class SqlAlchemyFeedRepository:
     @staticmethod
     async def _count(
         session: AsyncSession,
-        model: type[Base],
-        *criteria: object,
+        model: type[Any],
+        *criteria: Any,
     ) -> int:
         value = await session.scalar(select(func.count()).select_from(model).where(*criteria))
         return int(value or 0)
 
     @staticmethod
     def _count_subquery(
-        model: type[Base],
-        foreign_key: object,
-        *criteria: object,
-    ) -> object:
+        model: type[Any],
+        foreign_key: Any,
+        *criteria: Any,
+    ) -> Any:
         return (
             select(func.count())
             .select_from(model)
-            .where(foreign_key == Publication.id, *criteria)  # type: ignore[operator]
+            .where(foreign_key == Publication.id, *criteria)
             .correlate(Publication)
             .scalar_subquery()
         )
