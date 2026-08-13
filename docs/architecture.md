@@ -1,170 +1,353 @@
-# Architecture
+# FoxGen architecture
 
-## Boundaries
+This document describes the executable architecture on `main`. The public Mini App is outside the current implementation baseline.
 
-FoxGen uses explicit layers:
+## System boundaries
 
-- `bot`: Telegram transport, navigation and FSM only;
-- `api`: health, authenticated internal admission and provider callbacks;
-- `application`: idempotent use cases, lifecycle and delivery orchestration;
-- `domain`: provider-independent capabilities and business state;
-- `infra`: PostgreSQL, Redis, S3-compatible storage and Telegram integrations;
-- `providers`: external generation API adapters and protocol validation.
+FoxGen is split into explicit transport, application, domain and infrastructure layers.
 
-Handlers must not construct KIE.ai payloads directly. They select a product capability, collect validated inputs and hand a draft to an application service.
+```text
+Telegram bot                     Trusted backend callers
+    |                                     |
+    |                                     v
+    |                                  FastAPI
+    |                       ┌─────────────┼─────────────┐
+    |                       |             |             |
+    |                  paid task API   admin API    KIE callback
+    |                       |             |             |
+    └──────────────┬────────┴─────────────┴─────────────┘
+                   v
+             application/domain
+          generation | billing | admin
+                   |
+        ┌──────────┼───────────┐
+        v          v           v
+   PostgreSQL    Redis      S3-compatible
+   durable truth  FSM/locks   private media
+        |
+        v
+   foxgen-worker
+   ├─ provider submission/polling
+   ├─ callback processing
+   ├─ archive/delivery
+   └─ admin/support/campaign jobs
+```
 
-## Paid submission security
+Module responsibilities:
 
-Provider task creation is fail-closed:
+- `foxgen.bot` — Telegram transport, FSM, keyboards and orchestration;
+- `foxgen.api` — FastAPI routes, authentication and transport validation;
+- `foxgen.application` — generation admission/lifecycle/reconciliation use cases;
+- `foxgen.admin` — shared administrative policy/services/workers;
+- `foxgen.domain` — provider-independent business states and transition rules;
+- `foxgen.infra` — PostgreSQL repositories/models, Redis, storage and durable queues;
+- `foxgen.providers` — KIE adapters, contracts and webhook/status normalization.
 
-1. `FOXGEN_TASK_SUBMISSION_ENABLED` must be explicitly enabled;
-2. the caller must present the configured internal bearer token;
-3. `X-FoxGen-User-Id` identifies the owning user;
-4. every request must carry an `Idempotency-Key`;
-5. Redis enforces user/global request-rate limits;
-6. PostgreSQL enforces one generation per `(user_id, idempotency_key)`;
-7. active-generation limits are checked before admission;
-8. catalog-only passthrough models cannot create paid tasks.
+Provider payload construction must not leak into Telegram handlers. Administrative write logic must not live only in Telegram/HTTP/web handlers.
 
-The internal token is intended for trusted FoxGen services such as the Telegram bot. It must not be shipped to Telegram clients, web browsers or mini apps.
+## Durable data ownership
 
-## Transactional admission and outbox
+### PostgreSQL
 
-The API never calls KIE directly. Admission is one PostgreSQL transaction:
+PostgreSQL is authoritative for:
+
+- users and block state;
+- generations and lifecycle timestamps;
+- provider callback inbox;
+- transactional outbox;
+- wallets, prices, reservations and immutable ledger entries;
+- archived media metadata;
+- Telegram delivery state;
+- admin users, command ledger and audit events;
+- payments/operations used by the admin contour;
+- support tickets/messages/outbox;
+- tariff and CMS versions;
+- notification campaigns/deliveries;
+- partner/promo/prompt/runtime/moderation admin data.
+
+### Redis
+
+Redis is ephemeral and non-authoritative for money/provider work. It owns:
+
+- Telegram FSM state/data TTL;
+- per-FSM-key event isolation;
+- request rate counters;
+- distributed locks/caches used by runtime services.
+
+A Redis TTL expiry may discard a conversation draft, but it cannot erase a committed paid generation or wallet movement.
+
+### S3-compatible storage
+
+Private object storage owns media bytes:
+
+- `inputs/` — temporary Telegram references;
+- deterministic generation result keys — durable archived outputs.
+
+PostgreSQL remains authoritative for durable result/media lifecycle. Provider source URLs are not forwarded to users.
+
+## Paid task admission
+
+Paid creation is fail-closed. Before queue admission FoxGen requires:
+
+1. `FOXGEN_TASK_SUBMISSION_ENABLED=true`;
+2. valid trusted internal bearer authentication;
+3. a positive `X-FoxGen-User-Id`;
+4. valid `Idempotency-Key`;
+5. production-ready model contract;
+6. runtime model availability not disabled by admin policy;
+7. user not administratively blocked;
+8. Redis rate limits satisfied;
+9. PostgreSQL active-generation limits satisfied;
+10. active model price;
+11. sufficient wallet balance.
+
+The admission transaction then atomically persists generation, reservation, immutable ledger movement and submission outbox. A request cannot become billable provider work without the matching local durable state.
+
+## Atomic admission and billing
+
+Conceptually:
 
 ```text
 BEGIN
-  insert user when missing
-  insert generation(status=queued, idempotency_key, request_hash)
-  insert outbox event(type=generation.submit, unique deduplication_key)
+  ensure/update user
+  reject blocked user
+  enforce active-generation limits
+  insert generation(status=queued, request_hash, idempotency_key)
+  lock wallet
+  resolve active price
+  move available -> reserved
+  insert balance_reservation(status=reserved)
+  insert immutable ledger reserve entry
+  insert outbox generation.submit
 COMMIT
 ```
 
-If the transaction fails, neither the generation nor provider work becomes visible. If the API process exits after commit, the outbox row remains claimable by a worker.
+The unique `(user_id, idempotency_key)` generation key and ledger/outbox uniqueness converge duplicate confirmation requests onto one local billable generation.
 
-Workers claim rows with `FOR UPDATE SKIP LOCKED`. A processing lease allows another worker to reclaim ordinary non-billable work after a crash. Attempts, availability time, worker identity and the final dead-letter state are persisted.
+## Billable provider submission boundary
 
-## Billable POST boundary
+KIE task creation is treated as a potentially non-idempotent billable POST. It is never blindly retried.
 
-KIE `createTask` is a non-idempotent, billable POST. FoxGen never retries it automatically.
+For `generation.submit` the worker:
 
-For a `generation.submit` event, the worker performs this sequence:
+1. claims the local event;
+2. verifies the generation can legally submit;
+3. moves generation to `submitting`;
+4. consumes the submission outbox boundary so a crash cannot replay it;
+5. performs one provider create call;
+6. persists `submitted` + `provider_task_id`, deterministic failure, or `submission_unknown`.
 
-1. verify that the generation is still `queued`;
-2. atomically move it to `submitting`;
-3. mark the submission outbox event completed;
-4. call KIE exactly once;
-5. store `submitted` and `provider_task_id`, or store `submission_unknown`/`failed`.
-
-Completing the outbox event before the provider call is intentional. A process crash after step 3 cannot replay the billable POST. A watchdog moves stale `submitting` records to `submission_unknown` without resubmitting them.
-
-The per-generation callback URL contains `generation_id`. If KIE accepted the task but the create response was lost, a later callback can still correlate the provider task with the local generation and complete it safely.
-
-Read-only provider status requests may use bounded retries. Invalid credentials, insufficient credits and validation failures are never retried without a state change.
+`submission_unknown` means the provider may have accepted a billable request but the response was not safely recorded. Funds stay reserved until evidence resolves the ambiguity. The stale-submitting watchdog converts abandoned `submitting` work to `submission_unknown`; it does not submit again.
 
 ## Callback inbox and polling convergence
 
-KIE callbacks may expose a task ID at the top level or inside `data`, using either `taskId` or `task_id`. The API:
+KIE callback requests are authenticated with the provider webhook HMAC and replay-age window. The callback path normalizes task identity, records a deduplicated provider event and schedules local processing.
 
-1. normalizes the task ID;
-2. verifies HMAC and replay age;
-3. validates and stores the local generation identity from the callback URL;
-4. hashes the normalized payload;
-5. inserts a unique `provider_events` inbox row;
-6. inserts a `kie.callback` outbox event in the same transaction;
-7. returns HTTP 200.
+Provider polling is read-only and may retry within bounded policies. Callback and polling share the same legal state transitions, so whichever produces verifiable state first wins without creating a second generation or provider charge.
 
-Duplicate callback payloads are harmless because `event_hash` and the callback outbox deduplication key are unique.
+The callback URL can include the local generation identifier so an accepted provider task can be correlated even if the create-task response was lost.
 
-The worker resolves the generation through the local generation ID first and `provider_task_id` second, normalizes terminal provider states and parses string `resultJson` into structured JSON. Submitted generations also receive a scheduled polling fallback. Callback and polling paths use the same legal terminal transitions, so whichever arrives first wins without duplicating completion.
+## Generation lifecycle
 
-## Media archive
+Current durable states:
 
-A successful terminal transition inserts a unique `generation.archive` outbox event in the same transaction.
+```text
+draft
+queued
+submitting
+submitted
+processing
+submission_unknown
+result_ready
+storing_media
+delivery_pending
+succeeded
+failed
+cancelled
+```
 
-The archive worker:
+Normal success path:
 
-1. extracts HTTPS result URLs from the normalized payload;
-2. rejects credentials in URLs, non-HTTPS schemes, private/reserved DNS targets and redirects;
-3. enforces response timeout, declared-size and streamed byte limits;
-4. writes the response to a temporary file while calculating SHA-256;
-5. stores it under a deterministic S3-compatible key;
-6. inserts an idempotent `media_assets` record;
-7. creates one delivery and `generation.deliver` outbox event.
+```text
+queued
+ -> submitting
+ -> submitted
+ -> processing
+ -> result_ready
+ -> storing_media
+ -> delivery_pending
+ -> succeeded
+```
 
-Deterministic object keys and unique `(generation_id, source_url)` rows make archive retries safe. Provider URLs are never forwarded directly to users.
+Important semantics:
 
-Local development uses MinIO. Production should use a private managed S3-compatible bucket. Telegram receives short-lived presigned `GetObject` URLs.
+- `submission_unknown` is a recovery state, never an automatic resubmit signal;
+- provider success becomes `result_ready`, not user-visible success;
+- `succeeded` means result storage and Telegram delivery have completed;
+- cancellation is allowed only before provider submission may have started;
+- state transition validation and database constraints reject unknown/illegal durable values.
+
+## Outbox and retry model
+
+General outbox states:
+
+```text
+pending -> processing -> completed
+   |          |
+   |          +-> retry_wait -> processing
+   +-------------------------> dead_letter
+```
+
+`failed` remains a legacy compatibility value where present. Retry scheduling applies only to operations whose side effects are safe to retry. Exhausted/terminal work records a failure class and enters observable dead-letter state.
+
+`FOR UPDATE SKIP LOCKED` allows multiple workers to claim independent rows without duplicate ownership. Leases allow safe local work to be reclaimed after worker failure.
+
+## Result archive
+
+A successful provider result advances to `result_ready`, then archive work:
+
+1. parses normalized result URLs;
+2. validates HTTPS/source constraints;
+3. rejects credential-bearing/private/reserved SSRF targets and unsafe redirects;
+4. enforces download timeout and byte limits;
+5. calculates SHA-256 while writing temporary bytes;
+6. stores under deterministic private S3 key;
+7. persists per-result `media_assets` state;
+8. creates one delivery only after all required assets are durable.
+
+Media asset states:
+
+```text
+pending
+retry_wait
+stored
+failed
+```
+
+Multi-file results can partially succeed. Retry skips already stored assets and resumes only incomplete ones.
 
 ## Telegram delivery boundary
 
-Telegram send operations are not idempotent. FoxGen prepares all presigned URLs first, then atomically moves delivery from `pending` to `sending` and completes the delivery outbox event before calling Telegram.
+Telegram send becomes a non-idempotent external side effect once sending begins.
 
-A successful call stores Telegram message IDs and marks the delivery `sent`. A timeout or transport-ambiguous failure becomes `delivery_unknown`; it is not automatically replayed, avoiding duplicate files in the chat. Operators can inspect and explicitly reconcile unknown deliveries later.
+Delivery states:
 
-## Generation states
-
-The persisted lifecycle defines:
-
-- `draft`;
-- `queued`;
-- `submitting`;
-- `submitted`;
-- `submission_unknown`;
-- `succeeded`;
-- `failed`;
-- `cancelled`.
-
-A database check constraint prevents unknown states. Terminal transitions set `completed_at`; submitted tasks receive `next_poll_at`.
-
-## Delivery states
-
-- `pending` — stored assets are ready;
-- `sending` — the non-idempotent Telegram boundary has started;
-- `sent` — Telegram message IDs were stored;
-- `delivery_unknown` — Telegram may have accepted the send, so automatic replay is forbidden;
-- `failed` — a deterministic terminal failure requiring support action.
-
-## Outbox states
-
-- `pending` — eligible after `available_at`;
-- `processing` — leased by a worker;
-- `completed` — handled successfully or deliberately consumed;
-- `failed` — retry budget exhausted and requires inspection.
-
-## FSM rules
-
-Every flow must support:
-
-1. valid transition;
-2. invalid input with an actionable hint;
-3. back;
-4. cancel;
-5. restart/menu;
-6. stale callback recovery;
-7. duplicate click protection;
-8. timeout/expired draft recovery.
-
-Redis stores active FSM state. Durable drafts that affect money or provider submission must be copied to PostgreSQL before confirmation. User-provided text is escaped before HTML rendering in Telegram.
-
-## Configuration
-
-Optional empty values from `.env` are ignored. This keeps the documented `cp .env.example .env` flow valid while still requiring non-empty secrets when a feature is enabled.
-
-Production admission requires:
-
-```env
-FOXGEN_TASK_SUBMISSION_ENABLED=true
-FOXGEN_INTERNAL_API_TOKEN=<long-random-secret>
-FOXGEN_KIE_API_KEY=<provider-key>
-FOXGEN_TELEGRAM_BOT_TOKEN=<bot-token>
-FOXGEN_S3_BUCKET=<private-bucket>
+```text
+pending
+retry_wait
+sending
+sent
+delivery_unknown
+failed
 ```
 
-Worker tuning is controlled with `FOXGEN_WORKER_*`, `FOXGEN_PROVIDER_POLL_INTERVAL_SECONDS`, media limits and S3 settings.
+`retry_wait` is only safe before the send boundary. A timeout/transport ambiguity after sending begins becomes `delivery_unknown`; FoxGen does not automatically resend. An administrator can later mark it sent, retry only after confirming no message was delivered, or terminate/refund according to reconciliation policy.
 
-Do not enable paid admission until pricing and atomic balance reservation are configured under issue #7.
+## Billing settlement
 
-## Data ownership
+Reservation states:
 
-PostgreSQL owns users, generations, outbox events, provider events, media assets, deliveries, future transactions, referrals, partner commissions, payments and audit events. Redis owns temporary sessions, request-rate counters, locks and caches. S3-compatible storage owns durable media bytes. PostgreSQL remains the source of truth for lifecycle, archive and delivery idempotency.
+```text
+reserved
+captured
+released
+refunded
+```
+
+Current rules:
+
+- provider accepted (`submitted`) -> capture reserved funds;
+- `submission_unknown` -> keep funds reserved;
+- deterministic failure before capture -> release;
+- terminal failure after capture -> full refund under current policy;
+- repeated settlement attempts converge via row locks + deterministic ledger idempotency.
+
+See `billing.md`.
+
+## Telegram FSM architecture
+
+Redis FSM controls only the interactive draft. Every declared state has an explicit behavior contract for success/back/cancel/timeout/invalid input/stale callback. Event isolation serializes concurrent updates for one key.
+
+Quick Start and unsolicited photo/video reference entry store private object keys before asking whether the user wants image or video output. Reference-prefilled navigation preserves the stored reference across model/settings edits.
+
+Paid work becomes durable only at confirmation/admission. Telegram FSM is not used as the source of truth after a generation is committed.
+
+See `telegram-flows.md`.
+
+## Administrative control plane
+
+FoxGen has a shared admin domain layer:
+
+```text
+Telegram /admin ─────┐
+                     ├─> AdminPolicy -> AdminServices -> PostgreSQL/ledger/outboxes
+Signed admin HTTP ───┤
+                     └─> backend-only operator web surface
+                                      |
+                                      v
+                                  AdminWorker
+```
+
+Key invariants:
+
+- all transports use server-side `AdminPolicy`;
+- each privileged callback/FSM/HTTP action re-authorizes;
+- writes use append-only command/audit records;
+- same idempotency key + same request replays the stored result;
+- key reuse with changed request conflicts;
+- destructive/expensive operations require manual confirmation;
+- signed HTTP is network allowlisted and HMACs exact raw body bytes;
+- support replies/campaign sends are durable worker work;
+- secrets are recursively redacted from admin output;
+- runtime user block/model availability are enforced at paid admission.
+
+The internal operator web surface is backend-only. It is not the public Mini App.
+
+See `admin-control-plane.md` and `admin-capability-matrix.md`.
+
+## Security boundaries
+
+Secrets are intentionally separated:
+
+- internal generation bearer token;
+- KIE API key;
+- KIE webhook HMAC secret;
+- legacy billing-admin token if enabled;
+- full admin HMAC secret;
+- database/Redis/storage credentials.
+
+No trusted secret belongs in Telegram client state or public frontend code. Public reverse proxies must deny `/internal/admin/` entirely; backend callers use the private network path.
+
+## Production topology
+
+`docker-compose.prod.yml` runs:
+
+- PostgreSQL;
+- Redis;
+- MinIO/private storage service where used;
+- migration job;
+- API;
+- worker;
+- bot.
+
+The API host port is loopback-only for the reverse proxy. PostgreSQL, Redis and MinIO are not published on host public interfaces.
+
+Production deployment is exact-SHA after successful `main` CI. The server-side `.env` is preserved and tracked local modifications block deployment.
+
+## Consistency and reconciliation
+
+Reconciliation inspects cross-resource invariants among generation, outbox, media, delivery and reservation state. Automated fixes are limited to deterministic local state repairs. It never performs another billable provider submission and never blindly resends `delivery_unknown`.
+
+See `postprocessing-reconciliation.md`.
+
+## Source-of-truth hierarchy
+
+When resolving drift:
+
+1. migrations + database constraints for schema/history;
+2. domain/application transition code for legal business state;
+3. tests for explicit expected behavior;
+4. transport adapters for API/FSM presentation;
+5. documentation.
+
+A discovered mismatch is a documentation/code defect to fix, not permission to silently reinterpret production state.
