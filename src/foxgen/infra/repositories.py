@@ -148,9 +148,7 @@ class SqlAlchemyGenerationRepository:
                             deduplication_key=f"generation.submit:{generation.id}",
                             payload={"generation_id": str(generation.id)},
                         )
-                        .on_conflict_do_nothing(
-                            index_elements=[OutboxEvent.deduplication_key]
-                        )
+                        .on_conflict_do_nothing(index_elements=[OutboxEvent.deduplication_key])
                     )
                     return _snapshot(generation), True
 

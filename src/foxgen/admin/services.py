@@ -3,8 +3,16 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from foxgen.admin.access_service import AdminAccessService
-from foxgen.admin.content_service import AdminCmsService, AdminNotificationService, AdminSupportService
-from foxgen.admin.finance_service import AdminOperationService, AdminPaymentService, AdminTariffService
+from foxgen.admin.content_service import (
+    AdminCmsService,
+    AdminNotificationService,
+    AdminSupportService,
+)
+from foxgen.admin.finance_service import (
+    AdminOperationService,
+    AdminPaymentService,
+    AdminTariffService,
+)
 from foxgen.admin.operations_service import (
     AdminModerationService,
     AdminPartnerService,

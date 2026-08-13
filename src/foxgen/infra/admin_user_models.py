@@ -10,7 +10,9 @@ class UserRestriction(Base):
     __tablename__ = "user_restrictions"
 
     user_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False)
-    blocked: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", index=True)
+    blocked: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="false", index=True
+    )
     reason: Mapped[str | None] = mapped_column(Text)
     source: Mapped[str] = mapped_column(String(32), default="admin", server_default="admin")
     updated_by: Mapped[int | None] = mapped_column(BigInteger)

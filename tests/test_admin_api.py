@@ -188,7 +188,9 @@ async def test_admin_balance_write_requires_idempotency_and_confirmation() -> No
     transport = httpx.ASGITransport(app=app, client=("127.0.0.1", 12345))
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
         base_headers = _signed_headers(method="POST", path=path, body=raw)
-        missing_controls = await client.post(path, content=raw, headers={**base_headers, "Content-Type": "application/json"})
+        missing_controls = await client.post(
+            path, content=raw, headers={**base_headers, "Content-Type": "application/json"}
+        )
         allowed = await client.post(
             path,
             content=raw,

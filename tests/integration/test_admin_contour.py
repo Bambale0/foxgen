@@ -132,10 +132,12 @@ async def test_support_reply_is_outboxed_and_duplicate_key_does_not_duplicate_me
             )
             outbox_count = int(
                 await session.scalar(
-                    select(func.count(SupportOutbox.id)).join(
+                    select(func.count(SupportOutbox.id))
+                    .join(
                         SupportMessage,
                         SupportMessage.id == SupportOutbox.message_id,
-                    ).where(SupportMessage.ticket_id == ticket_id)
+                    )
+                    .where(SupportMessage.ticket_id == ticket_id)
                 )
                 or 0
             )

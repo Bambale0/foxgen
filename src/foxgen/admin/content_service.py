@@ -197,10 +197,14 @@ class AdminCmsService:
         if not clean_slug or not clean_title or not clean_body:
             raise AdminValidationError("CMS slug, title and body are required")
         if any(char not in "abcdefghijklmnopqrstuvwxyz0123456789-_" for char in clean_slug):
-            raise AdminValidationError("CMS slug may contain only lowercase letters, digits, '-' and '_'")
+            raise AdminValidationError(
+                "CMS slug may contain only lowercase letters, digits, '-' and '_'"
+            )
 
         async def operation(session: AsyncSession) -> dict[str, object]:
-            document = await session.scalar(select(CmsDocument).where(CmsDocument.slug == clean_slug))
+            document = await session.scalar(
+                select(CmsDocument).where(CmsDocument.slug == clean_slug)
+            )
             if document is None:
                 document = CmsDocument(slug=clean_slug, title=clean_title)
                 session.add(document)

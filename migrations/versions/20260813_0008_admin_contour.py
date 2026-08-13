@@ -50,7 +50,9 @@ def upgrade() -> None:
         "admin_users",
         sa.Column("user_id", sa.BigInteger(), primary_key=True, autoincrement=False),
         sa.Column("role", sa.String(32), nullable=False, server_default="operator"),
-        sa.Column("scopes", postgresql.JSONB(), nullable=False, server_default=sa.text("'[]'::jsonb")),
+        sa.Column(
+            "scopes", postgresql.JSONB(), nullable=False, server_default=sa.text("'[]'::jsonb")
+        ),
         sa.Column("active", sa.Boolean(), nullable=False, server_default=sa.text("true")),
         created_at(),
         updated_at(),
@@ -66,7 +68,12 @@ def upgrade() -> None:
         sa.Column("action", sa.String(128), nullable=False),
         sa.Column("target_id", sa.String(255), nullable=True),
         sa.Column("request_hash", sa.String(64), nullable=False),
-        sa.Column("request_payload", postgresql.JSONB(), nullable=False, server_default=sa.text("'{}'::jsonb")),
+        sa.Column(
+            "request_payload",
+            postgresql.JSONB(),
+            nullable=False,
+            server_default=sa.text("'{}'::jsonb"),
+        ),
         sa.Column("response_payload", postgresql.JSONB(), nullable=True),
         sa.Column("status", sa.String(16), nullable=False, server_default="reserved"),
         sa.Column("error_code", sa.String(64), nullable=True),
@@ -96,7 +103,9 @@ def upgrade() -> None:
         sa.Column("action", sa.String(128), nullable=False),
         sa.Column("target_id", sa.String(255), nullable=True),
         sa.Column("outcome", sa.String(32), nullable=False),
-        sa.Column("payload", postgresql.JSONB(), nullable=False, server_default=sa.text("'{}'::jsonb")),
+        sa.Column(
+            "payload", postgresql.JSONB(), nullable=False, server_default=sa.text("'{}'::jsonb")
+        ),
         created_at(),
     )
     op.create_index("ix_admin_audit_events_admin_user_id", "admin_audit_events", ["admin_user_id"])
@@ -123,7 +132,9 @@ def upgrade() -> None:
         sa.Column("version", sa.Integer(), nullable=False),
         sa.Column("payload", postgresql.JSONB(), nullable=False),
         sa.Column("created_by", sa.BigInteger(), nullable=False),
-        sa.Column("published_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
+        sa.Column(
+            "published_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()
+        ),
         created_at(),
         sa.UniqueConstraint("version", name="uq_tariff_versions_version"),
         sa.CheckConstraint("version > 0", name="ck_tariff_versions_positive"),
@@ -140,7 +151,9 @@ def upgrade() -> None:
         sa.Column("amount_units", sa.BigInteger(), nullable=False),
         sa.Column("currency", sa.String(16), nullable=False, server_default="CREDIT"),
         sa.Column("credited_ledger_key", sa.String(255), nullable=True, unique=True),
-        sa.Column("raw_payload", postgresql.JSONB(), nullable=False, server_default=sa.text("'{}'::jsonb")),
+        sa.Column(
+            "raw_payload", postgresql.JSONB(), nullable=False, server_default=sa.text("'{}'::jsonb")
+        ),
         sa.Column("last_checked_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("processed_at", sa.DateTime(timezone=True), nullable=True),
         created_at(),
@@ -171,12 +184,16 @@ def upgrade() -> None:
         ),
         sa.Column("operation_type", sa.String(64), nullable=False),
         sa.Column("status", sa.String(64), nullable=False),
-        sa.Column("payload", postgresql.JSONB(), nullable=False, server_default=sa.text("'{}'::jsonb")),
+        sa.Column(
+            "payload", postgresql.JSONB(), nullable=False, server_default=sa.text("'{}'::jsonb")
+        ),
         sa.Column("created_by", sa.BigInteger(), nullable=True),
         created_at(),
     )
     op.create_index("ix_operation_events_generation_id", "operation_events", ["generation_id"])
-    op.create_index("ix_operation_events_parent_operation_id", "operation_events", ["parent_operation_id"])
+    op.create_index(
+        "ix_operation_events_parent_operation_id", "operation_events", ["parent_operation_id"]
+    )
     op.create_index("ix_operation_events_operation_type", "operation_events", ["operation_type"])
     op.create_index("ix_operation_events_status", "operation_events", ["status"])
     op.create_index("ix_operation_events_created_at", "operation_events", ["created_at"])
@@ -199,7 +216,9 @@ def upgrade() -> None:
     )
     op.create_index("ix_support_tickets_user_id", "support_tickets", ["user_id"])
     op.create_index("ix_support_tickets_status", "support_tickets", ["status"])
-    op.create_index("ix_support_tickets_assigned_admin_id", "support_tickets", ["assigned_admin_id"])
+    op.create_index(
+        "ix_support_tickets_assigned_admin_id", "support_tickets", ["assigned_admin_id"]
+    )
     op.create_index("ix_support_tickets_created_at", "support_tickets", ["created_at"])
 
     op.create_table(
@@ -231,10 +250,14 @@ def upgrade() -> None:
         ),
         sa.Column("recipient_id", sa.BigInteger(), nullable=False),
         sa.Column("deduplication_key", sa.String(255), nullable=False),
-        sa.Column("payload", postgresql.JSONB(), nullable=False, server_default=sa.text("'{}'::jsonb")),
+        sa.Column(
+            "payload", postgresql.JSONB(), nullable=False, server_default=sa.text("'{}'::jsonb")
+        ),
         sa.Column("status", sa.String(32), nullable=False, server_default="pending"),
         sa.Column("attempts", sa.Integer(), nullable=False, server_default="0"),
-        sa.Column("available_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
+        sa.Column(
+            "available_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()
+        ),
         sa.Column("locked_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("last_error", sa.Text(), nullable=True),
         created_at(),
@@ -271,7 +294,12 @@ def upgrade() -> None:
         ),
         sa.Column("version", sa.Integer(), nullable=False),
         sa.Column("body", sa.Text(), nullable=False),
-        sa.Column("metadata_json", postgresql.JSONB(), nullable=False, server_default=sa.text("'{}'::jsonb")),
+        sa.Column(
+            "metadata_json",
+            postgresql.JSONB(),
+            nullable=False,
+            server_default=sa.text("'{}'::jsonb"),
+        ),
         sa.Column("created_by", sa.BigInteger(), nullable=False),
         sa.Column("published_at", sa.DateTime(timezone=True), nullable=True),
         created_at(),
@@ -282,14 +310,18 @@ def upgrade() -> None:
         ),
         sa.CheckConstraint("version > 0", name="ck_cms_document_versions_positive"),
     )
-    op.create_index("ix_cms_document_versions_document_id", "cms_document_versions", ["document_id"])
+    op.create_index(
+        "ix_cms_document_versions_document_id", "cms_document_versions", ["document_id"]
+    )
 
     op.create_table(
         "notification_campaigns",
         uuid_pk(),
         sa.Column("name", sa.String(255), nullable=False),
         sa.Column("message", sa.Text(), nullable=False),
-        sa.Column("segment", postgresql.JSONB(), nullable=False, server_default=sa.text("'{}'::jsonb")),
+        sa.Column(
+            "segment", postgresql.JSONB(), nullable=False, server_default=sa.text("'{}'::jsonb")
+        ),
         sa.Column("status", sa.String(32), nullable=False, server_default="draft"),
         sa.Column("created_by", sa.BigInteger(), nullable=False),
         sa.Column("started_at", sa.DateTime(timezone=True), nullable=True),
@@ -302,7 +334,9 @@ def upgrade() -> None:
         ),
     )
     op.create_index("ix_notification_campaigns_status", "notification_campaigns", ["status"])
-    op.create_index("ix_notification_campaigns_created_at", "notification_campaigns", ["created_at"])
+    op.create_index(
+        "ix_notification_campaigns_created_at", "notification_campaigns", ["created_at"]
+    )
 
     op.create_table(
         "notification_deliveries",
@@ -316,7 +350,9 @@ def upgrade() -> None:
         sa.Column("recipient_id", sa.BigInteger(), nullable=False),
         sa.Column("status", sa.String(32), nullable=False, server_default="pending"),
         sa.Column("attempts", sa.Integer(), nullable=False, server_default="0"),
-        sa.Column("available_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
+        sa.Column(
+            "available_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()
+        ),
         sa.Column("locked_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("telegram_message_id", sa.BigInteger(), nullable=True),
         sa.Column("last_error", sa.Text(), nullable=True),
@@ -332,10 +368,16 @@ def upgrade() -> None:
             name="ck_notification_deliveries_status",
         ),
     )
-    op.create_index("ix_notification_deliveries_campaign_id", "notification_deliveries", ["campaign_id"])
-    op.create_index("ix_notification_deliveries_recipient_id", "notification_deliveries", ["recipient_id"])
+    op.create_index(
+        "ix_notification_deliveries_campaign_id", "notification_deliveries", ["campaign_id"]
+    )
+    op.create_index(
+        "ix_notification_deliveries_recipient_id", "notification_deliveries", ["recipient_id"]
+    )
     op.create_index("ix_notification_deliveries_status", "notification_deliveries", ["status"])
-    op.create_index("ix_notification_deliveries_available_at", "notification_deliveries", ["available_at"])
+    op.create_index(
+        "ix_notification_deliveries_available_at", "notification_deliveries", ["available_at"]
+    )
 
     op.create_table(
         "admin_outbox",
@@ -343,10 +385,14 @@ def upgrade() -> None:
         sa.Column("event_type", sa.String(64), nullable=False),
         sa.Column("target_id", sa.String(255), nullable=False),
         sa.Column("deduplication_key", sa.String(255), nullable=False),
-        sa.Column("payload", postgresql.JSONB(), nullable=False, server_default=sa.text("'{}'::jsonb")),
+        sa.Column(
+            "payload", postgresql.JSONB(), nullable=False, server_default=sa.text("'{}'::jsonb")
+        ),
         sa.Column("status", sa.String(32), nullable=False, server_default="pending"),
         sa.Column("attempts", sa.Integer(), nullable=False, server_default="0"),
-        sa.Column("available_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
+        sa.Column(
+            "available_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()
+        ),
         sa.Column("locked_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("last_error", sa.Text(), nullable=True),
         created_at(),
@@ -398,7 +444,12 @@ def upgrade() -> None:
         sa.Column("reward_units", sa.BigInteger(), nullable=False, server_default="0"),
         sa.Column("max_uses", sa.Integer(), nullable=True),
         sa.Column("uses", sa.Integer(), nullable=False, server_default="0"),
-        sa.Column("metadata_json", postgresql.JSONB(), nullable=False, server_default=sa.text("'{}'::jsonb")),
+        sa.Column(
+            "metadata_json",
+            postgresql.JSONB(),
+            nullable=False,
+            server_default=sa.text("'{}'::jsonb"),
+        ),
         sa.Column("created_by", sa.BigInteger(), nullable=False),
         created_at(),
     )
@@ -420,7 +471,9 @@ def upgrade() -> None:
             name="ck_prompt_library_items_status",
         ),
     )
-    op.create_index("ix_prompt_library_items_author_user_id", "prompt_library_items", ["author_user_id"])
+    op.create_index(
+        "ix_prompt_library_items_author_user_id", "prompt_library_items", ["author_user_id"]
+    )
     op.create_index("ix_prompt_library_items_status", "prompt_library_items", ["status"])
     op.create_index("ix_prompt_library_items_created_at", "prompt_library_items", ["created_at"])
 
@@ -428,7 +481,9 @@ def upgrade() -> None:
         "runtime_flags",
         sa.Column("key", sa.String(128), primary_key=True),
         sa.Column("enabled", sa.Boolean(), nullable=False, server_default=sa.text("false")),
-        sa.Column("value", postgresql.JSONB(), nullable=False, server_default=sa.text("'{}'::jsonb")),
+        sa.Column(
+            "value", postgresql.JSONB(), nullable=False, server_default=sa.text("'{}'::jsonb")
+        ),
         sa.Column("updated_by", sa.BigInteger(), nullable=True),
         updated_at(),
     )
@@ -447,7 +502,9 @@ def upgrade() -> None:
         "trend_items",
         uuid_pk(),
         sa.Column("title", sa.String(255), nullable=False),
-        sa.Column("payload", postgresql.JSONB(), nullable=False, server_default=sa.text("'{}'::jsonb")),
+        sa.Column(
+            "payload", postgresql.JSONB(), nullable=False, server_default=sa.text("'{}'::jsonb")
+        ),
         sa.Column("active", sa.Boolean(), nullable=False, server_default=sa.text("true")),
         sa.Column("created_by", sa.BigInteger(), nullable=False),
         created_at(),
@@ -464,10 +521,14 @@ def upgrade() -> None:
         sa.Column("created_by", sa.BigInteger(), nullable=False),
         created_at(),
     )
-    op.create_index("ix_feed_moderation_actions_content_id", "feed_moderation_actions", ["content_id"])
+    op.create_index(
+        "ix_feed_moderation_actions_content_id", "feed_moderation_actions", ["content_id"]
+    )
     op.create_index("ix_feed_moderation_actions_action", "feed_moderation_actions", ["action"])
     op.create_index("ix_feed_moderation_actions_active", "feed_moderation_actions", ["active"])
-    op.create_index("ix_feed_moderation_actions_created_at", "feed_moderation_actions", ["created_at"])
+    op.create_index(
+        "ix_feed_moderation_actions_created_at", "feed_moderation_actions", ["created_at"]
+    )
 
 
 def downgrade() -> None:

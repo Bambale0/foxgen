@@ -36,7 +36,9 @@ def redact_secrets(value: object) -> object:
         redacted: dict[str, object] = {}
         for raw_key, raw_value in value.items():
             key = str(raw_key)
-            redacted[key] = "[REDACTED]" if _contains_sensitive_fragment(key) else redact_secrets(raw_value)
+            redacted[key] = (
+                "[REDACTED]" if _contains_sensitive_fragment(key) else redact_secrets(raw_value)
+            )
         return redacted
     if isinstance(value, list):
         return [redact_secrets(item) for item in value]
@@ -124,7 +126,9 @@ def create_admin_session_token(
     }
     raw = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
     encoded = base64.urlsafe_b64encode(raw).rstrip(b"=").decode("ascii")
-    signature = hmac.new(secret.encode("utf-8"), encoded.encode("ascii"), hashlib.sha256).hexdigest()
+    signature = hmac.new(
+        secret.encode("utf-8"), encoded.encode("ascii"), hashlib.sha256
+    ).hexdigest()
     return f"{encoded}.{signature}"
 
 

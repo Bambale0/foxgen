@@ -774,7 +774,9 @@ def create_admin_router(settings: Settings) -> APIRouter:
         context.require(AI_ADMIN)
         summary_payload = await services.queries.summary(context)
         finance_payload = await services.queries.finance(context)
-        failures = await services.queries.generations(context, user_id=None, status="failed", limit=20)
+        failures = await services.queries.generations(
+            context, user_id=None, status="failed", limit=20
+        )
         return {
             "summary": summary_payload,
             "finance": finance_payload,
@@ -851,7 +853,9 @@ async def _authenticate(request: Request, settings: Settings) -> AdminContext:
     return await services.policy.authorize(user_id=user_id, request_id=request_id)
 
 
-async def _auth_services(request: Request, settings: Settings) -> tuple[AdminContext, AdminServices]:
+async def _auth_services(
+    request: Request, settings: Settings
+) -> tuple[AdminContext, AdminServices]:
     context = await _authenticate(request, settings)
     return context, _services(request)
 

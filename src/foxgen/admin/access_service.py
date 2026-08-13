@@ -19,7 +19,9 @@ class AdminAccessService:
     async def list_admins(self, context: AdminContext) -> list[dict[str, object]]:
         context.require(ADMIN_MANAGE)
         async with self._database.session() as session:
-            items = tuple((await session.scalars(select(AdminUser).order_by(AdminUser.user_id))).all())
+            items = tuple(
+                (await session.scalars(select(AdminUser).order_by(AdminUser.user_id))).all()
+            )
         await self._executor.audit_read(context=context, action="admins.list", target_id=None)
         return [
             {
@@ -58,7 +60,9 @@ class AdminAccessService:
                 details={"unknown_scopes": unknown},
             )
         if user_id == context.user_id and not active:
-            raise AdminValidationError("An administrator cannot deactivate their own current session")
+            raise AdminValidationError(
+                "An administrator cannot deactivate their own current session"
+            )
 
         async def operation(session: AsyncSession) -> dict[str, object]:
             await session.execute(

@@ -38,10 +38,14 @@ class AdminApiClient:
         await self._client.aclose()
 
     async def health(self, admin_user_id: int) -> dict[str, object]:
-        return _dict(await self.request("GET", "/internal/admin/health", admin_user_id=admin_user_id))
+        return _dict(
+            await self.request("GET", "/internal/admin/health", admin_user_id=admin_user_id)
+        )
 
     async def summary(self, admin_user_id: int) -> dict[str, object]:
-        return _dict(await self.request("GET", "/internal/admin/summary", admin_user_id=admin_user_id))
+        return _dict(
+            await self.request("GET", "/internal/admin/summary", admin_user_id=admin_user_id)
+        )
 
     async def request(
         self,
@@ -142,7 +146,9 @@ class AdminApiClient:
         except (httpx.TimeoutException, httpx.NetworkError) as exc:
             raise AdminApiClientError("Admin export недоступен.", status_code=503) from exc
         if response.is_error:
-            raise AdminApiClientError("Не удалось сформировать export.", status_code=response.status_code)
+            raise AdminApiClientError(
+                "Не удалось сформировать export.", status_code=response.status_code
+            )
         return response.content, response.headers.get("content-type", "application/octet-stream")
 
 

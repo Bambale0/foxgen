@@ -173,7 +173,9 @@ class SupportTicket(Base):
     )
     user_id: Mapped[int] = mapped_column(BigInteger, index=True)
     subject: Mapped[str] = mapped_column(String(255))
-    status: Mapped[str] = mapped_column(String(32), default="open", server_default="open", index=True)
+    status: Mapped[str] = mapped_column(
+        String(32), default="open", server_default="open", index=True
+    )
     assigned_admin_id: Mapped[int | None] = mapped_column(BigInteger, index=True)
     priority: Mapped[str] = mapped_column(String(16), default="normal", server_default="normal")
     operator_note: Mapped[str | None] = mapped_column(Text)
@@ -222,7 +224,9 @@ class SupportOutbox(Base):
     recipient_id: Mapped[int] = mapped_column(BigInteger, index=True)
     deduplication_key: Mapped[str] = mapped_column(String(255))
     payload: Mapped[dict[str, object]] = mapped_column(JSONB, default=dict)
-    status: Mapped[str] = mapped_column(String(32), default="pending", server_default="pending", index=True)
+    status: Mapped[str] = mapped_column(
+        String(32), default="pending", server_default="pending", index=True
+    )
     attempts: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     available_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
@@ -254,7 +258,9 @@ class CmsDocument(Base):
 class CmsDocumentVersion(Base):
     __tablename__ = "cms_document_versions"
     __table_args__ = (
-        UniqueConstraint("document_id", "version", name="uq_cms_document_versions_document_version"),
+        UniqueConstraint(
+            "document_id", "version", name="uq_cms_document_versions_document_version"
+        ),
         CheckConstraint("version > 0", name="ck_cms_document_versions_positive"),
     )
 
@@ -289,7 +295,9 @@ class NotificationCampaign(Base):
     name: Mapped[str] = mapped_column(String(255))
     message: Mapped[str] = mapped_column(Text)
     segment: Mapped[dict[str, object]] = mapped_column(JSONB, default=dict)
-    status: Mapped[str] = mapped_column(String(32), default="draft", server_default="draft", index=True)
+    status: Mapped[str] = mapped_column(
+        String(32), default="draft", server_default="draft", index=True
+    )
     created_by: Mapped[int] = mapped_column(BigInteger)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -320,7 +328,9 @@ class NotificationDelivery(Base):
         ForeignKey("notification_campaigns.id", ondelete="CASCADE"), index=True
     )
     recipient_id: Mapped[int] = mapped_column(BigInteger, index=True)
-    status: Mapped[str] = mapped_column(String(32), default="pending", server_default="pending", index=True)
+    status: Mapped[str] = mapped_column(
+        String(32), default="pending", server_default="pending", index=True
+    )
     attempts: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     available_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
@@ -351,7 +361,9 @@ class AdminOutbox(Base):
     target_id: Mapped[str] = mapped_column(String(255), index=True)
     deduplication_key: Mapped[str] = mapped_column(String(255))
     payload: Mapped[dict[str, object]] = mapped_column(JSONB, default=dict)
-    status: Mapped[str] = mapped_column(String(32), default="pending", server_default="pending", index=True)
+    status: Mapped[str] = mapped_column(
+        String(32), default="pending", server_default="pending", index=True
+    )
     attempts: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     available_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
@@ -393,7 +405,9 @@ class PartnerWithdrawal(Base):
     )
     user_id: Mapped[int] = mapped_column(BigInteger, index=True)
     amount_units: Mapped[int] = mapped_column(BigInteger)
-    status: Mapped[str] = mapped_column(String(32), default="pending", server_default="pending", index=True)
+    status: Mapped[str] = mapped_column(
+        String(32), default="pending", server_default="pending", index=True
+    )
     destination: Mapped[str | None] = mapped_column(String(255))
     reviewed_by: Mapped[int | None] = mapped_column(BigInteger)
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -432,7 +446,9 @@ class PromptLibraryItem(Base):
     author_user_id: Mapped[int | None] = mapped_column(BigInteger, index=True)
     title: Mapped[str] = mapped_column(String(255))
     prompt: Mapped[str] = mapped_column(Text)
-    status: Mapped[str] = mapped_column(String(32), default="pending", server_default="pending", index=True)
+    status: Mapped[str] = mapped_column(
+        String(32), default="pending", server_default="pending", index=True
+    )
     moderation_reason: Mapped[str | None] = mapped_column(Text)
     moderated_by: Mapped[int | None] = mapped_column(BigInteger)
     moderated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

@@ -147,7 +147,9 @@ async def admin_close(
     await callback.answer()
 
 
-@router.callback_query(F.data.in_({"adm:summary", "adm:finance", "adm:partners", "adm:runtime", "adm:ai"}))
+@router.callback_query(
+    F.data.in_({"adm:summary", "adm:finance", "adm:partners", "adm:runtime", "adm:ai"})
+)
 async def admin_read_summary(
     callback: CallbackQuery,
     admin_api_client: AdminApiClient | None = None,
@@ -245,7 +247,9 @@ async def admin_user_lookup_message(
         )
         rows.append(
             [
-                InlineKeyboardButton(text=f"Баланс {target_id}", callback_data=f"adm:ubal:{target_id}"),
+                InlineKeyboardButton(
+                    text=f"Баланс {target_id}", callback_data=f"adm:ubal:{target_id}"
+                ),
                 InlineKeyboardButton(text="Block", callback_data=f"adm:ublock:{target_id}"),
                 InlineKeyboardButton(text="Unblock", callback_data=f"adm:uunblock:{target_id}"),
             ]
@@ -555,7 +559,11 @@ async def admin_tariffs(
         return
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="Опубликовать новую версию", callback_data="adm:tariff:edit")],
+            [
+                InlineKeyboardButton(
+                    text="Опубликовать новую версию", callback_data="adm:tariff:edit"
+                )
+            ],
             [InlineKeyboardButton(text="← Админка", callback_data="adm:home")],
         ]
     )
@@ -821,10 +829,18 @@ async def admin_prompt_detail(
         InlineKeyboardMarkup(
             inline_keyboard=[
                 [
-                    InlineKeyboardButton(text="Approve", callback_data=f"adm:prompt:act:a:{item_id}"),
-                    InlineKeyboardButton(text="Reject", callback_data=f"adm:prompt:act:r:{item_id}"),
+                    InlineKeyboardButton(
+                        text="Approve", callback_data=f"adm:prompt:act:a:{item_id}"
+                    ),
+                    InlineKeyboardButton(
+                        text="Reject", callback_data=f"adm:prompt:act:r:{item_id}"
+                    ),
                 ],
-                [InlineKeyboardButton(text="Deactivate", callback_data=f"adm:prompt:act:d:{item_id}")],
+                [
+                    InlineKeyboardButton(
+                        text="Deactivate", callback_data=f"adm:prompt:act:d:{item_id}"
+                    )
+                ],
                 [InlineKeyboardButton(text="← Промпты", callback_data="adm:prompts")],
             ]
         ),
@@ -1068,7 +1084,9 @@ async def admin_ticket_detail(
     if user_id is None or callback.data is None:
         return
     ticket_id = callback.data.split(":", 2)[2]
-    result = await _request(admin_api_client, "GET", f"/internal/admin/tickets/{ticket_id}", user_id)
+    result = await _request(
+        admin_api_client, "GET", f"/internal/admin/tickets/{ticket_id}", user_id
+    )
     if result is None:
         return
     await _edit(
@@ -1076,7 +1094,11 @@ async def admin_ticket_detail(
         _json_text(result),
         InlineKeyboardMarkup(
             inline_keyboard=[
-                [InlineKeyboardButton(text="Ответить", callback_data=f"adm:ticketreply:{ticket_id}")],
+                [
+                    InlineKeyboardButton(
+                        text="Ответить", callback_data=f"adm:ticketreply:{ticket_id}"
+                    )
+                ],
                 [InlineKeyboardButton(text="← Тикеты", callback_data="adm:support")],
             ]
         ),
@@ -1089,7 +1111,10 @@ async def admin_ticket_reply_start(
     state: FSMContext,
     admin_api_client: AdminApiClient | None = None,
 ) -> None:
-    if await _authorize_callback(callback, admin_api_client, state=state) is None or callback.data is None:
+    if (
+        await _authorize_callback(callback, admin_api_client, state=state) is None
+        or callback.data is None
+    ):
         return
     ticket_id = callback.data.split(":", 2)[2]
     await state.update_data(admin_ticket_id=ticket_id)
@@ -1179,8 +1204,16 @@ async def admin_operation_detail(
         _json_text(result),
         InlineKeyboardMarkup(
             inline_keyboard=[
-                [InlineKeyboardButton(text="Replay safe op", callback_data=f"adm:op:replay:{operation_id}")],
-                [InlineKeyboardButton(text="Refund", callback_data=f"adm:op:refund:{operation_id}")],
+                [
+                    InlineKeyboardButton(
+                        text="Replay safe op", callback_data=f"adm:op:replay:{operation_id}"
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
+                        text="Refund", callback_data=f"adm:op:refund:{operation_id}"
+                    )
+                ],
                 [InlineKeyboardButton(text="← Operations", callback_data="adm:operations")],
             ]
         ),
@@ -1215,7 +1248,10 @@ async def admin_operation_refund_start(
     state: FSMContext,
     admin_api_client: AdminApiClient | None = None,
 ) -> None:
-    if await _authorize_callback(callback, admin_api_client, state=state) is None or callback.data is None:
+    if (
+        await _authorize_callback(callback, admin_api_client, state=state) is None
+        or callback.data is None
+    ):
         return
     operation_id = callback.data.split(":", 3)[3]
     await state.update_data(admin_operation_id=operation_id)
@@ -1291,7 +1327,12 @@ async def admin_export_download(
     admin_api_client: AdminApiClient | None = None,
 ) -> None:
     user_id = await _authorize_callback(callback, admin_api_client)
-    if user_id is None or callback.data is None or callback.message is None or admin_api_client is None:
+    if (
+        user_id is None
+        or callback.data is None
+        or callback.message is None
+        or admin_api_client is None
+    ):
         return
     kind = callback.data.split(":", 2)[2]
     path = {
@@ -1455,7 +1496,9 @@ async def _request(
         return None
 
 
-async def _call(client: AdminApiClient | None, method: str, admin_user_id: int) -> dict[str, object] | None:
+async def _call(
+    client: AdminApiClient | None, method: str, admin_user_id: int
+) -> dict[str, object] | None:
     if client is None:
         return None
     try:
