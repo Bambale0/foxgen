@@ -131,7 +131,9 @@ class AdminTariffService:
         self._validate_payload(payload)
 
         async def operation(session: AsyncSession) -> dict[str, object]:
-            await session.execute(text("SELECT pg_advisory_xact_lock(hashtextextended('foxgen:tariffs', 0))"))
+            await session.execute(
+                text("SELECT pg_advisory_xact_lock(hashtextextended('foxgen:tariffs', 0))")
+            )
             latest = await session.scalar(select(func.max(TariffVersion.version)))
             next_version = int(latest or 0) + 1
             published_at = datetime.now(timezone.utc)
@@ -219,7 +221,11 @@ class AdminTariffService:
             for raw_slug, raw_amount in section.items():
                 if not isinstance(raw_slug, str) or not raw_slug.strip():
                     raise AdminValidationError(f"{section_name} contains an invalid model slug")
-                if not isinstance(raw_amount, int) or isinstance(raw_amount, bool) or raw_amount <= 0:
+                if (
+                    not isinstance(raw_amount, int)
+                    or isinstance(raw_amount, bool)
+                    or raw_amount <= 0
+                ):
                     raise AdminValidationError(
                         f"{section_name}.{raw_slug} must be a positive integer credit amount"
                     )

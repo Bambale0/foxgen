@@ -162,9 +162,7 @@ async def global_error(event: ErrorEvent) -> bool:
     logger.exception("Unhandled Telegram update", exc_info=event.exception)
     update_message = event.update.message
     if update_message:
-        await update_message.answer(
-            "Что-то пошло не так. Откройте /menu и повторите шаг."
-        )
+        await update_message.answer("Что-то пошло не так. Откройте /menu и повторите шаг.")
         return True
     update_callback = event.update.callback_query
     if update_callback:
@@ -178,9 +176,7 @@ async def global_error(event: ErrorEvent) -> bool:
 def create_event_isolation(storage: RedisStorage) -> BaseEventIsolation:
     """Serialize updates for one FSM key across polling tasks and bot replicas."""
 
-    return storage.create_isolation(
-        lock_kwargs={"timeout": FSM_EVENT_LOCK_TIMEOUT_SECONDS}
-    )
+    return storage.create_isolation(lock_kwargs={"timeout": FSM_EVENT_LOCK_TIMEOUT_SECONDS})
 
 
 async def run(settings: Settings | None = None) -> None:
@@ -213,9 +209,7 @@ async def run(settings: Settings | None = None) -> None:
         bucket=resolved.s3_bucket,
         region=resolved.s3_region,
         endpoint_url=(
-            str(resolved.s3_endpoint_url)
-            if resolved.s3_endpoint_url is not None
-            else None
+            str(resolved.s3_endpoint_url) if resolved.s3_endpoint_url is not None else None
         ),
         access_key_id=(
             resolved.s3_access_key_id.get_secret_value()

@@ -242,7 +242,9 @@ def create_admin_web_router(settings: Settings) -> APIRouter:
             result = await services.cms.publish_document(
                 context=context,
                 document_id=_uuid_target(target),
-                version_id=UUID(raw_version) if isinstance(raw_version, str) and raw_version else None,
+                version_id=UUID(raw_version)
+                if isinstance(raw_version, str) and raw_version
+                else None,
                 idempotency_key=key,
             )
         elif body.action == "model.availability":

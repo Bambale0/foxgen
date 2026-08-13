@@ -205,8 +205,18 @@ class AdminQueryService:
     async def finance(self, context: AdminContext) -> dict[str, object]:
         context.require(FINANCE_READ)
         async with self._database.session() as session:
-            available = int(await session.scalar(select(func.coalesce(func.sum(WalletAccount.available_units), 0))) or 0)
-            reserved = int(await session.scalar(select(func.coalesce(func.sum(WalletAccount.reserved_units), 0))) or 0)
+            available = int(
+                await session.scalar(
+                    select(func.coalesce(func.sum(WalletAccount.available_units), 0))
+                )
+                or 0
+            )
+            reserved = int(
+                await session.scalar(
+                    select(func.coalesce(func.sum(WalletAccount.reserved_units), 0))
+                )
+                or 0
+            )
             ledger_entries = int(await session.scalar(select(func.count(LedgerEntry.id))) or 0)
             completed_payments = int(
                 await session.scalar(
@@ -225,7 +235,10 @@ class AdminQueryService:
                 or 0
             )
             active_prices = int(
-                await session.scalar(select(func.count(ModelPrice.id)).where(ModelPrice.enabled.is_(True))) or 0
+                await session.scalar(
+                    select(func.count(ModelPrice.id)).where(ModelPrice.enabled.is_(True))
+                )
+                or 0
             )
         payload = {
             "wallet_available_units": available,
@@ -247,7 +260,9 @@ class AdminQueryService:
         limit: int,
     ) -> list[dict[str, object]]:
         context.require(PAYMENTS_READ)
-        statement = select(PaymentEvent).order_by(PaymentEvent.created_at.desc()).limit(_limit(limit))
+        statement = (
+            select(PaymentEvent).order_by(PaymentEvent.created_at.desc()).limit(_limit(limit))
+        )
         if status:
             statement = statement.where(PaymentEvent.status == status)
         if user_id is not None:
@@ -305,7 +320,9 @@ class AdminQueryService:
             ],
         }
 
-    async def tariff_versions(self, context: AdminContext, *, limit: int) -> list[dict[str, object]]:
+    async def tariff_versions(
+        self, context: AdminContext, *, limit: int
+    ) -> list[dict[str, object]]:
         context.require(TARIFFS_READ)
         async with self._database.session() as session:
             items = tuple(
@@ -342,7 +359,9 @@ class AdminQueryService:
         limit: int,
     ) -> list[dict[str, object]]:
         context.require(OPERATIONS_READ)
-        statement = select(OperationEvent).order_by(OperationEvent.created_at.desc()).limit(_limit(limit))
+        statement = (
+            select(OperationEvent).order_by(OperationEvent.created_at.desc()).limit(_limit(limit))
+        )
         if generation_id is not None:
             statement = statement.where(OperationEvent.generation_id == generation_id)
         if status:
@@ -358,7 +377,9 @@ class AdminQueryService:
         )
         return result
 
-    async def operation_detail(self, context: AdminContext, operation_id: UUID) -> dict[str, object]:
+    async def operation_detail(
+        self, context: AdminContext, operation_id: UUID
+    ) -> dict[str, object]:
         context.require(OPERATIONS_READ)
         async with self._database.session() as session:
             item = await session.get(OperationEvent, operation_id)
@@ -381,7 +402,10 @@ class AdminQueryService:
             root = await session.get(OperationEvent, operation_id)
             if root is None:
                 raise AdminNotFoundError("operation", str(operation_id))
-            conditions = [OperationEvent.id == root.id, OperationEvent.parent_operation_id == root.id]
+            conditions = [
+                OperationEvent.id == root.id,
+                OperationEvent.parent_operation_id == root.id,
+            ]
             if root.parent_operation_id is not None:
                 conditions.append(OperationEvent.id == root.parent_operation_id)
                 conditions.append(OperationEvent.parent_operation_id == root.parent_operation_id)
@@ -410,7 +434,9 @@ class AdminQueryService:
         limit: int,
     ) -> list[dict[str, object]]:
         context.require(SUPPORT_READ)
-        statement = select(SupportTicket).order_by(SupportTicket.updated_at.desc()).limit(_limit(limit))
+        statement = (
+            select(SupportTicket).order_by(SupportTicket.updated_at.desc()).limit(_limit(limit))
+        )
         if status:
             statement = statement.where(SupportTicket.status == status)
         if assignee_id is not None:
@@ -510,7 +536,9 @@ class AdminQueryService:
                     )
                 ).all()
             )
-        await self._executor.audit_read(context=context, action="notifications.campaigns", target_id=None)
+        await self._executor.audit_read(
+            context=context, action="notifications.campaigns", target_id=None
+        )
         return [_campaign_payload(item) for item in items]
 
     async def campaign_detail(self, context: AdminContext, campaign_id: UUID) -> dict[str, object]:
@@ -539,11 +567,23 @@ class AdminQueryService:
         context.require(PARTNERS_READ)
         async with self._database.session() as session:
             partners = int(await session.scalar(select(func.count(PartnerProfile.user_id))) or 0)
-            earned = int(await session.scalar(select(func.coalesce(func.sum(PartnerProfile.earned_units), 0))) or 0)
-            withdrawn = int(await session.scalar(select(func.coalesce(func.sum(PartnerProfile.withdrawn_units), 0))) or 0)
+            earned = int(
+                await session.scalar(
+                    select(func.coalesce(func.sum(PartnerProfile.earned_units), 0))
+                )
+                or 0
+            )
+            withdrawn = int(
+                await session.scalar(
+                    select(func.coalesce(func.sum(PartnerProfile.withdrawn_units), 0))
+                )
+                or 0
+            )
             pending = int(
                 await session.scalar(
-                    select(func.count(PartnerWithdrawal.id)).where(PartnerWithdrawal.status == "pending")
+                    select(func.count(PartnerWithdrawal.id)).where(
+                        PartnerWithdrawal.status == "pending"
+                    )
                 )
                 or 0
             )
@@ -563,12 +603,18 @@ class AdminQueryService:
         limit: int,
     ) -> list[dict[str, object]]:
         context.require(PARTNERS_READ)
-        statement = select(PartnerWithdrawal).order_by(PartnerWithdrawal.created_at.desc()).limit(_limit(limit))
+        statement = (
+            select(PartnerWithdrawal)
+            .order_by(PartnerWithdrawal.created_at.desc())
+            .limit(_limit(limit))
+        )
         if status:
             statement = statement.where(PartnerWithdrawal.status == status)
         async with self._database.session() as session:
             items = tuple((await session.scalars(statement)).all())
-        await self._executor.audit_read(context=context, action="partners.withdrawals", target_id=None)
+        await self._executor.audit_read(
+            context=context, action="partners.withdrawals", target_id=None
+        )
         return [
             {
                 "id": str(item.id),
@@ -590,7 +636,9 @@ class AdminQueryService:
             item = await session.get(PromoCode, normalized)
         if item is None:
             raise AdminNotFoundError("promo code", normalized)
-        await self._executor.audit_read(context=context, action="promo.detail", target_id=normalized)
+        await self._executor.audit_read(
+            context=context, action="promo.detail", target_id=normalized
+        )
         return {
             "code": item.code,
             "active": item.active,
@@ -610,7 +658,11 @@ class AdminQueryService:
         limit: int,
     ) -> list[dict[str, object]]:
         context.require(MODERATION_READ)
-        statement = select(PromptLibraryItem).order_by(PromptLibraryItem.created_at.desc()).limit(_limit(limit))
+        statement = (
+            select(PromptLibraryItem)
+            .order_by(PromptLibraryItem.created_at.desc())
+            .limit(_limit(limit))
+        )
         if status:
             statement = statement.where(PromptLibraryItem.status == status)
         async with self._database.session() as session:
@@ -624,15 +676,23 @@ class AdminQueryService:
             item = await session.get(PromptLibraryItem, item_id)
         if item is None:
             raise AdminNotFoundError("prompt library item", str(item_id))
-        await self._executor.audit_read(context=context, action="prompts.detail", target_id=str(item_id))
+        await self._executor.audit_read(
+            context=context, action="prompts.detail", target_id=str(item_id)
+        )
         return _prompt_payload(item)
 
     async def runtime(self, context: AdminContext) -> dict[str, object]:
         context.require(RUNTIME_READ)
         async with self._database.session() as session:
-            flags = tuple((await session.scalars(select(RuntimeFlag).order_by(RuntimeFlag.key))).all())
+            flags = tuple(
+                (await session.scalars(select(RuntimeFlag).order_by(RuntimeFlag.key))).all()
+            )
             models = tuple(
-                (await session.scalars(select(ModelAvailability).order_by(ModelAvailability.model_slug))).all()
+                (
+                    await session.scalars(
+                        select(ModelAvailability).order_by(ModelAvailability.model_slug)
+                    )
+                ).all()
             )
         await self._executor.audit_read(context=context, action="runtime.read", target_id=None)
         return {
@@ -664,7 +724,9 @@ class AdminQueryService:
             trends = tuple(
                 (
                     await session.scalars(
-                        select(TrendItem).where(TrendItem.active.is_(True)).order_by(TrendItem.created_at.desc())
+                        select(TrendItem)
+                        .where(TrendItem.active.is_(True))
+                        .order_by(TrendItem.created_at.desc())
                     )
                 ).all()
             )
@@ -827,7 +889,9 @@ def _cms_document_payload(item: CmsDocument) -> dict[str, object]:
         "id": str(item.id),
         "slug": item.slug,
         "title": item.title,
-        "published_version_id": str(item.published_version_id) if item.published_version_id else None,
+        "published_version_id": str(item.published_version_id)
+        if item.published_version_id
+        else None,
         "created_at": item.created_at.isoformat(),
         "updated_at": item.updated_at.isoformat(),
     }

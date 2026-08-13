@@ -135,11 +135,13 @@ def _xls_response(
         parts.append("<Row>")
         for column in columns:
             value = row.get(column)
-            data_type = "Number" if isinstance(value, (int, float)) and not isinstance(value, bool) else "String"
-            rendered = "" if value is None else str(value)
-            parts.append(
-                f'<Cell><Data ss:Type="{data_type}">{html.escape(rendered)}</Data></Cell>'
+            data_type = (
+                "Number"
+                if isinstance(value, (int, float)) and not isinstance(value, bool)
+                else "String"
             )
+            rendered = "" if value is None else str(value)
+            parts.append(f'<Cell><Data ss:Type="{data_type}">{html.escape(rendered)}</Data></Cell>')
         parts.append("</Row>")
     parts.extend(["</Table></Worksheet>", "</Workbook>"])
     return Response(

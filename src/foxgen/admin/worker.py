@@ -96,7 +96,9 @@ class AdminWorker:
     ) -> None:
         self._database = database
         self._sender = sender
-        self._payment_recheck_adapter = payment_recheck_adapter or UnavailablePaymentRecheckAdapter()
+        self._payment_recheck_adapter = (
+            payment_recheck_adapter or UnavailablePaymentRecheckAdapter()
+        )
         self._worker_id = worker_id
         self._batch_size = batch_size
         self._lease_seconds = lease_seconds
@@ -235,7 +237,9 @@ class AdminWorker:
                 return
             message = await session.get(SupportMessage, event.message_id)
             if message is None:
-                await self._fail_support(event_id, PermanentAdminJobError("Support message is missing"))
+                await self._fail_support(
+                    event_id, PermanentAdminJobError("Support message is missing")
+                )
                 return
             recipient_id = event.recipient_id
             text = str(event.payload.get("text") or message.body)
@@ -285,7 +289,9 @@ class AdminWorker:
 
         async with self._database.session() as session:
             async with session.begin():
-                delivery = await session.get(NotificationDelivery, delivery_id, with_for_update=True)
+                delivery = await session.get(
+                    NotificationDelivery, delivery_id, with_for_update=True
+                )
                 if delivery is None or delivery.status != "processing":
                     return
                 delivery.status = "sent"
@@ -420,8 +426,7 @@ class AdminWorker:
                             idempotency_key=ledger_key,
                             actor="system:admin-payment-worker",
                             reason=(
-                                f"Credit completed payment {payment.provider}/"
-                                f"{payment.external_id}"
+                                f"Credit completed payment {payment.provider}/{payment.external_id}"
                             ),
                             metadata_json={"payment_id": str(payment.id)},
                         )
@@ -529,7 +534,9 @@ class AdminWorker:
     async def _fail_notification(self, delivery_id: UUID, exc: Exception) -> None:
         async with self._database.session() as session:
             async with session.begin():
-                delivery = await session.get(NotificationDelivery, delivery_id, with_for_update=True)
+                delivery = await session.get(
+                    NotificationDelivery, delivery_id, with_for_update=True
+                )
                 if delivery is None or delivery.status != "processing":
                     return
                 ambiguous = isinstance(exc, AmbiguousAdminDeliveryError)
@@ -579,14 +586,18 @@ class AdminWorker:
     async def _refresh_campaign(self, campaign_id: UUID) -> None:
         async with self._database.session() as session:
             async with session.begin():
-                campaign = await session.get(NotificationCampaign, campaign_id, with_for_update=True)
+                campaign = await session.get(
+                    NotificationCampaign, campaign_id, with_for_update=True
+                )
                 if campaign is None or campaign.status != "running":
                     return
                 remaining = int(
                     await session.scalar(
                         select(func.count(NotificationDelivery.id)).where(
                             NotificationDelivery.campaign_id == campaign.id,
-                            NotificationDelivery.status.in_(("pending", "processing", "retry_wait")),
+                            NotificationDelivery.status.in_(
+                                ("pending", "processing", "retry_wait")
+                            ),
                         )
                     )
                     or 0

@@ -212,9 +212,7 @@ def create_app(
                 repository=SqlAlchemyGenerationRepository(database),
                 rate_limiter=RedisSubmissionRateLimiter(
                     redis.client,
-                    user_limit_per_minute=(
-                        resolved_settings.submission_user_rate_limit_per_minute
-                    ),
+                    user_limit_per_minute=(resolved_settings.submission_user_rate_limit_per_minute),
                     global_limit_per_minute=(
                         resolved_settings.submission_global_rate_limit_per_minute
                     ),

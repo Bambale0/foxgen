@@ -66,7 +66,9 @@ class AdminPartnerService:
             withdrawal.reviewed_by = context.user_id
             withdrawal.reviewed_at = func.now()
             if target == "paid":
-                partner = await session.get(PartnerProfile, withdrawal.user_id, with_for_update=True)
+                partner = await session.get(
+                    PartnerProfile, withdrawal.user_id, with_for_update=True
+                )
                 if partner is not None:
                     partner.withdrawn_units += withdrawal.amount_units
             return {"withdrawal_id": str(withdrawal.id), "status": target}

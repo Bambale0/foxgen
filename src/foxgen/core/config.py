@@ -104,12 +104,16 @@ class Settings(BaseSettings):
             try:
                 result.add(int(value))
             except ValueError as exc:
-                raise ValueError("FOXGEN_ADMIN_SUPERUSER_IDS must contain comma-separated integers") from exc
+                raise ValueError(
+                    "FOXGEN_ADMIN_SUPERUSER_IDS must contain comma-separated integers"
+                ) from exc
         return frozenset(result)
 
     @property
     def admin_networks(self) -> tuple[str, ...]:
-        values = tuple(value.strip() for value in self.admin_network_allowlist.split(",") if value.strip())
+        values = tuple(
+            value.strip() for value in self.admin_network_allowlist.split(",") if value.strip()
+        )
         return values or ("127.0.0.1/32", "::1/128")
 
 
