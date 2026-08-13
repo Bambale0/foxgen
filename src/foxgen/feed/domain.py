@@ -99,6 +99,12 @@ class PublicationView:
 
 
 @dataclass(frozen=True, slots=True)
+class RemixSource:
+    publication: PublicationView
+    storage_keys: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class FeedComment:
     id: UUID
     publication_id: UUID
