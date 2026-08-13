@@ -9,6 +9,7 @@ from foxgen.infra.admin_models import AdminUser
 from foxgen.infra.database import Database
 
 
+ADMIN_MANAGE = "admin:manage"
 USERS_READ = "users:read"
 USERS_WRITE = "users:write"
 GENERATIONS_READ = "generations:read"
@@ -40,6 +41,7 @@ EXPORTS_READ = "exports:read"
 
 ALL_SCOPES = frozenset(
     {
+        ADMIN_MANAGE,
         USERS_READ,
         USERS_WRITE,
         GENERATIONS_READ,
