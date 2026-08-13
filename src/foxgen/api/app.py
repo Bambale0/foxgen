@@ -10,6 +10,11 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, ValidationError
 
 from foxgen import __version__
+from foxgen.admin.availability import SqlAlchemyModelAvailabilityGuard
+from foxgen.admin.errors import AdminError
+from foxgen.admin.services import AdminServices
+from foxgen.api.admin import create_admin_router
+from foxgen.api.admin_web import create_admin_web_router
 from foxgen.api.billing import BillingServiceProtocol, create_billing_router
 from foxgen.api.generations import (
     GenerationOperationsProtocol,
@@ -180,6 +185,7 @@ def create_app(
     billing_service: BillingServiceProtocol | None = None,
     generation_operations: GenerationOperationsProtocol | None = None,
     reconciliation_service: ReconciliationProtocol | None = None,
+    admin_services: AdminServices | None = None,
 ) -> FastAPI:
     resolved_settings = settings or get_settings()
     registry = ModelRegistry()
@@ -196,19 +202,23 @@ def create_app(
         app.state.database = database
         app.state.redis = redis
 
+        if app.state.admin_services is None:
+            app.state.admin_services = AdminServices.build(
+                database,
+                bootstrap_superuser_ids=resolved_settings.admin_superuser_id_set,
+            )
         if app.state.submission_service is None:
             app.state.submission_service = SubmissionService(
                 repository=SqlAlchemyGenerationRepository(database),
                 rate_limiter=RedisSubmissionRateLimiter(
                     redis.client,
-                    user_limit_per_minute=(
-                        resolved_settings.submission_user_rate_limit_per_minute
-                    ),
+                    user_limit_per_minute=(resolved_settings.submission_user_rate_limit_per_minute),
                     global_limit_per_minute=(
                         resolved_settings.submission_global_rate_limit_per_minute
                     ),
                 ),
                 registry=registry,
+                availability_guard=SqlAlchemyModelAvailabilityGuard(database),
                 user_concurrency_limit=resolved_settings.submission_user_concurrency_limit,
                 global_concurrency_limit=resolved_settings.submission_global_concurrency_limit,
             )
@@ -239,8 +249,11 @@ def create_app(
     app.state.billing_service = billing_service
     app.state.generation_operations = generation_operations
     app.state.reconciliation_service = reconciliation_service
+    app.state.admin_services = admin_services
     app.include_router(create_billing_router(resolved_settings))
     app.include_router(create_generation_router(resolved_settings))
+    app.include_router(create_admin_router(resolved_settings))
+    app.include_router(create_admin_web_router(resolved_settings))
 
     @app.exception_handler(FoxGenError)
     async def foxgen_error_handler(request: Request, exc: FoxGenError) -> JSONResponse:
@@ -251,6 +264,18 @@ def create_app(
                 "error": exc.code,
                 "message": exc.public_message,
                 "retryable": exc.retryable,
+            },
+        )
+
+    @app.exception_handler(AdminError)
+    async def admin_error_handler(request: Request, exc: AdminError) -> JSONResponse:
+        del request
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={
+                "error": exc.code,
+                "message": exc.message,
+                "details": exc.details,
             },
         )
 

@@ -7,6 +7,8 @@ from aiogram import Bot
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 
+from foxgen.admin.rate_limit import RateLimitedAdminSender
+from foxgen.admin.worker import AdminWorker, TelegramAdminDeliverySender
 from foxgen.application.delivery import MediaPipeline
 from foxgen.application.lifecycle import GenerationWorker
 from foxgen.core.config import Settings, get_settings
@@ -78,13 +80,27 @@ async def run(settings: Settings | None = None) -> None:
         poll_interval=timedelta(seconds=resolved.provider_poll_interval_seconds),
         stale_submitting_after=timedelta(seconds=resolved.stale_submitting_seconds),
     )
+    admin_sender = RateLimitedAdminSender(
+        TelegramAdminDeliverySender(bot),
+        rate_per_second=resolved.admin_notification_rate_per_second,
+    )
+    admin_worker = AdminWorker(
+        database=database,
+        sender=admin_sender,
+        worker_id=f"{worker_id}:admin",
+        batch_size=resolved.admin_worker_batch_size,
+        lease_seconds=resolved.admin_worker_lease_seconds,
+        max_attempts=resolved.admin_worker_max_attempts,
+        notification_rate_per_second=resolved.admin_notification_rate_per_second,
+    )
 
     try:
         while True:
             processed = await worker.run_once()
             polled = await worker.poll_once()
             reconciled = await worker.reconcile_once(datetime.now(timezone.utc))
-            if processed == 0 and polled == 0 and reconciled == 0:
+            admin_processed = await admin_worker.run_once()
+            if processed == 0 and polled == 0 and reconciled == 0 and admin_processed == 0:
                 await asyncio.sleep(resolved.worker_loop_interval_seconds)
     finally:
         await bot.session.close()

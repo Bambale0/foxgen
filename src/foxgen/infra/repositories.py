@@ -6,6 +6,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from foxgen.application.submissions import GenerationSnapshot
 from foxgen.core.errors import ErrorCode, SubmissionError
 from foxgen.domain.models import ACTIVE_GENERATION_STATUSES, GenerationStatus, MediaKind
+from foxgen.infra.admin_user_models import UserRestriction
 from foxgen.infra.billing import reserve_generation_charge
 from foxgen.infra.database import Database, Generation, OutboxEvent, User
 
@@ -68,6 +69,14 @@ class SqlAlchemyGenerationRepository:
                 )
                 if existing is not None:
                     return _snapshot(existing), False
+
+                restriction = await session.get(UserRestriction, user_id)
+                if restriction is not None and restriction.blocked:
+                    raise SubmissionError(
+                        ErrorCode.AUTHORIZATION,
+                        "Доступ к генерациям для этого аккаунта ограничен.",
+                        details={"reason": restriction.reason},
+                    )
 
                 global_active = await session.scalar(
                     select(func.count(Generation.id)).where(
@@ -139,9 +148,7 @@ class SqlAlchemyGenerationRepository:
                             deduplication_key=f"generation.submit:{generation.id}",
                             payload={"generation_id": str(generation.id)},
                         )
-                        .on_conflict_do_nothing(
-                            index_elements=[OutboxEvent.deduplication_key]
-                        )
+                        .on_conflict_do_nothing(index_elements=[OutboxEvent.deduplication_key])
                     )
                     return _snapshot(generation), True
 
