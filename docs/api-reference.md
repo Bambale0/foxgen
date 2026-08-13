@@ -4,7 +4,7 @@ This reference describes routes wired by the current FastAPI application. The pu
 
 ## Authentication classes
 
-FoxGen deliberately uses separate credentials for separate trust boundaries.
+FoxGen uses separate credentials for separate trust boundaries.
 
 ### Public/read-only
 
@@ -20,7 +20,7 @@ Legacy `/v1/admin/*` billing/reconciliation routes use the separately protected 
 
 ### Full internal admin control plane
 
-`/internal/admin/*` uses all of:
+`/internal/admin/*` requires all of:
 
 - source address in `FOXGEN_ADMIN_NETWORK_ALLOWLIST`;
 - `X-Admin-User-Id`;
@@ -29,13 +29,15 @@ Legacy `/v1/admin/*` billing/reconciliation routes use the separately protected 
 - `X-Admin-Signature`;
 - server-side RBAC through `AdminPolicy`.
 
-The signature input is:
+Signature input:
 
 ```text
 <timestamp>\n<METHOD>\n<path>\n<request_id>\n<exact raw body bytes>
 ```
 
-Admin writes require `Idempotency-Key`. Destructive/expensive writes additionally require `X-Admin-Confirm: CONFIRM` where the route enforces manual confirmation.
+Admin writes require `Idempotency-Key`. Destructive/expensive writes additionally require `X-Admin-Confirm: CONFIRM` where enforced by the route/service.
+
+# Core API
 
 ## Health
 
@@ -48,13 +50,13 @@ Admin writes require `Idempotency-Key`. Destructive/expensive writes additionall
 
 | Method | Path | Auth | Purpose |
 |---|---|---|---|
-| GET | `/v1/models` | none | Catalog and readiness flags |
-| GET | `/v1/models/{slug}` | none | Model detail + local input JSON schema |
+| GET | `/v1/models` | none | Catalog/readiness flags |
+| GET | `/v1/models/{slug}` | none | Model detail + local input schema |
 | POST | `/v1/models/{slug}/validate` | none | Free local contract validation |
 | POST | `/v1/models/{slug}/tasks` | trusted internal | Atomic paid generation admission |
 | POST | `/webhooks/kie` | KIE HMAC | Verified provider callback intake |
 
-Task admission validates authentication, positive user identity, idempotency key, exact model contract, runtime model availability, rate/concurrency limits, active price and sufficient balance before committing generation/reservation/outbox state.
+Paid task admission validates authentication, positive user identity, idempotency, strict model contract, registry/runtime availability, rate/concurrency limits, active price and sufficient balance before generation/reservation/outbox commit.
 
 ## Billing and wallet
 
@@ -63,10 +65,8 @@ Task admission validates authentication, positive user identity, idempotency key
 | GET | `/v1/prices` | none | Active model prices |
 | GET | `/v1/users/{user_id}/balance` | trusted internal | Wallet snapshot |
 | GET | `/v1/users/{user_id}/ledger` | trusted internal | Immutable ledger history |
-| POST | `/v1/admin/users/{user_id}/balance-adjustments` | legacy billing admin | Idempotent manual wallet adjustment |
-| PUT | `/v1/admin/prices/{model_slug}` | legacy billing admin | Publish new model-price version |
-
-The full admin control plane also provides balance/tariff actions through shared admin services and command audit/idempotency.
+| POST | `/v1/admin/users/{user_id}/balance-adjustments` | legacy billing admin | Idempotent manual adjustment |
+| PUT | `/v1/admin/prices/{model_slug}` | legacy billing admin | Publish model-price version |
 
 ## Generation operations
 
@@ -74,30 +74,44 @@ The full admin control plane also provides balance/tariff actions through shared
 |---|---|---|---|
 | GET | `/v1/generations/{generation_id}` | trusted internal + owner ID | Owner-scoped lifecycle status |
 | POST | `/v1/generations/{generation_id}/cancel` | trusted internal + owner ID | Pre-provider cancellation |
-| GET | `/v1/admin/generations/stuck` | legacy billing admin | Read-only stuck-generation report |
+| GET | `/v1/admin/generations/stuck` | legacy billing admin | Stuck-generation report |
 | POST | `/v1/admin/generations/{id}/resolve-unknown` | legacy billing admin | Evidence-based `submission_unknown` resolution |
 | GET | `/v1/admin/reconciliation` | legacy billing admin | Read-only consistency report |
-| POST | `/v1/admin/reconciliation/run` | legacy billing admin | Report or deterministic safe fixes |
+| POST | `/v1/admin/reconciliation/run` | legacy billing admin | Report/deterministic safe fixes |
 | POST | `/v1/admin/generations/{id}/resolve-delivery` | legacy billing admin | Manual `delivery_unknown` resolution |
 
-Cancellation is intentionally rejected once provider submission may have started. Unknown provider or Telegram outcomes are never resolved through blind retry.
+Cancellation is rejected once provider submission may have started. Unknown provider/Telegram outcomes are never resolved through blind retry.
 
 # Signed internal admin API
 
-Prefix: `/internal/admin`.
+All paths below are relative to:
 
-## Health and summary
+```text
+/internal/admin
+```
 
-| Method | Path |
-|---|---|
-| GET | `/health` |
-| GET | `/summary` |
-| GET | `/finance` |
-| GET | `/audit` |
-| GET | `/ai/diagnostics` |
-| GET | `/commands/{command_id}` |
+Unless noted otherwise, every route still requires signed admin authentication/RBAC. A table marking a route `read` does not mean it is public.
 
-`/ai/diagnostics` is read-only and additionally requires the AI-admin scope.
+## Health, analytics and audit
+
+| Method | Path | Semantics |
+|---|---|---|
+| GET | `/health` | signed/RBAC health identity check |
+| GET | `/summary` | operational summary |
+| GET | `/analytics?hours=24` | bounded analytics snapshot |
+| GET | `/finance` | finance dashboard |
+| GET | `/audit` | audit event list |
+| GET | `/commands/{command_id}` | command/audit result detail |
+| GET | `/ai/diagnostics` | read-only diagnostic synthesis; AI-admin scope required |
+
+## Admin identity/RBAC
+
+| Method | Path | Write semantics |
+|---|---|---|
+| GET | `/admins` | list durable administrators |
+| PUT | `/admins/{user_id}` | idempotent + confirm role/scopes/active update |
+
+Bootstrap IDs from environment are only initial access. Durable role/scopes belong here/`admin_users`.
 
 ## Users
 
@@ -108,14 +122,22 @@ Prefix: `/internal/admin`.
 | POST | `/users/{user_id}/unblock` | idempotent + confirm |
 | POST | `/users/{user_id}/balance-adjustments` | idempotent + confirm |
 
-User blocking is rechecked at transactional paid-generation admission; it is not only a UI restriction.
+Blocked-user state is rechecked at transactional paid admission.
 
-## Generations and operations
+## Generations and previews
+
+| Method | Path | Semantics |
+|---|---|---|
+| GET | `/generations` | generation list/filter |
+| POST | `/previews/generation` | privileged generation input/model preview; no paid submit |
+
+The preview endpoint validates/normalizes privileged generation input through admin policy; it does not replace normal paid-admission gates.
+
+## Operations
 
 | Method | Path | Write semantics |
 |---|---|---|
-| GET | `/generations` | filter by user/status |
-| GET | `/operations` | filter/list |
+| GET | `/operations` | list/filter |
 | GET | `/operations/{operation_id}` | detail with sensitive payload redaction |
 | GET | `/operations/{operation_id}/timeline` | parent/child history |
 | POST | `/operations/{operation_id}/replay` | idempotent + confirm; safe local work only |
@@ -132,7 +154,7 @@ Admin replay never replays the billable `generation.submit` boundary.
 | POST | `/payments/{payment_id}/recheck` | idempotent, worker-backed |
 | POST | `/payments/{payment_id}/reprocess` | idempotent + confirm, worker-backed |
 
-Payment credit uses a deterministic immutable-ledger key, so repeated reprocessing cannot double-credit one payment.
+Payment credit uses a deterministic immutable-ledger key, preventing double credit across repeated reprocess commands.
 
 ## Tariffs and pricing
 
@@ -143,7 +165,7 @@ Payment credit uses a deterministic immutable-ledger key, so repeated reprocessi
 | GET | `/tariffs/versions/{version_id}` | version detail |
 | POST | `/tariffs/publish` | idempotent + confirm |
 
-The versioned tariff payload is the administrative surface for packages and product pricing dimensions. Historical published versions are retained.
+The versioned tariff payload is the administrative history for packages/product pricing dimensions. Runtime per-model generation pricing remains enforced by the billing admission layer.
 
 ## Support
 
@@ -155,7 +177,7 @@ The versioned tariff payload is the administrative surface for packages and prod
 | POST | `/tickets/{ticket_id}/update` | idempotent |
 | POST | `/tickets/{ticket_id}/reply` | idempotent + confirm; durable outbox |
 
-A reply request commits a support message/outbox record. Telegram delivery is performed later by the admin worker.
+A reply request commits support message/outbox state. Telegram delivery occurs later in the worker.
 
 ## CMS
 
@@ -166,7 +188,7 @@ A reply request commits a support message/outbox record. Telegram delivery is pe
 | POST | `/cms/documents` | idempotent save/new version |
 | POST | `/cms/documents/{document_id}/publish` | idempotent + confirm |
 
-Published content is versioned; old published versions are not mutated in place.
+Published content is versioned; historical published versions are not overwritten.
 
 ## Notification campaigns / broadcasts
 
@@ -180,17 +202,15 @@ Published content is versioned; old published versions are not mutated in place.
 | POST | `/notifications/campaigns/{campaign_id}/start` | idempotent + confirm |
 | POST | `/notifications/campaigns/{campaign_id}/cancel` | idempotent + confirm |
 
-Starting a campaign materializes recipient delivery rows once; mass send never runs inline in the HTTP request.
+Campaign start materializes durable recipient deliveries once. Mass send never runs inline in the request lifecycle.
 
 ## Partners
 
 | Method | Path | Write semantics |
 |---|---|---|
 | GET | `/partners/summary` | partner analytics |
-| GET | `/partners/withdrawals` | queue/filter |
+| GET | `/partners/withdrawals` | withdrawal queue/filter |
 | POST | `/partners/withdrawals/{withdrawal_id}/actions` | idempotent + confirm |
-
-Allowed withdrawal state transitions are enforced in the shared service/domain layer.
 
 ## Promos
 
@@ -200,17 +220,15 @@ Allowed withdrawal state transitions are enforced in the shared service/domain l
 | POST | `/promos` | idempotent create |
 | POST | `/promos/{code}/active` | idempotent + confirm enable/disable |
 
-Promo codes are normalized and validated server-side.
+Promo input is normalized/validated server-side.
 
 ## Prompt library moderation
 
 | Method | Path | Write semantics |
 |---|---|---|
-| GET | `/prompts` | filter by moderation status |
+| GET | `/prompts` | filter/list by status |
 | GET | `/prompts/{item_id}` | detail |
 | POST | `/prompts/{item_id}/moderate` | idempotent + confirm |
-
-Moderation actions cover approval/rejection/deactivation according to current service state rules.
 
 ## Runtime and model availability
 
@@ -220,7 +238,7 @@ Moderation actions cover approval/rejection/deactivation according to current se
 | POST | `/runtime/flags/{key}` | idempotent + confirm |
 | POST | `/models/{model_slug}/availability` | idempotent + confirm |
 
-Runtime model availability is revalidated before paid admission. Disabling a model does not require application deployment.
+Runtime model availability is revalidated before paid admission.
 
 ## Moderation backend
 
@@ -231,24 +249,46 @@ Runtime model availability is revalidated before paid admission. Disabling a mod
 | POST | `/trends/{trend_id}/remove` | idempotent + confirm |
 | POST | `/feed/{content_id}/moderate` | idempotent + confirm |
 
-These are backend administrative contracts. Their presence does not imply the public Mini App UI is implemented.
+These are backend administrative contracts. They do not imply that the public Mini App moderation UI is implemented.
 
 ## Exports
 
-| Method | Path |
-|---|---|
-| GET | `/exports/users.csv` |
-| GET | `/exports/finance.csv` |
+| Method | Path | Format |
+|---|---|---|
+| GET | `/exports/users.csv` | UTF-8 CSV |
+| GET | `/exports/finance.csv` | UTF-8 CSV |
+| GET | `/exports/users.xls` | SpreadsheetML 2003 / Excel-readable XLS |
+| GET | `/exports/finance.xls` | SpreadsheetML 2003 / Excel-readable XLS |
 
-Telegram `/admin` also exposes operator export actions including XLS-compatible outputs where implemented by the bot adapter.
+The XLS endpoints intentionally generate SpreadsheetML without adding a heavyweight mutable spreadsheet library to the production image.
 
-## Error/idempotency behavior
+## Internal operator web
 
-For a write command, the admin command executor records the request fingerprint and result. Repeating the same `(admin, action, idempotency key)` with the same effective request returns the stored result and sets `replayed`; reusing the key for different parameters returns an idempotency conflict.
+When `FOXGEN_ADMIN_WEB_ENABLED=true`, the application also exposes an internal operator surface under:
 
-Authentication/authorization failure is always server-side. No hidden button, copied callback or forged operator request bypasses policy.
+```text
+/internal/admin/ui
+```
 
-## Raw-body signing example
+and protected session/action endpoints defined by the admin web routers. This surface is backend-only and uses server-confirmed admin policy/session behavior. It is not the public Mini App.
+
+For machine integrations, prefer the explicit signed JSON API documented above.
+
+# Idempotency and error semantics
+
+For a write command, the admin command executor records request fingerprint and result.
+
+```text
+same (admin, action, key) + same effective request
+  -> stored result, replayed=true
+
+same (admin, action, key) + changed effective request
+  -> idempotency conflict
+```
+
+Authentication/authorization failure is always server-side. Hidden buttons, copied callback data or forged operator actions do not bypass policy.
+
+# Raw-body signing example
 
 Pseudo-code:
 
@@ -258,6 +298,6 @@ canonical = timestamp + "\n" + method + "\n" + path + "\n" + request_id + "\n" +
 signature = hex(HMAC-SHA256(admin_hmac_key, canonical))
 ```
 
-Do not JSON-reserialize a body after signing it. Query parameters are not included in the current signature string; the URL path is.
+Do not JSON-reserialize after signing. Query parameters are not included in the current canonical signature string; the URL path is.
 
-See `admin-control-plane.md` for rollout and security rules.
+See `admin-control-plane.md` for roles, confirmation, rollout and security rules.
