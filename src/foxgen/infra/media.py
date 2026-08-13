@@ -8,10 +8,12 @@ import tempfile
 from pathlib import Path
 from typing import BinaryIO
 from urllib.parse import unquote, urlparse
+from uuid import UUID
 
 import boto3  # type: ignore[import-untyped]
 import httpx
 from aiogram import Bot
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from botocore.config import Config  # type: ignore[import-untyped]
 
 from foxgen.application.media import DownloadedMedia, StoredMedia
@@ -206,13 +208,31 @@ class TelegramMediaSender:
         recipient_id: int,
         urls: list[str],
         caption: str,
+        generation_id: UUID,
     ) -> list[int]:
+        generation_hex = generation_id.hex
+        publication_actions = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text="Опубликовать в ленту",
+                        callback_data=f"feed:publish:{generation_hex}:f",
+                    ),
+                    InlineKeyboardButton(
+                        text="Добавить в профиль",
+                        callback_data=f"feed:publish:{generation_hex}:p",
+                    ),
+                ],
+                [InlineKeyboardButton(text="Открыть ленту", callback_data="feed:open")],
+            ]
+        )
         message_ids: list[int] = []
         for index, url in enumerate(urls):
             message = await self._bot.send_document(
                 chat_id=recipient_id,
                 document=url,
                 caption=caption if index == 0 else None,
+                reply_markup=publication_actions if index == 0 else None,
                 disable_content_type_detection=False,
             )
             message_ids.append(message.message_id)
@@ -266,7 +286,9 @@ def _content_length(value: str | None) -> int | None:
 
 def _safe_filename(url: str, content_type: str) -> str:
     raw_name = unquote(Path(urlparse(url).path).name)
-    clean = "".join(character for character in raw_name if character.isalnum() or character in "-_.")
+    clean = "".join(
+        character for character in raw_name if character.isalnum() or character in "-_."
+    )
     if clean and len(clean) <= 120:
         return clean
     extension = mimetypes.guess_extension(content_type) or ".bin"
