@@ -7,12 +7,7 @@ from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command, CommandStart
 from aiogram.filters.command import CommandObject
 from aiogram.fsm.context import FSMContext
-from aiogram.types import (
-    CallbackQuery,
-    InlineKeyboardButton,
-    InlineKeyboardMarkup,
-    Message,
-)
+from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
 from foxgen.bot.api_client import (
     FeedCommentView,
@@ -39,7 +34,13 @@ async def feed_command(
     api_client: FoxGenApiClient,
 ) -> None:
     await state.clear()
-    await _send_feed_page(message, api_client, user_id=_message_user_id(message), source="recent", offset=0)
+    await _send_feed_page(
+        message,
+        api_client,
+        user_id=_message_user_id(message),
+        source="recent",
+        offset=0,
+    )
 
 
 @router.callback_query(F.data == "feed:open")
@@ -62,8 +63,7 @@ async def open_feed(
 
 @router.callback_query(F.data.startswith("feed:src:"))
 async def switch_feed_source(callback: CallbackQuery, api_client: FoxGenApiClient) -> None:
-    code = (callback.data or "").rpartition(":")[2]
-    source = _SOURCE_CODES.get(code)
+    source = _SOURCE_CODES.get((callback.data or "").rpartition(":")[2])
     if source is None:
         await callback.answer("Неизвестный раздел ленты.", show_alert=True)
         return
@@ -132,6 +132,7 @@ async def own_profile(
 async def author_profile(callback: CallbackQuery, api_client: FoxGenApiClient) -> None:
     slug = (callback.data or "").split(":", 2)[2]
     if slug == "me":
+        await callback.answer()
         return
     if callback.message:
         await _send_profile_page(
@@ -172,7 +173,7 @@ async def profile_page(callback: CallbackQuery, api_client: FoxGenApiClient) -> 
 async def open_post(callback: CallbackQuery, api_client: FoxGenApiClient) -> None:
     publication_id = (callback.data or "").rpartition(":")[2]
     try:
-        publication = await api_client.feed_publication(
+        item = await api_client.feed_publication(
             user_id=callback.from_user.id,
             publication_id=publication_id,
         )
@@ -180,7 +181,7 @@ async def open_post(callback: CallbackQuery, api_client: FoxGenApiClient) -> Non
         await callback.answer(exc.message, show_alert=True)
         return
     if callback.message:
-        await _send_publication(callback.message, publication)
+        await _send_publication(callback.message, item)
     await callback.answer()
 
 
@@ -211,26 +212,38 @@ async def show_comments(callback: CallbackQuery, api_client: FoxGenApiClient) ->
     except FoxGenApiError as exc:
         await callback.answer(exc.message, show_alert=True)
         return
-    text = _comments_text(comments)
-    keyboard = InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text="Написать комментарий",
-                    callback_data=f"feed:comment:{_uuid_hex(publication_id)}:{_surface_code(surface)}",
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    text="К публикации",
-                    callback_data=f"feed:post:{_uuid_hex(publication_id)}",
-                )
-            ],
-        ]
-    )
     if callback.message:
-        await callback.message.answer(text, reply_markup=keyboard)
+        await callback.message.answer(
+            _comments_text(comments),
+            reply_markup=InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [
+                        InlineKeyboardButton(
+                            text="Написать комментарий",
+                            callback_data=(
+                                f"feed:comment:{_uuid_hex(publication_id)}:"
+                                f"{_surface_code(surface)}"
+                            ),
+                        )
+                    ],
+                    [
+                        InlineKeyboardButton(
+                            text="К публикации",
+                            callback_data=f"feed:post:{_uuid_hex(publication_id)}",
+                        )
+                    ],
+                ]
+            ),
+        )
     await callback.answer()
+
+
+@router.callback_query(FeedStates.waiting_comment, F.data == "feed:comment:cancel")
+async def cancel_comment(callback: CallbackQuery, state: FSMContext) -> None:
+    await state.clear()
+    await callback.answer("Отменено")
+    if callback.message:
+        await callback.message.answer("Комментарий не отправлен.")
 
 
 @router.callback_query(F.data.startswith("feed:comment:"))
@@ -254,14 +267,6 @@ async def begin_comment(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer()
 
 
-@router.callback_query(FeedStates.waiting_comment, F.data == "feed:comment:cancel")
-async def cancel_comment(callback: CallbackQuery, state: FSMContext) -> None:
-    await state.clear()
-    await callback.answer("Отменено")
-    if callback.message:
-        await callback.message.answer("Комментарий не отправлен.")
-
-
 @router.message(FeedStates.waiting_comment, F.text)
 async def receive_comment(
     message: Message,
@@ -275,13 +280,12 @@ async def receive_comment(
         await state.clear()
         await message.answer("Черновик комментария устарел. Откройте публикацию снова.")
         return
-    text = (message.text or "").strip()
     try:
         await api_client.add_feed_comment(
             user_id=_message_user_id(message),
             publication_id=publication_id,
             surface=surface,
-            text=text,
+            text=(message.text or "").strip(),
         )
     except FoxGenApiError as exc:
         await message.answer(exc.message)
@@ -328,13 +332,17 @@ async def share_publication(
     except FoxGenApiError as exc:
         await callback.answer(exc.message, show_alert=True)
         return
-    share_url = "https://t.me/share/url?url=" + quote(deep_link, safe="")
     if callback.message:
         await callback.message.answer(
             f"Ссылка на публикацию:\n<code>{escape(deep_link)}</code>",
             reply_markup=InlineKeyboardMarkup(
                 inline_keyboard=[
-                    [InlineKeyboardButton(text="Поделиться", url=share_url)]
+                    [
+                        InlineKeyboardButton(
+                            text="Поделиться",
+                            url="https://t.me/share/url?url=" + quote(deep_link, safe=""),
+                        )
+                    ]
                 ]
             ),
         )
@@ -347,12 +355,11 @@ async def remix_publication(
     state: FSMContext,
     api_client: FoxGenApiClient,
 ) -> None:
-    publication_id = (callback.data or "").rpartition(":")[2]
     await _start_remix(
         state=state,
         api_client=api_client,
         user_id=callback.from_user.id,
-        publication_id=publication_id,
+        publication_id=(callback.data or "").rpartition(":")[2],
         callback=callback,
     )
 
@@ -363,25 +370,26 @@ async def publish_generation(callback: CallbackQuery, api_client: FoxGenApiClien
     if len(parts) != 4 or parts[3] not in {"f", "p"}:
         await callback.answer("Кнопка устарела.", show_alert=True)
         return
+    scope = "feed" if parts[3] == "f" else "profile"
     try:
-        generation_id = str(UUID(parts[2]))
-        scope = "feed" if parts[3] == "f" else "profile"
-        publication = await api_client.publish(
+        item = await api_client.publish(
             user_id=callback.from_user.id,
-            generation_id=generation_id,
+            generation_id=str(UUID(parts[2])),
             scope=scope,
             prompt_visible=True,
         )
-    except (ValueError, FoxGenApiError) as exc:
-        message = exc.message if isinstance(exc, FoxGenApiError) else "Некорректный ID генерации."
-        await callback.answer(message, show_alert=True)
+    except ValueError:
+        await callback.answer("Некорректный ID генерации.", show_alert=True)
+        return
+    except FoxGenApiError as exc:
+        await callback.answer(exc.message, show_alert=True)
         return
     await callback.answer(
         "Опубликовано в ленте." if scope == "feed" else "Добавлено в профиль.",
         show_alert=True,
     )
     if callback.message:
-        await _send_publication(callback.message, publication)
+        await _send_publication(callback.message, item)
 
 
 @router.callback_query(F.data.startswith("feed:unpub:"))
@@ -409,18 +417,19 @@ async def deep_link_start(
 ) -> None:
     target = parse_start_param(command.args)
     if target is None:
+        await state.clear()
+        await message.answer("Главное меню", reply_markup=main_menu())
         return
     user_id = _message_user_id(message)
     await state.clear()
     try:
         if target.kind == DeepLinkKind.POST and target.publication_id is not None:
-            publication = await api_client.feed_publication(
+            item = await api_client.feed_publication(
                 user_id=user_id,
                 publication_id=str(target.publication_id),
             )
-            await _send_publication(message, publication)
-            return
-        if target.kind == DeepLinkKind.PROFILE and target.profile_slug is not None:
+            await _send_publication(message, item)
+        elif target.kind == DeepLinkKind.PROFILE and target.profile_slug is not None:
             await _send_profile_page(
                 message,
                 api_client,
@@ -429,8 +438,7 @@ async def deep_link_start(
                 offset=0,
                 header=True,
             )
-            return
-        if target.kind == DeepLinkKind.REMIX and target.publication_id is not None:
+        elif target.kind == DeepLinkKind.REMIX and target.publication_id is not None:
             await _start_remix(
                 state=state,
                 api_client=api_client,
@@ -438,7 +446,6 @@ async def deep_link_start(
                 publication_id=str(target.publication_id),
                 message=message,
             )
-            return
     except FoxGenApiError as exc:
         await message.answer(exc.message, reply_markup=main_menu())
 
@@ -457,19 +464,14 @@ async def _send_feed_page(
         await message.answer(exc.message, reply_markup=_feed_root_keyboard())
         return
     if not items:
-        await message.answer(
-            "В этом разделе пока нет публикаций.",
-            reply_markup=_feed_root_keyboard(),
-        )
+        await message.answer("В этом разделе пока нет публикаций.", reply_markup=_feed_root_keyboard())
         return
     code = _source_code(source)
     await _send_publication(
         message,
         items[0],
         next_callback=f"feed:page:{code}:{offset + 1}",
-        previous_callback=(
-            f"feed:page:{code}:{max(0, offset - 1)}" if offset > 0 else None
-        ),
+        previous_callback=f"feed:page:{code}:{offset - 1}" if offset > 0 else None,
         title=_SOURCE_TITLES.get(source, "Лента"),
     )
 
@@ -501,17 +503,14 @@ async def _send_profile_page(
             f"Публичный код: <code>{escape(page.profile.public_slug)}</code>"
         )
     if not page.items:
-        await message.answer(
-            "В профиле пока нет опубликованных работ.",
-            reply_markup=_feed_root_keyboard(),
-        )
+        await message.answer("В профиле пока нет опубликованных работ.", reply_markup=_feed_root_keyboard())
         return
     await _send_publication(
         message,
         page.items[0],
         next_callback=f"feed:pp:{page.profile.public_slug}:{offset + 1}",
         previous_callback=(
-            f"feed:pp:{page.profile.public_slug}:{max(0, offset - 1)}" if offset > 0 else None
+            f"feed:pp:{page.profile.public_slug}:{offset - 1}" if offset > 0 else None
         ),
         title="Профиль",
     )
@@ -550,7 +549,7 @@ async def _set_like(
 ) -> None:
     publication_id = (callback.data or "").rpartition(":")[2]
     try:
-        publication = await api_client.set_feed_like(
+        item = await api_client.set_feed_like(
             user_id=callback.from_user.id,
             publication_id=publication_id,
             liked=liked,
@@ -558,15 +557,15 @@ async def _set_like(
     except FoxGenApiError as exc:
         await callback.answer(exc.message, show_alert=True)
         return
-    await _refresh_card(callback, publication)
+    await _refresh_card(callback, item)
     await callback.answer("Лайк сохранён" if liked else "Лайк снят")
 
 
-async def _refresh_card(callback: CallbackQuery, publication: FeedPublicationView) -> None:
+async def _refresh_card(callback: CallbackQuery, item: FeedPublicationView) -> None:
     if callback.message is None:
         return
-    caption = _publication_caption(publication)
-    keyboard = _publication_keyboard(publication)
+    caption = _publication_caption(item)
+    keyboard = _publication_keyboard(item)
     try:
         if callback.message.photo or callback.message.video or callback.message.document:
             await callback.message.edit_caption(caption=caption, reply_markup=keyboard)
@@ -587,15 +586,9 @@ async def _start_remix(
     message: Message | None = None,
 ) -> None:
     try:
-        source = await api_client.remix_source(
-            user_id=user_id,
-            publication_id=publication_id,
-        )
+        source = await api_client.remix_source(user_id=user_id, publication_id=publication_id)
     except FoxGenApiError as exc:
-        if callback is not None:
-            await callback.answer(exc.message, show_alert=True)
-        elif message is not None:
-            await message.answer(exc.message)
+        await _remix_error(exc.message, callback=callback, message=message)
         return
 
     if source.media_kind == "image":
@@ -605,13 +598,25 @@ async def _start_remix(
         mode = GenerationMode.VIDEO_REFERENCE
         product = Product.VIDEO
     else:
-        text = "Remix для этого типа медиа пока не поддерживается."
-        if callback is not None:
-            await callback.answer(text, show_alert=True)
-        elif message is not None:
-            await message.answer(text)
+        await _remix_error(
+            "Remix для этого типа медиа пока не поддерживается.",
+            callback=callback,
+            message=message,
+        )
         return
 
+    if not source.reference_storage_keys:
+        await _remix_error(
+            "Исходный файл remix недоступен.",
+            callback=callback,
+            message=message,
+        )
+        return
+
+    media = [
+        {"kind": source.media_kind, "storage_key": key}
+        for key in source.reference_storage_keys[:6]
+    ]
     await state.clear()
     await state.update_data(
         entrypoint="feed_remix",
@@ -620,15 +625,15 @@ async def _start_remix(
         product=product.value,
         mode=mode.value,
         idempotency_key=f"generation:{user_id}:{uuid4().hex}",
-        media=[],
+        media=media,
         can_submit=False,
     )
     await state.set_state(GenerationStates.choosing_model)
     text = (
         "<b>Remix публикации</b>\n\n"
-        "Исходный результат уже прикреплён как референс. Выберите модель, "
-        "затем опишите свой вариант. Производная работа сможет попасть в профиль, "
-        "но не в общую ленту."
+        "Исходный результат закреплён как референс. Выберите модель и опишите свой вариант. "
+        "Производную работу можно опубликовать в профиль, но не в общую ленту; "
+        "её prompt не будет раскрыт в публичной карточке."
     )
     if callback is not None:
         if callback.message:
@@ -636,6 +641,18 @@ async def _start_remix(
         await callback.answer()
     elif message is not None:
         await message.answer(text, reply_markup=model_keyboard(mode))
+
+
+async def _remix_error(
+    text: str,
+    *,
+    callback: CallbackQuery | None,
+    message: Message | None,
+) -> None:
+    if callback is not None:
+        await callback.answer(text, show_alert=True)
+    elif message is not None:
+        await message.answer(text)
 
 
 def _publication_caption(publication: FeedPublicationView, *, title: str | None = None) -> str:
@@ -666,7 +683,7 @@ def _publication_keyboard(
     rows: list[list[InlineKeyboardButton]] = [
         [
             InlineKeyboardButton(
-                text=("♥ Убрать лайк" if publication.viewer_liked else "♡ Лайк"),
+                text="♥ Убрать лайк" if publication.viewer_liked else "♡ Лайк",
                 callback_data=(
                     f"feed:unlike:{publication_hex}"
                     if publication.viewer_liked
@@ -683,10 +700,7 @@ def _publication_keyboard(
                 text="Поделиться",
                 callback_data=f"feed:share:{publication_hex}:{surface_code}",
             ),
-            InlineKeyboardButton(
-                text="Remix",
-                callback_data=f"feed:remix:{publication_hex}",
-            ),
+            InlineKeyboardButton(text="Remix", callback_data=f"feed:remix:{publication_hex}"),
         ],
         [
             InlineKeyboardButton(
@@ -738,10 +752,8 @@ def _comments_text(comments: tuple[FeedCommentView, ...]) -> str:
     if not comments:
         return "<b>Комментарии</b>\n\nПока никто не написал."
     lines = ["<b>Комментарии</b>"]
-    for comment in comments:
-        lines.append(
-            f"\n<b>{escape(comment.author_display_name)}</b>\n{escape(comment.text)}"
-        )
+    for item in comments:
+        lines.append(f"\n<b>{escape(item.author_display_name)}</b>\n{escape(item.text)}")
     return "\n".join(lines)
 
 
@@ -752,8 +764,7 @@ def _publication_surface_callback(
     raw = value or ""
     if not raw.startswith(prefix):
         return None
-    tail = raw[len(prefix) :]
-    publication_raw, separator, surface_code = tail.rpartition(":")
+    publication_raw, separator, surface_code = raw[len(prefix) :].rpartition(":")
     if not separator or surface_code not in {"f", "p"}:
         return None
     try:
