@@ -6,6 +6,7 @@ from typing import Annotated
 from fastapi import APIRouter, Header, Request, Response
 from pydantic import BaseModel, Field
 
+from foxgen.admin.errors import AdminValidationError
 from foxgen.admin.security import require_manual_confirmation
 from foxgen.api.admin import _authenticate, _services
 from foxgen.core.config import Settings
@@ -41,8 +42,6 @@ def create_admin_extensions_router(settings: Settings) -> APIRouter:
         context = await _authenticate(request, settings)
         require_manual_confirmation(confirmation)
         if idempotency_key is None or not idempotency_key.strip():
-            from foxgen.admin.errors import AdminValidationError
-
             raise AdminValidationError("Idempotency-Key is required for admin writes")
         result = await _services(request).access.set_admin(
             context=context,
@@ -55,6 +54,11 @@ def create_admin_extensions_router(settings: Settings) -> APIRouter:
         payload = dict(result.payload)
         payload["replayed"] = result.replayed
         return payload
+
+    @router.get("/analytics")
+    async def analytics(request: Request, hours: int = 24) -> dict[str, object]:
+        context = await _authenticate(request, settings)
+        return await _services(request).analytics.snapshot(context, hours=hours)
 
     @router.post("/previews/generation")
     async def preview_generation(
