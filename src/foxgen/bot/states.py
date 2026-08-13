@@ -16,3 +16,7 @@ class GenerationStates(StatesGroup):
     choosing_audio = State()
     confirming = State()
     submitting = State()
+
+
+class FeedStates(StatesGroup):
+    waiting_comment = State()
