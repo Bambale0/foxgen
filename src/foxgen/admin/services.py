@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from foxgen.admin.access_service import AdminAccessService
+from foxgen.admin.analytics_service import AdminAnalyticsService
 from foxgen.admin.content_service import (
     AdminCmsService,
     AdminNotificationService,
@@ -32,6 +33,7 @@ from foxgen.infra.database import Database
 class AdminServices:
     policy: AdminPolicy
     access: AdminAccessService
+    analytics: AdminAnalyticsService
     queries: AdminQueryService
     users: AdminUserService
     payments: AdminPaymentService
@@ -58,6 +60,7 @@ class AdminServices:
         return cls(
             policy=AdminPolicy(database, bootstrap_superuser_ids=bootstrap_superuser_ids),
             access=AdminAccessService(database, executor),
+            analytics=AdminAnalyticsService(database, executor),
             queries=AdminQueryService(database, executor),
             users=AdminUserService(database, executor),
             payments=AdminPaymentService(database, executor),
