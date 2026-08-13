@@ -2,7 +2,7 @@
 
 FoxGen configuration is defined by `foxgen.core.config.Settings`. All variables use the `FOXGEN_` prefix. Empty optional values from `.env` are ignored by pydantic-settings.
 
-This document groups settings by responsibility. Exact validation ranges remain enforced by the `Settings` model.
+This document groups settings by responsibility. Exact validation ranges remain enforced by the `Settings` model. A declared setting is not assumed to be operational unless runtime code consumes it; reserved/inactive settings are called out explicitly.
 
 ## Runtime
 
@@ -51,7 +51,7 @@ Paid admission is intentionally fail-closed. Enabling the switch without the tok
 ## KIE.ai
 
 | Variable | Default | Purpose |
-|---|---|---|
+|---|---:|---|
 | `FOXGEN_KIE_API_KEY` | empty | Provider API credential |
 | `FOXGEN_KIE_BASE_URL` | `https://api.kie.ai` | KIE API origin |
 | `FOXGEN_KIE_CALLBACK_BASE_URL` | empty | Public HTTPS origin used to construct `/webhooks/kie` |
@@ -114,13 +114,19 @@ The worker retry budget does not authorize a second billable provider POST. Prov
 |---|---|---|
 | `FOXGEN_S3_ENDPOINT_URL` | empty | S3/MinIO endpoint |
 | `FOXGEN_S3_REGION` | `us-east-1` | Region |
-| `FOXGEN_S3_BUCKET` | `foxgen-media` | Private bucket |
+| `FOXGEN_S3_BUCKET` | `foxgen-media` | Private bucket name; application storage expects it to exist |
 | `FOXGEN_S3_ACCESS_KEY_ID` | empty | Storage credential |
 | `FOXGEN_S3_SECRET_ACCESS_KEY` | empty | Storage credential |
 | `FOXGEN_S3_FORCE_PATH_STYLE` | `true` | Compatibility switch for MinIO/S3 implementations |
-| `FOXGEN_S3_CREATE_BUCKET` | `false` | Application bucket-creation switch where supported |
+| `FOXGEN_S3_CREATE_BUCKET` | `false` | **Reserved/inactive in current runtime.** Declared by `Settings` but not consumed by `S3MediaStorage`; setting it to `true` does not create a bucket. Tracked by issue #57. |
+
+Current `S3MediaStorage` writes/reads the configured bucket and can health-check it, but it does not perform application-level bucket creation. Local/production MinIO Compose bootstrap ensures its configured bucket exists; deployments using an external S3-compatible endpoint must provision the private bucket separately.
+
+Do not depend on `FOXGEN_S3_CREATE_BUCKET=true` for production provisioning until #57 is explicitly implemented or the setting is removed.
 
 Local `.env.example` contains development MinIO credentials. They are forbidden in production; `scripts/deploy-production.sh` rejects known development secrets.
+
+Temporary input lifecycle is a separate concern: even an existing bucket still needs the externally configured `inputs/` lifecycle rule described in `input-media-lifecycle.md` until issue #50 is resolved.
 
 ## Production-only Compose variables
 
@@ -151,7 +157,10 @@ Do not commit `.env`. Do not place any of these secrets in Telegram messages, pu
 When adding/changing a setting, update together:
 
 - `src/foxgen/core/config.py`;
+- every runtime consumer of the setting;
 - `.env.example`;
 - `deploy/production.env.example` when production-relevant;
 - this document;
 - Compose/deploy validation if the setting changes container wiring.
+
+A setting is not considered operational merely because it exists in `Settings`; documentation must reflect whether executable code actually consumes it.
