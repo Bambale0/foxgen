@@ -59,9 +59,18 @@ class SubmissionRateLimiter(Protocol):
     async def check(self, user_id: int) -> None: ...
 
 
+class ModelAvailabilityGuard(Protocol):
+    async def ensure_enabled(self, model_slug: str) -> None: ...
+
+
 class NoopSubmissionRateLimiter:
     async def check(self, user_id: int) -> None:
         del user_id
+
+
+class NoopModelAvailabilityGuard:
+    async def ensure_enabled(self, model_slug: str) -> None:
+        del model_slug
 
 
 def request_fingerprint(*, model_slug: str, input_payload: dict[str, object]) -> str:
@@ -97,12 +106,14 @@ class SubmissionService:
         repository: GenerationRepository,
         rate_limiter: SubmissionRateLimiter,
         registry: ModelRegistry | None = None,
+        availability_guard: ModelAvailabilityGuard | None = None,
         user_concurrency_limit: int = 2,
         global_concurrency_limit: int = 20,
     ) -> None:
         self._repository = repository
         self._rate_limiter = rate_limiter
         self._registry = registry or ModelRegistry()
+        self._availability_guard = availability_guard or NoopModelAvailabilityGuard()
         self._user_concurrency_limit = user_concurrency_limit
         self._global_concurrency_limit = global_concurrency_limit
 
@@ -130,6 +141,7 @@ class SubmissionService:
                     "enabled_for_submission": model.enabled_for_submission,
                 },
             )
+        await self._availability_guard.ensure_enabled(model.slug)
 
         normalized = validate_input(model.contract, input_data)
         request_hash = request_fingerprint(model_slug=model.slug, input_payload=normalized)
