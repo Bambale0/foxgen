@@ -2,6 +2,7 @@ import mimetypes
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
+from uuid import UUID
 
 
 @dataclass(frozen=True, slots=True)
@@ -41,6 +42,7 @@ class MediaSender(Protocol):
         recipient_id: int,
         urls: list[str],
         caption: str,
+        generation_id: UUID,
     ) -> list[int]: ...
 
 
