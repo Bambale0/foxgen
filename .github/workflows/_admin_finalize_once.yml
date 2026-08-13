@@ -1,0 +1,174 @@
+name: Admin finalize once
+
+on:
+  push:
+    branches: [feat/full-admin-contour]
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - name: Apply final transport wiring
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path: str, old: str, new: str) -> None:
+              file = Path(path)
+              text = file.read_text(encoding='utf-8')
+              if old not in text:
+                  raise SystemExit(f'Expected pattern not found in {path}: {old[:120]!r}')
+              file.write_text(text.replace(old, new, 1), encoding='utf-8')
+
+          replace_once(
+              'src/foxgen/api/app.py',
+              'from foxgen.api.admin_web import create_admin_web_router\n',
+              'from foxgen.api.admin_web import create_admin_web_router\nfrom foxgen.api.admin_web_extensions import create_admin_web_extensions_router\n',
+          )
+          replace_once(
+              'src/foxgen/api/app.py',
+              '    app.include_router(create_admin_web_router(resolved_settings))\n',
+              '    app.include_router(create_admin_web_router(resolved_settings))\n    app.include_router(create_admin_web_extensions_router(resolved_settings))\n',
+          )
+
+          replace_once(
+              'src/foxgen/bot/app.py',
+              'from foxgen.bot.admin import router as admin_router\n',
+              'from foxgen.bot.admin import router as admin_router\nfrom foxgen.bot.admin_extras import router as admin_extras_router\n',
+          )
+          replace_once(
+              'src/foxgen/bot/app.py',
+              '    dispatcher.include_router(admin_router)\n',
+              '    dispatcher.include_router(admin_extras_router)\n    dispatcher.include_router(admin_router)\n',
+          )
+
+          admin_path = Path('src/foxgen/bot/admin.py')
+          admin = admin_path.read_text(encoding='utf-8')
+          close_line = '            [InlineKeyboardButton(text="Закрыть", callback_data="adm:close")],\n'
+          if 'callback_data="adm:analytics"' not in admin:
+              if close_line not in admin:
+                  raise SystemExit('Admin close menu line not found')
+              admin = admin.replace(
+                  close_line,
+                  '            [InlineKeyboardButton(text="Аналитика 24ч", callback_data="adm:analytics")],\n' + close_line,
+                  1,
+              )
+          finance_csv = '                [InlineKeyboardButton(text="Finance CSV", callback_data="adm:export:finance")],\n'
+          if 'adm:exportxls:users' not in admin:
+              if finance_csv not in admin:
+                  raise SystemExit('Finance CSV export line not found')
+              admin = admin.replace(
+                  finance_csv,
+                  finance_csv
+                  + '                [InlineKeyboardButton(text="Users XLS", callback_data="adm:exportxls:users")],\n'
+                  + '                [InlineKeyboardButton(text="Finance XLS", callback_data="adm:exportxls:finance")],\n',
+                  1,
+              )
+          start = admin.find('async def admin_withdrawals(')
+          end = admin.find('\n\n@router.callback_query', start)
+          if start < 0 or end < 0:
+              raise SystemExit('admin_withdrawals function not found')
+          block = admin[start:end]
+          if 'adm:withdrawals:approved' not in block:
+              back = '    rows.append([InlineKeyboardButton(text="← Админка", callback_data="adm:home")])\n'
+              if back not in block:
+                  raise SystemExit('withdrawal back line not found')
+              block = block.replace(
+                  back,
+                  '    rows.append([InlineKeyboardButton(text="Одобренные → выплата", callback_data="adm:withdrawals:approved")])\n'
+                  + back,
+                  1,
+              )
+              admin = admin[:start] + block + admin[end:]
+          admin_path.write_text(admin, encoding='utf-8')
+
+          replace_once(
+              'src/foxgen/admin/operations_service.py',
+              '        if not normalized or len(normalized) > 64:\n            raise AdminValidationError("Promo code must contain 1-64 characters")\n',
+              '        if not normalized or len(normalized) > 32:\n            raise AdminValidationError("Promo code must contain 1-32 characters")\n',
+          )
+          replace_once(
+              'src/foxgen/api/admin.py',
+              '    code: str = Field(min_length=1, max_length=64)\n',
+              '    code: str = Field(min_length=1, max_length=32)\n',
+          )
+
+          web_path = Path('src/foxgen/api/admin_web.py')
+          web = web_path.read_text(encoding='utf-8')
+          if "'analytics'" not in web or "'admins'" not in web:
+              old_sections = "const sections=['summary','users','finance','payments','operations','tickets','tariffs','campaigns','partners','prompts','cms','moderation','runtime','audit'];"
+              new_sections = "const sections=['summary','analytics','users','finance','payments','operations','tickets','tariffs','campaigns','partners','prompts','cms','moderation','runtime','admins','audit'];"
+              if old_sections not in web:
+                  raise SystemExit('Admin web sections list not found')
+              web = web.replace(old_sections, new_sections, 1)
+          if '<option>generation.preview</option>' not in web:
+              old_option = '<option>user.balance_adjustment</option>'
+              web = web.replace(
+                  old_option,
+                  '<option>generation.preview</option><option>admin.set</option>' + old_option,
+                  1,
+              )
+          destructive = '            "user.block",\n'
+          if '            "admin.set",\n' not in web:
+              web = web.replace(destructive, '            "admin.set",\n' + destructive, 1)
+          dispatch = '        if body.action == "user.block":\n'
+          if 'body.action == "generation.preview"' not in web:
+              if dispatch not in web:
+                  raise SystemExit('Admin web dispatch anchor not found')
+              preview_dispatch = '''        if body.action == "generation.preview":
+            generation_input = payload.get("input")
+            if not isinstance(generation_input, dict):
+                raise AdminValidationError("payload.input must be an object")
+            return await services.previews.generation_preview(
+                context=context,
+                model_slug=_required_target(target),
+                input_payload=generation_input,
+            )
+        if body.action == "admin.set":
+            scopes_value = payload.get("scopes")
+            if not isinstance(scopes_value, list) or any(
+                not isinstance(item, str) for item in scopes_value
+            ):
+                raise AdminValidationError("payload.scopes must be a list of strings")
+            result = await services.access.set_admin(
+                context=context,
+                user_id=_int_target(target),
+                role=_string(payload, "role"),
+                scopes=scopes_value,
+                active=_bool(payload, "active"),
+                idempotency_key=key,
+            )
+        elif body.action == "user.block":
+'''
+              web = web.replace(dispatch, preview_dispatch, 1)
+          web_path.write_text(web, encoding='utf-8')
+          PY
+
+          python -m pip install ruff==0.9.10
+          git diff --name-only --diff-filter=ACMRT origin/main...HEAD -- '*.py' > /tmp/admin-python.txt
+          if test -s /tmp/admin-python.txt; then
+            mapfile -t files < /tmp/admin-python.txt
+            ruff format "${files[@]}"
+            ruff check --fix "${files[@]}"
+          fi
+
+          if git diff --quiet; then
+            echo 'No finalization changes required'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/foxgen
+          git commit -m 'feat(admin): finalize operator transport controls'
+          git push origin HEAD:feat/full-admin-contour

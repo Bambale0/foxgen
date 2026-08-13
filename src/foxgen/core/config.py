@@ -52,9 +52,22 @@ class Settings(BaseSettings):
     submission_user_concurrency_limit: int = Field(default=2, ge=1, le=100)
     submission_global_concurrency_limit: int = Field(default=20, ge=1, le=10_000)
 
-    # Price and balance mutations use a separate credential and are disabled by default.
+    # Legacy billing mutation API remains separately protected.
     billing_admin_api_enabled: bool = False
     billing_admin_api_token: SecretStr | None = None
+
+    # Full internal admin control plane. Defaults are fail-closed and loopback-only.
+    admin_api_enabled: bool = False
+    admin_web_enabled: bool = False
+    admin_hmac_key: SecretStr | None = None
+    admin_hmac_max_skew_seconds: int = Field(default=300, ge=30, le=3600)
+    admin_network_allowlist: str = "127.0.0.1/32,::1/128"
+    admin_superuser_ids: str = ""
+    admin_session_ttl_seconds: int = Field(default=900, ge=60, le=86_400)
+    admin_worker_batch_size: int = Field(default=50, ge=1, le=1000)
+    admin_worker_lease_seconds: int = Field(default=120, ge=30, le=3600)
+    admin_worker_max_attempts: int = Field(default=8, ge=1, le=100)
+    admin_notification_rate_per_second: float = Field(default=20.0, ge=0.1, le=1000)
 
     worker_loop_interval_seconds: float = Field(default=1.0, ge=0.1, le=60)
     worker_outbox_batch_size: int = Field(default=10, ge=1, le=500)
@@ -80,6 +93,28 @@ class Settings(BaseSettings):
         if self.kie_callback_base_url is None:
             return None
         return f"{str(self.kie_callback_base_url).rstrip('/')}/webhooks/kie"
+
+    @property
+    def admin_superuser_id_set(self) -> frozenset[int]:
+        result: set[int] = set()
+        for raw in self.admin_superuser_ids.split(","):
+            value = raw.strip()
+            if not value:
+                continue
+            try:
+                result.add(int(value))
+            except ValueError as exc:
+                raise ValueError(
+                    "FOXGEN_ADMIN_SUPERUSER_IDS must contain comma-separated integers"
+                ) from exc
+        return frozenset(result)
+
+    @property
+    def admin_networks(self) -> tuple[str, ...]:
+        values = tuple(
+            value.strip() for value in self.admin_network_allowlist.split(",") if value.strip()
+        )
+        return values or ("127.0.0.1/32", "::1/128")
 
 
 @lru_cache(maxsize=1)
