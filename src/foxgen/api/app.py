@@ -16,6 +16,7 @@ from foxgen.admin.services import AdminServices
 from foxgen.api.admin import create_admin_router
 from foxgen.api.admin_web import create_admin_web_router
 from foxgen.api.billing import BillingServiceProtocol, create_billing_router
+from foxgen.api.feed import FeedServiceProtocol, create_feed_router
 from foxgen.api.generations import (
     GenerationOperationsProtocol,
     ReconciliationProtocol,
@@ -27,9 +28,12 @@ from foxgen.application.reconciliation import ReconciliationService
 from foxgen.application.submissions import SubmissionReceipt, SubmissionService
 from foxgen.core.config import Settings, get_settings
 from foxgen.core.errors import ErrorCode, FoxGenError, WebhookVerificationError
+from foxgen.feed.service import FeedService
 from foxgen.infra.billing import SqlAlchemyBillingRepository
 from foxgen.infra.billing_lifecycle_repository import BillingAwareLifecycleRepository
 from foxgen.infra.database import Database
+from foxgen.infra.feed import SqlAlchemyFeedRepository
+from foxgen.infra.media import S3MediaStorage
 from foxgen.infra.rate_limit import RedisSubmissionRateLimiter
 from foxgen.infra.redis import RedisPool
 from foxgen.infra.repositories import SqlAlchemyGenerationRepository
@@ -46,6 +50,7 @@ class HealthResponse(BaseModel):
 
 class ModelInputRequest(BaseModel):
     input: dict[str, Any]
+    source_publication_id: UUID | None = None
 
 
 class SubmissionServiceProtocol(Protocol):
@@ -57,6 +62,7 @@ class SubmissionServiceProtocol(Protocol):
         model_slug: str,
         input_data: dict[str, object],
         idempotency_key: str,
+        source_publication_id: UUID | None = None,
     ) -> SubmissionReceipt: ...
 
 
@@ -176,6 +182,26 @@ def _webhook_hash(payload: dict[str, object]) -> str:
     return hashlib.sha256(canonical).hexdigest()
 
 
+def _feed_media_storage(settings: Settings) -> S3MediaStorage:
+    return S3MediaStorage(
+        bucket=settings.s3_bucket,
+        region=settings.s3_region,
+        endpoint_url=(str(settings.s3_endpoint_url) if settings.s3_endpoint_url else None),
+        access_key_id=(
+            settings.s3_access_key_id.get_secret_value()
+            if settings.s3_access_key_id is not None
+            else None
+        ),
+        secret_access_key=(
+            settings.s3_secret_access_key.get_secret_value()
+            if settings.s3_secret_access_key is not None
+            else None
+        ),
+        force_path_style=settings.s3_force_path_style,
+        presigned_url_ttl_seconds=settings.media_presigned_url_ttl_seconds,
+    )
+
+
 def create_app(
     settings: Settings | None = None,
     *,
@@ -186,6 +212,7 @@ def create_app(
     generation_operations: GenerationOperationsProtocol | None = None,
     reconciliation_service: ReconciliationProtocol | None = None,
     admin_services: AdminServices | None = None,
+    feed_service: FeedServiceProtocol | None = None,
 ) -> FastAPI:
     resolved_settings = settings or get_settings()
     registry = ModelRegistry()
@@ -230,6 +257,11 @@ def create_app(
             app.state.generation_operations = GenerationOperationsService(lifecycle_repository)
         if app.state.reconciliation_service is None:
             app.state.reconciliation_service = ReconciliationService(lifecycle_repository)
+        if app.state.feed_service is None:
+            app.state.feed_service = FeedService(
+                SqlAlchemyFeedRepository(database),
+                _feed_media_storage(resolved_settings),
+            )
 
         try:
             yield
@@ -250,8 +282,10 @@ def create_app(
     app.state.generation_operations = generation_operations
     app.state.reconciliation_service = reconciliation_service
     app.state.admin_services = admin_services
+    app.state.feed_service = feed_service
     app.include_router(create_billing_router(resolved_settings))
     app.include_router(create_generation_router(resolved_settings))
+    app.include_router(create_feed_router(resolved_settings))
     app.include_router(create_admin_router(resolved_settings))
     app.include_router(create_admin_web_router(resolved_settings))
 
@@ -344,13 +378,23 @@ def create_app(
                 status_code=503,
                 detail="Task submission service is not configured",
             )
-        receipt = await service.submit(
-            user_id=principal.user_id,
-            username=username,
-            model_slug=slug,
-            input_data=body.input,
-            idempotency_key=idempotency_key,
-        )
+        if body.source_publication_id is None:
+            receipt = await service.submit(
+                user_id=principal.user_id,
+                username=username,
+                model_slug=slug,
+                input_data=body.input,
+                idempotency_key=idempotency_key,
+            )
+        else:
+            receipt = await service.submit(
+                user_id=principal.user_id,
+                username=username,
+                model_slug=slug,
+                input_data=body.input,
+                idempotency_key=idempotency_key,
+                source_publication_id=body.source_publication_id,
+            )
         return receipt_payload(receipt)
 
     @app.post("/webhooks/kie")
