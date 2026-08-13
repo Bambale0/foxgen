@@ -135,7 +135,12 @@ async def receive_prompt(
         return
 
     mode = _mode(data)
-    if mode_requires_media(mode):
+    # Feed remix arrives with durable source MediaAsset storage keys already prefilled.
+    # It must not ask the user to upload the source again or allow replacing that lineage
+    # implicitly before the derivative generation is admitted.
+    if mode_requires_media(mode) and not (
+        _is_feed_remix(data) and bool(_stored_media(data))
+    ):
         await state.set_state(GenerationStates.waiting_media)
         await message.answer(
             _media_prompt(mode),
@@ -333,12 +338,16 @@ async def confirm_generation(
     try:
         resolved_media = await _resolve_media(data, input_media)
         payload = _provider_payload(data, resolved_media)
+        source_publication_id = data.get("source_publication_id")
         queued = await api_client.submit(
             user_id=callback.from_user.id,
             username=callback.from_user.username,
             model_slug=_required_str(data, "model_slug"),
             input_data=payload,
             idempotency_key=_required_str(data, "idempotency_key"),
+            source_publication_id=(
+                source_publication_id if isinstance(source_publication_id, str) else None
+            ),
         )
     except SubmissionError as exc:
         await state.set_state(GenerationStates.confirming)
@@ -365,13 +374,18 @@ async def confirm_generation(
         if queued.replayed
         else ""
     )
+    derivative_text = (
+        "\nЭто remix-производная: её можно публиковать в профиль, но не в общую ленту."
+        if isinstance(data.get("source_publication_id"), str)
+        else ""
+    )
     if callback.message:
         await callback.message.edit_text(
             (
                 "✅ <b>Генерация поставлена в очередь</b>\n\n"
                 f"ID: <code>{escape(queued.generation_id)}</code>\n"
                 "Результат придёт сюда автоматически после сохранения."
-                f"{replay_text}"
+                f"{derivative_text}{replay_text}"
             ),
             reply_markup=after_submit_keyboard(),
         )
@@ -429,6 +443,10 @@ async def go_back(callback: CallbackQuery, state: FSMContext) -> None:
         await _edit_callback(callback, "Что создаём?", main_menu())
         return
     if current == GenerationStates.choosing_model.state:
+        if _is_feed_remix(data):
+            await state.clear()
+            await _edit_callback(callback, "Remix отменён. Что создаём?", main_menu())
+            return
         product = Product(_required_str(data, "product"))
         await state.set_state(GenerationStates.choosing_mode)
         await _edit_callback(callback, "Выберите сценарий:", mode_keyboard(product))
@@ -439,6 +457,14 @@ async def go_back(callback: CallbackQuery, state: FSMContext) -> None:
         await _edit_callback(callback, "Выберите модель:", model_keyboard(mode))
         return
     if current == GenerationStates.waiting_media.state:
+        if _is_feed_remix(data):
+            await state.set_state(GenerationStates.waiting_prompt)
+            await _edit_callback(
+                callback,
+                "Отправьте описание результата:",
+                navigation_keyboard(),
+            )
+            return
         await state.update_data(media=[], can_submit=False)
         await state.set_state(GenerationStates.waiting_prompt)
         await _edit_callback(
@@ -450,20 +476,23 @@ async def go_back(callback: CallbackQuery, state: FSMContext) -> None:
     if current == GenerationStates.choosing_aspect_ratio.state:
         mode = _mode(data)
         target = (
-            GenerationStates.waiting_media
-            if mode_requires_media(mode)
-            else GenerationStates.waiting_prompt
+            GenerationStates.waiting_prompt
+            if _is_feed_remix(data)
+            else (
+                GenerationStates.waiting_media
+                if mode_requires_media(mode)
+                else GenerationStates.waiting_prompt
+            )
         )
         await state.set_state(target)
-        text = (
-            _media_prompt(mode)
-            if mode_requires_media(mode)
-            else "Отправьте описание результата:"
-        )
+        requires_upload = mode_requires_media(mode) and not _is_feed_remix(data)
+        text = _media_prompt(mode) if requires_upload else "Отправьте описание результата:"
         await _edit_callback(
             callback,
             text,
-            navigation_keyboard(media_done=mode_supports_multiple_media(mode)),
+            navigation_keyboard(
+                media_done=requires_upload and mode_supports_multiple_media(mode)
+            ),
         )
         return
     if current in {
@@ -576,6 +605,11 @@ async def _confirmation_text(
         else f"⚠️ Доступно только {balance.available_units} {escape(balance.currency)}"
     )
     options = _options_summary(data)
+    derivative_line = (
+        "\nИсточник: remix-публикация (общая feed-публикация результата будет запрещена)"
+        if _is_feed_remix(data)
+        else ""
+    )
     return (
         "<b>Проверьте генерацию</b>\n\n"
         f"Сценарий: {escape(MODE_TITLES[_mode(data)])}\n"
@@ -583,7 +617,7 @@ async def _confirmation_text(
         f"Формат: {escape(_required_str(data, 'aspect_ratio'))}\n"
         f"Параметры: {escape(options)}\n"
         f"Медиа: {media_count}\n"
-        f"Описание: {escape(_required_str(data, 'prompt'))}\n\n"
+        f"Описание: {escape(_required_str(data, 'prompt'))}{derivative_line}\n\n"
         f"Стоимость: <b>{quote.amount_units} {escape(quote.currency)}</b>\n"
         f"{balance_line}\n\n"
         "Средства резервируются атомарно при постановке в очередь.",
@@ -719,6 +753,12 @@ def _stored_media(data: dict[str, Any]) -> list[StoredInput]:
         if isinstance(kind, str) and isinstance(storage_key, str):
             result.append({"kind": kind, "storage_key": storage_key})
     return result
+
+
+def _is_feed_remix(data: dict[str, Any]) -> bool:
+    return data.get("entrypoint") == "feed_remix" and isinstance(
+        data.get("source_publication_id"), str
+    )
 
 
 def _mode(data: dict[str, Any]) -> GenerationMode:
