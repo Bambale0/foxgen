@@ -12,6 +12,7 @@ from foxgen.admin.operations_service import (
     AdminRuntimeService,
 )
 from foxgen.admin.policy import AdminPolicy
+from foxgen.admin.preview_service import AdminPreviewService
 from foxgen.admin.query_service import AdminQueryService
 from foxgen.admin.repository import AdminCommandExecutor
 from foxgen.admin.user_service import AdminUserService
@@ -34,6 +35,7 @@ class AdminServices:
     prompts: AdminPromptService
     runtime: AdminRuntimeService
     moderation: AdminModerationService
+    previews: AdminPreviewService
 
     @classmethod
     def build(
@@ -58,4 +60,5 @@ class AdminServices:
             prompts=AdminPromptService(database, executor),
             runtime=AdminRuntimeService(database, executor),
             moderation=AdminModerationService(database, executor),
+            previews=AdminPreviewService(executor),
         )
