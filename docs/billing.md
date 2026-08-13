@@ -1,133 +1,242 @@
-# Billing and pricing
+# Billing, pricing and financial invariants
 
-FoxGen uses integer internal balance units. Floating-point money is never stored or calculated. Every balance mutation is represented by an append-only ledger entry and a materialized wallet account balance.
+FoxGen stores internal balance in integer `CREDIT` units. Floating-point wallet arithmetic is not used. A materialized wallet balance provides fast reads; the append-only ledger is the financial audit/reconciliation source.
 
-## Fail-closed release gate
+## Admission gate
 
-A generation can be admitted only when all of the following are true:
+A billable generation is admitted only when all conditions pass:
 
 1. paid submission is explicitly enabled;
-2. the trusted internal service is authenticated;
-3. the selected model has a currently active versioned price;
-4. the user has enough available units;
-5. the generation, reservation, ledger entry and outbox event can be committed together.
+2. the caller is a trusted internal service;
+3. the user is not administratively blocked;
+4. the model is production-ready and not runtime-disabled;
+5. a currently active model price exists;
+6. the user has enough available balance;
+7. rate/concurrency limits pass;
+8. generation, reservation, ledger movement and outbox can commit atomically.
 
-If a price is missing, FoxGen returns `pricing_unavailable`. If funds are insufficient, it returns `insufficient_credits`. No provider request is created in either case.
+Missing price returns a pricing failure before provider access. Insufficient funds fail before provider access. No queued paid generation can exist without its matching reservation in the successful admission path.
 
-## Account model
+## Wallet account
 
-Each user has one wallet account:
+Each user wallet stores:
 
-- `available_units` — spendable balance;
-- `reserved_units` — funds held for admitted generations;
+- `available_units` — spendable credits;
+- `reserved_units` — credits held for admitted work whose billing outcome is not fully settled;
 - `currency` — currently `CREDIT`;
-- `version` — incremented on each account mutation.
+- `version` — incremented on account mutation.
 
-Database constraints prevent negative available or reserved balances.
+Database constraints prevent negative available/reserved values.
 
-## Price catalog
+## Versioned model prices
 
-`model_prices` is versioned by `(model_slug, version)`. Publishing a new price disables the previous active version and keeps historical rows for audit. Prices have explicit activation windows and optional metadata.
+`model_prices` is versioned by `(model_slug, version)` and keeps historical rows. Publishing a new active price disables the previous active version rather than editing history in place.
 
-No default commercial values are invented by migrations. Administrators must configure prices deliberately before enabling paid submission.
+Price rows include:
+
+- amount in integer units;
+- currency;
+- enabled flag;
+- activation window;
+- metadata;
+- version.
+
+Migrations do not invent commercial prices. Operations must deliberately publish prices before enabling production paid submission.
+
+The full admin contour also maintains a versioned tariff payload for packages and broader product pricing. `model_prices` remains the runtime per-model price used by current generation admission; tariff publishing is an administrative/version-history surface and must be kept consistent with whatever product-price projection is used by a release.
 
 ## Atomic reservation
 
-Generation admission runs in one PostgreSQL transaction:
+Conceptually, generation admission executes:
 
 ```text
-insert generation(status=queued)
-lock wallet account
-select active model price
-available_units -= price
-reserved_units += price
-insert balance_reservation(status=reserved)
-insert immutable ledger entry(type=reserve)
-insert outbox event(type=generation.submit)
-commit
+BEGIN
+  create/idempotently find generation
+  lock/ensure wallet account
+  select active model price
+  validate sufficient available units
+  available_units -= amount
+  reserved_units += amount
+  create balance_reservation(status=reserved)
+  append ledger(type=reserve)
+  create outbox(generation.submit)
+COMMIT
 ```
 
-Any failure rolls back the entire operation. A user can never have a queued billable generation without a matching reservation.
+Any failure rolls back the transaction.
 
-## Settlement policy
+## Settlement lifecycle
 
-### Provider accepted the task
-
-When the worker transitions a generation to `submitted`, it captures the reservation in the same transaction:
+Reservation states:
 
 ```text
-reserved_units -= price
-reservation.status = captured
+reserved -> captured
+reserved -> released
+captured -> refunded
+```
+
+### Provider acceptance
+
+When provider acceptance is durably verified and generation becomes `submitted`, the reservation is captured:
+
+```text
+reserved_units -= amount
+reservation = captured
 ledger += capture
 ```
 
-### Ambiguous provider submission
+### Ambiguous submission
 
-`submission_unknown` keeps funds reserved. FoxGen neither captures nor releases the balance until callback, polling, operator reconciliation or an explicit policy resolves the ambiguity.
+`submission_unknown` deliberately keeps the reservation in `reserved`. FoxGen does not guess whether the provider charged and does not release/capture solely because a local timeout occurred.
+
+Resolution requires callback, polling evidence or explicit operator reconciliation.
 
 ### Deterministic failure before capture
 
-A reserved amount is released:
+A reservation is released:
 
 ```text
-available_units += price
-reserved_units -= price
-reservation.status = released
+available_units += amount
+reserved_units -= amount
+reservation = released
 ledger += release
 ```
 
-### Failure after capture
+### Terminal failure after capture
 
-The current policy refunds the full captured amount:
+Current policy applies a full refund:
 
 ```text
-available_units += price
-reservation.status = refunded
+available_units += amount
+reservation = refunded
 ledger += refund
 ```
 
-The same settlement rules apply whether completion arrives through callback or polling. Ledger idempotency keys and reservation row locks make repeated transitions harmless.
+Repeated lifecycle events cannot create repeated settlement because reservation rows are locked and ledger operations use deterministic idempotency keys.
 
 ## Immutable ledger
 
-`ledger_entries` is append-only. A database trigger rejects updates and deletes. Each entry includes:
+`ledger_entries` records every financial movement with:
 
-- user and optional generation/reservation IDs;
+- user ID;
+- optional generation/reservation references;
 - entry type;
-- available and reserved deltas;
+- available/reserved deltas;
 - currency;
 - unique idempotency key;
-- actor and human-readable reason;
-- metadata and timestamp.
+- actor;
+- reason;
+- metadata;
+- timestamp.
 
-The wallet account is a fast materialized balance. The ledger is the audit trail and reconciliation source.
+The ledger is append-only by design and is the basis for reconciliation. Admin adjustments do not mutate prior entries; they append new adjustment/credit/debit movements through protected services.
 
-## Administration API
+## User/admin balance adjustment
 
-Price and balance mutations use a separate, disabled-by-default administrator credential:
+Two protected administrative transports currently exist:
 
-```env
-FOXGEN_BILLING_ADMIN_API_ENABLED=true
-FOXGEN_BILLING_ADMIN_API_TOKEN=<separate-long-random-secret>
-```
-
-Endpoints:
-
-- `GET /v1/prices` — active price catalog;
-- `GET /v1/users/{user_id}/balance` — trusted internal balance read;
-- `GET /v1/users/{user_id}/ledger` — trusted internal ledger history;
-- `POST /v1/admin/users/{user_id}/balance-adjustments` — idempotent manual credit/debit;
-- `PUT /v1/admin/prices/{model_slug}` — publish a new price version.
-
-The billing administrator token must be distinct from the ordinary internal service token and must never be exposed to Telegram clients, mini apps or browsers.
-
-## Reconciliation
-
-Production operations should periodically verify:
+### Legacy billing-admin route
 
 ```text
-account.available_units + account.reserved_units
+POST /v1/admin/users/{user_id}/balance-adjustments
+```
+
+It requires the separately configured billing-admin credential and `Idempotency-Key`.
+
+### Full admin control plane
+
+```text
+POST /internal/admin/users/{user_id}/balance-adjustments
+```
+
+It additionally uses signed HMAC admin authentication, server-side RBAC, command/audit ledger, idempotent replay and explicit confirmation.
+
+For new operator surfaces, prefer the full admin domain/service path rather than duplicating financial write logic.
+
+## Payment events and reprocessing
+
+The admin contour stores payment events for operational inspection/recheck/reprocess.
+
+A completed payment credit uses a deterministic immutable-ledger idempotency key:
+
+```text
+payment-credit:<provider>:<external_id>
+```
+
+Consequences:
+
+- reprocessing the same completed payment cannot credit it twice;
+- a second admin command with another request id still observes the existing payment credit;
+- provider recheck/reprocess is durable admin worker work rather than an unsafe request-lifecycle mutation;
+- when a provider recheck adapter is absent, the job fails closed instead of inventing payment state.
+
+## Tariff history
+
+The full admin contour exposes:
+
+```text
+GET  /internal/admin/tariffs
+GET  /internal/admin/tariffs/versions
+GET  /internal/admin/tariffs/versions/{version_id}
+POST /internal/admin/tariffs/publish
+```
+
+Publishing is idempotent, audited and confirmation-gated. Historical published versions are retained for operational traceability.
+
+## Financial read APIs
+
+Trusted internal:
+
+```text
+GET /v1/prices
+GET /v1/users/{user_id}/balance
+GET /v1/users/{user_id}/ledger
+```
+
+Full admin:
+
+```text
+GET /internal/admin/finance
+GET /internal/admin/payments
+GET /internal/admin/payments/{payment_id}
+GET /internal/admin/exports/finance.csv   # actual route prefix resolves to /internal/admin/exports/finance.csv
+```
+
+See `api-reference.md` for authentication details.
+
+## Reconciliation invariants
+
+Operational checks include:
+
+```text
+wallet.available_units + wallet.reserved_units
 = sum(ledger.available_delta + ledger.reserved_delta)
 ```
 
-and ensure each active generation has exactly one reservation. Automated reconciliation and anomaly alerts are tracked under reliability and administration work.
+and cross-resource expectations such as:
+
+- every admitted billable generation has one reservation;
+- a captured reservation matches verified provider acceptance or later lifecycle;
+- terminal pre-capture failures do not retain reserved funds;
+- terminal post-capture failures/refunds settle exactly once;
+- duplicate admin/payment commands do not append duplicate financial effects.
+
+Automated reconciliation exists and may apply only deterministic local fixes. It never submits a provider task or resolves ambiguous external side effects through guesswork.
+
+See `postprocessing-reconciliation.md`.
+
+## Security requirements
+
+Use separate credentials for ordinary internal generation API, legacy billing-admin API and full admin HMAC control plane. None belong in a public client or Mini App.
+
+Every manual money mutation must include a human-readable reason and be attributable to an actor/admin request. Do not bypass shared billing/admin services with direct SQL for ordinary operations.
+
+## Change checklist
+
+A billing/pricing change must update:
+
+- SQLAlchemy model/migration if schema changes;
+- atomic admission/settlement tests;
+- reconciliation expectations;
+- `.env`/configuration docs for new switches;
+- this document and `api-reference.md` when operator behavior changes.
