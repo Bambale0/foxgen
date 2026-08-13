@@ -233,6 +233,16 @@ Operational flow includes pending review, approval/rejection and deactivation of
 
 Durable transitions cover pending review through approval/payment or rejection. Actions are RBAC/audit/idempotency protected.
 
+## 13. Admin transport reachability
+
+The shared admin domain layer is implemented, but current runtime reachability is intentionally documented separately from source-module existence.
+
+Registered runtime currently includes the main signed admin API router, main backend operator web router and main Telegram admin router.
+
+Prepared extension modules for direct admin-role management, dedicated analytics, privileged generation preview, XLS exports and several Telegram extra callbacks exist but are not registered by current entrypoints. This is a **transport wiring gap**, not a missing domain-state model.
+
+Tracked by issue #55. Until it is fixed, those extension routes/callbacks are not production-active. See `known-limitations.md`, `api-reference.md` and `admin-capability-matrix.md`.
+
 ## Completed implementation sequence
 
 Historical delivery epics:
@@ -241,11 +251,14 @@ Historical delivery epics:
 2. #35 — Telegram FSM/recovery matrix — completed.
 3. #36 — durable generation lifecycle — completed.
 4. #37 — outbox/media/delivery/billing reconciliation — completed.
-5. #9 — administrative control plane — completed through PR #54.
+5. #9 — administrative domain/control-plane core — completed through PR #54, with extension transport wiring separately tracked by #55.
 
-## Remaining known state/ops gap
+## Remaining known state/ops gaps
 
-At this documentation revision, the explicit known infrastructure state gap is issue #50: automatic/verified short-retention lifecycle configuration for abandoned `inputs/` objects. Until merged, operations must enforce that rule externally.
+At this documentation revision, two explicit gaps remain:
+
+1. **#50 — temporary input lifecycle automation.** Current `main` requires an external short-retention bucket rule for abandoned `inputs/` objects. Automatic application/verification of that lifecycle is not merged production behavior.
+2. **#55 — admin extension transport wiring.** Extension service/router modules exist but are not registered by current FastAPI/Telegram entrypoints. Documentation treats only the registered core admin transports as active.
 
 Other future product epics can introduce new model/product/payment/referral states. When they do, this file must be updated at the same time as domain transitions, database constraints and tests.
 
@@ -260,5 +273,6 @@ A new durable/FSM/admin state is not complete until all applicable items exist:
 - cancellation behavior;
 - operator visibility/recovery;
 - database constraint/migration where durable;
+- actual transport wiring where user/operator reachable;
 - tests;
 - documentation.
