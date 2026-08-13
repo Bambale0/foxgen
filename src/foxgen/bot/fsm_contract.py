@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Mapping
 
-from foxgen.bot.states import GenerationStates
+from foxgen.bot.states import FeedStates, GenerationStates
 
 
 @dataclass(frozen=True, slots=True)
@@ -71,7 +71,7 @@ STATE_CONTRACTS: Mapping[str, StateContract] = MappingProxyType(
         ),
         GenerationStates.choosing_model.state: StateContract(
             success=(GenerationStates.waiting_prompt.state,),
-            back=GenerationStates.choosing_mode.state,
+            back="generation mode or cancel feed remix",
             cancel=_TO_MENU,
             timeout=_EXPIRED,
             invalid_input="keep state and repeat compatible model choices",
@@ -148,6 +148,14 @@ STATE_CONTRACTS: Mapping[str, StateContract] = MappingProxyType(
             timeout="recover from durable generation/idempotency state",
             invalid_input="report that generation is already launching",
             stale_callback="resolve through durable generation/idempotency state",
+        ),
+        FeedStates.waiting_comment.state: StateContract(
+            success=(_TO_MENU,),
+            back="cancel comment and return to publication",
+            cancel="clear comment draft without mutating the publication",
+            timeout=_EXPIRED,
+            invalid_input="keep state and request text up to 300 characters",
+            stale_callback=_STALE,
         ),
     }
 )
