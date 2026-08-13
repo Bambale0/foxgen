@@ -39,6 +39,57 @@ REQUIRED_COLUMNS: dict[str, frozenset[str]] = {
     "wallet_accounts": frozenset({"user_id", "available_units", "reserved_units"}),
     "balance_reservations": frozenset({"generation_id", "status", "amount_units"}),
     "ledger_entries": frozenset({"idempotency_key", "entry_type", "available_delta"}),
+    "admin_users": frozenset({"user_id", "role", "scopes", "active"}),
+    "admin_commands": frozenset(
+        {
+            "id",
+            "idempotency_key",
+            "admin_user_id",
+            "request_id",
+            "action",
+            "request_hash",
+            "request_payload",
+            "response_payload",
+            "status",
+        }
+    ),
+    "admin_audit_events": frozenset(
+        {"id", "admin_user_id", "request_id", "action", "outcome", "payload"}
+    ),
+    "user_restrictions": frozenset({"user_id", "blocked", "reason", "updated_by"}),
+    "tariff_versions": frozenset({"id", "version", "payload", "created_by"}),
+    "payment_events": frozenset(
+        {"id", "provider", "external_id", "user_id", "status", "credited_ledger_key"}
+    ),
+    "operation_events": frozenset(
+        {"id", "parent_operation_id", "operation_type", "status", "payload"}
+    ),
+    "support_tickets": frozenset({"id", "user_id", "status", "assigned_admin_id"}),
+    "support_messages": frozenset({"id", "ticket_id", "sender_kind", "body", "status"}),
+    "support_outbox": frozenset(
+        {"id", "message_id", "recipient_id", "status", "attempts", "available_at"}
+    ),
+    "cms_documents": frozenset({"id", "slug", "title", "published_version_id"}),
+    "cms_document_versions": frozenset(
+        {"id", "document_id", "version", "body", "created_by", "published_at"}
+    ),
+    "notification_campaigns": frozenset(
+        {"id", "name", "message", "segment", "status", "created_by"}
+    ),
+    "notification_deliveries": frozenset(
+        {"id", "campaign_id", "recipient_id", "status", "attempts", "available_at"}
+    ),
+    "admin_outbox": frozenset(
+        {"id", "event_type", "target_id", "status", "attempts", "available_at"}
+    ),
+    "partner_profiles": frozenset({"user_id", "earned_units", "withdrawn_units"}),
+    "partner_withdrawals": frozenset({"id", "user_id", "amount_units", "status"}),
+    "promo_codes": frozenset({"code", "active", "reward_units", "uses"}),
+    "prompt_library_items": frozenset({"id", "title", "prompt", "status"}),
+    "runtime_flags": frozenset({"key", "enabled", "value", "updated_by"}),
+    "model_availability": frozenset({"model_slug", "enabled", "reason", "updated_by"}),
+    "trend_items": frozenset({"id", "title", "payload", "active"}),
+    "feed_moderation_actions": frozenset({"id", "content_id", "action", "active"}),
 }
 
 
