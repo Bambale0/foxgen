@@ -56,11 +56,31 @@ The underlying admin services/domain models remain present. Existing registered 
 
 Do not work around this gap by duplicating service logic in new handlers. The correct fix is to register the existing extension routers before broad fallbacks, add route/FSM regression tests and then update this document/API reference.
 
+## 3. `FOXGEN_S3_CREATE_BUCKET` is declared but inactive
+
+Status: **reserved setting; current application storage does not consume it**.
+
+Tracked by issue **#57**.
+
+`Settings` declares:
+
+```text
+FOXGEN_S3_CREATE_BUCKET=false
+```
+
+but current `S3MediaStorage` has no create-bucket option and expects the configured bucket to already exist. Setting this variable to `true` therefore does not provision an external S3 bucket.
+
+Current Compose MinIO bootstrap creates the configured local/production MinIO bucket through infrastructure setup. For an external S3-compatible deployment, provision the private bucket separately.
+
+This is distinct from issue #50: an existing bucket still requires the temporary `inputs/` lifecycle policy.
+
+The eventual fix should either wire controlled bootstrap semantics with tests or remove/deprecate the unused setting. Normal request-time media upload should not opportunistically create production buckets.
+
 ## Documentation rule
 
-When either limitation is resolved:
+When a limitation is resolved:
 
 1. merge executable code and tests first;
 2. remove/update the limitation in the same PR;
-3. update `api-reference.md`, `admin-capability-matrix.md`, `telegram-flows.md` or `input-media-lifecycle.md` as applicable;
-4. update production preflight/runbook if operational setup changes.
+3. update `api-reference.md`, `admin-capability-matrix.md`, `telegram-flows.md`, `configuration.md` or `input-media-lifecycle.md` as applicable;
+4. update env examples and production preflight/runbook if operational setup changes.
