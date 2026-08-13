@@ -1,6 +1,6 @@
 # FoxGen documentation
 
-This directory documents the executable state of FoxGen on `main`. The source code, tests and migrations remain authoritative when a mismatch is discovered; the documentation must then be corrected in the same change.
+This directory documents the executable state of FoxGen on `main`. Source code, tests and migrations remain authoritative when a mismatch is discovered; documentation must then be corrected in the same change.
 
 ## Start here
 
@@ -8,6 +8,7 @@ This directory documents the executable state of FoxGen on `main`. The source co
 |---|---|
 | [`../README.md`](../README.md) | Product/runtime overview and quick start |
 | [`architecture.md`](architecture.md) | Service boundaries, durable pipelines and safety invariants |
+| [`database-schema.md`](database-schema.md) | PostgreSQL table/state/constraint map |
 | [`configuration.md`](configuration.md) | Complete configuration groups and production rules |
 | [`api-reference.md`](api-reference.md) | Core, billing/generation and signed internal-admin HTTP surface |
 | [`telegram-flows.md`](telegram-flows.md) | User Telegram flows, Quick Start, FSM and `/admin` shell |
@@ -68,6 +69,6 @@ PostgreSQL is the source of truth for generations, billing, outbox/inbox events,
 
 ## How to update documentation
 
-When code changes, update documentation by behavior area rather than adding an isolated note. Remove obsolete roadmap language. For a schema change, update architecture/state docs and operational rollback notes. For a new admin capability, update both the capability matrix and API/runbook. For new configuration, update `configuration.md`, `.env.example` and `deploy/production.env.example` together.
+When code changes, update documentation by behavior area rather than adding an isolated note. Remove obsolete roadmap language. For a schema change, update architecture/schema/state docs and operational rollback notes. For a new admin capability, update both the capability matrix and API/runbook. For new configuration, update `configuration.md`, `.env.example` and `deploy/production.env.example` together.
 
 Review [`../AGENTS.md`](../AGENTS.md) for repository-wide rules.
