@@ -144,7 +144,12 @@ class TelegramInputMediaStorage:
 
     async def presign(self, storage_key: str) -> str:
         normalized = storage_key.strip()
-        if not normalized.startswith("inputs/"):
+        # Ordinary Telegram references live under inputs/. Feed-remix is the only flow that
+        # injects already archived generation media; those keys come from the authenticated
+        # feed API and remain durable/read-only. Cleanup below still targets inputs/ only.
+        if not (
+            normalized.startswith("inputs/") or normalized.startswith("generations/")
+        ):
             raise SubmissionError(
                 ErrorCode.VALIDATION,
                 "Черновик содержит некорректную ссылку на входной файл.",
