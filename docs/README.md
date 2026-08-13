@@ -7,6 +7,7 @@ This directory documents the executable state of FoxGen on `main`. Source code, 
 | Document | Purpose |
 |---|---|
 | [`../README.md`](../README.md) | Product/runtime overview and quick start |
+| [`development.md`](development.md) | Local setup, Compose, migrations and debugging |
 | [`architecture.md`](architecture.md) | Service boundaries, durable pipelines and safety invariants |
 | [`database-schema.md`](database-schema.md) | PostgreSQL table/state/constraint map |
 | [`configuration.md`](configuration.md) | Complete configuration groups and production rules |
@@ -17,13 +18,17 @@ This directory documents the executable state of FoxGen on `main`. Source code, 
 | [`generation-operations.md`](generation-operations.md) | Status/cancel/operator resolution for durable generations |
 | [`postprocessing-reconciliation.md`](postprocessing-reconciliation.md) | Retry/dead-letter/media/delivery reconciliation |
 | [`input-media-lifecycle.md`](input-media-lifecycle.md) | Telegram input object lifecycle and cleanup requirements |
-| [`admin-capability-matrix.md`](admin-capability-matrix.md) | Implemented admin capability/domain matrix |
+| [`admin-capability-matrix.md`](admin-capability-matrix.md) | Admin capability/domain/transport matrix |
 | [`admin-control-plane.md`](admin-control-plane.md) | Admin security, HMAC, RBAC, workers and rollout |
+| [`security.md`](security.md) | Consolidated trust boundaries and prohibited shortcuts |
 | [`testing-ci.md`](testing-ci.md) | Reproducible CI and local quality gates |
+| [`release-checklist.md`](release-checklist.md) | Pre-merge, pre-deploy and post-deploy checklist |
 | [`production-deploy.md`](production-deploy.md) | Exact-SHA production deployment workflow |
 | [`github-environment-setup.md`](github-environment-setup.md) | GitHub `production` Environment setup |
 | [`operations-runbook.md`](operations-runbook.md) | Day-2 operations, smoke checks and incident handling |
+| [`known-limitations.md`](known-limitations.md) | Known gaps that must not be described as active production behavior |
 | [`state-gap-audit.md`](state-gap-audit.md) | Historical state-gap audit with current completion status |
+| [`documentation-policy.md`](documentation-policy.md) | Documentation source-of-truth and maintenance rules |
 
 ## Scope boundary
 
@@ -66,9 +71,14 @@ PostgreSQL is the source of truth for generations, billing, outbox/inbox events,
 6. Admin HTTP is backend-only, network allowlisted and signed over exact raw request bytes.
 7. User/provider media remains private; public clients never receive storage credentials.
 8. Production deployment is gated by CI and deploys an exact tested `main` SHA.
+9. An existing source module/branch is not documented as active until it is wired/merged and covered by runtime tests.
+
+## Known limitations are first-class documentation
+
+`known-limitations.md` records discrepancies such as external `inputs/` lifecycle enforcement and currently unwired admin extension routers. This prevents roadmap/prepared code from being mistaken for production behavior.
 
 ## How to update documentation
 
-When code changes, update documentation by behavior area rather than adding an isolated note. Remove obsolete roadmap language. For a schema change, update architecture/schema/state docs and operational rollback notes. For a new admin capability, update both the capability matrix and API/runbook. For new configuration, update `configuration.md`, `.env.example` and `deploy/production.env.example` together.
+When code changes, update documentation by behavior area rather than adding an isolated note. Remove obsolete roadmap language. For a schema change, update architecture/schema/state docs and operational rollback notes. For a new admin capability, update capability matrix, API/runbook and limitation status. For new configuration, update `configuration.md`, `.env.example` and `deploy/production.env.example` together.
 
-Review [`../AGENTS.md`](../AGENTS.md) for repository-wide rules.
+Review [`documentation-policy.md`](documentation-policy.md) and [`../AGENTS.md`](../AGENTS.md) for maintenance rules.
