@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from foxgen.admin.access_service import AdminAccessService
 from foxgen.admin.content_service import AdminCmsService, AdminNotificationService, AdminSupportService
 from foxgen.admin.finance_service import AdminOperationService, AdminPaymentService, AdminTariffService
 from foxgen.admin.operations_service import (
@@ -22,6 +23,7 @@ from foxgen.infra.database import Database
 @dataclass(frozen=True, slots=True)
 class AdminServices:
     policy: AdminPolicy
+    access: AdminAccessService
     queries: AdminQueryService
     users: AdminUserService
     payments: AdminPaymentService
@@ -47,6 +49,7 @@ class AdminServices:
         executor = AdminCommandExecutor(database)
         return cls(
             policy=AdminPolicy(database, bootstrap_superuser_ids=bootstrap_superuser_ids),
+            access=AdminAccessService(database, executor),
             queries=AdminQueryService(database, executor),
             users=AdminUserService(database, executor),
             payments=AdminPaymentService(database, executor),
