@@ -9,6 +9,7 @@ from foxgen.domain.models import ACTIVE_GENERATION_STATUSES, GenerationStatus, M
 from foxgen.infra.admin_user_models import UserRestriction
 from foxgen.infra.billing import reserve_generation_charge
 from foxgen.infra.database import Database, Generation, OutboxEvent, User
+from foxgen.infra.feed import SqlAlchemyFeedRepository
 
 
 _ACTIVE_STATUS_VALUES = tuple(status.value for status in ACTIVE_GENERATION_STATUSES)
@@ -58,7 +59,9 @@ class SqlAlchemyGenerationRepository:
         input_payload: dict[str, object],
         user_concurrency_limit: int,
         global_concurrency_limit: int,
+        source_publication_id: UUID | None = None,
     ) -> tuple[GenerationSnapshot, bool]:
+        feed_repository = SqlAlchemyFeedRepository(self._database)
         async with self._database.session() as session:
             async with session.begin():
                 existing = await session.scalar(
@@ -76,6 +79,14 @@ class SqlAlchemyGenerationRepository:
                         ErrorCode.AUTHORIZATION,
                         "Доступ к генерациям для этого аккаунта ограничен.",
                         details={"reason": restriction.reason},
+                    )
+
+                if source_publication_id is not None:
+                    # Validate the exact publication before billing or provider work. The lineage
+                    # row is written in this same transaction after the generation ID exists.
+                    await feed_repository.validate_remix_source(
+                        session,
+                        source_publication_id=source_publication_id,
                     )
 
                 global_active = await session.scalar(
@@ -132,8 +143,14 @@ class SqlAlchemyGenerationRepository:
                 )
                 generation = insert_result.scalar_one_or_none()
                 if generation is not None:
+                    if source_publication_id is not None:
+                        await feed_repository.create_derivative_link(
+                            session,
+                            generation_id=generation.id,
+                            source_publication_id=source_publication_id,
+                        )
                     # Price lookup, wallet lock, reserve movement, immutable ledger entry,
-                    # generation and outbox are committed as one transaction.
+                    # generation, derivative lineage and outbox are one transaction.
                     await reserve_generation_charge(
                         session,
                         generation_id=generation.id,
