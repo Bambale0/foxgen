@@ -10,6 +10,7 @@ from foxgen.feed.domain import (
     PublicationRecord,
     PublicationScope,
     PublicationView,
+    RemixSource,
     ShareReceipt,
     post_start_param,
 )
@@ -348,17 +349,22 @@ class FeedService:
         *,
         viewer_user_id: int,
         publication_id: UUID,
-    ) -> PublicationView:
-        publication = await self.publication(
-            viewer_user_id=viewer_user_id,
+    ) -> RemixSource:
+        record = await self._repository.get_publication(
             publication_id=publication_id,
+            viewer_user_id=viewer_user_id,
         )
-        if not publication.media_urls:
+        if record is None:
+            raise FeedError(ErrorCode.TASK_NOT_FOUND, "Публикация не найдена.")
+        if not record.storage_keys:
             raise FeedError(
                 ErrorCode.TASK_NOT_FOUND,
                 "У публикации нет доступного результата для remix.",
             )
-        return publication
+        return RemixSource(
+            publication=await self._view(record, viewer_user_id=viewer_user_id),
+            storage_keys=record.storage_keys,
+        )
 
     async def _view(
         self,
