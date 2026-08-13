@@ -13,11 +13,7 @@ from foxgen.application.media import (
     storage_key_for,
 )
 from foxgen.core.errors import ErrorCode, SubmissionError
-from foxgen.domain.models import (
-    DeliveryStatus,
-    GenerationStatus,
-    MediaAssetStatus,
-)
+from foxgen.domain.models import DeliveryStatus, GenerationStatus, MediaAssetStatus
 
 
 @dataclass(frozen=True, slots=True)
@@ -188,10 +184,7 @@ class MediaPipeline:
         }:
             await self._repository.complete_outbox(message.id)
             return
-        if generation.status in {
-            GenerationStatus.FAILED,
-            GenerationStatus.CANCELLED,
-        }:
+        if generation.status in {GenerationStatus.FAILED, GenerationStatus.CANCELLED}:
             await self._repository.complete_outbox(message.id)
             return
         if generation.status == GenerationStatus.RESULT_READY:
@@ -354,6 +347,7 @@ class MediaPipeline:
                 recipient_id=delivery.recipient_id,
                 urls=urls,
                 caption=caption,
+                generation_id=delivery.generation_id,
             )
         except Exception as exc:
             # Telegram send is not idempotent. Do not automatically replay an ambiguous send.
