@@ -1,49 +1,59 @@
-# FoxGen administrative control plane
+# Administrative control plane
 
-## Purpose
+FoxGen implements one shared administrative domain layer through the registered Telegram `/admin`, signed backend HTTP API and backend-only operator web surface. The public Mini App is intentionally outside this implementation.
 
-FoxGen exposes one administrative domain layer through three transports:
+Prepared extension modules also exist in the source tree but are not yet registered by runtime entrypoints. They are tracked by issue #55 and are documented separately so source-file presence is not confused with production reachability.
 
-```text
-Telegram /admin ───────┐
-                       ├─> AdminPolicy -> AdminServices -> PostgreSQL/ledger/outboxes
-Signed internal HTTP ──┤
-                       └─> internal admin web operator surface
-                                      |
-                                      v
-                       AdminWorker -> Telegram / local safe replay jobs
-```
-
-The public mini-app is intentionally outside this implementation. The operator web surface lives only under `/internal/admin/ui` and is protected by the same server-side role policy as the other transports.
-
-## Security model
-
-### Internal HTTP signature
-
-Every request to `/internal/admin/*` requires:
-
-- `X-Admin-User-Id` — administrator Telegram/internal ID;
-- `X-Request-Id` — caller-generated correlation ID;
-- `X-Admin-Timestamp` — Unix seconds;
-- `X-Admin-Signature` — lowercase HMAC-SHA256 hex digest.
-
-The signed byte sequence is exactly:
+## Architecture
 
 ```text
-<timestamp>\n<METHOD>\n<path>\n<request_id>\n<raw request body bytes>
+Telegram /admin ─────────────┐
+                             │
+Signed /internal/admin/* ────┼─> AdminPolicy
+                             │      |
+Backend operator UI ─────────┘      v
+                                AdminServices
+                                |    |    |
+                                |    |    +-> immutable billing/admin ledger
+                                |    +------> PostgreSQL domain state
+                                +-----------> durable admin/support/campaign outboxes
+                                                   |
+                                                   v
+                                               AdminWorker
 ```
 
-Query parameters are not part of the signature. The body is: the exact bytes received by FastAPI, not a reserialized JSON object. Timestamp skew is limited by `FOXGEN_ADMIN_HMAC_MAX_SKEW_SECONDS`.
+Transports do not own independent write business logic.
 
-All write commands additionally require `Idempotency-Key`. Destructive or expensive commands require `X-Admin-Confirm: CONFIRM`.
+## Server-side authorization
 
-### Network allowlist
+A privileged UI is not an authorization mechanism. Every operation is revalidated server-side.
 
-The application checks `request.client.host` against `FOXGEN_ADMIN_NETWORK_ALLOWLIST` CIDRs before HMAC/RBAC. The default production example allows loopback plus RFC1918 Docker addresses because the Telegram bot is a separate backend container.
+### RBAC
 
-Do not trust `X-Forwarded-For` for this decision. If a reverse proxy sits in front of the API, the proxy itself must deny the admin prefix from public ingress.
+`AdminPolicy` is the common policy source. Current roles include:
 
-Recommended Nginx rule in the public virtual host:
+- `superadmin`;
+- `operator`;
+- `support`;
+- `moderator`;
+- `finance`;
+- `marketing`.
+
+Durable administrators live in `admin_users` with role/scope state. `FOXGEN_ADMIN_SUPERUSER_IDS` bootstraps initial superadmin access and should be minimized after durable RBAC is established.
+
+Every registered Telegram admin callback/FSM continuation, signed HTTP request and operator-web action resolves a fresh admin context and requires the relevant scope.
+
+## Network allowlist
+
+The signed API first checks `request.client.host` against CIDRs in:
+
+```env
+FOXGEN_ADMIN_NETWORK_ALLOWLIST=127.0.0.1/32,::1/128,172.16.0.0/12
+```
+
+Use the narrowest real backend subnet in production. Do not trust arbitrary `X-Forwarded-For` values for this check. Never set `0.0.0.0/0` merely to make an integration work.
+
+Public reverse proxy must deny the whole admin prefix, for example:
 
 ```nginx
 location ^~ /internal/admin/ {
@@ -51,69 +61,238 @@ location ^~ /internal/admin/ {
 }
 ```
 
-Backend-only callers use `http://api:8080/internal/admin/...` over the private Docker/VPC network and never traverse the public virtual host.
+Backend callers use the private service/VPC path.
 
-### RBAC
+## HMAC signature
 
-`AdminPolicy` is the only role/scopes source used by application code. Roles currently include:
+Registered machine routes under `/internal/admin/*` require:
 
-- `superadmin`
-- `operator`
-- `support`
-- `moderator`
-- `finance`
-- `marketing`
+```text
+X-Admin-User-Id
+X-Request-Id
+X-Admin-Timestamp
+X-Admin-Signature
+```
 
-Bootstrap superusers can be supplied via `FOXGEN_ADMIN_SUPERUSER_IDS`. This is a bootstrap path only; durable administrators live in `admin_users` and can have additional explicit scopes. Every Telegram callback/FSM continuation, HTTP request and web action re-runs server-side authorization.
+The signature is lowercase HMAC-SHA256 hex over exactly:
 
-### Audit and redaction
+```text
+<timestamp>\n<METHOD>\n<path>\n<request_id>\n<raw request body bytes>
+```
 
-Every write goes through `AdminCommandExecutor` and creates an append-only command record plus an audit event. The same `(admin_user_id, action, Idempotency-Key)` replays the stored result when the request hash matches and returns a conflict when the request changed.
+The body must be the exact bytes sent. Do not parse JSON and reserialize after calculating the signature. Query parameters are not included in the current canonical string; the URL path is.
 
-Audit/operation output recursively redacts keys containing:
+`FOXGEN_ADMIN_HMAC_MAX_SKEW_SECONDS` limits stale/replay requests.
 
-- `token`
-- `secret`
-- `password`
-- `authorization`
-- `api_key`
-- `webhook`
-- `callback`
+## Write safety
 
-Do not place raw provider secrets into arbitrary free-form fields.
+All registered admin write routes require:
 
-## Durable background work
+```text
+Idempotency-Key
+```
 
-`AdminWorker` is executed from the normal `foxgen-worker` process and claims work with row locks and `SKIP LOCKED`.
+Routes classified as destructive/expensive additionally require:
 
-### Support replies
+```text
+X-Admin-Confirm: CONFIRM
+```
 
-HTTP/Telegram admin flows create `SupportMessage(status=queued)` and `SupportOutbox(status=pending)` in one transaction. The worker performs Telegram delivery later. Retriable failures use bounded exponential backoff. Network-ambiguous sends are not automatically retried because Telegram may already have accepted the message; they go to manual review/dead letter rather than intentionally duplicating the reply.
+Confirmation is enforced by backend code, not merely a Telegram/web preview button.
 
-### Notification campaigns
+## Command ledger and idempotency
 
-Starting a campaign materializes one `NotificationDelivery` per recipient under a unique `(campaign_id, recipient_id)` constraint. Workers lease deliveries, apply the configured global send rate, retry safe failures and complete the campaign after no pending/retry/processing deliveries remain.
+Admin writes run through the command executor/repository. A durable command records:
 
-### Payment reprocess
+- admin user;
+- request/correlation ID;
+- action and target;
+- request fingerprint/payload;
+- response payload/error;
+- command status and timestamps.
 
-A completed payment is credited through a deterministic immutable-ledger key:
+Behavior:
+
+```text
+same admin + action + Idempotency-Key + same request
+    -> stored result (replayed)
+
+same admin + action + same key + changed request
+    -> idempotency conflict
+```
+
+External side effects must not occur twice merely because an HTTP/Telegram client retried.
+
+## Audit and redaction
+
+Admin writes append audit records. Operator output recursively redacts sensitive fields whose keys contain terms such as:
+
+```text
+token
+secret
+password
+authorization
+api_key
+webhook
+callback
+```
+
+Redaction is a defense layer, not permission to store raw credentials in arbitrary reason/metadata fields.
+
+## User restriction enforcement
+
+Blocking a user changes durable restriction state used by paid-generation admission. The transaction that admits a generation re-checks block status; the restriction does not rely on hiding Telegram controls.
+
+This protects against stale client state, copied callbacks and direct internal API attempts using a blocked user ID.
+
+## Runtime model controls
+
+Administrative model availability is independent of static provider-registry readiness:
+
+```text
+registry production_ready
+AND
+runtime availability enabled
+```
+
+must both hold before paid admission. A failing model can therefore be disabled without deployment while keeping its reviewed contract intact.
+
+## Durable support replies
+
+A support reply request does not send Telegram as its sole side effect inside the request transaction.
+
+The service commits:
+
+```text
+SupportMessage(status=queued)
+SupportOutbox(status=pending)
+```
+
+The admin worker later claims and sends the reply. Ambiguous external acceptance must not intentionally create duplicate replies.
+
+## Notification campaigns
+
+Campaign start does not iterate and send recipients inside the HTTP request.
+
+The service:
+
+1. validates campaign/segment;
+2. materializes `NotificationDelivery` recipients once;
+3. commits campaign state;
+4. returns the durable command result.
+
+Workers lease deliveries, apply `FOXGEN_ADMIN_NOTIFICATION_RATE_PER_SECOND`, retry safe failures and converge campaign state.
+
+## Payment recheck/reprocess
+
+Admin payment operations are durable worker jobs. Completed-payment credit uses:
 
 ```text
 payment-credit:<provider>:<external_id>
 ```
 
-A second reprocess observes that key and cannot apply another credit. `recheck` uses a provider adapter; when no adapter for that payment provider is registered, the job remains fail-closed and eventually dead-letters instead of inventing provider state.
+as the immutable billing-ledger idempotency key. Reprocessing the same payment cannot produce a second effective credit even when another admin request uses a new command key.
 
-### Operation replay
+A provider without a supported recheck adapter fails closed rather than inventing remote state.
 
-Admin replay creates a child `OperationEvent` without charging. The worker only replays local non-billable `generation.archive` and `generation.deliver` outbox events. Provider submission (`generation.submit`) is deliberately not replayable through this path.
+## Safe operation replay
+
+Admin replay creates an auditable child `OperationEvent`. The worker permits only explicitly safe local/non-billable replay classes supported by current code.
+
+Forbidden through replay:
+
+```text
+generation.submit
+```
+
+because it crosses the billable non-idempotent provider boundary.
+
+## Versioned content/configuration
+
+### Tariffs
+
+Tariff publishing creates immutable/versioned history. Do not overwrite historical published commercial state in place.
+
+### CMS
+
+Documents own versions. Publishing one version does not rewrite prior published history.
+
+### Runtime flags
+
+Feature flags/model availability are mutable operational state protected by policy, audit and idempotency. They are not a replacement for code/provider-contract changes when schemas actually change.
+
+## Registered Telegram `/admin`
+
+The current main admin router provides the core interactive shell for summary/users/finance/payments/partners/withdrawals/tariffs/promos/prompts/broadcast/support/operations/runtime/AI/CMS/export workflows exposed by `bot/admin.py`.
+
+Every privileged callback/FSM continuation re-authorizes through the signed backend admin API. Dangerous operations use explicit confirmation and shared services.
+
+`bot/admin_extras.py` is currently **not registered**. Dedicated analytics, XLS-export and approved-withdrawal shortcut callbacks from that module are tracked by #55 and must not be treated as active until wired/tested.
+
+See `telegram-flows.md`.
+
+## Registered signed HTTP API
+
+Current FastAPI app registers `create_admin_router()`. It provides the active core routes for:
+
+- health/summary/users;
+- generations;
+- finance/payments/tariffs;
+- operations/timeline/replay/refund;
+- support;
+- CMS;
+- notifications;
+- partners/withdrawals;
+- promos/prompts;
+- runtime/model availability;
+- moderation;
+- audit/commands/AI diagnostics;
+- CSV exports.
+
+Exact registered paths are listed in `api-reference.md`.
+
+## Registered backend operator web
+
+`create_admin_web_router()` exposes `/internal/admin/ui` when both admin API and admin web switches are enabled.
+
+The registered surface includes:
+
+- signed session mint;
+- private HTML dashboard;
+- server-authorized section reads;
+- generic shared-service action dispatcher with idempotency and destructive confirmation.
+
+It is backend/operator-only and must not be published as a public Mini App.
+
+## Prepared but inactive extensions — issue #55
+
+Current source tree also contains:
+
+```text
+src/foxgen/api/admin_extensions.py
+src/foxgen/api/admin_web_extensions.py
+src/foxgen/bot/admin_extras.py
+```
+
+but runtime entrypoints do not register these routers.
+
+Prepared, currently inactive affordances include:
+
+- direct admin-user list/set routes;
+- dedicated analytics route;
+- privileged generation-preview route;
+- XLS export routes;
+- operator-web analytics/preview/admin-management extension routes;
+- Telegram analytics/XLS/approved-withdrawal extra callbacks.
+
+Underlying services exist, but those extension transports are not production-reachable until #55 is merged. Do not duplicate their service logic as a workaround.
 
 ## Environment variables
 
 ```env
 FOXGEN_ADMIN_API_ENABLED=false
 FOXGEN_ADMIN_WEB_ENABLED=false
-FOXGEN_ADMIN_HMAC_KEY=<random dedicated secret>
+FOXGEN_ADMIN_HMAC_KEY=<dedicated-random-secret>
 FOXGEN_ADMIN_HMAC_MAX_SKEW_SECONDS=300
 FOXGEN_ADMIN_NETWORK_ALLOWLIST=127.0.0.1/32,::1/128,172.16.0.0/12
 FOXGEN_ADMIN_SUPERUSER_IDS=<telegram-id>[,<telegram-id>...]
@@ -124,34 +303,46 @@ FOXGEN_ADMIN_WORKER_MAX_ATTEMPTS=8
 FOXGEN_ADMIN_NOTIFICATION_RATE_PER_SECOND=20
 ```
 
-Use a dedicated admin HMAC secret. Do not reuse the internal task token, Telegram token, KIE key or webhook secret.
+Use a dedicated admin HMAC secret. Do not reuse Telegram token, ordinary internal token, billing-admin token, KIE credentials or storage/database credentials.
 
 ## Rollout order
 
-1. Deploy code with `FOXGEN_ADMIN_API_ENABLED=false` and `FOXGEN_ADMIN_WEB_ENABLED=false`.
-2. Run `alembic upgrade head` and verify revision `20260813_0008`.
-3. Configure `FOXGEN_ADMIN_HMAC_KEY`, the narrowest practical backend CIDR allowlist and one bootstrap admin ID.
-4. Confirm the public reverse proxy returns `404` for `/internal/admin/health` from the Internet.
-5. Enable `FOXGEN_ADMIN_API_ENABLED=true` and restart API, bot and worker.
-6. Send `/admin` from the bootstrap admin and verify the summary screen.
-7. Verify a non-admin gets denied from `/admin` and cannot continue a copied callback.
-8. Test a small positive then negative balance adjustment on a dedicated test user and confirm the ledger/audit record.
-9. Test one support reply and confirm it appears first as outbox work, then `sent` after the worker consumes it.
-10. Create a notification campaign targeted to one test user, preview it, start it and confirm one delivery row and one Telegram message.
-11. Enable `FOXGEN_ADMIN_WEB_ENABLED=true` only after the same HMAC/network checks pass; mint a short session with `POST /internal/admin/ui/session`.
-12. Remove bootstrap IDs from environment after equivalent durable `admin_users` rows exist, when operational policy allows.
+1. Deploy code with admin API/web disabled.
+2. Run `alembic upgrade head` and verify revision `20260813_0008` is applied.
+3. Configure dedicated HMAC key and narrow backend CIDR allowlist.
+4. Configure one bootstrap admin ID.
+5. Verify public ingress denies `/internal/admin/health`.
+6. Enable `FOXGEN_ADMIN_API_ENABLED=true`.
+7. Restart/deploy API, bot and worker.
+8. Test signed `/internal/admin/health` over the backend path.
+9. Send `/admin` from the bootstrap admin.
+10. Verify a regular user is denied from `/admin` and copied callback data.
+11. Perform one controlled idempotent balance adjustment and inspect audit/ledger.
+12. Test one support reply; verify durable outbox exists before worker delivery.
+13. Test one-recipient notification campaign and verify one delivery row/message.
+14. Enable `FOXGEN_ADMIN_WEB_ENABLED=true` only if the private operator surface is required and its network/session boundary is verified.
+15. Move long-lived operator identity from environment bootstrap toward durable `admin_users` according to operational policy. Direct admin-management extension routes themselves remain #55 until wired.
 
 ## Smoke checks
 
-Signed health:
+### Signed health
 
 ```text
 GET /internal/admin/health
 ```
 
-Expected: `200`, correct `admin_user_id`, role and request ID. The same request with a stale timestamp, modified raw body, wrong signature, non-allowlisted source or regular user must fail.
+Expected success contains authorized admin identity/role/request ID.
 
-Operational checks:
+Negative cases that must fail:
+
+- missing/invalid signature;
+- raw body changed after signing;
+- stale timestamp;
+- source outside allowlist;
+- regular/non-admin user;
+- API disabled.
+
+### Core reads
 
 ```text
 GET /internal/admin/summary
@@ -160,7 +351,9 @@ GET /internal/admin/runtime
 GET /internal/admin/audit
 ```
 
-Database checks:
+Do not use a prepared #55 extension path as a smoke check until the router is registered.
+
+### Database health
 
 ```sql
 select status, count(*) from admin_commands group by status;
@@ -170,23 +363,48 @@ select status, count(*) from notification_deliveries group by status;
 select status, count(*) from admin_outbox group by status;
 ```
 
-Any growing `dead_letter` count requires operator review before increasing retry limits.
+Rising dead-letter counts require root-cause review before retry-budget changes.
+
+## Emergency containment
+
+1. Set `FOXGEN_ADMIN_API_ENABLED=false`.
+2. Set `FOXGEN_ADMIN_WEB_ENABLED=false`.
+3. Deploy/restart API and bot so no new admin commands are accepted.
+4. If a campaign must stop, cancel it through the controlled path before disabling access when possible.
+5. Keep command/audit/outbox tables for forensic evidence.
+6. Inspect in-flight admin worker jobs before changing durable state.
 
 ## Rollback
 
-Fast containment requires no schema rollback:
+Application rollback can disable the feature and revert application code while keeping durable admin tables/history.
 
-1. set `FOXGEN_ADMIN_API_ENABLED=false` and `FOXGEN_ADMIN_WEB_ENABLED=false`;
-2. restart API/bot so new admin commands cannot be accepted;
-3. if an active campaign must stop, cancel it before disabling the API or update its durable state through a controlled database procedure;
-4. retain admin/audit/outbox tables for forensic history.
+Only remove/downgrade the admin schema when:
 
-Only run `alembic downgrade 20260725_0007` when there is no admin command/support/campaign/payment work that must be retained. The downgrade intentionally removes all admin-control-plane history.
+- no support reply is queued;
+- no campaign/delivery is running/pending;
+- no payment/admin outbox job must be retained;
+- no audit/forensic history is required;
+- migration/data consequences were explicitly reviewed.
+
+In ordinary production incidents, retaining schema/history and disabling routes is safer than deleting operational evidence.
 
 ## Incident rules
 
-- Never bypass manual confirmation by changing a handler to call a service directly.
-- Never execute support send or campaign fan-out in an HTTP request lifecycle.
-- Never replay `generation.submit` to recover an ambiguous provider submission.
-- Never expose an admin session token, HMAC key or provider credential in audit payloads.
-- Never broaden the network allowlist to `0.0.0.0/0` as a workaround for proxy/network configuration.
+- Never bypass confirmation by calling a lower-level write path directly.
+- Never expose admin HMAC/session tokens through a public frontend.
+- Never broaden network allowlist as a debugging shortcut.
+- Never mass-send campaigns directly from a request handler.
+- Never replay `generation.submit` through admin operation replay.
+- Never insert a second manual ledger credit to reprocess a payment.
+- Never mutate historical tariff/CMS/audit/ledger rows simply to make an operator UI look correct.
+- Never document a prepared extension as active merely because its source file exists.
+
+## Related documents
+
+- `admin-capability-matrix.md` — capability/transport status;
+- `api-reference.md` — registered routes and inactive #55 extensions;
+- `known-limitations.md` — current admin/storage gaps;
+- `configuration.md` — env reference;
+- `security.md` — trust boundaries;
+- `operations-runbook.md` — day-2 operations;
+- `billing.md` — financial invariants.

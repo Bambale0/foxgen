@@ -1,66 +1,156 @@
-# KIE.ai model matrix
+# KIE.ai model matrix and readiness policy
 
-FoxGen treats the KIE catalog as a versioned provider contract, not a list of marketing names. Discovering a provider model does **not** automatically make it safe for paid submission.
+FoxGen treats every provider model as a reviewed contract, not a marketing-name string. Discovering a KIE model does not automatically authorize paid submission.
 
-## Independent readiness fields
+This document describes the current registry policy in `main`. Exact provider behavior should be re-verified against official KIE documentation whenever a contract is changed or enabled.
 
-Every model returned by `GET /v1/models` exposes:
+## Readiness fields
 
-- `provider_id_verified` — the exact KIE provider identifier and API family were checked;
-- `schema_verified` — FoxGen has a strict reviewed request schema for the supported subset;
-- `enabled_for_submission` — paid task admission is allowed;
-- `tested_live` — a credentialed provider smoke test was recorded;
-- `production_ready` — provider ID, schema and submission gate are all true;
-- `contract_reviewed_at` — date of the latest explicit contract review.
+Every model exposed by `GET /v1/models` carries independent readiness metadata:
 
-`tested_live=false` is not hidden or inferred. It remains false until a real provider request is run in a controlled environment and recorded.
+- `provider_id_verified` — exact provider identifier/API family reviewed;
+- `schema_verified` — strict FoxGen request schema reviewed for the supported subset;
+- `enabled_for_submission` — code-level paid-admission allowlist permits it;
+- `tested_live` — controlled credentialed provider smoke test recorded;
+- `production_ready` — provider ID/schema/submission readiness satisfy the registry rule;
+- `contract_reviewed_at` — explicit review date;
+- capabilities/defaults/recommendation metadata.
 
-`enabled_for_submission` is also independent: a model may have a verified provider ID and strict schema while remaining disabled after a provider regression, before product launch or during an emergency rollback. The production registry uses an explicit slug allowlist rather than deriving this switch from other fields.
+`tested_live=false` must remain visible until a real test has happened; it is not inferred from contract unit tests.
 
-## Production-enabled Market models
+## Runtime administrative availability
 
-| FoxGen slug | KIE model | Supported subset | Local validation |
-|---|---|---|---|
-| `seedream-5-pro` | `seedream/5-pro-text-to-image` | text to image | strict prompt, ratio, quality and output-format enums |
-| `seedream-5-pro-edit` | `seedream/5-pro-image-to-image` | image editing | strict text contract plus 1–10 image URLs |
-| `nano-banana-2` | `nano-banana-2` | text generation and image editing | strict ratio, resolution and output-format enums; FoxGen cap of 14 images |
-| `nano-banana-pro` | `nano-banana-pro` | text generation and image editing | same reviewed normalized contract with the Pro provider ID |
-| `seedance-2` | `bytedance/seedance-2` | text, first/last frame and multimodal references | strict ratio, resolution and duration enums; mutually exclusive generation modes |
-| `seedance-2-mini` | `bytedance/seedance-2-mini` | same supported subset as Seedance 2 | same reviewed schema with the Mini provider ID |
+A model can be structurally `production_ready` in the registry while being administratively disabled at runtime.
 
-The Seedance contract additionally requires a first frame when a last frame is supplied. FoxGen accepts at most six multimodal references in total. Individual list limits and media-count caps are conservative FoxGen safety limits; they are not presented as provider-wide maxima.
+Paid admission therefore has two separate gates:
 
-`Seedance 2 Fast` is intentionally excluded from the active FoxGen registry. The product priority is the full Seedance 2 model plus Seedance 2 Mini.
+```text
+registry readiness
+AND
+runtime ModelAvailability/admin policy
+```
 
-## Catalog-only models
+`POST /internal/admin/models/{model_slug}/availability` can disable/re-enable a model without application deployment. The runtime guard is enforced before transactional paid admission, not merely hidden in Telegram UI.
 
-The catalog also contains provider IDs and capability metadata for Seedream 4.5, GPT Image 2, Flux 2 Pro, Imagen 4 Ultra, Ideogram V3, Qwen2, Wan 2.7, Grok Imagine, Kling, Hailuo, Topaz, Recraft and ElevenLabs operations.
+Use runtime disable for provider incidents/emergency containment. Use registry contract changes when the underlying supported schema/provider ID changes.
 
-These entries remain useful for discovery and roadmap planning, but their paid submission gate stays off until their exact model-specific schema is reviewed. Generic `PROMPT`, `PROMPT_IMAGES`, media-category and `PASSTHROUGH` contracts are not considered production schemas.
+## Strict production-enabled Market models
 
-A request to a catalog-only model is rejected before rate limiting, persistence, balance reservation, outbox creation or KIE access.
+| FoxGen slug | KIE provider model | Supported FoxGen subset |
+|---|---|---|
+| `seedream-5-pro` | `seedream/5-pro-text-to-image` | text-to-image with strict prompt/ratio/quality/output-format validation |
+| `seedream-5-pro-edit` | `seedream/5-pro-image-to-image` | image editing with strict text contract and bounded image URL list |
+| `nano-banana-2` | `nano-banana-2` | text generation/image editing with reviewed ratio/resolution/output-format contract |
+| `nano-banana-pro` | `nano-banana-pro` | Pro provider ID with the reviewed normalized Nano Banana contract |
+| `seedance-2` | `bytedance/seedance-2` | text, first/last-frame and multimodal-reference video subset |
+| `seedance-2-mini` | `bytedance/seedance-2-mini` | same reviewed supported mode family with Mini provider ID |
 
-## API behavior
+The Seedance contract enforces mutually compatible generation modes and requires a first frame when a last frame is supplied. Conservative FoxGen reference/image caps are product safety limits, not claims about the provider's global maximum.
 
-- `GET /v1/models` returns catalog metadata and independent readiness fields.
-- `GET /v1/models/{slug}` also returns the current JSON schema.
-- `POST /v1/models/{slug}/validate` performs free local schema validation.
-- `POST /v1/models/{slug}/tasks` admits only `production_ready` models and validates again before the atomic billing transaction.
+`Seedance 2 Fast` is not part of the active FoxGen production registry baseline documented here.
 
-## Models intentionally not sent through the Market adapter
+## Catalog-only entries
 
-Veo 3.1, Runway/Aleph, Suno music operations, Gemini Omni resource creation and current chat endpoints use dedicated paths and response formats. They remain separate adapters; routing them through `/api/v1/jobs/createTask` would be incorrect.
+The registry/catalog also contains provider metadata for additional families such as:
 
-## Maintenance and drift review
+- Seedream 4.5;
+- GPT Image 2;
+- Flux 2 Pro;
+- Imagen 4 Ultra;
+- Ideogram V3;
+- Qwen2;
+- Wan 2.7;
+- Grok Imagine;
+- Kling;
+- Hailuo;
+- Topaz;
+- Recraft;
+- ElevenLabs operations.
 
-Before enabling a new model or version:
+Catalog presence is useful for roadmap/discovery but does not make a model billable. A broad/generic `PASSTHROUGH` or category schema is not accepted as a production paid contract.
 
-1. verify the exact provider ID and API family in official KIE documentation;
-2. record the documentation page and review date;
-3. implement a strict model-specific schema with enum, range and cross-field rules;
-4. add valid provider-example fixtures and invalid boundary tests;
-5. ensure no enabled entry uses passthrough or broad open validation;
-6. run a controlled live smoke test when credentials and budget are available;
-7. update this matrix and recommendation order.
+A catalog-only task request is rejected before billing reservation/outbox/provider access.
 
-Contract review is required whenever the provider documentation changes, a live request starts returning a previously unseen validation error, or six months pass since `contract_reviewed_at`.
+## Dedicated API families
+
+Some KIE products do not belong to the generic Market `createTask` adapter and must use dedicated adapters/contracts when implemented, including families with materially different create/status/resource semantics such as:
+
+- Veo;
+- Runway/Aleph;
+- Suno music operations;
+- Gemini Omni resource flows;
+- chat endpoints.
+
+Do not route a model through the generic Market adapter merely to make it fit the existing task endpoint.
+
+## API semantics
+
+```text
+GET  /v1/models
+GET  /v1/models/{slug}
+POST /v1/models/{slug}/validate
+POST /v1/models/{slug}/tasks
+```
+
+- list/detail expose catalog/readiness metadata;
+- detail includes current local input schema;
+- `/validate` is free local validation;
+- `/tasks` revalidates the contract and all paid-admission gates;
+- runtime administrative disable is checked before durable paid admission.
+
+## Telegram compatibility
+
+Telegram handlers select product capabilities/modes, not arbitrary provider payload dictionaries. The current image/video FSM exposes only combinations intentionally mapped to supported contracts.
+
+Quick Start reference routing also selects compatible models based on the requested output and reference media kind. Unsupported reference/model combinations are rejected before billing.
+
+## Contract review procedure
+
+Before enabling/changing a model:
+
+1. verify exact provider model ID and API family in official KIE documentation;
+2. record/review provider documentation and date;
+3. implement a strict model-specific input contract;
+4. define cross-field rules, enums and numeric/list bounds;
+5. add valid fixtures based on reviewed provider examples;
+6. add invalid/boundary tests;
+7. make sure no paid-enabled entry relies on open passthrough validation;
+8. update bot mode/model mapping if the product flow changes;
+9. run controlled live smoke test when credentials/budget are available;
+10. set/retain readiness flags truthfully;
+11. update this matrix and any pricing/admin documentation.
+
+## Drift triggers
+
+Re-review a contract when:
+
+- provider documentation changes;
+- a previously valid request starts receiving new provider validation errors;
+- result/callback shape changes;
+- provider model ID/version changes;
+- a runtime incident requires repeated disabling;
+- the explicit review period expires under project policy.
+
+During uncertain drift, prefer runtime disable + investigation over loosening validation.
+
+## Billing interaction
+
+A production-ready, runtime-enabled model still needs an active price and sufficient balance. Model readiness never implies a default commercial price.
+
+The final admission condition is effectively:
+
+```text
+trusted caller
++ valid user/idempotency
++ strict model contract
++ registry production readiness
++ runtime availability
++ rate/concurrency allowance
++ active price
++ sufficient wallet
+=> atomic local admission
+```
+
+## Source-of-truth rule
+
+When this document conflicts with current registry/contracts/tests, treat executable contract code/tests as authoritative and fix this document. Never change provider IDs based only on this Markdown file.
