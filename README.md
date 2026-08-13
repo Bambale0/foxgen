@@ -1,193 +1,241 @@
 # FoxGen
 
-FoxGen is a Telegram-first multimodal AI generation platform built with Python 3.12, FastAPI, aiogram 3, PostgreSQL, Redis and KIE.ai.
+FoxGen is a Telegram-first multimodal AI generation platform built on Python 3.12, FastAPI, aiogram 3, PostgreSQL, Redis, S3-compatible object storage and KIE.ai.
 
-The product is designed around a simple rule: a user should reach the target action in a few taps, always understand the next step and always have a safe way back.
+This README describes code that is merged and reachable in `main`. The public Mini App is intentionally treated as a separate product surface and is not documented as implemented here.
 
-## Product map
+## What is implemented
 
-- Create video
-- Create image
-- Create voice
-- Create music
-- Motion Control and avatars
-- Prompt AI
-- AI assistant
-- Balance and payment history
-- Referrals
-- Partners
+### Telegram product shell
 
-## Current implementation
+- main menu for image/video creation and planned product sections;
+- Quick Start from the main menu;
+- photo/video sent with no active FSM is accepted as a reference entrypoint;
+- user chooses whether to create an image or a video from the received reference;
+- compatible model selection and model-specific settings;
+- Redis-backed FSM with back/cancel/menu, invalid-input handling, stale callback recovery and TTL expiry;
+- Redis event isolation serializes concurrent updates for one FSM key;
+- Telegram albums are rejected before upload;
+- private object storage for Telegram reference files;
+- server-authorized `/admin` panel.
 
-- async FastAPI and aiogram application entry points;
-- Redis-backed Telegram image/video FSM with explicit expiry, back, cancel, edit and stale-callback recovery;
-- text-to-image, image editing, text-to-video, image-to-video and multimodal reference-to-video flows;
-- model-aware options for Seedream 5 Pro, Nano Banana 2/Pro and Seedance 2/Mini;
-- private S3-compatible storage for Telegram inputs with fresh presigned URLs at submission time;
-- price and available-balance confirmation before the launch button is enabled;
-- stable draft idempotency keys and duplicate-click protection;
-- PostgreSQL entities and Alembic migrations;
-- typed KIE.ai Market API client and normalized provider errors;
-- KIE webhook HMAC-SHA256 verification with replay-window protection;
-- versioned flagship model registry with exact provider IDs;
-- strict contracts for Seedream 5 Pro, Seedance 2, Seedance 2 Mini and Nano Banana 2/Pro;
-- curated image, video and ElevenLabs Market model pack;
-- JSON schemas, preflight validation and model-specific task submission endpoints;
-- fail-closed internal authentication for paid provider submission;
-- mandatory user identity and idempotency key for every paid request;
-- atomic pricing lookup and balance reservation before queue admission;
-- immutable append-only balance ledger with reserve, capture, release and refund transitions;
-- persisted generation fingerprints and explicit lifecycle states;
-- Redis request-rate limits and PostgreSQL active-generation limits;
-- transactional PostgreSQL outbox for provider submission;
-- durable, deduplicated KIE callback inbox;
-- worker leasing with `FOR UPDATE SKIP LOCKED`, retry scheduling and dead-letter state;
-- single-attempt KIE `createTask` submission with `submission_unknown` recovery state;
-- local-generation callback correlation after a lost provider response;
-- stale-`submitting` watchdog without automatic resubmission;
-- polling fallback when a callback is delayed or missing;
-- structured parsing of provider `resultJson` payloads;
-- SSRF-resistant result downloading with byte and timeout limits;
-- S3-compatible object storage with SHA-256 metadata and presigned delivery URLs;
-- persisted media assets and Telegram delivery state;
-- duplicate-safe Telegram delivery with explicit `delivery_unknown` state;
-- local MinIO service and bucket bootstrap in Docker Compose;
-- Docker Compose services for API, worker, bot, PostgreSQL, Redis, MinIO and migrations;
-- GitHub Actions CI for Ruff, mypy, pytest and Docker build, followed by gated production autodeploy for successful pushes to `main`.
+### Generation and provider lifecycle
 
-Payment-provider webhooks, the remaining media products, exact contracts for the wider model catalog and production hardening remain tracked in issues #7, #5, #20, #21 and #10.
+- typed KIE.ai provider registry and strict model contracts;
+- free local model validation before paid admission;
+- fail-closed trusted internal task API;
+- mandatory user identity and `Idempotency-Key` for paid requests;
+- Redis rate limits plus PostgreSQL per-user/global active-generation limits;
+- atomic generation + billing reservation + immutable ledger + outbox admission;
+- worker claiming through `FOR UPDATE SKIP LOCKED`;
+- exactly-one-attempt boundary for billable `createTask` submission;
+- `submission_unknown` instead of unsafe automatic provider resubmission;
+- HMAC-verified callback inbox plus polling fallback;
+- explicit durable lifecycle through processing, result storage and delivery;
+- partial media archive retry, dead-letter state and reconciliation;
+- SSRF-resistant result download and private S3-compatible archive;
+- duplicate-safe Telegram delivery with explicit `delivery_unknown` state.
 
-## Telegram image/video path
+### Billing
+
+- integer internal credits; no floating-point wallet arithmetic;
+- versioned model prices;
+- materialized wallet accounts backed by an append-only ledger;
+- atomic reserve/capture/release/refund lifecycle;
+- deterministic idempotency for balance adjustments and settlement;
+- reconciliation across generation, reservation, media, outbox and delivery state.
+
+### Administrative control plane
+
+FoxGen has one administrative domain layer exposed through the registered Telegram `/admin`, signed backend HTTP API and internal operator web surface. The public Mini App is not part of this implementation.
+
+Registered/current capabilities include:
+
+- server-side RBAC policy and bootstrap/durable admin identity model;
+- user lookup, block/unblock and balance adjustment;
+- generation, operation, payment and finance inspection;
+- payment recheck/reprocess with double-credit protection;
+- versioned tariff publishing;
+- partner analytics and withdrawal actions;
+- promo management;
+- prompt-library moderation;
+- runtime flags and model availability without deployment;
+- support tickets and durable support outbox;
+- versioned CMS documents;
+- notification preview/campaign create/test/start/cancel;
+- durable campaign deliveries, retries and rate limiting;
+- trends/feed moderation backend actions;
+- CSV exports;
+- audit browsing and read-only AI diagnostics;
+- append-only admin command ledger with request/result snapshots and idempotent replay.
+
+Every admin write is server-authorized. Signed HTTP admin requests are network allowlisted and use HMAC-SHA256 over the exact raw body. Destructive or expensive actions require explicit confirmation.
+
+Prepared admin extension modules for direct admin-role management, dedicated analytics, privileged generation preview, XLS exports and several Telegram extra callbacks currently exist in the tree but are **not registered by runtime entrypoints**. They are tracked by issue #55 and documented in [`docs/known-limitations.md`](docs/known-limitations.md). Do not integrate against those extension paths until #55 is merged.
+
+## Architecture at a glance
 
 ```text
-User chooses image or video
-    -> generation mode
-    -> compatible model
-    -> prompt
-    -> required Telegram references
-    -> model-specific options
-    -> current price + available balance
-    -> one confirmation
-    -> authenticated internal API request
-    -> atomic reserve + generation + outbox commit
+Telegram bot ────────────────┐
+                            │
+Trusted internal clients ───┼──> FastAPI
+                            │      ├── paid generation admission
+Telegram /admin ────────────┤      ├── registered signed internal admin API
+                            │      └── provider callbacks
+                            │
+                            v
+                     Application services
+                     ├── submissions
+                     ├── generation lifecycle
+                     ├── billing
+                     ├── reconciliation
+                     └── admin services
+                            │
+             ┌──────────────┼──────────────┐
+             v              v              v
+         PostgreSQL        Redis       S3-compatible
+         source of truth   FSM/locks   private media
+             │
+             v
+         foxgen-worker
+         ├── provider submission/polling
+         ├── callback processing
+         ├── archive/delivery
+         └── admin/support/campaign work
 ```
 
-The bot never contacts KIE or PostgreSQL directly. Telegram input files are stored privately by object key. A temporary provider-readable URL is generated only when the user confirms the draft.
+See [`docs/architecture.md`](docs/architecture.md) for boundaries and invariants.
 
-## Durable generation path
+## Generation lifecycle
+
+Durable generation states:
 
 ```text
-Trusted FoxGen service
-    -> internal bearer authentication
-    -> user identity + Idempotency-Key
-    -> model registry + typed input contract
-    -> Redis rate limit
-    -> PostgreSQL transaction
-         -> active price
-         -> balance reservation + immutable ledger entry
-         -> generation(status=queued)
-         -> outbox(generation.submit)
-    -> foxgen-worker claims outbox row
-    -> one KIE createTask attempt
-    -> submitted OR submission_unknown OR failed
-    -> capture OR retained reserve OR release
-    -> verified callback inbox OR polling fallback
-    -> success OR failure/refund
-    -> secure download + S3-compatible storage
-    -> Telegram delivery
+draft
+  -> queued
+  -> submitting
+  -> submitted
+  -> processing
+  -> result_ready
+  -> storing_media
+  -> delivery_pending
+  -> succeeded
 ```
 
-The billable provider POST is never automatically replayed. The callback URL carries the local generation ID, allowing a later callback to recover an accepted task even when the original provider response was lost.
+Recovery/terminal branches include `submission_unknown`, `failed` and `cancelled`.
 
-Telegram send is also treated as non-idempotent. Delivery work is consumed immediately before sending. A transport-ambiguous send becomes `delivery_unknown` instead of producing duplicate files in the user's chat.
+The billable provider POST is never automatically replayed. A lost provider response moves the local task into an ambiguity state that must converge through callback, polling or evidence-based operator reconciliation.
 
-See [architecture notes](docs/architecture.md). Provider-specific payloads stay inside provider adapters; Telegram handlers work with product capabilities rather than raw model APIs.
-
-## Local start
+## Local development
 
 ```bash
 cp .env.example .env
-# Fill Telegram, KIE, internal API and local storage settings.
-
+# Fill only the secrets needed for the feature you are testing.
 docker compose up --build
 ```
 
-The local stack starts PostgreSQL, Redis and MinIO. The MinIO API is exposed on port `9000`; its console is exposed on `9001` for development only.
+Local Compose provides PostgreSQL, Redis, MinIO, migrations, API, worker and bot. MinIO ports are exposed for development only.
 
-Paid submissions remain fail-closed until all of these are intentionally configured:
+Paid provider submission remains disabled until explicitly enabled:
 
 ```env
 FOXGEN_TASK_SUBMISSION_ENABLED=true
-FOXGEN_INTERNAL_API_TOKEN=<long-random-secret>
-FOXGEN_KIE_API_KEY=<provider-key>
+FOXGEN_INTERNAL_API_TOKEN=<dedicated-internal-secret>
+FOXGEN_KIE_API_KEY=<kie-key>
 ```
 
-Publish active model prices and fund a test wallet through the separately protected billing-admin API before trying the Telegram launch flow.
+A test wallet also needs an active model price and enough credits before Telegram confirmation can launch a paid task.
 
-API endpoints include:
+See [`docs/development.md`](docs/development.md).
 
-- `GET /health/live`
-- `GET /health/ready`
-- `GET /v1/models`
-- `GET /v1/models/{slug}`
-- `POST /v1/models/{slug}/validate`
-- `POST /v1/models/{slug}/tasks`
-- `GET /v1/prices`
-- `GET /v1/users/{user_id}/balance`
-- `GET /v1/users/{user_id}/ledger`
-- `POST /v1/admin/users/{user_id}/balance-adjustments`
-- `PUT /v1/admin/prices/{model_slug}`
-- `POST /webhooks/kie`
+## Administrative bootstrap
 
-Example preflight validation:
+The full admin control plane is disabled by default. Minimal backend setup:
 
-```bash
-curl -X POST http://localhost:8080/v1/models/seedance-2/validate \
-  -H 'Content-Type: application/json' \
-  -d '{"input":{"prompt":"A cinematic fox running through snow"}}'
+```env
+FOXGEN_ADMIN_API_ENABLED=true
+FOXGEN_ADMIN_HMAC_KEY=<dedicated-admin-hmac-secret>
+FOXGEN_ADMIN_NETWORK_ALLOWLIST=127.0.0.1/32,::1/128,172.16.0.0/12
+FOXGEN_ADMIN_SUPERUSER_IDS=<telegram-admin-id>
 ```
 
-A successful admission returns a local generation in `queued` state. The worker performs the provider call asynchronously, settles the reservation, archives the result and delivers stored media to the originating Telegram user.
+Do not reuse Telegram, KIE, webhook or ordinary internal API secrets as the admin HMAC key. Restrict the network allowlist to the real backend subnet in production. See [`docs/admin-control-plane.md`](docs/admin-control-plane.md).
 
-Never expose internal API tokens, billing-admin credentials or object-storage credentials to Telegram clients, browsers or mini apps.
+## Public and internal APIs
 
-Local quality checks:
+Core routes include:
+
+```text
+GET  /health/live
+GET  /health/ready
+GET  /v1/models
+GET  /v1/models/{slug}
+POST /v1/models/{slug}/validate
+POST /v1/models/{slug}/tasks
+POST /webhooks/kie
+```
+
+Billing/generation operator routes and the **registered** signed `/internal/admin/*` surface are documented in [`docs/api-reference.md`](docs/api-reference.md).
+
+Never place internal API tokens, admin HMAC keys, billing credentials or object-storage credentials in Telegram clients, browsers or a public Mini App.
+
+## Quality and CI
+
+The reproducible CI pipeline uses the exact dependency lock and checks:
+
+- Ruff lint;
+- Ruff formatting gate;
+- strict mypy;
+- pytest with coverage threshold;
+- real PostgreSQL and Redis integration tests;
+- Alembic upgrade, current-head verification and downgrade/re-upgrade;
+- API readiness smoke test;
+- Gitleaks;
+- dependency review;
+- Trivy filesystem/image scans;
+- Docker Compose validation;
+- deterministic production image build/import smoke test.
+
+Local commands:
 
 ```bash
-python -m pip install -e '.[dev]'
+python -m pip install --requirement requirements.lock
+python -m pip install --no-deps --editable .
 make ci
 ```
 
-## Configuration
+See [`docs/testing-ci.md`](docs/testing-ci.md).
 
-All settings use the `FOXGEN_` prefix. Secrets are read from environment variables and must never be committed. The `.env.example` file documents Telegram FSM expiry, internal API access, billing administration, KIE, worker, media limits and S3-compatible storage settings.
+## Production deploy
 
-For production callbacks set:
+A successful CI run on `main` can trigger the protected production deployment workflow. Deployment is gated by the `production` GitHub Environment and `AUTODEPLOY_ENABLED=true`.
 
-```env
-FOXGEN_KIE_CALLBACK_BASE_URL=https://foxgen.example.com
-FOXGEN_KIE_WEBHOOK_HMAC_KEY=...
-```
+The server keeps its own `.env`; GitHub Actions does not upload application secrets. Deployment is exact-SHA, fast-forward only, serialized with `flock`, runs migrations before application replacement and requires `/health/ready` to pass.
 
-For production storage, replace the local MinIO endpoint and development credentials with managed S3-compatible storage and keep the bucket private. Telegram receives temporary presigned URLs rather than provider URLs.
+Current production also requires an external object-storage lifecycle rule for temporary `inputs/`; automatic lifecycle bootstrap is tracked separately by issue #50.
 
-## Delivery plan
+See:
 
-1. [Platform foundation, architecture and CI](../../issues/1)
-2. [Telegram UX, navigation and complete FSM](../../issues/2)
-3. [KIE.ai provider layer and model catalog](../../issues/3)
-4. [Generation orchestration, queues and lifecycle](../../issues/4)
-5. [Image, video, voice, music and motion-control products](../../issues/5)
-6. [Prompt AI and conversational assistant](../../issues/6)
-7. [Balance, pricing, payments and financial ledger](../../issues/7)
-8. [Referrals, partners and growth mechanics](../../issues/8)
-9. [Admin, moderation, support and analytics](../../issues/9)
-10. [Reliability, security, observability and delivery](../../issues/10)
-11. [Flagship KIE model pack](../../issues/12)
-12. [Secure paid task submission](../../issues/17)
-13. [Idempotent provider submission](../../issues/18)
-14. [Durable generation lifecycle](../../issues/19)
+- [`docs/production-deploy.md`](docs/production-deploy.md)
+- [`docs/github-environment-setup.md`](docs/github-environment-setup.md)
+- [`docs/operations-runbook.md`](docs/operations-runbook.md)
+- [`docs/known-limitations.md`](docs/known-limitations.md)
 
-## Repository rules
+## Documentation index
 
-Read [AGENTS.md](AGENTS.md) before making automated changes. KIE.ai model IDs and payload fields must be verified against official documentation and protected by contract tests.
+Start with [`docs/README.md`](docs/README.md). It maps architecture, schema, configuration, API, Telegram FSM, model contracts, billing, admin, security, CI, deployment, reconciliation and operations.
+
+## Source-of-truth rules
+
+- runtime behavior/reachability: registered code paths + tests;
+- database schema: Alembic migrations + SQLAlchemy models;
+- model provider IDs/payload contracts: reviewed provider registry/contracts + tests;
+- environment variables: `foxgen.core.config.Settings`, `.env.example`, `deploy/production.env.example`;
+- deploy behavior: `.github/workflows/`, `docker-compose.prod.yml`, `scripts/deploy-production.sh`;
+- current limitations: `docs/known-limitations.md` plus open tracked issue/PR state.
+
+If documentation disagrees with executable code or migrations, treat executable state as authoritative and correct the documentation in the same PR.
+
+## Repository workflow
+
+Read [`AGENTS.md`](AGENTS.md) before automated changes. Changes to behavior, APIs, schema, provider contracts, security or deployment must update relevant documentation and tests in the same PR.
