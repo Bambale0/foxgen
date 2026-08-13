@@ -90,8 +90,8 @@ def request_fingerprint(
     source_publication_id: UUID | None = None,
 ) -> str:
     payload: dict[str, object] = {"model": model_slug, "input": input_payload}
-    # Keep existing fingerprints byte-compatible for ordinary generations. A remix source
-    # becomes part of idempotency only when one is explicitly supplied.
+    # Keep ordinary request fingerprints byte-compatible. Remix lineage participates in
+    # idempotency only when a source publication is explicitly supplied.
     if source_publication_id is not None:
         payload["source_publication_id"] = str(source_publication_id)
     canonical = json.dumps(
@@ -173,6 +173,9 @@ class SubmissionService:
             input_payload=normalized,
             source_publication_id=source_publication_id,
         )
+        prompt = (
+            str(normalized.get("prompt")) if normalized.get("prompt") is not None else None
+        )
 
         existing = await self._repository.find_by_idempotency(
             user_id=user_id,
@@ -183,27 +186,33 @@ class SubmissionService:
             return _receipt(existing, model, replayed=True)
 
         await self._rate_limiter.check(user_id)
-        common_args = {
-            "user_id": user_id,
-            "username": username,
-            "idempotency_key": idempotency_key,
-            "request_hash": request_hash,
-            "model_slug": model.slug,
-            "media_kind": model.media_kind,
-            "prompt": (
-                str(normalized.get("prompt")) if normalized.get("prompt") is not None else None
-            ),
-            "input_payload": normalized,
-            "user_concurrency_limit": self._user_concurrency_limit,
-            "global_concurrency_limit": self._global_concurrency_limit,
-        }
         if source_publication_id is None:
-            # Do not pass the new keyword on the ordinary path so existing repository test
-            # doubles and extensions remain source-compatible.
-            generation, created = await self._repository.admit(**common_args)
+            # Keep the ordinary call shape unchanged so old repository adapters/test doubles
+            # do not need to know anything about the feed-domain extension.
+            generation, created = await self._repository.admit(
+                user_id=user_id,
+                username=username,
+                idempotency_key=idempotency_key,
+                request_hash=request_hash,
+                model_slug=model.slug,
+                media_kind=model.media_kind,
+                prompt=prompt,
+                input_payload=normalized,
+                user_concurrency_limit=self._user_concurrency_limit,
+                global_concurrency_limit=self._global_concurrency_limit,
+            )
         else:
             generation, created = await self._repository.admit(
-                **common_args,
+                user_id=user_id,
+                username=username,
+                idempotency_key=idempotency_key,
+                request_hash=request_hash,
+                model_slug=model.slug,
+                media_kind=model.media_kind,
+                prompt=prompt,
+                input_payload=normalized,
+                user_concurrency_limit=self._user_concurrency_limit,
+                global_concurrency_limit=self._global_concurrency_limit,
                 source_publication_id=source_publication_id,
             )
         self._assert_same_request(generation, request_hash)
