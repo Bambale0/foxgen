@@ -2,7 +2,7 @@
 
 FoxGen is a Telegram-first multimodal AI generation platform built on Python 3.12, FastAPI, aiogram 3, PostgreSQL, Redis, S3-compatible object storage and KIE.ai.
 
-This README describes the code currently present in `main`. The public Mini App is intentionally treated as a separate product surface and is not documented as implemented here.
+This README describes code that is merged and reachable in `main`. The public Mini App is intentionally treated as a separate product surface and is not documented as implemented here.
 
 ## What is implemented
 
@@ -17,11 +17,11 @@ This README describes the code currently present in `main`. The public Mini App 
 - Redis event isolation serializes concurrent updates for one FSM key;
 - Telegram albums are rejected before upload;
 - private object storage for Telegram reference files;
-- `/admin` server-authorized administrative panel.
+- server-authorized `/admin` panel.
 
 ### Generation and provider lifecycle
 
-- typed KIE.ai provider registry and model contracts;
+- typed KIE.ai provider registry and strict model contracts;
 - free local model validation before paid admission;
 - fail-closed trusted internal task API;
 - mandatory user identity and `Idempotency-Key` for paid requests;
@@ -47,11 +47,11 @@ This README describes the code currently present in `main`. The public Mini App 
 
 ### Administrative control plane
 
-FoxGen has one administrative domain layer exposed through Telegram `/admin`, a signed backend HTTP API and an internal operator web surface. The public Mini App is not part of this implementation.
+FoxGen has one administrative domain layer exposed through the registered Telegram `/admin`, signed backend HTTP API and internal operator web surface. The public Mini App is not part of this implementation.
 
-Implemented capabilities include:
+Registered/current capabilities include:
 
-- RBAC roles/scopes and bootstrap superadmins;
+- server-side RBAC policy and bootstrap/durable admin identity model;
 - user lookup, block/unblock and balance adjustment;
 - generation, operation, payment and finance inspection;
 - payment recheck/reprocess with double-credit protection;
@@ -65,11 +65,13 @@ Implemented capabilities include:
 - notification preview/campaign create/test/start/cancel;
 - durable campaign deliveries, retries and rate limiting;
 - trends/feed moderation backend actions;
-- privileged generation preview;
+- CSV exports;
 - audit browsing and read-only AI diagnostics;
 - append-only admin command ledger with request/result snapshots and idempotent replay.
 
 Every admin write is server-authorized. Signed HTTP admin requests are network allowlisted and use HMAC-SHA256 over the exact raw body. Destructive or expensive actions require explicit confirmation.
+
+Prepared admin extension modules for direct admin-role management, dedicated analytics, privileged generation preview, XLS exports and several Telegram extra callbacks currently exist in the tree but are **not registered by runtime entrypoints**. They are tracked by issue #55 and documented in [`docs/known-limitations.md`](docs/known-limitations.md). Do not integrate against those extension paths until #55 is merged.
 
 ## Architecture at a glance
 
@@ -78,7 +80,7 @@ Telegram bot ────────────────┐
                             │
 Trusted internal clients ───┼──> FastAPI
                             │      ├── paid generation admission
-Telegram /admin ────────────┤      ├── signed internal admin API
+Telegram /admin ────────────┤      ├── registered signed internal admin API
                             │      └── provider callbacks
                             │
                             v
@@ -128,7 +130,7 @@ The billable provider POST is never automatically replayed. A lost provider resp
 
 ```bash
 cp .env.example .env
-# Fill required secrets for the features you are testing.
+# Fill only the secrets needed for the feature you are testing.
 docker compose up --build
 ```
 
@@ -143,6 +145,8 @@ FOXGEN_KIE_API_KEY=<kie-key>
 ```
 
 A test wallet also needs an active model price and enough credits before Telegram confirmation can launch a paid task.
+
+See [`docs/development.md`](docs/development.md).
 
 ## Administrative bootstrap
 
@@ -171,7 +175,7 @@ POST /v1/models/{slug}/tasks
 POST /webhooks/kie
 ```
 
-Billing/generation operator routes and the full signed `/internal/admin/*` surface are documented in [`docs/api-reference.md`](docs/api-reference.md).
+Billing/generation operator routes and the **registered** signed `/internal/admin/*` surface are documented in [`docs/api-reference.md`](docs/api-reference.md).
 
 Never place internal API tokens, admin HMAC keys, billing credentials or object-storage credentials in Telegram clients, browsers or a public Mini App.
 
@@ -180,7 +184,7 @@ Never place internal API tokens, admin HMAC keys, billing credentials or object-
 The reproducible CI pipeline uses the exact dependency lock and checks:
 
 - Ruff lint;
-- Ruff formatting for changed Python files;
+- Ruff formatting gate;
 - strict mypy;
 - pytest with coverage threshold;
 - real PostgreSQL and Redis integration tests;
@@ -208,27 +212,30 @@ A successful CI run on `main` can trigger the protected production deployment wo
 
 The server keeps its own `.env`; GitHub Actions does not upload application secrets. Deployment is exact-SHA, fast-forward only, serialized with `flock`, runs migrations before application replacement and requires `/health/ready` to pass.
 
+Current production also requires an external object-storage lifecycle rule for temporary `inputs/`; automatic lifecycle bootstrap is tracked separately by issue #50.
+
 See:
 
 - [`docs/production-deploy.md`](docs/production-deploy.md)
 - [`docs/github-environment-setup.md`](docs/github-environment-setup.md)
 - [`docs/operations-runbook.md`](docs/operations-runbook.md)
+- [`docs/known-limitations.md`](docs/known-limitations.md)
 
 ## Documentation index
 
-Start with [`docs/README.md`](docs/README.md). It maps architecture, API, Telegram FSM, model contracts, billing, admin, deployment, reconciliation and operational documentation.
+Start with [`docs/README.md`](docs/README.md). It maps architecture, schema, configuration, API, Telegram FSM, model contracts, billing, admin, security, CI, deployment, reconciliation and operations.
 
 ## Source-of-truth rules
 
-- runtime behavior: code + tests;
+- runtime behavior/reachability: registered code paths + tests;
 - database schema: Alembic migrations + SQLAlchemy models;
-- model provider IDs and payload contracts: reviewed provider registry/contracts + tests;
+- model provider IDs/payload contracts: reviewed provider registry/contracts + tests;
 - environment variables: `foxgen.core.config.Settings`, `.env.example`, `deploy/production.env.example`;
 - deploy behavior: `.github/workflows/`, `docker-compose.prod.yml`, `scripts/deploy-production.sh`;
-- admin capability contract: `docs/admin-capability-matrix.md` and the current admin service/API implementation.
+- current limitations: `docs/known-limitations.md` plus open tracked issue/PR state.
 
-If documentation disagrees with executable code or migrations, treat the executable source as authoritative and update the documentation in the same PR.
+If documentation disagrees with executable code or migrations, treat executable state as authoritative and correct the documentation in the same PR.
 
 ## Repository workflow
 
-Read [`AGENTS.md`](AGENTS.md) before automated changes. Changes to behavior, APIs, schema, provider contracts, security or deployment must update the relevant documentation and tests in the same PR.
+Read [`AGENTS.md`](AGENTS.md) before automated changes. Changes to behavior, APIs, schema, provider contracts, security or deployment must update relevant documentation and tests in the same PR.
