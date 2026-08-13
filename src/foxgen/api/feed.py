@@ -4,7 +4,7 @@ from uuid import UUID
 from fastapi import APIRouter, Header, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
-from foxgen.api.security import authenticate_user_context
+from foxgen.api.security import SubmissionPrincipal, authenticate_user_context
 from foxgen.core.config import Settings
 from foxgen.feed.domain import (
     CommentSurface,
@@ -13,6 +13,9 @@ from foxgen.feed.domain import (
     FeedSource,
     PublicationScope,
     PublicationView,
+    RemixSource,
+    ShareReceipt,
+    post_start_param,
     profile_start_param,
     remix_start_param,
 )
@@ -119,14 +122,14 @@ class FeedServiceProtocol(Protocol):
         publication_id: UUID,
         user_id: int,
         surface: CommentSurface,
-    ): ...
+    ) -> ShareReceipt: ...
 
     async def remix_source(
         self,
         *,
         viewer_user_id: int,
         publication_id: UUID,
-    ) -> PublicationView: ...
+    ) -> RemixSource: ...
 
 
 class PublishRequest(BaseModel):
@@ -162,7 +165,7 @@ def _principal(
     settings: Settings,
     authorization: str | None,
     user_id_header: str | None,
-):
+) -> SubmissionPrincipal:
     return authenticate_user_context(
         settings=settings,
         authorization=authorization,
@@ -212,7 +215,7 @@ def _publication_payload(item: PublicationView) -> dict[str, object]:
             "avatar_url": item.author_avatar_url,
             "profile_deep_link": profile_start_param(item.author_slug),
         },
-        "post_deep_link": f"post_{item.id.hex}",
+        "post_deep_link": post_start_param(item.id),
         "remix_deep_link": remix_start_param(item.id),
         "published_at": item.published_at,
     }
@@ -535,13 +538,16 @@ def create_feed_router(settings: Settings) -> APIRouter:
             authorization=authorization,
             user_id_header=user_id_header,
         )
-        publication = await _service(request).remix_source(
+        remix = await _service(request).remix_source(
             viewer_user_id=principal.user_id,
             publication_id=publication_id,
         )
         return {
-            "source": _publication_payload(publication),
-            "source_publication_id": str(publication.id),
+            "source": _publication_payload(remix.publication),
+            "source_publication_id": str(remix.publication.id),
+            # Trusted internal bot/backend callers may use these private object keys only
+            # to mint a fresh presigned reference at final generation confirmation.
+            "reference_storage_keys": list(remix.storage_keys),
         }
 
     return router
