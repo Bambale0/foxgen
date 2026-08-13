@@ -52,6 +52,7 @@ class GenerationRepository(Protocol):
         input_payload: dict[str, object],
         user_concurrency_limit: int,
         global_concurrency_limit: int,
+        source_publication_id: UUID | None = None,
     ) -> tuple[GenerationSnapshot, bool]: ...
 
 
@@ -82,9 +83,19 @@ class NoopUserAccessGuard:
         del user_id
 
 
-def request_fingerprint(*, model_slug: str, input_payload: dict[str, object]) -> str:
+def request_fingerprint(
+    *,
+    model_slug: str,
+    input_payload: dict[str, object],
+    source_publication_id: UUID | None = None,
+) -> str:
+    payload: dict[str, object] = {"model": model_slug, "input": input_payload}
+    # Keep existing fingerprints byte-compatible for ordinary generations. A remix source
+    # becomes part of idempotency only when one is explicitly supplied.
+    if source_publication_id is not None:
+        payload["source_publication_id"] = str(source_publication_id)
     canonical = json.dumps(
-        {"model": model_slug, "input": input_payload},
+        payload,
         ensure_ascii=False,
         sort_keys=True,
         separators=(",", ":"),
@@ -136,6 +147,7 @@ class SubmissionService:
         model_slug: str,
         input_data: dict[str, object],
         idempotency_key: str,
+        source_publication_id: UUID | None = None,
     ) -> SubmissionReceipt:
         await self._user_access_guard.ensure_allowed(user_id)
         model = self._registry.get(model_slug)
@@ -156,7 +168,11 @@ class SubmissionService:
         await self._availability_guard.ensure_enabled(model.slug)
 
         normalized = validate_input(model.contract, input_data)
-        request_hash = request_fingerprint(model_slug=model.slug, input_payload=normalized)
+        request_hash = request_fingerprint(
+            model_slug=model.slug,
+            input_payload=normalized,
+            source_publication_id=source_publication_id,
+        )
 
         existing = await self._repository.find_by_idempotency(
             user_id=user_id,
@@ -167,18 +183,29 @@ class SubmissionService:
             return _receipt(existing, model, replayed=True)
 
         await self._rate_limiter.check(user_id)
-        generation, created = await self._repository.admit(
-            user_id=user_id,
-            username=username,
-            idempotency_key=idempotency_key,
-            request_hash=request_hash,
-            model_slug=model.slug,
-            media_kind=model.media_kind,
-            prompt=str(normalized.get("prompt")) if normalized.get("prompt") is not None else None,
-            input_payload=normalized,
-            user_concurrency_limit=self._user_concurrency_limit,
-            global_concurrency_limit=self._global_concurrency_limit,
-        )
+        common_args = {
+            "user_id": user_id,
+            "username": username,
+            "idempotency_key": idempotency_key,
+            "request_hash": request_hash,
+            "model_slug": model.slug,
+            "media_kind": model.media_kind,
+            "prompt": (
+                str(normalized.get("prompt")) if normalized.get("prompt") is not None else None
+            ),
+            "input_payload": normalized,
+            "user_concurrency_limit": self._user_concurrency_limit,
+            "global_concurrency_limit": self._global_concurrency_limit,
+        }
+        if source_publication_id is None:
+            # Do not pass the new keyword on the ordinary path so existing repository test
+            # doubles and extensions remain source-compatible.
+            generation, created = await self._repository.admit(**common_args)
+        else:
+            generation, created = await self._repository.admit(
+                **common_args,
+                source_publication_id=source_publication_id,
+            )
         self._assert_same_request(generation, request_hash)
         return _receipt(generation, model, replayed=not created)
 
