@@ -5,7 +5,12 @@ import json
 from uuid import uuid4
 
 from aiogram import F, Router
-from aiogram.types import BufferedInputFile, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.types import (
+    BufferedInputFile,
+    CallbackQuery,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+)
 
 from foxgen.bot.admin_api_client import AdminApiClient, AdminApiClientError
 
@@ -167,9 +172,7 @@ async def _edit_json(callback: CallbackQuery, value: object) -> None:
         await callback.message.edit_text(
             f"<pre>{html.escape(rendered)}</pre>",
             reply_markup=InlineKeyboardMarkup(
-                inline_keyboard=[
-                    [InlineKeyboardButton(text="← Админка", callback_data="adm:home")]
-                ]
+                inline_keyboard=[[InlineKeyboardButton(text="← Админка", callback_data="adm:home")]]
             ),
         )
     await callback.answer()
