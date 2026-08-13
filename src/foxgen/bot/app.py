@@ -14,6 +14,7 @@ from aiogram.types import CallbackQuery, ErrorEvent, Message
 from foxgen.bot.admin import router as admin_router
 from foxgen.bot.admin_api_client import AdminApiClient
 from foxgen.bot.api_client import FoxGenApiClient
+from foxgen.bot.feed import router as feed_router
 from foxgen.bot.flows import router as generation_router
 from foxgen.bot.fsm_contract import contract_for
 from foxgen.bot.keyboards import main_menu
@@ -235,9 +236,10 @@ async def run(settings: Settings | None = None) -> None:
         admin_api_client=admin_api_client,
         input_media=input_media,
     )
-    # Admin must run before broad product/shell fallbacks. Every handler still performs
-    # a fresh signed server-side authorization check.
+    # Admin and feed/deep-link handlers must run before broad product/shell fallbacks.
+    # Every privileged admin action remains freshly server-authorized.
     dispatcher.include_router(admin_router)
+    dispatcher.include_router(feed_router)
     dispatcher.include_router(quick_start_router)
     dispatcher.include_router(generation_router)
     dispatcher.include_router(router)
