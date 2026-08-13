@@ -128,21 +128,37 @@ During `submitting`, duplicate/cancel/back interactions are intentionally restri
 
 `/admin` is a separate privileged Telegram shell. Authorization is server-side; merely knowing callback data cannot grant access.
 
-The panel exposes operational capabilities such as:
+The **currently registered main admin router** exposes the operational menu for:
 
-- stats/analytics;
-- user lookup and balance actions;
-- finance/exports;
-- payments and tariffs/pricing;
-- partners/withdrawals;
-- promos and prompt moderation;
-- runtime/model controls;
-- support/CMS/campaign operations;
-- AI diagnostics and other admin tools exposed by the current bot adapter.
+- summary/statistics;
+- user lookup, block/unblock and balance actions;
+- finance;
+- payments;
+- partners and withdrawal queue/actions supported by the main router;
+- tariffs/pricing;
+- promos;
+- prompt moderation;
+- broadcast/campaign flow;
+- support;
+- operations;
+- runtime/subscription/model controls;
+- AI diagnostics;
+- CMS;
+- currently wired export actions, including the registered CSV-backed flows exposed by the main adapter/API.
 
-Every privileged callback/FSM continuation re-checks admin policy. Destructive/expensive workflows include preview/confirm semantics and ultimately use shared admin services or the signed admin API instead of duplicating domain write logic in Telegram handlers.
+Every privileged callback/FSM continuation re-checks admin policy through the signed server-side admin API. Destructive/expensive workflows use preview/confirm semantics and shared admin services rather than direct write SQL in Telegram handlers.
 
-See `admin-control-plane.md` and `admin-capability-matrix.md`.
+### Prepared Telegram admin extras — issue #55
+
+`src/foxgen/bot/admin_extras.py` exists in the source tree but its router is **not currently included by `foxgen.bot.app`**. Therefore these prepared callbacks are not active production behavior yet:
+
+- dedicated `adm:analytics` callback;
+- XLS export callbacks;
+- approved-withdrawal listing/payment shortcut callbacks.
+
+The underlying shared services remain available. The correct fix is router registration plus reachability/security tests, not duplicate business logic. Until issue #55 is merged, documentation and operators must not rely on those extra callbacks.
+
+See `admin-control-plane.md`, `admin-capability-matrix.md` and `known-limitations.md`.
 
 ## Error recovery rules
 
@@ -156,4 +172,4 @@ See `admin-control-plane.md` and `admin-capability-matrix.md`.
 
 ## Testing expectations
 
-Regression coverage includes FSM contract completeness, stale callback recovery, active draft preservation, reference routing, event isolation and admin authorization. Changes that add a new state must update the state contract and tests at the same time.
+Regression coverage includes FSM contract completeness, stale callback recovery, active draft preservation, reference routing, event isolation and main admin authorization. A new generation/admin FSM state must update its state/authorization tests at the same time. Issue #55 additionally requires explicit tests proving the extra admin router is registered before those callbacks are documented as active.
