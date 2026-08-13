@@ -1,6 +1,8 @@
 # HTTP API reference
 
-This reference describes routes wired by the current FastAPI application. The public Mini App is outside scope; `/internal/admin/ui` is a backend-only operator surface.
+This reference describes routes actually registered by the current FastAPI application on `main`. The public Mini App is outside scope; `/internal/admin/ui` is a backend-only operator surface.
+
+Prepared extension modules that are present in the source tree but not currently registered are listed separately under **Prepared but inactive admin extensions**. See issue #55 and `known-limitations.md`.
 
 ## Authentication classes
 
@@ -20,7 +22,7 @@ Legacy `/v1/admin/*` billing/reconciliation routes use the separately protected 
 
 ### Full internal admin control plane
 
-`/internal/admin/*` requires all of:
+Registered `/internal/admin/*` machine routes require:
 
 - source address in `FOXGEN_ADMIN_NETWORK_ALLOWLIST`;
 - `X-Admin-User-Id`;
@@ -35,7 +37,7 @@ Signature input:
 <timestamp>\n<METHOD>\n<path>\n<request_id>\n<exact raw body bytes>
 ```
 
-Admin writes require `Idempotency-Key`. Destructive/expensive writes additionally require `X-Admin-Confirm: CONFIRM` where enforced by the route/service.
+Admin writes require `Idempotency-Key`. Destructive/expensive writes additionally require `X-Admin-Confirm: CONFIRM` where enforced.
 
 # Core API
 
@@ -82,7 +84,7 @@ Paid task admission validates authentication, positive user identity, idempotenc
 
 Cancellation is rejected once provider submission may have started. Unknown provider/Telegram outcomes are never resolved through blind retry.
 
-# Signed internal admin API
+# Registered signed internal admin API
 
 All paths below are relative to:
 
@@ -90,28 +92,18 @@ All paths below are relative to:
 /internal/admin
 ```
 
-Unless noted otherwise, every route still requires signed admin authentication/RBAC. A table marking a route `read` does not mean it is public.
+Every route is private/signed/RBAC-protected even when the table labels it read-only.
 
-## Health, analytics and audit
+## Health, summary and audit
 
 | Method | Path | Semantics |
 |---|---|---|
-| GET | `/health` | signed/RBAC health identity check |
+| GET | `/health` | signed/RBAC identity/health check |
 | GET | `/summary` | operational summary |
-| GET | `/analytics?hours=24` | bounded analytics snapshot |
 | GET | `/finance` | finance dashboard |
 | GET | `/audit` | audit event list |
-| GET | `/commands/{command_id}` | command/audit result detail |
+| GET | `/commands/{command_id}` | command/result detail |
 | GET | `/ai/diagnostics` | read-only diagnostic synthesis; AI-admin scope required |
-
-## Admin identity/RBAC
-
-| Method | Path | Write semantics |
-|---|---|---|
-| GET | `/admins` | list durable administrators |
-| PUT | `/admins/{user_id}` | idempotent + confirm role/scopes/active update |
-
-Bootstrap IDs from environment are only initial access. Durable role/scopes belong here/`admin_users`.
 
 ## Users
 
@@ -124,14 +116,11 @@ Bootstrap IDs from environment are only initial access. Durable role/scopes belo
 
 Blocked-user state is rechecked at transactional paid admission.
 
-## Generations and previews
+## Generations
 
 | Method | Path | Semantics |
 |---|---|---|
 | GET | `/generations` | generation list/filter |
-| POST | `/previews/generation` | privileged generation input/model preview; no paid submit |
-
-The preview endpoint validates/normalizes privileged generation input through admin policy; it does not replace normal paid-admission gates.
 
 ## Operations
 
@@ -165,8 +154,6 @@ Payment credit uses a deterministic immutable-ledger key, preventing double cred
 | GET | `/tariffs/versions/{version_id}` | version detail |
 | POST | `/tariffs/publish` | idempotent + confirm |
 
-The versioned tariff payload is the administrative history for packages/product pricing dimensions. Runtime per-model generation pricing remains enforced by the billing admission layer.
-
 ## Support
 
 | Method | Path | Write semantics |
@@ -188,8 +175,6 @@ A reply request commits support message/outbox state. Telegram delivery occurs l
 | POST | `/cms/documents` | idempotent save/new version |
 | POST | `/cms/documents/{document_id}/publish` | idempotent + confirm |
 
-Published content is versioned; historical published versions are not overwritten.
-
 ## Notification campaigns / broadcasts
 
 | Method | Path | Write semantics |
@@ -202,7 +187,7 @@ Published content is versioned; historical published versions are not overwritte
 | POST | `/notifications/campaigns/{campaign_id}/start` | idempotent + confirm |
 | POST | `/notifications/campaigns/{campaign_id}/cancel` | idempotent + confirm |
 
-Campaign start materializes durable recipient deliveries once. Mass send never runs inline in the request lifecycle.
+Campaign start materializes durable recipient deliveries once; mass send never runs inline in the request lifecycle.
 
 ## Partners
 
@@ -219,8 +204,6 @@ Campaign start materializes durable recipient deliveries once. Mass send never r
 | GET | `/promos/{code}` | lookup |
 | POST | `/promos` | idempotent create |
 | POST | `/promos/{code}/active` | idempotent + confirm enable/disable |
-
-Promo input is normalized/validated server-side.
 
 ## Prompt library moderation
 
@@ -249,34 +232,63 @@ Runtime model availability is revalidated before paid admission.
 | POST | `/trends/{trend_id}/remove` | idempotent + confirm |
 | POST | `/feed/{content_id}/moderate` | idempotent + confirm |
 
-These are backend administrative contracts. They do not imply that the public Mini App moderation UI is implemented.
+These backend contracts do not imply a finished public Mini App UI.
 
-## Exports
+## Active exports
 
 | Method | Path | Format |
 |---|---|---|
 | GET | `/exports/users.csv` | UTF-8 CSV |
 | GET | `/exports/finance.csv` | UTF-8 CSV |
-| GET | `/exports/users.xls` | SpreadsheetML 2003 / Excel-readable XLS |
-| GET | `/exports/finance.xls` | SpreadsheetML 2003 / Excel-readable XLS |
 
-The XLS endpoints intentionally generate SpreadsheetML without adding a heavyweight mutable spreadsheet library to the production image.
+# Registered internal operator web
 
-## Internal operator web
+When both admin API/web switches are enabled, `create_admin_web_router()` registers:
 
-When `FOXGEN_ADMIN_WEB_ENABLED=true`, the application also exposes an internal operator surface under:
+| Method | Path | Auth |
+|---|---|---|
+| POST | `/internal/admin/ui/session` | signed admin HTTP + network/RBAC; mints short session |
+| GET | `/internal/admin/ui?session=...` | admin session + network/RBAC |
+| GET | `/internal/admin/ui/api/summary` | `X-Admin-Session` + network/RBAC |
+| GET | `/internal/admin/ui/api/{section}` | `X-Admin-Session` + network/RBAC |
+| POST | `/internal/admin/ui/api/action` | session + idempotency; confirmation for destructive action classes |
+
+Current generic section names supported by the registered router include users, payments, operations, tickets, tariffs, campaigns, moderation, runtime, partners, prompts, CMS, audit and finance.
+
+Current generic action dispatcher supports shared-service actions including user block/unblock/balance adjustment, payment recheck/reprocess, operation replay/refund, ticket reply, tariff publish, campaign create/start/cancel, CMS save/publish, model availability/runtime flag and trend/feed moderation.
+
+This operator surface is backend-only. It is not the public Mini App.
+
+# Prepared but inactive admin extensions — issue #55
+
+The repository also contains extension modules that are **not registered by the current FastAPI entrypoint**:
 
 ```text
-/internal/admin/ui
+src/foxgen/api/admin_extensions.py
+src/foxgen/api/admin_web_extensions.py
 ```
 
-and protected session/action endpoints defined by the admin web routers. This surface is backend-only and uses server-confirmed admin policy/session behavior. It is not the public Mini App.
+Accordingly, the following prepared routes are not current production endpoints:
 
-For machine integrations, prefer the explicit signed JSON API documented above.
+```text
+GET /internal/admin/admins
+PUT /internal/admin/admins/{user_id}
+GET /internal/admin/analytics
+POST /internal/admin/previews/generation
+GET /internal/admin/exports/users.xls
+GET /internal/admin/exports/finance.xls
+
+GET /internal/admin/ui/api/analytics
+POST /internal/admin/ui/api/preview-generation
+GET /internal/admin/ui/api/admins
+PUT /internal/admin/ui/api/admins/{user_id}
+```
+
+Do not integrate against those paths until issue #55 is merged and this section is removed/updated. The underlying shared access/analytics/preview services exist, but source-file presence is not route registration.
 
 # Idempotency and error semantics
 
-For a write command, the admin command executor records request fingerprint and result.
+For a write command, the admin command executor records request fingerprint/result.
 
 ```text
 same (admin, action, key) + same effective request
@@ -300,4 +312,4 @@ signature = hex(HMAC-SHA256(admin_hmac_key, canonical))
 
 Do not JSON-reserialize after signing. Query parameters are not included in the current canonical signature string; the URL path is.
 
-See `admin-control-plane.md` for roles, confirmation, rollout and security rules.
+See `admin-control-plane.md`, `known-limitations.md` and issue #55 for admin transport status.
