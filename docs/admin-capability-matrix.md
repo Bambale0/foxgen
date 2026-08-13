@@ -1,66 +1,104 @@
 # FoxGen admin capability matrix
 
-Status: **implemented in `main` through PR #54**.
+Status: **core administrative control plane is active in `main` through PR #54; selected extension transports are prepared but not wired and are tracked by issue #55**.
 
-This matrix is the current capability contract for the FoxGen administrative control plane. It was derived from the supplied NEUROMIX admin migration brief and implemented in FoxGen's own architecture rather than by copying one legacy handler. The public Mini App remains a separate workstream; backend moderation/operator contracts are implemented and can be consumed by a future UI.
+This matrix is the current capability contract derived from the supplied NEUROMIX admin migration brief and implemented in FoxGen's architecture. The public Mini App remains a separate workstream.
+
+## Status meanings
+
+- **active** — service exists and at least the listed current transport is registered/reachable in runtime;
+- **service active / extension #55** — shared service/domain capability exists, but a prepared extension route/callback is not registered by current entrypoints;
+- **backend only** — current admin backend capability exists; public Mini App UI is not implemented.
 
 ## Architecture invariants
 
-- one server-side `AdminPolicy` authorizes every admin transport;
+- one server-side `AdminPolicy` authorizes admin operations;
 - shared admin services own write behavior;
-- Telegram/HTTP/operator-web layers are thin adapters;
-- every write command is represented in the append-only admin command/audit layer;
-- idempotent actions replay stored results for the same request and conflict on changed payload;
+- Telegram/HTTP/operator-web adapters must not duplicate domain writes;
+- writes use append-only command/audit state;
+- same idempotency request replays stored result; payload drift conflicts;
 - destructive/expensive actions require explicit confirmation;
 - signed admin HTTP is backend-only, network allowlisted and HMAC-SHA256 signed over exact raw body bytes;
 - support replies and notification campaigns are durable worker/outbox work;
-- sensitive fields are recursively redacted from administrative output;
-- published tariff/CMS history is versioned rather than overwritten;
-- regular users fail closed even when they forge callbacks/requests.
+- sensitive fields are recursively redacted;
+- tariff/CMS publishing preserves versions;
+- regular users fail closed even with forged callbacks/requests.
 
 ## Capability matrix
 
-| Capability | Shared implementation | Transport | R/W | Audit | Idempotency | Worker |
-|---|---|---|---|---|---|---|
-| Admin role/scopes | `AdminPolicy`, access service, `admin_users` | Telegram/HTTP/operator web | R/W | yes | admin changes | no |
-| Admin command ledger | command executor/repository, `admin_commands` | all writes | W | self | core invariant | no |
-| Audit events/redaction | admin repository/query/security | HTTP/operator web | R | self | n/a | no |
-| Summary/stats/analytics | query/analytics services | Telegram/HTTP/operator web | R | policy-bound | n/a | no |
-| User lookup | query service | Telegram/HTTP/operator web | R | policy-bound | n/a | no |
-| Block/unblock user | user service + admission guard | Telegram/HTTP/operator web | W | yes | yes | no |
-| Balance adjustment | user service + immutable billing ledger | Telegram/HTTP/operator web | W | yes | yes | no |
-| Generation inspection | query service | HTTP/operator web | R | policy-bound | n/a | no |
-| Privileged generation preview | preview service | HTTP/operator web | R | policy-bound | n/a | no |
-| Finance dashboard | query/finance services | Telegram/HTTP/operator web | R | policy-bound | n/a | no |
-| CSV/XLS operator exports | query/export adapters | Telegram/HTTP | R | policy-bound | n/a | no |
-| Payment list/detail | query service | HTTP/operator web | R | policy-bound | n/a | no |
-| Payment recheck | payment service/admin outbox | HTTP/operator web | W | yes | yes | yes |
-| Payment reprocess | payment service/admin outbox + deterministic ledger key | HTTP/operator web | W | yes | yes | yes |
-| Tariff current/history | tariff/query service | Telegram/HTTP/operator web | R | policy-bound | n/a | no |
-| Tariff publish | tariff service | Telegram/HTTP/operator web | W | yes | yes | no |
-| Package/image/video/partner/prompt pricing payload | versioned tariff data | Telegram/HTTP/operator web | R/W | yes | publish key | no |
-| Operation list/detail/timeline | query service | HTTP/operator web | R | policy-bound | n/a | no |
-| Safe operation replay | operation service + admin worker | HTTP/operator web | W | yes | yes | yes |
-| Operation refund | operation/finance service | HTTP/operator web | W | yes | yes | no |
-| Partner analytics | query/partner service | Telegram/HTTP/operator web | R | policy-bound | n/a | no |
-| Partner withdrawal queue/detail/actions | partner service | Telegram/HTTP/operator web | R/W | yes for writes | yes | no |
-| Promo create/lookup/activate/deactivate | promo service | Telegram/HTTP/operator web | R/W | yes for writes | yes | no |
-| Prompt library list/detail | query service | Telegram/HTTP/operator web | R | policy-bound | n/a | no |
-| Prompt approve/reject/deactivate | prompt service | Telegram/HTTP/operator web | W | yes | yes | no |
-| Subscription/runtime toggle | runtime service | Telegram/HTTP/operator web | W | yes | yes | no |
-| Model availability | runtime service + paid-admission guard | Telegram/HTTP/operator web | W | yes | yes | no |
-| Runtime config/preset actions | runtime/admin services | Telegram/HTTP | W | yes | yes where mutating | no |
-| Support ticket list/detail | query/support service | HTTP/operator web | R | policy-bound | n/a | no |
-| Ticket assign/update | support service | HTTP/operator web | W | yes | yes | no |
-| Ticket reply | support service + support outbox | HTTP/operator web | W | yes | yes | yes |
-| CMS document/version read | query/CMS service | HTTP/operator web | R | policy-bound | n/a | no |
-| CMS save/publish | CMS service | HTTP/operator web | W | yes | yes | no |
-| Broadcast/campaign preview | notification service | Telegram/HTTP/operator web | R | policy-bound | n/a | no |
-| Campaign create/test/start/cancel | notification service | Telegram/HTTP/operator web | W | yes | yes | yes |
-| Notification delivery status/retries | AdminWorker/query service | worker/operator web | R/W | yes | durable dedupe | yes |
-| AI admin diagnostics | query/analytics | Telegram/HTTP | R | policy-bound | n/a | no |
-| Trend create/remove | moderation service | HTTP/operator web backend | W | yes | yes | no |
-| Feed blur/remove moderation | moderation service | HTTP/operator web backend | W | yes | yes | no |
+| Capability | Shared implementation | Current transport | Status | R/W | Audit | Idempotency | Worker |
+|---|---|---|---|---|---|---|---|
+| Admin policy/roles/scopes | `AdminPolicy`, access service, `admin_users` | bootstrap policy + shared services | active core; management transport #55 | R/W | yes | admin mutations | no |
+| Admin list/set role/scopes | access service | prepared signed/web extension | service active / extension #55 | R/W | yes | yes | no |
+| Admin command ledger | command executor/repository, `admin_commands` | all registered writes | active | W | self | core invariant | no |
+| Audit events/redaction | admin repository/query/security | signed HTTP/operator web | active | R | self | n/a | no |
+| Summary/stats | query service | Telegram/signed HTTP/operator web | active | R | policy-bound | n/a | no |
+| Dedicated analytics snapshot | analytics service | prepared signed/web extension | service active / extension #55 | R | policy-bound | n/a | no |
+| User lookup | query service | Telegram/signed HTTP/operator web | active | R | policy-bound | n/a | no |
+| Block/unblock user | user service + admission guard | Telegram/signed HTTP/operator web | active | W | yes | yes | no |
+| Balance adjustment | user service + immutable billing ledger | Telegram/signed HTTP/operator web | active | W | yes | yes | no |
+| Generation inspection | query service | signed HTTP/operator web | active | R | policy-bound | n/a | no |
+| Privileged generation preview | preview service | prepared signed/web extension | service active / extension #55 | R | policy-bound | n/a | no |
+| Finance dashboard | query/finance services | Telegram/signed HTTP/operator web | active | R | policy-bound | n/a | no |
+| CSV exports | query/export adapter | Telegram/signed HTTP | active | R | policy-bound | n/a | no |
+| XLS exports | query/export extension | prepared signed HTTP/Telegram extra | service active / extension #55 | R | policy-bound | n/a | no |
+| Payment list/detail | query service | Telegram/signed HTTP/operator web | active | R | policy-bound | n/a | no |
+| Payment recheck | payment service/admin outbox | signed HTTP/operator web | active | W | yes | yes | yes |
+| Payment reprocess | payment service/admin outbox + deterministic ledger key | signed HTTP/operator web | active | W | yes | yes | yes |
+| Tariff current/history | tariff/query service | Telegram/signed HTTP/operator web | active | R | policy-bound | n/a | no |
+| Tariff publish | tariff service | Telegram/signed HTTP/operator web | active | W | yes | yes | no |
+| Package/image/video/partner/prompt pricing payload | versioned tariff data | Telegram/signed HTTP/operator web | active | R/W | yes | publish key | no |
+| Operation list/detail/timeline | query service | Telegram/signed HTTP/operator web | active | R | policy-bound | n/a | no |
+| Safe operation replay | operation service + admin worker | signed HTTP/operator web | active | W | yes | yes | yes |
+| Operation refund | operation/finance service | signed HTTP/operator web | active | W | yes | yes | no |
+| Partner analytics | query/partner service | Telegram/signed HTTP/operator web | active | R | policy-bound | n/a | no |
+| Partner withdrawal queue/actions | partner service | Telegram/signed HTTP/operator web | active core | R/W | yes for writes | yes | no |
+| Approved-withdrawal pay shortcut | partner service | prepared Telegram extra | service active / extension #55 | W | yes | yes | no |
+| Promo create/lookup/activate/deactivate | promo service | Telegram/signed HTTP/operator web | active | R/W | yes for writes | yes | no |
+| Prompt library list/detail | query service | Telegram/signed HTTP/operator web | active | R | policy-bound | n/a | no |
+| Prompt approve/reject/deactivate | prompt service | Telegram/signed HTTP/operator web | active | W | yes | yes | no |
+| Subscription/runtime toggle | runtime service | Telegram/signed HTTP/operator web | active | W | yes | yes | no |
+| Model availability | runtime service + paid-admission guard | Telegram/signed HTTP/operator web | active | W | yes | yes | no |
+| Runtime config/preset actions | runtime/admin services | registered transports where exposed | active core | W | yes | yes where mutating | no |
+| Support ticket list/detail | query/support service | Telegram/signed HTTP/operator web | active | R | policy-bound | n/a | no |
+| Ticket assign/update | support service | signed HTTP/operator web | active | W | yes | yes | no |
+| Ticket reply | support service + support outbox | Telegram/signed HTTP/operator web | active | W | yes | yes | yes |
+| CMS document/version read | query/CMS service | Telegram/signed HTTP/operator web | active | R | policy-bound | n/a | no |
+| CMS save/publish | CMS service | signed HTTP/operator web | active | W | yes | yes | no |
+| Broadcast/campaign preview | notification service | Telegram/signed HTTP/operator web | active | R | policy-bound | n/a | no |
+| Campaign create/test/start/cancel | notification service | Telegram/signed HTTP/operator web | active | W | yes | yes | yes |
+| Notification delivery status/retries | AdminWorker/query service | worker/operator web | active | R/W | yes | durable dedupe | yes |
+| AI admin diagnostics | query/diagnostic service | Telegram/signed HTTP | active | R | policy-bound | n/a | no |
+| Trend create/remove | moderation service | signed HTTP/operator web backend | active backend only | W | yes | yes | no |
+| Feed blur/remove moderation | moderation service | signed HTTP/operator web backend | active backend only | W | yes | yes | no |
+
+## Current transport wiring
+
+### Registered FastAPI routers
+
+Current `create_app()` registers:
+
+```text
+create_billing_router(...)
+create_generation_router(...)
+create_admin_router(...)
+create_admin_web_router(...)
+```
+
+It does **not** currently register:
+
+```text
+create_admin_extensions_router(...)
+create_admin_web_extensions_router(...)
+```
+
+The prepared extension endpoints are listed in `api-reference.md` under issue #55.
+
+### Registered Telegram routers
+
+Current bot dispatcher registers the main `admin_router`, Quick Start, generation and shell routers. `bot/admin_extras.py` exists but its router is not currently included, so those extra callbacks are not production-active.
+
+This distinction is intentional documentation accuracy: a source module existing in the tree is not equivalent to runtime parity.
 
 ## Admin roles
 
@@ -73,11 +111,11 @@ Current policy roles include:
 - `finance`;
 - `marketing`.
 
-Roles map to scopes in the shared policy. Durable admins live in `admin_users`; `FOXGEN_ADMIN_SUPERUSER_IDS` is a bootstrap mechanism, not the long-term policy store.
+Durable admins live in `admin_users`; `FOXGEN_ADMIN_SUPERUSER_IDS` is bootstrap configuration, not the preferred long-term operational policy store.
 
 ## Core domain entities
 
-The admin migration/model layer includes the administrative equivalents of the required capability contract:
+The admin migration/model layer includes:
 
 - `AdminUser`;
 - `AdminCommand`;
@@ -90,16 +128,17 @@ The admin migration/model layer includes the administrative equivalents of the r
 - `SupportOutbox`;
 - `CmsDocument` / `CmsDocumentVersion`;
 - `NotificationCampaign` / `NotificationDelivery`;
+- `AdminOutbox`;
 - partner profile/withdrawal entities;
 - promo codes;
 - prompt-library items;
 - runtime flags/model availability;
 - trend/feed moderation records;
-- admin outbox work.
+- user restrictions.
 
-Database schema is introduced by Alembic revision `20260813_0008_admin_contour.py`.
+Schema is introduced by Alembic revision `20260813_0008_admin_contour.py`.
 
-## Important state machines
+## State/invariant highlights
 
 ### Admin command
 
@@ -108,50 +147,33 @@ reserved -> succeeded
          -> failed
 ```
 
-A succeeded command is immutable from the operator perspective. Same admin/action/key/request hash returns the stored response; payload drift conflicts.
+Same admin/action/key/request hash replays the stored result; payload drift conflicts.
 
-### Payment admin work
+### Payment credit
 
-Payment operations distinguish observed/current state from durable recheck/reprocess request work. Completed payment credit is protected by:
+Completed-payment credit is protected by:
 
 ```text
 payment-credit:<provider>:<external_id>
 ```
 
-so a second reprocess cannot append a second credit.
+so a second reprocess cannot append another effective credit.
 
 ### Support
 
-Ticket business state supports open/pending/resolved/closed and authorized reopening. A reply commits:
+A reply commits `SupportMessage` + `SupportOutbox` before worker delivery. The request handler is not the only copy of the side effect.
 
-```text
-SupportMessage(status=queued)
-SupportOutbox(status=pending)
-```
+### Campaigns
 
-before the worker performs Telegram delivery.
+Starting a campaign materializes recipient deliveries once under unique `(campaign_id, recipient_id)` state; workers send later with retries/rate limiting.
 
-Support outbox follows a leased retry/dead-letter lifecycle rather than sending only inside the HTTP request.
+### Operation replay
 
-### CMS
-
-Documents own immutable versions. Publishing selects/promotes a version; previously published content is not silently edited in place.
-
-### Notification campaigns
-
-Campaigns progress from draft/ready into running/completed or cancellation. Starting a campaign materializes recipient deliveries once under durable uniqueness.
-
-### Partner withdrawals
-
-Allowed transitions cover pending review to approval/payment or rejection. Actions are server-validated and audited.
-
-### Prompt moderation
-
-Pending content can be approved/rejected; approved content can later be deactivated according to current service rules.
+Replay creates a child operation and is restricted to safe non-billable local work. `generation.submit` is forbidden.
 
 ## Security contract
 
-For `/internal/admin/*`:
+For registered `/internal/admin/*` machine routes:
 
 ```text
 network allowlist
@@ -162,9 +184,9 @@ network allowlist
 + AdminPolicy authorization
 ```
 
-Write routes also require `Idempotency-Key`. Destructive/expensive actions require `X-Admin-Confirm: CONFIRM` where applicable.
+Writes require `Idempotency-Key`; destructive/expensive actions require `X-Admin-Confirm: CONFIRM` where applicable.
 
-The HMAC canonical bytes are:
+Canonical HMAC bytes:
 
 ```text
 <timestamp>\n<METHOD>\n<path>\n<request_id>\n<exact raw body bytes>
@@ -172,69 +194,41 @@ The HMAC canonical bytes are:
 
 Audit/operation output redacts sensitive keys containing `token`, `secret`, `password`, `authorization`, `api_key`, `webhook` or `callback`.
 
-## Durable side-effect rules
-
-### Support
-
-HTTP/Telegram creates durable message/outbox state. Worker sends later.
-
-### Campaigns
-
-HTTP/Telegram creates/starts durable campaign state. Worker leases recipient deliveries and applies rate/retry policy.
-
-### Payment reprocess
-
-Admin request creates durable work; deterministic payment ledger key prevents double credit.
-
-### Operation replay
-
-Creates auditable child operation. Worker permits only safe non-billable local replay such as archive/delivery orchestration. `generation.submit` is explicitly forbidden.
-
-## Transport parity
+## Transport notes
 
 ### Telegram `/admin`
 
-Thin interactive shell for summary, users, finance, pricing/tariffs, partners, promos, prompt moderation, campaigns and operational tools. Each callback/FSM continuation re-authorizes.
+The registered main admin router is a thin shell for core summary/users/finance/payments/partners/withdrawals/tariffs/promos/prompts/broadcast/support/operations/runtime/AI/CMS/export capabilities. Every callback/FSM continuation re-authorizes through signed server-side health/action calls.
+
+Prepared extra analytics/XLS/approved-withdrawal callbacks are issue #55 and are not counted as active.
 
 ### Signed internal HTTP
 
-Explicit testable router under `/internal/admin/*`; endpoint inventory is in `api-reference.md`.
+Registered route inventory is in `api-reference.md`.
 
 ### Backend operator web
 
-Internal-only operator surface under `/internal/admin/ui`, protected by the same server-side policy/session/HMAC/network boundaries. It is not the public Mini App.
+The registered `/internal/admin/ui` supports a signed session mint, server-side session/RBAC section reads and generic shared-service action dispatch. Prepared analytics/preview/admin-management extension routes are issue #55.
 
-### Future public Mini App
+### Public Mini App
 
-Out of current scope. When implemented, it must call protected backend admin capabilities and must never trust client-side hidden controls as authorization.
+Out of current scope. Future UI must call server-protected capabilities and must never trust client-side hidden state as authorization.
 
 ## Acceptance coverage
 
-Automated coverage includes:
+Existing automated coverage includes HMAC/timestamp/raw-body verification, allowlist, roles/scopes, confirmation, redaction, validation, signed admin API requests, balance idempotency, payment double-credit protection, safe replay, support outbox, campaign materialization, blocked-user paid-admission denial, Telegram non-admin protection and operator-web server-side authorization.
 
-- HMAC/timestamp/raw-body verification;
-- network allowlist;
-- role/scope checks;
-- confirmation parsing;
-- recursive redaction;
-- payload/tariff/campaign validation;
-- signed admin API requests;
-- idempotent balance adjustment;
-- payment reprocess double-credit prevention;
-- operation replay without double charge;
-- support reply creating outbox instead of direct-only send;
-- campaign recipient materialization once;
-- blocked user rejection at transactional paid admission;
-- Telegram non-admin denial/callback/FSM protection;
-- operator-web server-side authorization.
+Issue #55 requires explicit route-registration and Telegram-extra reachability tests before prepared extensions can move to active.
 
-## Operational documents
+## Related documents
 
-- `admin-control-plane.md` — security/rollout/runbook;
-- `api-reference.md` — endpoint inventory;
-- `configuration.md` — environment variables;
-- `operations-runbook.md` — production smoke/incident flow.
+- `admin-control-plane.md`;
+- `api-reference.md`;
+- `database-schema.md`;
+- `configuration.md`;
+- `known-limitations.md`;
+- `operations-runbook.md`.
 
 ## Change rule
 
-Any new admin capability is incomplete until the matrix specifies transport, read/write semantics, audit requirement, idempotency requirement and worker requirement, and until all exposed transports reuse the shared domain/service behavior.
+A new admin capability is complete only when shared service/domain behavior exists, audit/idempotency/worker requirements are defined, the intended transport is actually registered, tests prove reachability/security, and this matrix/API reference reflect the runtime state.
