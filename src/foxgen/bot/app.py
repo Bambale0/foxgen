@@ -11,6 +11,8 @@ from aiogram.fsm.storage.base import BaseEventIsolation
 from aiogram.fsm.storage.redis import RedisStorage
 from aiogram.types import CallbackQuery, ErrorEvent, Message
 
+from foxgen.bot.admin import router as admin_router
+from foxgen.bot.admin_api_client import AdminApiClient
 from foxgen.bot.api_client import FoxGenApiClient
 from foxgen.bot.flows import router as generation_router
 from foxgen.bot.fsm_contract import contract_for
@@ -200,6 +202,13 @@ async def run(settings: Settings | None = None) -> None:
         internal_token=internal_token.get_secret_value(),
         timeout_seconds=resolved.internal_api_timeout_seconds,
     )
+    admin_api_client: AdminApiClient | None = None
+    if resolved.admin_api_enabled and resolved.admin_hmac_key is not None:
+        admin_api_client = AdminApiClient(
+            base_url=str(resolved.internal_api_base_url),
+            hmac_key=resolved.admin_hmac_key.get_secret_value(),
+            timeout_seconds=resolved.internal_api_timeout_seconds,
+        )
     media_storage = S3MediaStorage(
         bucket=resolved.s3_bucket,
         region=resolved.s3_region,
@@ -229,8 +238,12 @@ async def run(settings: Settings | None = None) -> None:
         storage=storage,
         events_isolation=create_event_isolation(storage),
         api_client=api_client,
+        admin_api_client=admin_api_client,
         input_media=input_media,
     )
+    # Admin must run before broad product/shell fallbacks. Every handler still performs
+    # a fresh signed server-side authorization check.
+    dispatcher.include_router(admin_router)
     dispatcher.include_router(quick_start_router)
     dispatcher.include_router(generation_router)
     dispatcher.include_router(router)
@@ -244,6 +257,8 @@ async def run(settings: Settings | None = None) -> None:
             allowed_updates=dispatcher.resolve_used_update_types(),
         )
     finally:
+        if admin_api_client is not None:
+            await admin_api_client.aclose()
         await api_client.aclose()
         await bot.session.close()
         await storage.close()
