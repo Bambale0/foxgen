@@ -90,6 +90,30 @@ REQUIRED_COLUMNS: dict[str, frozenset[str]] = {
     "model_availability": frozenset({"model_slug", "enabled", "reason", "updated_by"}),
     "trend_items": frozenset({"id", "title", "payload", "active"}),
     "feed_moderation_actions": frozenset({"id", "content_id", "action", "active"}),
+    "user_profiles": frozenset(
+        {"user_id", "public_slug", "display_name", "avatar_url", "bio"}
+    ),
+    "publications": frozenset(
+        {
+            "id",
+            "generation_id",
+            "author_user_id",
+            "scope",
+            "status",
+            "prompt_visible",
+            "published_at",
+        }
+    ),
+    "generation_derivatives": frozenset(
+        {"derived_generation_id", "source_publication_id", "kind"}
+    ),
+    "publication_likes": frozenset({"id", "publication_id", "user_id"}),
+    "publication_comments": frozenset(
+        {"id", "publication_id", "user_id", "surface", "text", "created_at"}
+    ),
+    "publication_share_events": frozenset(
+        {"id", "publication_id", "user_id", "surface", "created_at"}
+    ),
 }
 
 
