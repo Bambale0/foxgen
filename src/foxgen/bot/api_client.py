@@ -62,6 +62,7 @@ class FeedPublicationView:
     author_avatar_url: str | None
     post_deep_link: str
     remix_deep_link: str
+    reference_storage_keys: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -378,7 +379,14 @@ class FoxGenApiClient:
         )
         if not isinstance(payload, dict):
             raise FoxGenApiError("Remix временно недоступен.", status_code=502)
-        return self._publication(payload.get("source"))
+        source = payload.get("source")
+        if not isinstance(source, dict):
+            raise FoxGenApiError("Сервер вернул повреждённый remix-контекст.", status_code=502)
+        merged = dict(source)
+        storage_keys = payload.get("reference_storage_keys")
+        if isinstance(storage_keys, list):
+            merged["reference_storage_keys"] = storage_keys
+        return self._publication(merged)
 
     @staticmethod
     def _user_headers(user_id: int) -> dict[str, str]:
@@ -401,6 +409,12 @@ class FoxGenApiClient:
         media_urls = (
             tuple(str(item) for item in media_urls_raw if isinstance(item, str))
             if isinstance(media_urls_raw, list)
+            else ()
+        )
+        storage_keys_raw = value.get("reference_storage_keys")
+        storage_keys = (
+            tuple(str(item) for item in storage_keys_raw if isinstance(item, str))
+            if isinstance(storage_keys_raw, list)
             else ()
         )
         publication_id = value.get("id")
@@ -439,6 +453,7 @@ class FoxGenApiClient:
             ),
             post_deep_link=str(value.get("post_deep_link", f"post_{publication_id}")),
             remix_deep_link=str(value.get("remix_deep_link", f"remix_{publication_id}")),
+            reference_storage_keys=storage_keys,
         )
 
     @classmethod
