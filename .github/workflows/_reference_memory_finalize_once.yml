@@ -1,0 +1,369 @@
+name: Reference memory finalize once
+
+on:
+  push:
+    branches:
+      - agent/reference-memory
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - name: Wait for earlier one-shot helpers and refresh branch
+        shell: bash
+        run: |
+          sleep 60
+          git pull --rebase origin agent/reference-memory
+      - name: Finalize reference-memory contracts and canonical docs
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_required(path: str, old: str, new: str) -> None:
+              target = Path(path)
+              text = target.read_text(encoding="utf-8")
+              if new in text:
+                  return
+              if old not in text:
+                  raise SystemExit(f"expected block not found in {path}: {old[:120]!r}")
+              target.write_text(text.replace(old, new, 1), encoding="utf-8")
+
+          replace_required(
+              "src/foxgen/infra/reference_memory.py",
+              '''                existing = await session.scalar(
+                    select(ReferenceAsset)
+                    .where(
+                        ReferenceAsset.user_id == user_id,
+                        ReferenceAsset.checksum_sha256 == checksum_sha256,
+                        ReferenceAsset.status == "active",
+                    )
+                    .order_by(ReferenceAsset.created_at.desc())
+                    .limit(1)
+                )
+                if existing is not None:
+                    return _snapshot(existing), False
+''',
+              '''                existing = await session.scalar(
+                    select(ReferenceAsset)
+                    .where(
+                        ReferenceAsset.user_id == user_id,
+                        ReferenceAsset.checksum_sha256 == checksum_sha256,
+                        ReferenceAsset.status.in_(_ACTIVE_QUOTA_STATUSES),
+                    )
+                    .order_by(ReferenceAsset.created_at.desc())
+                    .limit(1)
+                )
+                if existing is not None:
+                    if existing.status == "active":
+                        return _snapshot(existing), False
+                    raise SubmissionError(
+                        ErrorCode.INPUT_STORAGE_FAILED,
+                        "Такой референс уже сохраняется. Повторите чуть позже.",
+                        retryable=True,
+                    )
+''',
+          )
+
+          replace_required(
+              "src/foxgen/bot/reference_memory.py",
+              '''    selected = [item for item in _selected(data) if item != reference_id]
+    await state.update_data(
+        memory_selected=selected,
+        memory_delete_confirm=None,
+    )
+''',
+              '''    selected = [item for item in _selected(data) if item != reference_id]
+    media = [
+        item
+        for item in stored_media(data)
+        if item.get("reference_id") != reference_id
+    ]
+    await state.update_data(
+        memory_selected=selected,
+        media=media,
+        memory_delete_confirm=None,
+    )
+''',
+          )
+
+          replace_required(
+              "src/foxgen/infra/reference_media.py",
+              '''        stream = await self._reader.open(asset.storage_key)
+        if stream.size_bytes and stream.size_bytes != asset.size_bytes:
+            raise SubmissionError(
+                ErrorCode.PROVIDER_PROTOCOL,
+                "Размер сохранённого референса не совпадает с метаданными.",
+            )
+        return stream
+''',
+              '''        stream = await self._reader.open(asset.storage_key)
+        if stream.size_bytes and stream.size_bytes != asset.size_bytes:
+            raise SubmissionError(
+                ErrorCode.PROVIDER_PROTOCOL,
+                "Размер сохранённого референса не совпадает с метаданными.",
+            )
+        if stream.content_type != asset.content_type:
+            raise SubmissionError(
+                ErrorCode.PROVIDER_PROTOCOL,
+                "Тип сохранённого референса не совпадает с метаданными.",
+            )
+        return stream
+''',
+          )
+
+          # Keep the exact runtime-router contract test in sync if the earlier helper did not run.
+          needle = '        "foxgen-quick-start-wizard",\n        "foxgen-generation-wizard",'
+          replacement = (
+              '        "foxgen-quick-start-wizard",\n'
+              '        "foxgen-reference-memory",\n'
+              '        "foxgen-generation-wizard",'
+          )
+          for path in Path("tests").rglob("test_*.py"):
+              text = path.read_text(encoding="utf-8")
+              if needle in text and '"foxgen-reference-memory"' not in text:
+                  path.write_text(text.replace(needle, replacement), encoding="utf-8")
+
+          Path("docs/reference-memory.md").write_text(r'''# Reference memory
+
+FoxGen reference memory is a durable, private, user-owned image library for reuse from compatible Telegram generation screens.
+
+## User contract
+
+From an image-reference screen or compatible video-media screen, `📚 Память реф` allows the user to:
+
+- view a private image preview;
+- move through the library with previous/next navigation;
+- select or unselect several saved images;
+- see the selected count against the current model/scenario capacity;
+- add a new image directly to durable memory;
+- explicitly save compatible temporary images already present in the current draft;
+- delete a saved image with confirmation;
+- apply selected references back to the active image/video generation draft;
+- reuse the same saved image in any current/future wizard model whose capability accepts image references.
+
+For first+last-frame video, selection order is significant and becomes frame order. Existing temporary inputs remain first, followed by saved references in the order selected.
+
+## Durable ownership
+
+PostgreSQL table `reference_assets` is the source of truth for owner, storage key, checksum, byte size and lifecycle state. Every row belongs to exactly one Telegram user.
+
+Durable bytes live in the configured private S3-compatible bucket under:
+
+```text
+references/<telegram-user-id>/<reference-uuid>.<extension>
+```
+
+`references/` is intentionally outside the short-retention `inputs/` lifecycle. A saved reference survives Redis FSM expiry, `/start`, `/menu`, API/bot/worker restarts and deployments until the owner deletes it.
+
+Temporary Telegram inputs are never silently promoted. Saving is always an explicit action.
+
+## Status lifecycle
+
+```text
+uploading -> active -> delete_pending -> deleted
+     |                         |
+     +-------> failed          +-- reference.delete outbox -> worker -> private S3 delete
+```
+
+The save path reserves PostgreSQL quota before copying bytes. The S3 write must succeed before the row becomes `active`. A caught storage failure marks the row `failed` and removes a partially written object best-effort.
+
+Deletion is transactional on the metadata side: `active` becomes `delete_pending` and a deduplicated `reference.delete` outbox event is committed in the same transaction. The row disappears from list/resolve immediately. The worker then deletes the S3 object and marks the row `deleted`. Reclaimed deletion events are idempotent.
+
+## Quotas and de-duplication
+
+Per-owner limits are configurable:
+
+- `FOXGEN_REFERENCE_MEMORY_MAX_ITEMS` — default 50 images;
+- `FOXGEN_REFERENCE_MEMORY_MAX_TOTAL_BYTES` — default 500 MiB.
+
+Quota reservation locks the owner's `users` row and counts both `uploading` and `active` rows. Concurrent saves therefore cannot race past the item/byte quota.
+
+Within one owner's live memory, identical bytes are detected by SHA-256. An already-active identical reference is reused without another durable copy. If the same bytes are concurrently still in `uploading`, a retryable response is returned instead of creating a duplicate upload.
+
+## Private preview/provider access
+
+Production MinIO/S3 stays private. FoxGen does **not** return an internal MinIO hostname or permanent S3 URL to Telegram/KIE.
+
+List/resolve creates a short-lived FoxGen capability URL:
+
+```text
+https://<public-foxgen>/v1/reference-media/<uuid>?expires=<unix>&signature=<hmac>
+```
+
+The public read-only route:
+
+1. verifies expiry and HMAC bound to the reference UUID;
+2. checks PostgreSQL again and serves only a row that is still `active`;
+3. reads the object through the private S3/MinIO network;
+4. streams it with its validated image content type and `Cache-Control: private, no-store`.
+
+Because active-state is checked on every read, moving a reference to `delete_pending` revokes even an otherwise unexpired capability immediately. S3 cleanup may complete asynchronously afterwards.
+
+Redis never stores signed URLs. It stores durable reference UUIDs only. Immediately before paid generation admission, the bot calls owner-scoped `/v1/reference-memory/resolve`, receives fresh capability URLs and then builds the ordinary strict provider payload. A foreign, deleted or inactive UUID fails closed before a provider side effect.
+
+## Telegram draft representation
+
+Temporary and durable locators are distinct:
+
+```json
+{"kind": "image", "storage_key": "inputs/42/temporary.png"}
+{"kind": "image", "reference_id": "7a39..."}
+```
+
+`/start`, `/menu`, reload/skip and ordinary draft cleanup delete only temporary `storage_key` inputs. Durable `reference_id` assets are detached from the draft but remain in the owner's library unless the owner explicitly deletes them.
+
+If a user deletes a reference while it is selected in the current memory browser, that UUID is also removed from the active generation draft immediately so Back cannot leave a knowingly invalid saved reference attached.
+
+## Model compatibility
+
+The current model/scenario capability is always authoritative:
+
+- image models use `max_references`;
+- first-frame video accepts one image total;
+- first+last-frame video accepts two ordered images total;
+- multimodal video combines the global total-reference limit with the model's image-reference limit;
+- text-only video does not expose reference memory.
+
+Saved image references and ordinary temporary image uploads share the same model limits. Final provider-contract validation still runs, so reference memory cannot bypass a model payload contract.
+
+## Internal API
+
+Owner-scoped control operations require the trusted internal bearer plus `X-FoxGen-User-Id`:
+
+```text
+GET    /v1/reference-memory?offset=0&limit=20
+POST   /v1/reference-memory
+POST   /v1/reference-memory/resolve
+DELETE /v1/reference-memory/{reference_id}
+```
+
+`POST /v1/reference-memory` accepts only a current private key under exactly `inputs/<authenticated-user-id>/`; a guessed `inputs/<other-user>/...` key is rejected before file access.
+
+The externally reachable route is intentionally different:
+
+```text
+GET /v1/reference-media/{reference_id}?expires=...&signature=...
+```
+
+It is a read-only signed capability, not an internal identity API. It exposes no storage credential and performs a fresh active-state lookup before streaming bytes.
+
+## Recovery and operations
+
+`uploading` is non-selectable and counts toward quota. Under ordinary caught failures it becomes `failed`; a hard process termination between reservation and recovery can leave a stale `uploading` row. Treat that as an incident: reconcile the object/checksum and ownership before changing metadata. Never blindly activate it.
+
+`delete_pending` is already inaccessible to user/provider reads. Persistent `delete_pending` means the durable `reference.delete` outbox/S3 cleanup is retrying or needs operator reconciliation.
+
+Operational rules:
+
+1. never attach the short `inputs/` lifecycle to `references/` or `generations/`;
+2. never make MinIO/S3 public to fix preview delivery — use the signed FoxGen media proxy;
+3. use PostgreSQL row state plus the outbox as the source of truth during incidents;
+4. do not manually delete the entire media bucket/volume to clear temporary files;
+5. include `references/` in persistent media backup/privacy/deletion governance.
+
+## Verification checklist
+
+- save a Telegram image, reopen `/menu`, start a new generation and verify the image is still available;
+- save identical bytes twice and verify the active asset is reused;
+- attempt cross-user temporary-key promotion and verify fail-closed authorization;
+- fill item/byte quota and verify additional save is rejected before activation;
+- select multiple references for Seedream/Nano Banana and verify capability limits;
+- use saved images for first-frame and ordered first+last-frame video;
+- mix temporary image/video/audio with saved images in multimodal video and verify total/per-kind limits;
+- delete a saved item and verify it disappears immediately, its capability is revoked, worker deletes S3 bytes and old Redis drafts fail closed at final resolve;
+- verify `/start` and `/menu` clear temporary inputs but never durable memory;
+- verify public media capabilities expire and the S3 bucket remains private;
+- run Alembic upgrade/downgrade/re-upgrade plus `scripts/check_schema.py`;
+- run Ruff, strict mypy, unit/contract tests, real PostgreSQL/Redis lifecycle tests, secret/dependency/Trivy scans and production-image smoke.
+
+## Related documentation
+
+- `telegram-flows.md` — browser/generation FSM and UX;
+- `input-media-lifecycle.md` — temporary vs durable input ownership;
+- `database-schema.md` — durable metadata;
+- `configuration.md` — limits and signed-media TTL;
+- `api-reference.md` — internal and public HTTP surfaces;
+- `architecture.md` — storage/trust boundaries;
+- `security.md` — capability and owner-scope invariants.
+''', encoding="utf-8")
+
+          additions = {
+              "docs/database-schema.md": r'''
+
+## Reference memory
+
+`reference_assets` stores durable, owner-scoped saved-image metadata. Rows reference `users.id`, use server-generated private `references/<user>/<uuid>.*` storage keys and move through `uploading -> active -> delete_pending -> deleted` (or `failed`). Owner/checksum and owner/status/creation indexes support quota, de-duplication and library browsing. `delete_pending` is paired with a deduplicated `reference.delete` event in the shared outbox; the worker removes private S3 bytes before the final `deleted` transition.
+''',
+              "docs/configuration.md": r'''
+
+## Reference memory
+
+Durable saved-image memory is controlled by `FOXGEN_REFERENCE_MEMORY_MAX_ITEMS` (default 50), `FOXGEN_REFERENCE_MEMORY_MAX_TOTAL_BYTES` (default 500 MiB) and `FOXGEN_REFERENCE_MEMORY_PRESIGNED_URL_TTL_SECONDS` (default 21600). Saved bytes use the normal private S3/MinIO configuration under `references/`; the short `inputs/` lifecycle must never target that prefix. External preview/provider reads use the existing public FoxGen API origin (`FOXGEN_TELEGRAM_INPUT_PUBLIC_BASE_URL`) through a short-lived HMAC-signed `/v1/reference-media/*` capability while MinIO stays private.
+''',
+              "docs/api-reference.md": r'''
+
+## Reference memory API
+
+Trusted backend callers use the internal bearer plus `X-FoxGen-User-Id` for `GET/POST /v1/reference-memory`, `POST /v1/reference-memory/resolve` and `DELETE /v1/reference-memory/{uuid}`. Save accepts only `inputs/<authenticated-user-id>/...` temporary keys. Resolve is the final owner/active-state gate before provider admission.
+
+`GET /v1/reference-media/{uuid}?expires=...&signature=...` is a separate public read-only capability for Telegram/provider image fetches. It verifies HMAC+expiry, requires the durable row to remain `active`, and streams the object from private S3/MinIO without exposing storage credentials or internal endpoints.
+''',
+              "docs/architecture.md": r'''
+
+## Durable reference memory
+
+Saved image references are PostgreSQL/S3 business state, not Redis FSM state. PostgreSQL owns user association, checksum/quota and lifecycle; private S3 owns `references/` bytes; Redis holds only browser cursor/selection and UUID locators in an active draft. Promotion from temporary `inputs/` is explicit. Public consumers read through revocable short-lived FoxGen `/v1/reference-media/*` capabilities, so private MinIO never needs public ingress. Deletion first removes the row from `active`, then a durable outbox event drives idempotent S3 cleanup.
+''',
+              "docs/security.md": r'''
+
+## Saved-reference security
+
+Reference-memory create/list/resolve/delete are authenticated internal user-context operations. Save rejects temporary keys outside `inputs/<authenticated-user-id>/`. Durable UUIDs are owner-scoped and only `active` rows resolve. Telegram/KIE receive no S3 credential or internal MinIO URL; they receive a short-lived HMAC capability to the public FoxGen reference-media proxy. The proxy verifies signature/expiry and rechecks `active` state before every stream, so deletion revokes previously issued capabilities immediately. `/start`, `/menu` and draft cleanup ignore durable `reference_id` locators and delete only temporary inputs.
+''',
+          }
+          for filename, block in additions.items():
+              path = Path(filename)
+              text = path.read_text(encoding="utf-8")
+              marker = block.strip().splitlines()[0]
+              if marker not in text:
+                  path.write_text(text.rstrip() + "\n" + block, encoding="utf-8")
+
+          # Remove one-shot helper workflows from the final branch.
+          for helper in (
+              ".github/workflows/_reference_memory_format_once.yml",
+              ".github/workflows/_reference_memory_patch_contracts.yml",
+              ".github/workflows/_reference_memory_finalize_once.yml",
+          ):
+              Path(helper).unlink(missing_ok=True)
+          PY
+      - name: Install Ruff and format changed Python
+        shell: bash
+        run: |
+          python -m pip install 'ruff>=0.9,<1'
+          mapfile -t files < <(git diff --name-only origin/main...HEAD -- '*.py')
+          if ((${#files[@]})); then
+            ruff format "${files[@]}"
+            ruff check "${files[@]}"
+          fi
+      - name: Commit finalization
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'fix(reference-memory): finalize durable reference contracts'
+          git push origin HEAD:agent/reference-memory
