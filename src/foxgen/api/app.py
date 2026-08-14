@@ -24,6 +24,7 @@ from foxgen.api.generations import (
     ReconciliationProtocol,
     create_generation_router,
 )
+from foxgen.api.publication_media import create_publication_media_router
 from foxgen.api.publications import PublicationServiceProtocol, create_publication_router
 from foxgen.api.security import authenticate_submission, validate_idempotency_key
 from foxgen.application.generation_ops import GenerationOperationsService
@@ -264,6 +265,7 @@ def create_app(
     app.include_router(create_billing_router(resolved_settings))
     app.include_router(create_generation_router(resolved_settings))
     app.include_router(create_publication_router(resolved_settings))
+    app.include_router(create_publication_media_router(resolved_settings))
     app.include_router(create_admin_router(resolved_settings))
     app.include_router(create_admin_extensions_router(resolved_settings))
     # Extension routes must precede the generic /internal/admin/ui/api/{section}
