@@ -10,7 +10,7 @@ from aiogram.types import CallbackQuery
 from foxgen.bot.api_client import FoxGenApiClient, FoxGenApiError
 from foxgen.bot.callbacks import safe_edit_callback_message
 from foxgen.bot.catalog import GenerationMode, model_choice, product_for_mode
-from foxgen.bot.flows import _provider_payload
+from foxgen.bot.flows import ResolvedInput, _provider_payload
 from foxgen.bot.keyboards import (
     after_submit_keyboard,
     aspect_ratio_keyboard,
@@ -99,12 +99,16 @@ async def confirm_remix(
         return
     source_publication_id = str(data.get("source_publication_id") or "")
     if not source_publication_id:
-        await callback.answer("Источник ремикса потерян. Откройте публикацию заново.", show_alert=True)
+        await callback.answer(
+            "Источник ремикса потерян. Откройте публикацию заново.", show_alert=True
+        )
         return
 
     await state.set_state(GenerationStates.submitting)
     if callback.message:
-        await callback.message.edit_text("⏳ Проверяю источник ремикса и ставлю генерацию в очередь…")
+        await callback.message.edit_text(
+            "⏳ Проверяю источник ремикса и ставлю генерацию в очередь…"
+        )
     await callback.answer()
 
     try:
@@ -142,9 +146,7 @@ async def confirm_remix(
 
     await state.clear()
     replay_text = (
-        "\nПовторный запрос распознан — новая задача не создавалась."
-        if queued.replayed
-        else ""
+        "\nПовторный запрос распознан — новая задача не создавалась." if queued.replayed else ""
     )
     if callback.message:
         await callback.message.edit_text(
@@ -158,14 +160,14 @@ async def confirm_remix(
         )
 
 
-def _resolved_publication_media(payload: dict[str, object]) -> list[dict[str, str]]:
+def _resolved_publication_media(payload: dict[str, object]) -> list[ResolvedInput]:
     raw_items = payload.get("items")
     if not isinstance(raw_items, list) or not raw_items:
         raise SubmissionError(
             ErrorCode.VALIDATION,
             "У исходной публикации нет доступного медиа для ремикса.",
         )
-    result: list[dict[str, str]] = []
+    result: list[ResolvedInput] = []
     for raw in raw_items:
         if not isinstance(raw, dict):
             continue
