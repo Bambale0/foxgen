@@ -155,7 +155,7 @@ cp .env.example .env
 docker compose up --build
 ```
 
-Local Compose provides PostgreSQL, Redis, MinIO, migrations, API, worker and bot. Telegram/Mini App temporary input files are stored in a private shared volume mounted into `bot` and `api`; generated result archives remain in MinIO. MinIO bootstrap creates the private results bucket when needed, installs the short-retention `inputs/` lifecycle rule for S3-backed deployments, verifies it and gates API/worker/bot startup. MinIO ports are exposed for development only.
+Local Compose provides PostgreSQL, Redis, MinIO, migrations, API, worker and bot. Telegram/Mini App temporary input files are stored in a private shared volume mounted into `bot` and `api`; generated result archives remain in MinIO. MinIO bootstrap creates the private results bucket when needed, installs the short-retention `inputs/` lifecycle rule for S3-backed deployments, verifies it, configures bundled MinIO stale multipart cleanup explicitly and gates API/worker/bot startup. MinIO ports are exposed for development only.
 
 The visual Happy Fox shell is available at:
 

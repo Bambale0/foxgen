@@ -203,7 +203,7 @@ docker compose --env-file .env -f docker-compose.prod.yml logs --tail=200 minio-
 docker compose --env-file .env -f docker-compose.prod.yml run --rm minio-init
 ```
 
-Expected policy is prefix-scoped short retention, by default 2-day completed objects and 1-day incomplete multipart cleanup. The initializer preserves unrelated lifecycle rules and must never target `generations/`.
+Expected policy is prefix-scoped short retention, by default 2-day completed objects. Bundled MinIO also uses explicit server-wide stale multipart cleanup (`FOXGEN_MINIO_STALE_UPLOADS_EXPIRY=24h`, `FOXGEN_MINIO_STALE_UPLOADS_CLEANUP_INTERVAL=6h`) because its lifecycle API does not round-trip `AbortIncompleteMultipartUpload`. The initializer preserves unrelated lifecycle rules and must never target `generations/`.
 
 If object count grows unexpectedly or the bootstrap fails:
 

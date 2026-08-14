@@ -138,11 +138,15 @@ The Compose bootstrap script `scripts/configure_minio_input_lifecycle.py` consum
 | Variable | Default | Purpose |
 |---|---:|---|
 | `FOXGEN_INPUT_RETENTION_DAYS` | `2` | Expire completed temporary objects under `inputs/` after this many days |
-| `FOXGEN_INPUT_MULTIPART_ABORT_DAYS` | `1` | Abort incomplete multipart uploads under the managed rule |
+| `FOXGEN_INPUT_MULTIPART_ABORT_DAYS` | `1` | Desired incomplete-multipart abort window for providers that support it through lifecycle policy |
+| `FOXGEN_MINIO_STALE_UPLOADS_EXPIRY` | `24h` | Bundled MinIO server-wide stale multipart expiry window |
+| `FOXGEN_MINIO_STALE_UPLOADS_CLEANUP_INTERVAL` | `6h` | Bundled MinIO scan interval for stale multipart cleanup |
 | `FOXGEN_MINIO_INIT_ATTEMPTS` | `30` | Maximum bootstrap/verification attempts while MinIO becomes reachable |
 | `FOXGEN_MINIO_INIT_RETRY_SECONDS` | `2` | Delay between bootstrap attempts |
 
 These are not application request settings and are intentionally not part of `foxgen.core.config.Settings`. `minio-init` preserves unrelated lifecycle rules, replaces only rule ID `foxgen-expire-telegram-inputs`, verifies the written configuration and exits unsuccessfully on mismatch. API, worker and bot depend on successful completion.
+
+Bundled MinIO has an S3 API compatibility gap: `PutBucketLifecycle` does not round-trip `AbortIncompleteMultipartUpload` through `GetBucketLifecycleConfiguration`. FoxGen therefore verifies the `inputs/` prefix + retention read-back strictly and configures bundled MinIO's server-wide stale multipart cleanup explicitly through `MINIO_API_STALE_UPLOADS_EXPIRY` / `MINIO_API_STALE_UPLOADS_CLEANUP_INTERVAL`.
 
 Never choose an input retention shorter than the legitimate provider fetch/interaction window. The managed rule targets `inputs/` only; durable `generations/` objects must retain their product storage policy.
 

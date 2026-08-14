@@ -121,6 +121,20 @@ def lifecycle_rule_matches(
     )
 
 
+def lifecycle_rule_matches_without_abort(
+    rule: dict[str, Any],
+    *,
+    retention_days: int,
+) -> bool:
+    return (
+        rule.get("ID") == RULE_ID
+        and rule.get("Status") == "Enabled"
+        and rule.get("Filter") == {"Prefix": INPUT_PREFIX}
+        and rule.get("Expiration") == {"Days": retention_days}
+        and "AbortIncompleteMultipartUpload" not in rule
+    )
+
+
 def configure_lifecycle(
     client: S3LifecycleClient,
     *,
@@ -149,12 +163,32 @@ def configure_lifecycle(
             multipart_abort_days=multipart_abort_days,
         )
     ]
-    if len(matching) != 1:
-        raise RuntimeError(
-            "Input lifecycle verification failed: expected exactly one enabled "
-            f"{INPUT_PREFIX!r} rule with retention={retention_days}d and "
-            f"multipart_abort={multipart_abort_days}d"
+    if len(matching) == 1:
+        return
+
+    compatible_without_abort = [
+        rule
+        for rule in verified_rules
+        if lifecycle_rule_matches_without_abort(
+            rule,
+            retention_days=retention_days,
         )
+    ]
+    if len(compatible_without_abort) == 1:
+        print(
+            "Configured input lifecycle without multipart abort read-back: "
+            f"bucket={bucket} prefix={INPUT_PREFIX} retention_days={retention_days}. "
+            "Bundled MinIO omits AbortIncompleteMultipartUpload from "
+            "GetBucketLifecycleConfiguration; rely on explicit MinIO stale multipart "
+            "cleanup settings in Compose."
+        )
+        return
+
+    raise RuntimeError(
+        "Input lifecycle verification failed: expected exactly one enabled "
+        f"{INPUT_PREFIX!r} rule with retention={retention_days}d and "
+        f"multipart_abort={multipart_abort_days}d"
+    )
 
 
 def run(settings: LifecycleSettings | None = None) -> None:

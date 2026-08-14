@@ -30,6 +30,8 @@ services:
     environment:
       MINIO_ROOT_USER: foxgen
       MINIO_ROOT_PASSWORD: foxgen-development-secret
+      MINIO_API_STALE_UPLOADS_EXPIRY: ${FOXGEN_MINIO_STALE_UPLOADS_EXPIRY:-24h}
+      MINIO_API_STALE_UPLOADS_CLEANUP_INTERVAL: ${FOXGEN_MINIO_STALE_UPLOADS_CLEANUP_INTERVAL:-6h}
     ports:
       - "9000:9000"
       - "9001:9001"
