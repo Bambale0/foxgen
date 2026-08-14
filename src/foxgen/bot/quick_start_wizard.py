@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import TypedDict
 
 from aiogram import F, Router
+from aiogram.filters import Filter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery
 
@@ -24,6 +25,15 @@ router = Router(name="foxgen-quick-start-wizard")
 class StoredInput(TypedDict):
     kind: str
     storage_key: str
+
+
+class QuickStartWizardFilter(Filter):
+    async def __call__(self, state: FSMContext) -> bool:
+        data = await state.get_data()
+        return data.get("wizard_origin") == "quick_start"
+
+
+QUICK_START_WIZARD = QuickStartWizardFilter()
 
 
 @router.callback_query(
@@ -101,16 +111,16 @@ async def bridge_reference_to_wizard(callback: CallbackQuery, state: FSMContext)
 
 @router.callback_query(
     GenerationStates.image_selecting_model,
+    QUICK_START_WIZARD,
     F.data == "gw:back",
 )
 @router.callback_query(
     GenerationStates.video_selecting_model,
+    QUICK_START_WIZARD,
     F.data == "gw:back",
 )
 async def quick_start_back_to_product(callback: CallbackQuery, state: FSMContext) -> None:
     data = await state.get_data()
-    if data.get("wizard_origin") != "quick_start":
-        return
     reference_kind = str(data.get("reference_kind") or "")
     original = _stored_input(data.get("reference_original"))
     if reference_kind not in {"image", "video"} or original is None or not stored_media(data):
