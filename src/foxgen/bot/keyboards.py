@@ -1,4 +1,4 @@
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 
 from foxgen.bot.catalog import (
     IMAGE_ASPECT_RATIOS,
@@ -7,14 +7,41 @@ from foxgen.bot.catalog import (
     GenerationMode,
     Product,
 )
+from foxgen.core.config import Settings, get_settings
 
 
-def main_menu() -> InlineKeyboardMarkup:
-    """Return the product menu in the approved row order plus Quick Start."""
+def resolve_miniapp_url(settings: Settings | None = None) -> str | None:
+    """Return the public Happy Fox Mini App URL when Telegram can reach it."""
+
+    resolved = settings or get_settings()
+    if not resolved.miniapp_enabled:
+        return None
+    if resolved.miniapp_public_url is not None:
+        return f"{str(resolved.miniapp_public_url).rstrip('/')}/"
+    if resolved.kie_callback_base_url is None:
+        return None
+    base_url = str(resolved.kie_callback_base_url).rstrip("/")
+    return f"{base_url}/mini-app/"
+
+
+def main_menu(*, miniapp_url: str | None = None) -> InlineKeyboardMarkup:
+    """Return the product menu with the real Happy Fox WebApp entrypoint."""
+
+    resolved_miniapp_url = miniapp_url or resolve_miniapp_url()
+    if resolved_miniapp_url is not None:
+        miniapp_button = InlineKeyboardButton(
+            text="🦊 Открыть Happy Fox",
+            web_app=WebAppInfo(url=resolved_miniapp_url),
+        )
+    else:
+        miniapp_button = InlineKeyboardButton(
+            text="🦊 Happy Fox Mini App",
+            callback_data="miniapp:unavailable",
+        )
 
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="Мини апп", callback_data="planned:mini_app")],
+            [miniapp_button],
             [InlineKeyboardButton(text="Быстрый запуск", callback_data="quick:start")],
             [
                 InlineKeyboardButton(text="Создать видео", callback_data="create:video"),
@@ -116,7 +143,9 @@ def model_keyboard(mode: GenerationMode) -> InlineKeyboardMarkup:
 def navigation_keyboard(*, media_done: bool = False) -> InlineKeyboardMarkup:
     rows: list[list[InlineKeyboardButton]] = []
     if media_done:
-        rows.append([InlineKeyboardButton(text="✅ Референсы добавлены", callback_data="media:done")])
+        rows.append(
+            [InlineKeyboardButton(text="✅ Референсы добавлены", callback_data="media:done")]
+        )
     rows.extend(
         [
             [InlineKeyboardButton(text="⬅️ Назад", callback_data="nav:back")],
@@ -189,7 +218,11 @@ def confirmation_keyboard(*, can_submit: bool = True) -> InlineKeyboardMarkup:
     else:
         rows.extend(
             [
-                [InlineKeyboardButton(text="🔄 Обновить цену и баланс", callback_data="draft:refresh")],
+                [
+                    InlineKeyboardButton(
+                        text="🔄 Обновить цену и баланс", callback_data="draft:refresh"
+                    )
+                ],
                 [InlineKeyboardButton(text="💳 Открыть баланс", callback_data="account:balance")],
             ]
         )

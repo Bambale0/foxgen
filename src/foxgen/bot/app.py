@@ -8,7 +8,7 @@ from aiogram.filters import Command, CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.storage.base import BaseEventIsolation
 from aiogram.fsm.storage.redis import RedisStorage
-from aiogram.types import CallbackQuery, ErrorEvent, Message
+from aiogram.types import CallbackQuery, ErrorEvent, MenuButtonWebApp, Message, WebAppInfo
 
 from foxgen.bot.admin import router as admin_router
 from foxgen.bot.admin_api_client import AdminApiClient
@@ -18,7 +18,7 @@ from foxgen.bot.callbacks import safe_edit_callback_message
 from foxgen.bot.flows import router as generation_router
 from foxgen.bot.fsm_contract import contract_for
 from foxgen.bot.generation_wizard import router as generation_wizard_router
-from foxgen.bot.keyboards import main_menu
+from foxgen.bot.keyboards import main_menu, resolve_miniapp_url
 from foxgen.bot.quick_start import router as quick_start_router
 from foxgen.bot.quick_start_wizard import router as quick_start_wizard_router
 from foxgen.bot.uploads import TelegramInputMediaStorage, stored_input_keys
@@ -83,6 +83,14 @@ async def cancel_flow(
         "Действие отменено. Главное меню:",
         main_menu(),
         answer_text="Отменено",
+    )
+
+
+@router.callback_query(F.data == "miniapp:unavailable")
+async def miniapp_unavailable(callback: CallbackQuery) -> None:
+    await callback.answer(
+        "Happy Fox Mini App ещё не привязан к публичному HTTPS-адресу этого бота.",
+        show_alert=True,
     )
 
 
@@ -189,6 +197,28 @@ def register_runtime_routers(dispatcher: Dispatcher) -> None:
     dispatcher.include_router(router)
 
 
+async def configure_miniapp_menu(bot: Bot, settings: Settings) -> None:
+    miniapp_url = resolve_miniapp_url(settings)
+    if miniapp_url is None:
+        logger.warning(
+            "miniapp_public_url_unavailable",
+            extra={
+                "miniapp_enabled": settings.miniapp_enabled,
+                "kie_callback_base_url_configured": settings.kie_callback_base_url is not None,
+            },
+        )
+        return
+    try:
+        await bot.set_chat_menu_button(
+            menu_button=MenuButtonWebApp(
+                text="Happy Fox",
+                web_app=WebAppInfo(url=miniapp_url),
+            )
+        )
+    except Exception:
+        logger.exception("miniapp_chat_menu_configuration_failed")
+
+
 async def run(settings: Settings | None = None) -> None:
     resolved = settings or get_settings()
     telegram_token = resolved.telegram_bot_token
@@ -239,6 +269,7 @@ async def run(settings: Settings | None = None) -> None:
         default=DefaultBotProperties(parse_mode=ParseMode.HTML),
     )
     try:
+        await configure_miniapp_menu(bot, resolved)
         await dispatcher.start_polling(
             bot,
             allowed_updates=dispatcher.resolve_used_update_types(),

@@ -41,6 +41,7 @@ class Settings(BaseSettings):
     # Public Telegram Mini App. Static UI is safe to serve without secrets; every
     # user-scoped API operation remains fail-closed until auth is configured.
     miniapp_enabled: bool = True
+    miniapp_public_url: AnyHttpUrl | None = None
     miniapp_jwt_secret: SecretStr | None = None
     miniapp_auth_max_age_seconds: int = Field(default=86_400, ge=60, le=604_800)
     miniapp_jwt_ttl_seconds: int = Field(default=3600, ge=300, le=86_400)

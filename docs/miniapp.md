@@ -2,6 +2,17 @@
 
 `Happy Fox` is the public browser/WebView product surface for the FoxGen backend. The user-facing brand is **Happy Fox only**; internal Python packages, database resources and service names retain `foxgen` so product branding does not destabilize backend contracts.
 
+## Telegram entrypoints
+
+The Mini App is a real Telegram Web App, not a callback-only bot screen.
+
+When a public URL is configured, FoxGen exposes Happy Fox through two Telegram entrypoints:
+
+- the first button in the bot `/start` and `/menu` keyboard: **🦊 Открыть Happy Fox**;
+- the default Telegram chat menu button: **Happy Fox**.
+
+`FOXGEN_MINIAPP_PUBLIC_URL` is the preferred explicit production URL and should point to the HTTPS `/mini-app/` path. If it is omitted, FoxGen falls back to `FOXGEN_KIE_CALLBACK_BASE_URL + /mini-app/`. If neither public URL exists, the bot fails closed and shows an unavailable alert instead of pretending the Mini App is connected.
+
 ## Reachable surface
 
 The FastAPI process serves the packaged frontend at:
@@ -93,6 +104,7 @@ Required backend configuration:
 
 ```env
 FOXGEN_MINIAPP_ENABLED=true
+FOXGEN_MINIAPP_PUBLIC_URL=https://foxgen.example.com/mini-app/
 FOXGEN_MINIAPP_JWT_SECRET=<dedicated-random-secret>
 FOXGEN_MINIAPP_AUTH_MAX_AGE_SECONDS=86400
 FOXGEN_MINIAPP_JWT_TTL_SECONDS=3600
@@ -101,7 +113,7 @@ FOXGEN_MINIAPP_MEDIA_URL_TTL_SECONDS=300
 
 The public reverse proxy must serve `/mini-app/` and `/v1/miniapp/*` to the API service while continuing to deny public `/internal/admin/*` access.
 
-Configure the bot's Main Mini App URL in BotFather to the HTTPS production URL ending in `/mini-app/`. The static frontend loads Telegram's official Web App bridge and calls `ready()`/`expand()` when available.
+On bot startup FoxGen calls Telegram `setChatMenuButton` for the default `Happy Fox` Web App menu. The inline `/start` keyboard uses the same resolved URL. BotFather Main Mini App configuration may also point to the same HTTPS `/mini-app/` URL when a profile-level launch button is desired.
 
 ## Current product boundary
 
@@ -118,6 +130,7 @@ Regression coverage must include:
 - owner binding for bootstrap/history/detail;
 - task submission identity + idempotency through shared `SubmissionService`;
 - private upload user namespace;
+- Telegram inline WebApp button URL and fail-closed fallback;
 - packaged static shell showing `Happy Fox` rather than the old user-facing brand.
 
-The feature is controlled by `FOXGEN_MINIAPP_ENABLED`. Disabling it removes the public Mini App router/static mount without changing Telegram bot, worker, billing or provider lifecycle state.
+The feature is controlled by `FOXGEN_MINIAPP_ENABLED`. Disabling it removes the public Mini App router/static mount and suppresses Telegram WebApp entrypoints without changing worker, billing or provider lifecycle state.
