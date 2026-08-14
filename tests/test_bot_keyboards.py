@@ -21,10 +21,7 @@ def _callbacks(markup: object) -> set[str]:
 
 def _rows(markup: object) -> list[list[tuple[str, str | None]]]:
     inline_keyboard = getattr(markup, "inline_keyboard")
-    return [
-        [(button.text, button.callback_data) for button in row]
-        for row in inline_keyboard
-    ]
+    return [[(button.text, button.callback_data) for button in row] for row in inline_keyboard]
 
 
 def test_launch_button_is_hidden_until_quote_and_balance_are_valid() -> None:
