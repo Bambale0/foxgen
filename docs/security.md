@@ -69,7 +69,7 @@ Do not forward provider URLs directly to users as a substitute for archive valid
 
 User inputs/results are private. Public clients never receive bucket credentials. Provider-readable and Telegram-readable access uses bounded presigned URLs where required.
 
-Temporary `inputs/` need independent object lifecycle cleanup because Redis FSM expiry can orphan draft objects. Current `main` requires the lifecycle rule to be configured externally.
+Temporary `inputs/` need independent object lifecycle cleanup because Redis FSM expiry can orphan draft objects. Repository Compose deployments enforce and read-back verify the prefix-scoped lifecycle through `minio-init` before API, worker and bot startup; external S3-compatible topologies must provide equivalent infrastructure enforcement. The short input rule must never target durable `generations/` results.
 
 ## Financial integrity
 
@@ -184,5 +184,6 @@ A problematic model can also be runtime-disabled through the admin service witho
 - `billing.md`;
 - `admin-control-plane.md`;
 - `input-media-lifecycle.md`;
+- `minio-lifecycle-runbook.md`;
 - `production-deploy.md`;
 - `operations-runbook.md`.

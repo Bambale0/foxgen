@@ -1,8 +1,8 @@
 # Configuration reference
 
-FoxGen configuration is defined by `foxgen.core.config.Settings`. All variables use the `FOXGEN_` prefix. Empty optional values from `.env` are ignored by pydantic-settings.
+FoxGen application configuration is defined by `foxgen.core.config.Settings`. Application variables use the `FOXGEN_` prefix and empty optional values from `.env` are ignored by pydantic-settings. Infrastructure bootstrap scripts may also consume explicitly documented `FOXGEN_` variables without adding them to the application `Settings` model.
 
-This document groups settings by responsibility. Exact validation ranges remain enforced by the `Settings` model. A declared setting is not assumed to be operational unless runtime code consumes it; reserved/inactive settings are called out explicitly.
+This document groups settings by responsibility. Exact application validation ranges remain enforced by the `Settings` model. A declared setting is not assumed to be operational unless executable code consumes it; reserved/inactive settings are called out explicitly.
 
 ## Runtime
 
@@ -118,15 +118,32 @@ The worker retry budget does not authorize a second billable provider POST. Prov
 | `FOXGEN_S3_ACCESS_KEY_ID` | empty | Storage credential |
 | `FOXGEN_S3_SECRET_ACCESS_KEY` | empty | Storage credential |
 | `FOXGEN_S3_FORCE_PATH_STYLE` | `true` | Compatibility switch for MinIO/S3 implementations |
-| `FOXGEN_S3_CREATE_BUCKET` | `false` | **Reserved/inactive in current runtime.** Declared by `Settings` but not consumed by `S3MediaStorage`; setting it to `true` does not create a bucket. Tracked by issue #57. |
+| `FOXGEN_S3_CREATE_BUCKET` | `false` | **Reserved/inactive in current application runtime.** Declared by `Settings` but not consumed by `S3MediaStorage`; setting it to `true` does not create an external bucket. Tracked by issue #57. |
 
-Current `S3MediaStorage` writes/reads the configured bucket and can health-check it, but it does not perform application-level bucket creation. Local/production MinIO Compose bootstrap ensures its configured bucket exists; deployments using an external S3-compatible endpoint must provision the private bucket separately.
+Current `S3MediaStorage` writes/reads the configured bucket and can health-check it, but it does not perform application request-time bucket creation. Repository Compose uses a separate `minio-init` infrastructure bootstrap to ensure its bundled MinIO bucket exists. Deployments using an external S3-compatible endpoint outside that topology must provision the private bucket separately.
 
-Do not depend on `FOXGEN_S3_CREATE_BUCKET=true` for production provisioning until #57 is explicitly implemented or the setting is removed.
+Do not depend on `FOXGEN_S3_CREATE_BUCKET=true` for external production provisioning until #57 is explicitly implemented or the setting is removed.
 
 Local `.env.example` contains development MinIO credentials. They are forbidden in production; `scripts/deploy-production.sh` rejects known development secrets.
 
-Temporary input lifecycle is a separate concern: even an existing bucket still needs the externally configured `inputs/` lifecycle rule described in `input-media-lifecycle.md` until issue #50 is resolved.
+## Compose MinIO temporary-input lifecycle
+
+The Compose bootstrap script `scripts/configure_minio_input_lifecycle.py` consumes these infrastructure-only variables directly:
+
+| Variable | Default | Purpose |
+|---|---:|---|
+| `FOXGEN_INPUT_RETENTION_DAYS` | `2` | Expire completed temporary objects under `inputs/` after this many days |
+| `FOXGEN_INPUT_MULTIPART_ABORT_DAYS` | `1` | Abort incomplete multipart uploads under the managed rule |
+| `FOXGEN_MINIO_INIT_ATTEMPTS` | `30` | Maximum bootstrap/verification attempts while MinIO becomes reachable |
+| `FOXGEN_MINIO_INIT_RETRY_SECONDS` | `2` | Delay between bootstrap attempts |
+
+These are not application request settings and are intentionally not part of `foxgen.core.config.Settings`. `minio-init` preserves unrelated lifecycle rules, replaces only rule ID `foxgen-expire-telegram-inputs`, verifies the written configuration and exits unsuccessfully on mismatch. API, worker and bot depend on successful completion.
+
+Never choose an input retention shorter than the legitimate provider fetch/interaction window. The managed rule targets `inputs/` only; durable `generations/` objects must retain their product storage policy.
+
+External S3-compatible deployments that do not use the repository's bundled MinIO Compose topology must implement and verify an equivalent prefix-scoped policy through their infrastructure provider.
+
+See `input-media-lifecycle.md` and `minio-lifecycle-runbook.md`.
 
 ## Production-only Compose variables
 
@@ -134,7 +151,8 @@ Temporary input lifecycle is a separate concern: even an existing bucket still n
 
 - `FOXGEN_PUBLIC_API_PORT` — loopback host port exposed to the reverse proxy;
 - PostgreSQL/Redis infrastructure credentials;
-- the same application/provider/admin/storage settings listed above.
+- the same application/provider/admin/storage settings listed above;
+- MinIO lifecycle bootstrap/verification tuning.
 
 The production API is bound to host loopback by Compose. PostgreSQL, Redis and MinIO have no public host ports.
 
@@ -154,7 +172,7 @@ Do not commit `.env`. Do not place any of these secrets in Telegram messages, pu
 
 ## Configuration rollout rule
 
-When adding/changing a setting, update together:
+When adding/changing an application setting, update together:
 
 - `src/foxgen/core/config.py`;
 - every runtime consumer of the setting;
@@ -163,4 +181,4 @@ When adding/changing a setting, update together:
 - this document;
 - Compose/deploy validation if the setting changes container wiring.
 
-A setting is not considered operational merely because it exists in `Settings`; documentation must reflect whether executable code actually consumes it.
+Infrastructure-only variables must instead have an explicit script/Compose consumer, env examples, tests and this documentation. A variable is not considered operational merely because it is declared or documented.

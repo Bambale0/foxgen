@@ -20,6 +20,7 @@ The workflow/deploy script is designed around these invariants:
 - Compose configuration is validated before replacement;
 - production image is tagged with the commit SHA;
 - PostgreSQL/Redis must be healthy before migrations/application startup;
+- Compose-managed MinIO must complete bucket/lifecycle bootstrap and read-back verification before API/worker/bot startup;
 - Alembic upgrades run before the new API/worker/bot stack is considered ready;
 - API readiness must pass after startup;
 - PostgreSQL, Redis and MinIO are not publicly published by production Compose;
@@ -99,6 +100,7 @@ Required groups depend on enabled features, but a normal production bot/generati
 - internal API token;
 - KIE key and callback/webhook configuration;
 - private S3/MinIO settings;
+- temporary-input lifecycle retention/bootstrap settings;
 - worker/media settings;
 - deliberate paid-submission/pricing configuration.
 
@@ -118,18 +120,19 @@ Before enabling automatic deployment, verify:
 
 1. `FOXGEN_ENV=production`;
 2. server `.env` permissions are restrictive;
-3. production storage bucket is private;
-4. lifecycle cleanup for temporary `inputs/` is configured externally;
-5. reverse proxy exposes only intended public paths;
-6. `/internal/admin/` is blocked on public ingress;
-7. current database backup/restore procedure works;
-8. GitHub Environment host key/private SSH key are correct.
+3. production storage bucket policy is private;
+4. temporary-input lifecycle retention values are longer than the legitimate provider fetch/FSM window;
+5. `minio-init` can create/read the bundled bucket and read/write lifecycle configuration;
+6. reverse proxy exposes only intended public paths;
+7. `/internal/admin/` is blocked on public ingress;
+8. current database backup/restore procedure works;
+9. GitHub Environment host key/private SSH key are correct.
 
-## Temporary input lifecycle prerequisite
+## Temporary input lifecycle bootstrap
 
-Current `main` requires a storage-level lifecycle rule for temporary Telegram references. The application does not currently install that rule during deploy.
+Repository production Compose automatically installs and verifies the storage-level rule for temporary Telegram references before API, worker and bot startup.
 
-Recommended baseline:
+Default policy:
 
 ```text
 prefix: inputs/
@@ -137,7 +140,18 @@ expire after: 2 days
 abort incomplete multipart uploads after: 1 day
 ```
 
-Do not apply this short retention to durable generated results. See `input-media-lifecycle.md`.
+Configuration:
+
+```env
+FOXGEN_INPUT_RETENTION_DAYS=2
+FOXGEN_INPUT_MULTIPART_ABORT_DAYS=1
+FOXGEN_MINIO_INIT_ATTEMPTS=30
+FOXGEN_MINIO_INIT_RETRY_SECONDS=2
+```
+
+The initializer preserves unrelated lifecycle rules, replaces only the FoxGen-managed rule and fails startup when read-back verification does not match. Do not bypass the Compose dependency gate. Do not apply short retention to durable generated results.
+
+A deployment that replaces bundled MinIO with external S3-compatible storage must provision the private bucket and equivalent `inputs/` lifecycle enforcement through that external infrastructure. See `input-media-lifecycle.md` and `minio-lifecycle-runbook.md`.
 
 ## Normal deployment sequence
 
@@ -157,9 +171,9 @@ push/merge main
   -> docker compose config
   -> build foxgen:<commit-sha>
   -> start/verify PostgreSQL, Redis, MinIO
-  -> ensure media bucket exists
+  -> minio-init creates bucket if needed, applies inputs/ lifecycle and verifies read-back
   -> alembic upgrade head
-  -> start API, worker, bot
+  -> start API, worker, bot only after lifecycle gate succeeds
   -> wait for API/container readiness
   -> HTTP /health/ready smoke check
 ```
@@ -214,9 +228,12 @@ On the server:
 cd /root/foxgen
 export FOXGEN_IMAGE_TAG="$(git rev-parse HEAD)"
 docker compose --env-file .env -f docker-compose.prod.yml ps
+docker compose --env-file .env -f docker-compose.prod.yml logs --tail=200 minio-init
 docker compose --env-file .env -f docker-compose.prod.yml logs --tail=200 api worker bot
 curl --fail --silent http://127.0.0.1:${FOXGEN_PUBLIC_API_PORT:-8080}/health/ready
 ```
+
+Confirm `minio-init` reports the intended bucket, `inputs/` prefix and retention values before considering the storage preflight complete.
 
 Also smoke test according to enabled features:
 
@@ -254,6 +271,8 @@ bad release
 Do not force-reset the production checkout.
 
 A database schema that already reached production may not be safely downgradable with the application. Prefer a forward repair migration when durable data/history must be retained.
+
+For a rollback to a revision without automatic `minio-init` lifecycle enforcement, keep the already installed prefix-scoped rule and verify it externally before restoring application traffic.
 
 ## Emergency containment
 
