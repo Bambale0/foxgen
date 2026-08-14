@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from foxgen.bot.generation_capabilities import (
@@ -254,9 +256,9 @@ def _choice_rows(
     prefix: str,
     width: int,
     suffix: str = "",
-    transform: object | None = None,
+    transform: Callable[[str], str] | None = None,
 ) -> list[list[InlineKeyboardButton]]:
-    converter = transform if callable(transform) else lambda value: value
+    converter = transform or (lambda value: value)
     buttons = [
         InlineKeyboardButton(
             text=f"{'✅ ' if value == current else ''}{value}{suffix}",
