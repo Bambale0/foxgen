@@ -70,9 +70,7 @@ async def test_image_quick_start_keeps_reference_and_enters_image_model_screen()
     assert state.current == GenerationStates.image_selecting_model.state
     assert state.data["entrypoint"] == "wizard"
     assert state.data["wizard_origin"] == "quick_start"
-    assert state.data["media"] == [
-        {"kind": "image", "storage_key": "inputs/42/reference.jpg"}
-    ]
+    assert state.data["media"] == [{"kind": "image", "storage_key": "inputs/42/reference.jpg"}]
     assert state.data["reference_caption"] == "Use the reference lighting"
     assert state.data["idempotency_key"] == "quick-start-idempotency"
 
@@ -105,7 +103,5 @@ async def test_video_quick_start_prefers_multimodal_references_for_video_source(
     assert state.data["entrypoint"] == "wizard"
     assert state.data["wizard_origin"] == "quick_start"
     assert state.data["video_type"] == VideoGenerationType.REFERENCES.value
-    assert state.data["media"] == [
-        {"kind": "video", "storage_key": "inputs/42/reference.mp4"}
-    ]
+    assert state.data["media"] == [{"kind": "video", "storage_key": "inputs/42/reference.mp4"}]
     assert state.data["idempotency_key"] == "quick-video-idempotency"
