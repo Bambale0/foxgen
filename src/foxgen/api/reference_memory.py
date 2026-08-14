@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from typing import Protocol
 from uuid import UUID
 
 from fastapi import APIRouter, Header, HTTPException, Query, Request, status
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from foxgen.api.security import authenticate_user_context
@@ -54,6 +56,23 @@ class ReferenceMemoryServiceProtocol(Protocol):
     async def delete(self, *, user_id: int, asset_id: UUID) -> None: ...
 
 
+class ReferenceObjectStreamProtocol(Protocol):
+    content_type: str
+    size_bytes: int
+
+    def chunks(self, chunk_size: int = 1024 * 1024) -> AsyncIterator[bytes]: ...
+
+
+class ReferenceMediaDeliveryProtocol(Protocol):
+    async def open(
+        self,
+        *,
+        asset_id: UUID,
+        expires_at: int,
+        signature: str,
+    ) -> ReferenceObjectStreamProtocol: ...
+
+
 def _item_payload(item: ReferenceMemoryItem) -> dict[str, object]:
     return {
         "id": str(item.id),
@@ -65,10 +84,17 @@ def _item_payload(item: ReferenceMemoryItem) -> dict[str, object]:
 
 
 def _service(request: Request) -> ReferenceMemoryServiceProtocol:
-    service = request.app.state.reference_memory_service
+    service: ReferenceMemoryServiceProtocol | None = request.app.state.reference_memory_service
     if service is None:
         raise HTTPException(status_code=503, detail="Reference memory service is not configured")
     return service
+
+
+def _delivery(request: Request) -> ReferenceMediaDeliveryProtocol:
+    delivery: ReferenceMediaDeliveryProtocol | None = request.app.state.reference_media_delivery
+    if delivery is None:
+        raise HTTPException(status_code=503, detail="Reference media delivery is not configured")
+    return delivery
 
 
 def create_reference_memory_router(settings: Settings) -> APIRouter:
@@ -143,5 +169,34 @@ def create_reference_memory_router(settings: Settings) -> APIRouter:
         user_id = principal(authorization=authorization, user_id_header=user_id_header)
         await _service(request).delete(user_id=user_id, asset_id=asset_id)
         return {"status": "delete_pending", "id": str(asset_id)}
+
+    return router
+
+
+def create_reference_media_router() -> APIRouter:
+    """Public read-only signed capability used by Telegram and providers."""
+
+    router = APIRouter(prefix="/v1/reference-media", tags=["reference-media"])
+
+    @router.get("/{asset_id}")
+    async def read_reference(
+        asset_id: UUID,
+        request: Request,
+        expires: int = Query(ge=1),
+        signature: str = Query(min_length=64, max_length=64),
+    ) -> StreamingResponse:
+        stream = await _delivery(request).open(
+            asset_id=asset_id,
+            expires_at=expires,
+            signature=signature,
+        )
+        headers = {"Cache-Control": "private, no-store"}
+        if stream.size_bytes > 0:
+            headers["Content-Length"] = str(stream.size_bytes)
+        return StreamingResponse(
+            stream.chunks(),
+            media_type=stream.content_type,
+            headers=headers,
+        )
 
     return router
