@@ -179,6 +179,7 @@ def test_telegram_extension_router_precedes_product_and_shell_fallbacks() -> Non
         "foxgen-global-commands",
         "foxgen-admin-extras",
         "foxgen-admin",
+        "foxgen-quick-start-wizard",
         "foxgen-generation-wizard",
         "foxgen-quick-start",
         "foxgen-generation",
