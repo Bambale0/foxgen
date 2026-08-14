@@ -144,11 +144,14 @@ class TelegramInputMediaStorage:
 
     async def presign(self, storage_key: str) -> str:
         normalized = storage_key.strip()
-        if not normalized.startswith("inputs/"):
+        if not normalized.startswith(("inputs/", "generations/")):
             raise SubmissionError(
                 ErrorCode.VALIDATION,
                 "Черновик содержит некорректную ссылку на входной файл.",
             )
+        # inputs/ are temporary user uploads; generations/ are durable archived
+        # results reused read-only as remix references. Cleanup below remains
+        # intentionally restricted to inputs/ and cannot delete durable results.
         return await self._storage.presigned_url(normalized)
 
     async def delete_many(self, storage_keys: tuple[str, ...]) -> InputCleanupResult:
