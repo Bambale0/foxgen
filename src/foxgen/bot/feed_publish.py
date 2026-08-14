@@ -43,8 +43,12 @@ async def receive_generation_id(message: Message, state: FSMContext) -> None:
         reply_markup=InlineKeyboardMarkup(
             inline_keyboard=[
                 [
-                    InlineKeyboardButton(text="🌐 Общая лента", callback_data="feed:publish:scope:feed"),
-                    InlineKeyboardButton(text="👤 Профиль", callback_data="feed:publish:scope:profile"),
+                    InlineKeyboardButton(
+                        text="🌐 Общая лента", callback_data="feed:publish:scope:feed"
+                    ),
+                    InlineKeyboardButton(
+                        text="👤 Профиль", callback_data="feed:publish:scope:profile"
+                    ),
                 ],
                 [InlineKeyboardButton(text="❌ Отмена", callback_data="nav:cancel")],
             ]
@@ -83,10 +87,7 @@ async def choose_scope(
     publication_id = escape(str(item.get("id") or ""))
     await safe_edit_callback_message(
         callback,
-        (
-            "✅ <b>Опубликовано</b>\n\n"
-            f"Публикация: <code>{publication_id}</code>"
-        ),
+        (f"✅ <b>Опубликовано</b>\n\nПубликация: <code>{publication_id}</code>"),
         InlineKeyboardMarkup(
             inline_keyboard=[
                 [
