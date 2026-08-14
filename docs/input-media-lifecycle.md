@@ -1,78 +1,95 @@
 # Telegram input media lifecycle
 
-Telegram references are stored privately under the `inputs/` path inside a shared local filesystem volume mounted into `foxgen-bot` and `foxgen-api`. This document distinguishes cleanup implemented by application code from the best-effort retention that the local storage adapter enforces for abandoned temporary inputs.
+Telegram generation inputs first enter FoxGen as private temporary files under the local `inputs/` path shared by `foxgen-bot` and `foxgen-api`. Explicitly saved image references are a separate durable ownership class: PostgreSQL stores their metadata and private S3-compatible storage stores their bytes under `references/`.
 
-## Current application behavior
+This separation is a hard invariant. Temporary retention/cleanup applies to `inputs/`; it must never delete durable `references/` objects.
+
+## Current temporary-input behavior
 
 One Telegram message equals one upload operation.
 
 The bot:
 
-- accepts supported photo/video inputs;
+- accepts supported photo/video/audio inputs according to the active flow;
 - rejects Telegram albums/media groups before download;
 - serializes updates for one FSM key using Redis event isolation;
-- stores accepted reference bytes in private local storage;
-- keeps only storage keys in FSM draft data;
+- stores accepted temporary reference bytes in private local storage;
+- keeps temporary `storage_key` locators in FSM draft data;
 - creates provider-readable signed URLs only at final confirmation;
 - remembers the current Telegram generation control-message id in Redis FSM so accepted uploads can refresh one live `Загружено: X/Y` screen instead of posting another keyboard block;
-- treats that control-message id as presentation state only, never as media ownership or durable generation state;
-- deletes known input files on explicit `/start`/`/menu`, reference replacement, generation-screen reload, skip-without-reference and selected broken/old-state recovery paths;
+- treats that control-message id as presentation state only;
+- deletes known temporary files on `/start`, `/menu`, replacement, generation-screen reload, skip-without-reference and selected recovery paths;
 - classifies Telegram download failures separately from storage failures;
 - does not advance FSM when upload fails.
 
 ## Reference-screen cleanup actions
 
-The compact generation screens have explicit input semantics:
-
 ### `🔄 Перезагрузить`
 
-Reload means **clear the current temporary reference set and redraw the same screen from zero**.
+Reload means clear the current generation draft's references and redraw the same screen from zero.
 
-The handler:
-
-1. reads all current draft storage keys;
-2. best-effort deletes those private temporary files through `TelegramInputMediaStorage`;
-3. replaces the FSM `media` list with an empty list;
-4. re-renders the live counter and controls.
-
-It does not resend, copy or promote old inputs into persistent storage.
+For temporary inputs, the handler best-effort deletes known `inputs/` files. For durable saved references, it removes only their UUID locators from the Redis draft. The underlying `references/` objects remain in the user's library.
 
 ### Image `⏭ Пропустить`
 
-Skip means continue without image references. If the user has already uploaded temporary image references before pressing Skip, FoxGen deletes those known files, clears `media`, resolves the text-generation provider slug and proceeds to model settings.
-
-This avoids the misleading state where the UI says “skip” but the submitted payload still contains earlier references.
+Skip means continue without image references. Any known temporary images are deleted; saved-reference UUIDs are detached from the draft. The durable library is unchanged.
 
 ### `✅ Продолжить`
 
-Continue preserves the accepted temporary inputs and advances only when the current scenario contract is valid. Required video scenarios validate media completeness at the transition; an early press produces a user-facing Telegram alert and leaves the draft unchanged.
+Continue preserves accepted temporary and/or saved inputs and advances only when the current model/scenario contract is valid. Required video scenarios validate completeness before transition.
 
 ## Live control-message behavior
 
-After a successful upload, FoxGen attempts to edit the remembered generation control message with the new count and the same actions. This keeps the chat compact and makes old controls less likely to remain visible.
+After a successful temporary upload, FoxGen attempts to edit the remembered generation control message with the new count and current actions. If Telegram cannot edit it, the bot sends one replacement control message.
 
-If Telegram reports that the remembered message cannot be edited, the bot sends one replacement control message and remembers its new chat/message id. This fallback changes only Telegram presentation; it does not duplicate media and does not cause provider or billing side effects.
+The durable reference-memory browser uses a private Telegram image preview with its own replaceable control message. Navigating the library deletes/replaces the previous preview instead of accumulating stale preview keyboards.
 
-`wizard_control_chat_id` and `wizard_control_message_id` live only in Redis FSM data. They are cleared with the draft and are not written to PostgreSQL generation/billing records.
+Control-message IDs live only in Redis FSM data and are not media ownership or durable business state.
 
-## Why lifecycle cleanup is still required
+## Temporary retention
 
-Redis FSM state has a TTL. After expiry, the application may no longer know which private storage keys belonged to an abandoned draft. A process crash or client abandonment can have the same effect.
+Redis FSM has a TTL. After expiry, application code can lose the list of abandoned temporary keys. FoxGen therefore combines explicit per-draft deletion with best-effort local expiry: before writing a new input, the adapter prunes files older than `FOXGEN_TELEGRAM_INPUT_RETENTION_SECONDS`.
 
-FoxGen therefore combines explicit per-draft cleanup with best-effort expiry on the local input-storage adapter. Before writing a new file, the adapter prunes expired files by modification time using `FOXGEN_TELEGRAM_INPUT_RETENTION_SECONDS`.
+This mechanism is only for `inputs/` local storage. Durable saved references are not subject to that TTL.
+
+## Durable reference-memory promotion
+
+Temporary images become durable only through an explicit user action:
+
+- `➕ Добавить фото` from the `📚 Память реф` browser uploads one image and immediately saves it; or
+- `💾 Сохранить загруженные` explicitly saves compatible temporary image inputs already present in the current generation draft.
+
+The trusted internal API accepts a save request only when the temporary key is under exactly `inputs/<authenticated-user-id>/`. It reads the private file, validates it as an image, computes/uses SHA-256 metadata, reserves the owner's item/byte quota in PostgreSQL and copies bytes into private S3 storage under `references/<user-id>/<uuid>.<ext>`.
+
+The PostgreSQL `reference_assets` row moves from `uploading` to `active` only after the S3 write succeeds. On a caught storage failure, the row becomes `failed` and any partial object is deleted best-effort. Within one owner's active library, identical bytes are de-duplicated by SHA-256 and the existing durable asset is reused.
+
+After a direct memory upload is promoted successfully, its temporary `inputs/` staging file is deleted.
+
+## Durable reference deletion
+
+Deletion is not ordinary draft cleanup. It is an explicit owner action:
+
+```text
+active -> delete_pending
+       -> reference.delete outbox event
+       -> worker deletes private S3 object
+       -> deleted
+```
+
+`delete_pending` assets disappear immediately from list/resolve. The shared durable outbox lets the worker retry S3 deletion without keeping Telegram open. The S3 delete operation and final metadata transition are idempotent.
 
 ## Private storage invariant
 
-The storage root is private. Telegram users and public clients do not receive:
+Telegram users and public clients never receive:
 
-- filesystem paths;
-- storage credentials;
-- permanent provider URLs;
-- permanent object URLs.
+- local filesystem paths;
+- S3 credentials;
+- permanent object URLs;
+- permanent provider URLs.
 
-At final confirmation the bot generates a fresh signed URL with `FOXGEN_TELEGRAM_INPUT_PRESIGNED_URL_TTL_SECONDS`. The provider can read the reference for that bounded interval through the public API origin. The underlying file remains private on disk.
+Temporary inputs use fresh local signed URLs with `FOXGEN_TELEGRAM_INPUT_PRESIGNED_URL_TTL_SECONDS`. Durable saved references use fresh private S3 signed URLs with `FOXGEN_REFERENCE_MEMORY_PRESIGNED_URL_TTL_SECONDS` for preview/provider reads.
 
-The generation reference screen does not currently expose a persistent `Память реф` library. Temporary inputs are not silently converted into durable saved user assets; a future saved-reference feature requires its own owner-scoped storage/domain lifecycle.
+Redis stores only saved reference UUIDs, not signed URLs. Immediately before paid admission the bot asks the owner-scoped internal API to re-resolve all durable UUIDs; deleted, inactive or foreign references fail closed before provider submission.
 
 ## Input error classification
 
@@ -84,81 +101,95 @@ Examples:
 - unsupported media kind;
 - empty/invalid file;
 - input larger than configured maximum;
-- exceeding the selected model/scenario reference limit.
+- exceeding the selected model/scenario reference limit;
+- trying to save a non-image into durable reference memory;
+- trying to save a temporary key outside `inputs/<authenticated-user-id>/`;
+- exceeding the owner's reference-memory item or total-byte quota.
 
-The user receives an actionable validation response and remains in a recoverable flow. The live control screen is refreshed when useful so the current counter/actions stay visible.
+The user receives an actionable response and remains in a recoverable flow. No provider side effect exists at this stage.
 
 ### Retryable Telegram transfer failure
 
-A Telegram download/network failure is classified separately from invalid user content. The FSM does not pretend the file was stored.
+A Telegram download/network failure is distinct from invalid content. FSM does not pretend the input was stored.
 
-### Retryable local-storage failure
+### Retryable temporary-storage failure
 
-Failure while writing private input bytes also prevents FSM transition. Retrying the user step is allowed because no provider side effect has occurred.
+Failure while writing private local input bytes prevents the generation draft from advancing.
+
+### Retryable durable-storage failure
+
+Failure while copying an explicitly saved reference into S3 prevents the row from becoming `active`. The save path records failure and cleans the partial durable object best-effort.
 
 ### Cleanup failure
 
-Best-effort explicit cleanup failure should be logged/observable but must not turn a successful reset/menu action into a dangerous provider operation. Retention/lifecycle cleanup remains the final orphan safety net.
+Best-effort temporary cleanup failure is observable but must not convert a safe menu/reset into a provider operation. Local retention is the orphan safety net for temporary files. Durable reference deletion instead uses the shared outbox and worker retry path.
 
 ## Quick Start ownership
 
-A reference draft can hold:
+Quick Start stores only temporary input keys. When it converges into the ordinary generation wizard, the same private keys become prefilled `media`; they are not copied again.
 
-- original media object key;
-- optional video thumbnail/preview object key;
-- reference media kind;
-- selected output product/model/settings;
-- prompt/caption.
+A compatible temporary image may then be explicitly saved into durable reference memory. The normal Quick Start Back/edit behavior retains temporary ownership until an explicit clear/replacement/reset path.
 
-Back/edit navigation preserves these keys. Replacing the reference should clean the previously known temporary objects before/while establishing the new draft according to the current cleanup helper behavior.
+## Mixed drafts
 
-When Quick Start converges into the ordinary generation wizard, the same temporary keys become that wizard's prefilled `media`. The compact Telegram control-message id is separate presentation metadata and does not affect this ownership transfer.
+A generation draft may contain both locator types:
+
+```json
+{"kind": "image", "storage_key": "inputs/42/temporary.png"}
+{"kind": "image", "reference_id": "7a39..."}
+```
+
+Temporary inputs and durable saved references participate in the same current model/scenario limits. For first+last video, order in the draft determines first/last frame. For multimodal video, saved memory contributes image references while temporary uploads may contribute images, video and audio.
+
+Global cleanup helpers look only for `storage_key` values under `inputs/`; a durable `reference_id` is never interpreted as a disposable temporary file.
 
 ## Media groups
 
-Telegram albums are rejected before any member is downloaded. FoxGen does not currently aggregate an album into one multi-reference Quick Start draft. Users must send supported references as individual messages through the flow expected by the selected model.
-
-This policy avoids ambiguous ordering, partial album upload and double-processing races.
+Telegram albums are rejected before any member is downloaded. Users add supported references as individual messages or select multiple durable saved images in reference memory. This avoids ambiguous album ordering, partial ingestion and duplicate races.
 
 ## Verification checklist
 
-### Application
+### Temporary inputs
 
-1. Send one photo outside active FSM; verify Quick Start/reference choice appears.
-2. Confirm an `inputs/<user>/...` file exists privately under the shared input-storage root.
-3. Enter an image reference screen and upload several images individually; verify the same control message updates `Загружено: X/Y` whenever Telegram permits editing.
-4. Press `🔄 Перезагрузить`; verify all known current reference keys are deleted and the counter returns to zero.
-5. Upload references and then press image `⏭ Пропустить`; verify those temporary files are deleted before the text-only settings path continues.
-6. In a required video scenario press `✅ Продолжить` before all required media exists; verify an alert is shown and no provider request occurs.
-7. Cancel/reset with `/start` or `/menu`; verify known object cleanup is attempted and the FSM clears.
-8. Send a Telegram album; verify no objects are uploaded for it.
-9. Simulate Telegram download failure; verify state remains at the expected input step.
-10. Simulate local write failure; verify no successful upload transition occurs.
-11. Navigate back/edit in a reference-prefilled draft; verify the same stored object key is retained until an explicit incompatible replacement/clear path.
+1. Send one supported Telegram file; verify an `inputs/<user>/...` private file exists.
+2. Verify the live generation control updates rather than stacking keyboards when Telegram permits editing.
+3. Press `🔄 Перезагрузить`; verify temporary keys are deleted and saved library objects, if any, remain untouched.
+4. Press image `⏭ Пропустить`; verify temporary references are deleted and saved references are detached only.
+5. `/start` or `/menu`; verify temporary cleanup is attempted and durable memory survives.
+6. Send an album; verify no member is stored.
+7. Simulate Telegram/local-storage failure; verify no false successful transition.
+
+### Durable reference memory
+
+1. Save one image; verify an active `reference_assets` row and one private `references/<user>/...` object.
+2. Reopen `/menu`/start a new generation; verify the same reference remains available.
+3. Save identical bytes again; verify the existing active asset is reused.
+4. Attempt to save another user's `inputs/<other-user>/...` key; verify fail-closed authorization.
+5. Fill item/byte quota; verify additional save is rejected before durable activation.
+6. Select multiple saved images and reuse them in compatible image/video flows; verify model/scenario limits and first+last order.
+7. Delete one saved image; verify immediate disappearance from resolve/list, worker S3 deletion and final `deleted` state.
+8. Keep its UUID in an old Redis draft; verify final resolve rejects it before provider admission.
 
 ### Infrastructure
 
-1. Verify `bot` and `api` mount the same private input-storage volume.
-2. Verify the configured public API origin can reach `/v1/input-media/...`.
-3. Verify expired signed URLs are rejected.
-4. Verify files older than `FOXGEN_TELEGRAM_INPUT_RETENTION_SECONDS` are eventually pruned.
-5. Verify the storage root is not exposed as a public Docker bind or web static directory.
+1. Verify `bot` and `api` mount the same private temporary input volume.
+2. Verify `/v1/input-media/...` signed access works and expires.
+3. Verify S3/MinIO bucket stays private while signed `references/` reads work.
+4. Verify the MinIO `inputs/` lifecycle rule never matches `references/` or `generations/`.
+5. Verify `foxgen-worker` can delete `references/` objects.
 
 ## Incident handling
 
-If abandoned `inputs/` files accumulate:
+For abandoned `inputs/` files, use the existing retention/runbook path. Do not delete the entire shared volume.
 
-1. inspect bot logs for repeated cleanup failures;
-2. do not delete the entire shared volume;
-3. confirm no active confirmed generation still depends on an unexpired input file;
-4. increase `FOXGEN_TELEGRAM_INPUT_RETENTION_SECONDS` only after confirming real provider fetch delays;
-5. remove stale temporary files only through a controlled prefix-scoped operation if necessary;
-6. document the retention incident.
+For durable reference incidents, inspect PostgreSQL row status and the corresponding `reference.delete` outbox event before changing S3 manually. `uploading` should normally be short-lived; `delete_pending` indicates metadata is already hidden and storage cleanup is awaiting/retrying worker execution. Never reactivate/delete rows solely to silence an alarm without reconciling the private object.
 
 ## Related docs
 
-- `telegram-flows.md` — generation screens, reference/Quick Start behavior;
-- `configuration.md` — input, storage and lifecycle settings;
-- `architecture.md` — storage ownership;
-- `production-deploy.md` — production startup gating;
-- `minio-lifecycle-runbook.md` — bootstrap verification, failure recovery and rollback.
+- `reference-memory.md` — durable library domain, quotas, API and deletion lifecycle;
+- `telegram-flows.md` — generation/reference-memory FSM and UX;
+- `configuration.md` — temporary and durable media settings;
+- `database-schema.md` — `reference_assets` ownership/state;
+- `architecture.md` — storage and trust boundaries;
+- `production-deploy.md` — production startup/migration gating;
+- `minio-lifecycle-runbook.md` — temporary `inputs/` lifecycle bootstrap and recovery.
