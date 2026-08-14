@@ -14,7 +14,9 @@ from foxgen.admin.availability import SqlAlchemyModelAvailabilityGuard
 from foxgen.admin.errors import AdminError
 from foxgen.admin.services import AdminServices
 from foxgen.api.admin import create_admin_router
+from foxgen.api.admin_extensions import create_admin_extensions_router
 from foxgen.api.admin_web import create_admin_web_router
+from foxgen.api.admin_web_extensions import create_admin_web_extensions_router
 from foxgen.api.billing import BillingServiceProtocol, create_billing_router
 from foxgen.api.generations import (
     GenerationOperationsProtocol,
@@ -253,6 +255,10 @@ def create_app(
     app.include_router(create_billing_router(resolved_settings))
     app.include_router(create_generation_router(resolved_settings))
     app.include_router(create_admin_router(resolved_settings))
+    app.include_router(create_admin_extensions_router(resolved_settings))
+    # Extension routes must precede the generic /internal/admin/ui/api/{section}
+    # route in the base web router, otherwise analytics/admins would be shadowed.
+    app.include_router(create_admin_web_extensions_router(resolved_settings))
     app.include_router(create_admin_web_router(resolved_settings))
 
     @app.exception_handler(FoxGenError)

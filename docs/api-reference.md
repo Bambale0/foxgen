@@ -1,8 +1,6 @@
 # HTTP API reference
 
-This reference describes routes actually registered by the current FastAPI application on `main`. The public Mini App is outside scope; `/internal/admin/ui` is a backend-only operator surface.
-
-Prepared extension modules that are present in the source tree but not currently registered are listed separately under **Prepared but inactive admin extensions**. See issue #55 and `known-limitations.md`.
+This reference describes routes actually registered by the current FastAPI application. The public Mini App is outside scope; `/internal/admin/ui` is a backend-only operator surface.
 
 ## Authentication classes
 
@@ -94,16 +92,21 @@ All paths below are relative to:
 
 Every route is private/signed/RBAC-protected even when the table labels it read-only.
 
-## Health, summary and audit
+## Health, summary, analytics and access
 
 | Method | Path | Semantics |
 |---|---|---|
 | GET | `/health` | signed/RBAC identity/health check |
 | GET | `/summary` | operational summary |
 | GET | `/finance` | finance dashboard |
+| GET | `/analytics` | dedicated analytics snapshot; optional `hours` window |
+| GET | `/admins` | list durable admin identities/roles/scopes |
+| PUT | `/admins/{user_id}` | idempotent + confirm admin role/scope/active update |
 | GET | `/audit` | audit event list |
 | GET | `/commands/{command_id}` | command/result detail |
 | GET | `/ai/diagnostics` | read-only diagnostic synthesis; AI-admin scope required |
+
+The access/analytics routes use the same shared services and `_authenticate` boundary as the core admin router. Admin-role writes retain server-side policy, `Idempotency-Key` and explicit confirmation.
 
 ## Users
 
@@ -121,6 +124,7 @@ Blocked-user state is rechecked at transactional paid admission.
 | Method | Path | Semantics |
 |---|---|---|
 | GET | `/generations` | generation list/filter |
+| POST | `/previews/generation` | privileged local generation preview through shared preview service; does not bypass normal paid submission |
 
 ## Operations
 
@@ -240,51 +244,32 @@ These backend contracts do not imply a finished public Mini App UI.
 |---|---|---|
 | GET | `/exports/users.csv` | UTF-8 CSV |
 | GET | `/exports/finance.csv` | UTF-8 CSV |
+| GET | `/exports/users.xls` | SpreadsheetML 2003 / Excel-readable XLS |
+| GET | `/exports/finance.xls` | SpreadsheetML 2003 / Excel-readable XLS |
 
 # Registered internal operator web
 
-When both admin API/web switches are enabled, `create_admin_web_router()` registers:
+When both admin API/web switches are enabled, the operator surface registers:
 
 | Method | Path | Auth |
 |---|---|---|
 | POST | `/internal/admin/ui/session` | signed admin HTTP + network/RBAC; mints short session |
 | GET | `/internal/admin/ui?session=...` | admin session + network/RBAC |
 | GET | `/internal/admin/ui/api/summary` | `X-Admin-Session` + network/RBAC |
+| GET | `/internal/admin/ui/api/analytics` | session + network/RBAC; dedicated analytics snapshot |
+| POST | `/internal/admin/ui/api/preview-generation` | session + network/RBAC; shared privileged preview service |
+| GET | `/internal/admin/ui/api/admins` | session + network/RBAC; durable admin list |
+| PUT | `/internal/admin/ui/api/admins/{user_id}` | session + idempotency + confirm + RBAC |
 | GET | `/internal/admin/ui/api/{section}` | `X-Admin-Session` + network/RBAC |
 | POST | `/internal/admin/ui/api/action` | session + idempotency; confirmation for destructive action classes |
 
-Current generic section names supported by the registered router include users, payments, operations, tickets, tariffs, campaigns, moderation, runtime, partners, prompts, CMS, audit and finance.
+The specific extension router is registered before the base router's generic `GET /api/{section}` route. This ordering is intentional: otherwise `/analytics` and `/admins` would be shadowed by the generic section route even though they appeared in route enumeration.
 
-Current generic action dispatcher supports shared-service actions including user block/unblock/balance adjustment, payment recheck/reprocess, operation replay/refund, ticket reply, tariff publish, campaign create/start/cancel, CMS save/publish, model availability/runtime flag and trend/feed moderation.
+Current generic section names supported by the base router include users, payments, operations, tickets, tariffs, campaigns, moderation, runtime, partners, prompts, CMS, audit and finance.
+
+Current generic action dispatcher supports shared-service actions including user block/unblock/balance adjustment, payment recheck/reprocess, operation replay/refund, ticket reply, tariff publish, campaign create/start/cancel, CMS save/publish, model availability/runtime flag and trend/feed moderation. Dedicated analytics/admin/preview paths remain separate typed endpoints above.
 
 This operator surface is backend-only. It is not the public Mini App.
-
-# Prepared but inactive admin extensions — issue #55
-
-The repository also contains extension modules that are **not registered by the current FastAPI entrypoint**:
-
-```text
-src/foxgen/api/admin_extensions.py
-src/foxgen/api/admin_web_extensions.py
-```
-
-Accordingly, the following prepared routes are not current production endpoints:
-
-```text
-GET /internal/admin/admins
-PUT /internal/admin/admins/{user_id}
-GET /internal/admin/analytics
-POST /internal/admin/previews/generation
-GET /internal/admin/exports/users.xls
-GET /internal/admin/exports/finance.xls
-
-GET /internal/admin/ui/api/analytics
-POST /internal/admin/ui/api/preview-generation
-GET /internal/admin/ui/api/admins
-PUT /internal/admin/ui/api/admins/{user_id}
-```
-
-Do not integrate against those paths until issue #55 is merged and this section is removed/updated. The underlying shared access/analytics/preview services exist, but source-file presence is not route registration.
 
 # Idempotency and error semantics
 
@@ -312,4 +297,4 @@ signature = hex(HMAC-SHA256(admin_hmac_key, canonical))
 
 Do not JSON-reserialize after signing. Query parameters are not included in the current canonical signature string; the URL path is.
 
-See `admin-control-plane.md`, `known-limitations.md` and issue #55 for admin transport status.
+See `admin-control-plane.md`, `admin-capability-matrix.md` and `known-limitations.md` for the active admin contract and remaining production limitations.
