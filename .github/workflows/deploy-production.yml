@@ -84,6 +84,24 @@ jobs:
           printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/known_hosts"
 
+      - name: Report tracked production drift
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          printf -v remote_command \
+            'cd %q && git status --short --untracked-files=no' \
+            "$DEPLOY_PATH"
+          echo "Tracked production working-tree status (paths only; no diff contents):"
+          ssh \
+            -i "$HOME/.ssh/id_ed25519" \
+            -p "$DEPLOY_PORT" \
+            -o BatchMode=yes \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            -o ConnectTimeout=15 \
+            "$DEPLOY_USER@$DEPLOY_HOST" \
+            "$remote_command"
+
       - name: Deploy tested commit
         shell: bash
         run: |
