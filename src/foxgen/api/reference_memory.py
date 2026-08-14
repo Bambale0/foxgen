@@ -3,13 +3,13 @@ from __future__ import annotations
 from typing import Protocol
 from uuid import UUID
 
-from fastapi import APIRouter, Header, Query, Request, status
+from fastapi import APIRouter, Header, HTTPException, Query, Request, status
 from pydantic import BaseModel, ConfigDict, Field
 
 from foxgen.api.security import authenticate_user_context
 from foxgen.application.reference_memory import (
+    ReferenceMemoryItem,
     ReferenceMemoryPage,
-    ReferenceMemoryService,
     ReferenceSaveResult,
 )
 from foxgen.core.config import Settings
@@ -49,19 +49,26 @@ class ReferenceMemoryServiceProtocol(Protocol):
         *,
         user_id: int,
         asset_ids: tuple[UUID, ...],
-    ) -> tuple[object, ...]: ...
+    ) -> tuple[ReferenceMemoryItem, ...]: ...
 
     async def delete(self, *, user_id: int, asset_id: UUID) -> None: ...
 
 
-def _item_payload(item: object) -> dict[str, object]:
+def _item_payload(item: ReferenceMemoryItem) -> dict[str, object]:
     return {
-        "id": str(getattr(item, "id")),
-        "content_type": str(getattr(item, "content_type")),
-        "size_bytes": int(getattr(item, "size_bytes")),
-        "created_at": getattr(item, "created_at").isoformat(),
-        "preview_url": str(getattr(item, "preview_url")),
+        "id": str(item.id),
+        "content_type": item.content_type,
+        "size_bytes": item.size_bytes,
+        "created_at": item.created_at.isoformat(),
+        "preview_url": item.preview_url,
     }
+
+
+def _service(request: Request) -> ReferenceMemoryServiceProtocol:
+    service = request.app.state.reference_memory_service
+    if service is None:
+        raise HTTPException(status_code=503, detail="Reference memory service is not configured")
+    return service
 
 
 def create_reference_memory_router(settings: Settings) -> APIRouter:
@@ -87,8 +94,7 @@ def create_reference_memory_router(settings: Settings) -> APIRouter:
         user_id_header: str | None = Header(default=None, alias="X-FoxGen-User-Id"),
     ) -> dict[str, object]:
         user_id = principal(authorization=authorization, user_id_header=user_id_header)
-        service: ReferenceMemoryServiceProtocol = request.app.state.reference_memory_service
-        page = await service.list(user_id=user_id, offset=offset, limit=limit)
+        page = await _service(request).list(user_id=user_id, offset=offset, limit=limit)
         return {
             "items": [_item_payload(item) for item in page.items],
             "total": page.total,
@@ -106,8 +112,7 @@ def create_reference_memory_router(settings: Settings) -> APIRouter:
         username: str | None = Header(default=None, alias="X-FoxGen-Username"),
     ) -> dict[str, object]:
         user_id = principal(authorization=authorization, user_id_header=user_id_header)
-        service: ReferenceMemoryServiceProtocol = request.app.state.reference_memory_service
-        result = await service.save_from_temporary_input(
+        result = await _service(request).save_from_temporary_input(
             user_id=user_id,
             username=username,
             storage_key=body.storage_key,
@@ -122,8 +127,7 @@ def create_reference_memory_router(settings: Settings) -> APIRouter:
         user_id_header: str | None = Header(default=None, alias="X-FoxGen-User-Id"),
     ) -> dict[str, object]:
         user_id = principal(authorization=authorization, user_id_header=user_id_header)
-        service: ReferenceMemoryServiceProtocol = request.app.state.reference_memory_service
-        items = await service.resolve(
+        items = await _service(request).resolve(
             user_id=user_id,
             asset_ids=tuple(body.reference_ids),
         )
@@ -137,11 +141,7 @@ def create_reference_memory_router(settings: Settings) -> APIRouter:
         user_id_header: str | None = Header(default=None, alias="X-FoxGen-User-Id"),
     ) -> dict[str, str]:
         user_id = principal(authorization=authorization, user_id_header=user_id_header)
-        service: ReferenceMemoryServiceProtocol = request.app.state.reference_memory_service
-        await service.delete(user_id=user_id, asset_id=asset_id)
+        await _service(request).delete(user_id=user_id, asset_id=asset_id)
         return {"status": "delete_pending", "id": str(asset_id)}
 
     return router
-
-
-__all__ = ["ReferenceMemoryService", "create_reference_memory_router"]
