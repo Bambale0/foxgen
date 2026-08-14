@@ -19,8 +19,8 @@ from foxgen.bot.generation_draft import (
     stored_media,
     temporary_storage_keys,
 )
-from foxgen.bot.generation_keyboards import image_reference_keyboard, video_media_keyboard
 from foxgen.bot.generation_capabilities import VideoGenerationType
+from foxgen.bot.generation_keyboards import image_reference_keyboard, video_media_keyboard
 from foxgen.core.errors import SubmissionError
 
 
@@ -31,8 +31,10 @@ NOW = datetime(2026, 8, 15, tzinfo=timezone.utc)
 class FakeInputSource:
     def __init__(self, media: DownloadedMedia) -> None:
         self.media = media
+        self.described: list[str] = []
 
     async def describe(self, storage_key: str) -> DownloadedMedia:
+        self.described.append(storage_key)
         assert storage_key.startswith("inputs/")
         return self.media
 
@@ -180,6 +182,27 @@ async def test_reference_service_copies_explicit_input_to_durable_prefix(tmp_pat
     assert storage.stored == [repository.asset.storage_key]
     assert repository.asset.storage_key.startswith("references/42/")
     assert result.item.preview_url.endswith("?signed=1")
+
+
+@pytest.mark.asyncio
+async def test_reference_save_rejects_foreign_temporary_prefix_before_read(tmp_path: Path) -> None:
+    source = FakeInputSource(_media(tmp_path))
+    service = ReferenceMemoryService(
+        repository=FakeRepository(),
+        input_source=source,
+        storage=FakeStorage(),
+        max_items=50,
+        max_bytes=1024,
+    )
+
+    with pytest.raises(SubmissionError):
+        await service.save_from_temporary_input(
+            user_id=42,
+            username="fox",
+            storage_key="inputs/99/private.png",
+        )
+
+    assert source.described == []
 
 
 @pytest.mark.asyncio
