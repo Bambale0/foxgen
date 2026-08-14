@@ -73,6 +73,7 @@ async def handle_start_payload(
             await _answer_publication(message, api_client, item)
             return True
         if kind == "profile":
+            await state.update_data(feed_profile_slug=value)
             await _answer_profile(message, api_client, value)
             return True
         await _begin_remix_message(message, state, api_client, value)
@@ -276,7 +277,11 @@ async def show_comments(callback: CallbackQuery, api_client: FoxGenApiClient) ->
                         callback_data=f"feed:ca:{parts[2]}:{publication_id}",
                     )
                 ],
-                [InlineKeyboardButton(text="⬅️ К публикации", callback_data=f"feed:post:{publication_id}")],
+                [
+                    InlineKeyboardButton(
+                        text="⬅️ К публикации", callback_data=f"feed:post:{publication_id}"
+                    )
+                ],
             ]
         ),
     )
@@ -333,7 +338,11 @@ async def save_comment(
         "✅ Комментарий добавлен.",
         reply_markup=InlineKeyboardMarkup(
             inline_keyboard=[
-                [InlineKeyboardButton(text="К публикации", callback_data=f"feed:post:{publication_id}")],
+                [
+                    InlineKeyboardButton(
+                        text="К публикации", callback_data=f"feed:post:{publication_id}"
+                    )
+                ],
                 [InlineKeyboardButton(text="Лента", callback_data="feed:open")],
             ]
         ),
@@ -411,7 +420,10 @@ async def begin_profile_edit(callback: CallbackQuery, state: FSMContext) -> None
     await state.set_state(FeedStates.editing_profile_slug)
     await safe_edit_callback_message(
         callback,
-        "Введите новый короткий адрес профиля: 3–56 символов a-z, 0-9, _ или -. /start отменит редактирование.",
+        (
+            "Введите новый короткий адрес профиля: 3–56 символов a-z, 0-9, _ или -. "
+            "/start отменит редактирование."
+        ),
     )
 
 
@@ -423,7 +435,9 @@ async def profile_slug(message: Message, state: FSMContext) -> None:
         return
     await state.update_data(profile_edit_slug=slug)
     await state.set_state(FeedStates.editing_profile_name)
-    await message.answer("Введите отображаемое имя до 128 символов или отправьте - чтобы скрыть его.")
+    await message.answer(
+        "Введите отображаемое имя до 128 символов или отправьте - чтобы скрыть его."
+    )
 
 
 @router.message(FeedStates.editing_profile_name, F.text)
@@ -434,7 +448,9 @@ async def profile_name(message: Message, state: FSMContext) -> None:
         return
     await state.update_data(profile_edit_name=None if value == "-" else value)
     await state.set_state(FeedStates.editing_profile_bio)
-    await message.answer("Введите описание профиля до 500 символов или отправьте - чтобы оставить пустым.")
+    await message.answer(
+        "Введите описание профиля до 500 символов или отправьте - чтобы оставить пустым."
+    )
 
 
 @router.message(FeedStates.editing_profile_bio, F.text)
@@ -494,9 +510,7 @@ async def _show_feed_page(
             callback,
             text,
             InlineKeyboardMarkup(
-                inline_keyboard=[
-                    [InlineKeyboardButton(text="⬅️ В меню", callback_data="nav:menu")]
-                ]
+                inline_keyboard=[[InlineKeyboardButton(text="⬅️ В меню", callback_data="nav:menu")]]
             ),
         )
         return
@@ -627,7 +641,10 @@ async def _begin_remix_message(
     mode = _remix_mode(str(source.get("media_kind") or ""))
     await _prepare_remix_state(state, source, mode)
     await message.answer(
-        "<b>Ремикс</b>\n\nИсточник сохранён. Выберите модель — промпт исходной публикации уже подставлен и его можно изменить перед запуском.",
+        (
+            "<b>Ремикс</b>\n\nИсточник сохранён. Выберите модель — промпт исходной "
+            "публикации уже подставлен и его можно изменить перед запуском."
+        ),
         reply_markup=model_keyboard(mode),
     )
 
@@ -701,12 +718,20 @@ def _profile_text(profile: dict[str, object]) -> str:
 
 def _profile_keyboard(slug: str, *, own: bool) -> InlineKeyboardMarkup:
     rows: list[list[InlineKeyboardButton]] = [
-        [InlineKeyboardButton(text="🖼 Публикации", callback_data="feed:profile:page:0")],
+        [
+            InlineKeyboardButton(
+                text="🖼 Публикации", callback_data="feed:profile:page:0"
+            )
+        ],
     ]
     if own:
         rows.extend(
             [
-                [InlineKeyboardButton(text="✏️ Изменить профиль", callback_data="feed:profile:edit")],
+                [
+                    InlineKeyboardButton(
+                        text="✏️ Изменить профиль", callback_data="feed:profile:edit"
+                    )
+                ],
                 [InlineKeyboardButton(text="⚙️ Мои публикации", callback_data="feed:mine")],
             ]
         )
@@ -739,9 +764,9 @@ def _publication_text(item: dict[str, object], media_url: str | None) -> str:
     )
     return (
         f"<b>{escape(author_name)}</b> · {escape(str(item.get('model_slug') or 'model'))}\n"
-        f"❤️ {int(item.get('likes_count') or 0)} · "
-        f"💬 {int(item.get('comments_count') or 0)} · "
-        f"🔁 {int(item.get('remix_count') or 0)}"
+        f"❤️ {int(item.get('likes_count') or 0)}"
+        + f" · 💬 {int(item.get('comments_count') or 0)}"
+        + f" · 🔁 {int(item.get('remix_count') or 0)}"
         f"{prompt_line}{media_line}"
     )
 
@@ -776,9 +801,7 @@ def _publication_keyboard(
             [InlineKeyboardButton(text="🔁 Ремикс", callback_data=f"feed:r:{publication_id}")]
         )
     if _PROFILE_SLUG_RE.fullmatch(author_slug):
-        rows.append(
-            [InlineKeyboardButton(text="👤 Автор", callback_data=f"feed:p:{author_slug}")]
-        )
+        rows.append([InlineKeyboardButton(text="👤 Автор", callback_data=f"feed:p:{author_slug}")])
     if own_management and generation_id:
         if bool(item.get("active", True)):
             rows.append(
@@ -805,8 +828,12 @@ def _publication_keyboard(
         if mode in _FEED_SORTS:
             rows.append(
                 [
-                    InlineKeyboardButton(text="⬅️", callback_data=f"feed:page:{mode}:{previous}"),
-                    InlineKeyboardButton(text="➡️", callback_data=f"feed:page:{mode}:{next_offset}"),
+                    InlineKeyboardButton(
+                        text="⬅️", callback_data=f"feed:page:{mode}:{previous}"
+                    ),
+                    InlineKeyboardButton(
+                        text="➡️", callback_data=f"feed:page:{mode}:{next_offset}"
+                    ),
                 ]
             )
             rows.append(
