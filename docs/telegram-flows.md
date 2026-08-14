@@ -1,75 +1,179 @@
 # Telegram flows and FSM
 
-FoxGen uses aiogram 3 with Redis-backed FSM. Telegram handlers are transport/orchestration code; durable admission, billing and administrative writes are delegated to application/admin services or the internal API.
+FoxGen uses aiogram 3 with Redis-backed FSM. Telegram handlers own only conversational drafts and screen navigation; durable admission, billing, provider execution and delivery remain in the internal API/worker lifecycle.
 
-## Main menu
+## Global `/start` and `/menu`
 
-The current main menu exposes active image/video generation actions plus the broader product map. Quick Start is the fastest reference-driven entrypoint. Some menu sections may still be planned product surfaces; documentation must not treat a visible placeholder callback as an implemented generator.
+`foxgen-global-commands` is the first runtime router. `/start` and `/menu` therefore interrupt **every** active generation screen before any state-specific text/media handler can consume the command.
 
-`/start` and `/menu` clear the active user draft and return to the current main menu.
+The interrupt contract is:
 
-## Standard generation flow
+1. collect all known temporary input keys from FSM data;
+2. best-effort delete those temporary files;
+3. clear Redis state/data;
+4. open the canonical main menu.
+
+Regression tests enumerate every declared `GenerationStates` value, so adding a new screen cannot silently weaken this rule.
+
+## Screen-FSM design
+
+The normal image/video UX follows the proven screen pattern used in `banano_kling:tanyapi`:
 
 ```text
-main menu
-  -> image or video
-  -> generation mode
-  -> compatible model
-  -> prompt
-  -> required media inputs
-  -> aspect ratio
-  -> model-specific quality/duration/audio options
-  -> price + available balance preview
-  -> confirmation
-  -> authenticated internal API admission
+screen = renderer + keyboard + state + transitions
 ```
 
-The launch button is enabled only after the draft is valid and price/balance checks succeed.
+All temporary choices live in `FSMContext`. There are no process-global per-user draft dictionaries. A draft stores a stable `wizard_version`, a visible `*_flow_step`, selected UI model, model-specific settings, temporary media keys, prompt, idempotency key and the latest price/balance result.
 
-## Quick Start
+Capabilities and provider payload construction are separate from Telegram rendering:
 
-Quick Start lets a user begin from a reference before choosing the product/model.
+```text
+generation_capabilities.py  -> which screens/options a model supports
+generation_draft.py         -> stable draft + validation + provider payload
+generation_screens.py       -> text/keyboards for each user-visible screen
+generation_wizard.py        -> transitions only
+```
+
+## Create image
+
+New image flow:
+
+```text
+main menu -> Создать фото
+  -> 1/4 model
+  -> 2/4 optional references
+  -> 3/4 dynamic model settings
+  -> 4/4 prompt
+  -> live price + balance confirmation
+  -> authenticated paid admission
+```
+
+### Image UI models
+
+The UI model is intentionally separate from the provider slug. For example, the user sees one `Seedream 5 Pro` choice:
+
+- no references -> `seedream-5-pro`;
+- one or more references -> `seedream-5-pro-edit`.
+
+This removes a redundant text/edit mode screen while preserving the provider's distinct validated contracts.
+
+Current production wizard coverage is required by test to equal the production-enabled KIE submission allowlist. The wizard currently covers:
+
+```text
+seedream-5-pro
+seedream-5-pro-edit
+nano-banana-2
+nano-banana-pro
+seedance-2
+seedance-2-mini
+```
+
+### Dynamic image settings
+
+Settings are capability-driven and update on the same screen.
+
+Examples:
+
+- Seedream 5 Pro: supported aspect ratios, Basic/High quality, PNG/JPG;
+- Nano Banana 2/Pro: supported aspect ratios including auto, 1K/2K/4K, PNG/JPG.
+
+A model never receives a UI option that is absent from its verified local provider contract.
+
+## Create video
+
+New video flow:
+
+```text
+main menu -> Создать видео
+  -> 1/5 model
+  -> 2/5 input type
+  -> 3/5 media when required
+  -> 4/5 dynamic model settings
+  -> 5/5 prompt
+  -> live price + balance confirmation
+  -> authenticated paid admission
+```
+
+### Video input types
+
+For Seedance 2 / Seedance 2 Mini the wizard exposes the verified input modes:
+
+```text
+text
+first_frame
+first_last
+references
+```
+
+`first_last` preserves upload order: the first uploaded image becomes `first_frame_url`, the second becomes `last_frame_url`.
+
+Multimodal references are separated before provider admission into image/video/audio URL lists. The local contract enforces per-type and total limits before a billable provider request exists.
+
+### Dynamic video settings
+
+The Seedance screen exposes only verified options:
+
+- aspect ratio;
+- duration 5/10/15 seconds;
+- resolution supported by the contract;
+- generated audio;
+- return last frame;
+- web search.
+
+A setting toggle updates FSM data and re-renders the same screen rather than creating another one-off state.
+
+## Quick Start convergence
+
+Quick Start still owns the fastest reference ingestion path:
 
 ```text
 main menu -> Быстрый запуск
-  -> send one photo or video
-  -> file is stored privately on disk
-  -> "what create: image or video?"
-  -> compatible model
-  -> prompt/caption reuse
-  -> model settings
-  -> confirmation
+  -> upload one photo/video
+  -> choose desired result: image/video
+  -> same generation screen wizard as ordinary creation
 ```
 
-The same reference entry also works when a photo/video is sent while no FSM is active. The bot determines the media kind, stores it and enters the reference-product chooser instead of falling through to the generic menu.
+The uploaded local input is not downloaded again or copied. It becomes prefilled `media` in the wizard draft.
 
-### Image reference
+Default video interpretation:
 
-An image reference can route to image editing or image-to-video according to model capability.
+- image reference -> `first_frame`;
+- video reference -> multimodal `references`.
 
-### Video reference
+If the user switches to a compatible video input type, the prefilled reference survives. If the new type cannot accept the stored media, the old temporary file is deleted before the state changes.
 
-A video can route to compatible reference-to-video behavior. For image creation, FoxGen can use a Telegram-provided video thumbnail/cover when available. If Telegram did not provide a suitable cover, the user is asked to send the required frame as a separate photo; the bot does not silently pass a video URL to an image model.
+Quick Start also preserves its original reference metadata so Back from the first wizard model screen can return to the image/video product choice while the source is still valid. Abandoning an invalid/cleared Quick Start draft cleans all known reference keys.
 
-## Reference draft preservation
-
-Reference-prefilled navigation is explicit through `entrypoint=reference`. Back/edit actions preserve:
-
-- the original object storage key;
-- optional preview/thumbnail key;
-- selected model;
-- prompt when already entered;
-- applicable model settings.
-
-The bot does not infer reference semantics just because a media list is non-empty.
+Legacy `reference_choosing_model` / generic generation states remain temporarily declared and routed **after** the new wizard so Redis drafts created by an older deployed release can still recover instead of becoming unknown state names.
 
 ## Declared generation FSM states
+
+Current screen states:
+
+```text
+image_selecting_model
+image_uploading_references
+image_configuring
+image_waiting_prompt
+video_selecting_model
+video_selecting_type
+video_uploading_media
+video_configuring
+video_waiting_prompt
+```
+
+Quick Start/reference compatibility states:
 
 ```text
 quick_start_waiting_media
 reference_choosing_product
 reference_choosing_model
 reference_waiting_prompt
+```
+
+Migration-compatibility generic states:
+
+```text
 choosing_mode
 choosing_model
 waiting_prompt
@@ -78,118 +182,112 @@ choosing_aspect_ratio
 choosing_quality
 choosing_duration
 choosing_audio
+```
+
+Shared terminal conversational states:
+
+```text
 confirming
 submitting
 ```
 
-`fsm_contract.py` defines behavior expectations for every declared state.
+`fsm_contract.py` defines success/back/cancel/timeout/invalid/stale behavior for every declared state.
 
-## Required state behavior
+## Back / invalid input / stale callback
 
-Every state has an explicit contract for:
+Each new screen has an explicit backwards edge:
 
-- valid next transitions;
-- back;
-- cancel/menu;
-- timeout/expiry;
-- invalid message/input;
-- stale callback.
+```text
+image model <- references <- settings <- prompt <- confirmation
+video model <- type <- media/settings <- settings <- prompt <- confirmation
+```
 
-Known active state is preserved when a user presses an unrelated old button or sends input that belongs to another step. A missing/expired Redis state recovers to the menu with an expiry explanation. An unknown state name left by old deployed code is cleared fail-closed.
+For text-only video, Back from settings returns to input type because there is no media screen.
 
-## Concurrency and duplicate protection
+Invalid messages do not destroy a valid draft. Button-only screens tell the user to use the current buttons; media screens restate their exact media requirement; prompt screens request text. An unrelated stale callback keeps a known active state and points the user to the latest controls.
 
-Redis event isolation serializes updates for one FSM storage key. Two near-simultaneous reference messages from one user therefore cannot both observe the same empty state and race through upload/state mutation.
+## Confirmation and billing
 
-Paid generation confirmation also has a stable draft idempotency key. Duplicate button presses cannot intentionally create two billable local generations for one draft; the internal API/PostgreSQL idempotency layer remains the durable final guard.
+Confirmation does not synthesize a provider payload just to calculate price. It resolves the final provider model slug from the current draft, then reads current price and wallet balance through the trusted internal API.
 
-## Media validation
+Launch is enabled only when:
 
-- one Telegram message equals one reference upload operation;
+- the current model has an active price;
+- the wallet has enough available units;
+- the draft remains valid.
+
+At final launch, private local storage keys are converted to fresh signed URLs and only then is the strict provider payload constructed.
+
+Paid admission remains unchanged:
+
+```text
+authenticated internal request
+  -> model/runtime validation
+  -> idempotency
+  -> rate/concurrency limits
+  -> atomic price/balance reservation
+  -> generation + durable submit outbox
+```
+
+The Telegram wizard never calls KIE directly and never performs its own wallet mutation.
+
+## Duplicate confirmation
+
+Each draft owns one stable `idempotency_key`. During `submitting`, repeated launch presses are rejected conversationally; the internal API/PostgreSQL idempotency boundary remains the durable final guard if transport ambiguity occurs.
+
+## Media safety
+
+- one Telegram message equals one upload operation;
 - albums/media groups are rejected before download;
-- unsupported documents are rejected as user validation errors;
-- media size is capped by `FOXGEN_TELEGRAM_INPUT_MAX_BYTES`;
-- Telegram download failure and local-storage failure are separate retryable error classes;
-- FSM does not advance when upload fails.
+- unsupported documents fail as user validation errors;
+- input size is bounded by `FOXGEN_TELEGRAM_INPUT_MAX_BYTES`;
+- upload/storage failures do not advance the screen;
+- temporary files stay private and are cleaned on `/start`, `/menu`, cancel and explicit replacement/clear paths;
+- signed provider-readable URLs are generated only near final admission.
 
 See `input-media-lifecycle.md`.
 
-## Confirmation and billing preview
+## Runtime router order
 
-Before confirmation the bot obtains current model price and wallet balance from the trusted internal API. Insufficient funds disable launch rather than allowing a provider request that would later fail after user confirmation.
-
-At final confirmation the stored private file keys are converted into fresh signed URLs with a bounded TTL. Those provider-readable URLs are not persisted as public product URLs and are not generated at the moment the user first uploads the reference.
-
-## Submission state
-
-During `submitting`, duplicate/cancel/back interactions are intentionally restricted because admission can be in progress. Durable idempotency and generation lifecycle state determine recovery if the request result is ambiguous.
-
-## `/admin`
-
-`/admin` is a separate privileged Telegram shell. Authorization is server-side; merely knowing callback data cannot grant access.
-
-The registered admin routers expose the operational transport for:
-
-- summary/statistics;
-- user lookup, block/unblock and balance actions;
-- finance;
-- payments;
-- partners and withdrawal queue/actions;
-- tariffs/pricing;
-- promos;
-- prompt moderation;
-- broadcast/campaign flow;
-- support;
-- operations;
-- runtime/subscription/model controls;
-- AI diagnostics;
-- CMS;
-- CSV export actions;
-- dedicated analytics callback;
-- XLS user/finance exports;
-- approved-withdrawal listing and confirmed payment shortcut.
-
-Every privileged callback/FSM continuation re-checks admin policy through the signed server-side admin API. Destructive/expensive workflows use preview/confirm semantics and shared admin services rather than direct write SQL in Telegram handlers.
-
-### Admin router order
-
-Runtime registration order is explicit:
+Router order is a correctness contract:
 
 ```text
+foxgen-global-commands
 foxgen-admin-extras
 foxgen-admin
+foxgen-quick-start-wizard
+foxgen-generation-wizard
 foxgen-quick-start
 foxgen-generation
 foxgen-shell
 ```
 
-The extension router must remain ahead of the broad product/shell fallbacks. Otherwise a valid copied/issued admin callback can be treated as stale before the privileged handler gets a chance to re-authorize it.
+Reasons:
 
-`register_runtime_routers()` centralizes this order so tests can verify it without starting polling or attaching the global routers to a second dispatcher.
+- global commands must preempt every FSM;
+- Quick Start bridge must intercept post-upload product/back actions before legacy Quick Start handlers;
+- the new generation wizard must own ordinary `create:image`, `create:video`, its settings/back/confirmation callbacks before the generic legacy generation router;
+- legacy routers remain reachable only for older Redis drafts and unchanged reference ingestion paths;
+- shell catch-all remains last.
 
-### Extension callback security
+`register_runtime_routers()` and its regression test protect this ordering.
 
-`src/foxgen/bot/admin_extras.py` is active runtime transport for:
+## `/admin`
 
-- `adm:analytics` → signed `GET /internal/admin/analytics`;
-- `adm:exportxls:users` / `adm:exportxls:finance` → signed XLS download;
-- `adm:withdrawals:approved` → signed filtered withdrawal read;
-- `adm:wdpay:{withdrawal_id}` → signed confirmed/idempotent `mark_paid` write.
-
-Every one of these callbacks calls Admin API health/authorization first. The payment shortcut generates a fresh idempotency key and sends explicit confirmation through the shared partner action endpoint. No payout state is mutated directly in Telegram code.
-
-See `admin-control-plane.md`, `admin-capability-matrix.md` and `api-reference.md`.
-
-## Error recovery rules
-
-- user validation error: keep the current recoverable state and explain the expected input;
-- stale callback with active known state: keep the draft and direct the user to the latest controls;
-- Redis TTL expiry: clear and return to menu;
-- unknown old-release FSM state: clear fail-closed;
-- Telegram/API infrastructure error: do not pretend a generation was submitted;
-- duplicate confirm: converge through idempotency rather than creating another charge;
-- provider/delivery ambiguity after durable admission: handled by durable lifecycle, not Telegram FSM guessing.
+`/admin` remains a separate privileged Telegram shell. Every privileged callback/FSM continuation re-authorizes through the signed server-side admin API; screen-wizard work does not bypass or alter that boundary.
 
 ## Testing expectations
 
-Regression coverage includes FSM contract completeness, stale callback recovery, active draft preservation, reference routing, event isolation, main admin authorization and extension transport reachability. Admin extension tests verify router order plus analytics, XLS and approved-withdrawal/payment callbacks. A new generation/admin FSM state or privileged callback must update its state/authorization tests at the same time.
+The generation screen change is incomplete unless tests preserve:
+
+- `STATE_CONTRACTS == all declared GenerationStates`;
+- `/start` interruption for every declared state;
+- exact runtime router order;
+- wizard provider-slug coverage equals all production-enabled KIE submission models;
+- Seedream text/edit slug selection by reference presence;
+- per-model dynamic settings visibility;
+- first/last frame order;
+- multimodal reference separation;
+- media-completion rules;
+- Quick Start reference preservation into the same wizard;
+- price/balance gating and existing submission idempotency tests.

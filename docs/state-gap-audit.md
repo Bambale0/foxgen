@@ -7,6 +7,15 @@ This document began as a gap analysis. It is now a completion/status record for 
 Declared generation states:
 
 ```text
+image_selecting_model
+image_uploading_references
+image_configuring
+image_waiting_prompt
+video_selecting_model
+video_selecting_type
+video_uploading_media
+video_configuring
+video_waiting_prompt
 quick_start_waiting_media
 reference_choosing_product
 reference_choosing_model
@@ -27,13 +36,18 @@ Implemented invariants:
 
 - every declared state has a behavior contract for success/back/cancel/timeout/invalid input/stale callback;
 - `/start` and `/menu` are registered ahead of every state-specific router and always interrupt the active FSM before returning to the canonical entrypoint;
+- ordinary image/video creation uses separate screen-level FSM branches rather than one generic mode chain;
+- model-specific screens and settings are capability-driven and cover every production-enabled KIE submission slug;
+- one UI model may resolve to different validated provider contracts, e.g. Seedream text/edit based on reference presence;
+- Quick Start reference ingestion converges into the same image/video screen wizard without copying the temporary file;
+- compatible prefilled references survive video type/model navigation; incompatible replacements are cleaned before transition;
+- legacy generic/reference states remain declared only for deployed Redis-draft migration compatibility and are routed after the new wizard;
 - known active drafts survive unrelated stale callbacks/messages;
 - expired/unknown state recovers fail-closed;
-- reference-prefilled drafts preserve stored media across back/edit navigation;
-- Quick Start and no-active-FSM photo/video inputs route into reference product/model/settings flow;
 - Redis event isolation serializes concurrent updates for one FSM key;
 - Telegram albums are rejected before download;
 - transfer/storage failures do not advance FSM;
+- live price/balance confirmation precedes paid admission;
 - duplicate paid confirmation converges through durable idempotency.
 
 See `telegram-flows.md`.
@@ -263,12 +277,14 @@ Telegram runtime order is:
 foxgen-global-commands
 foxgen-admin-extras
 foxgen-admin
+foxgen-quick-start-wizard
+foxgen-generation-wizard
 foxgen-quick-start
 foxgen-generation
 foxgen-shell
 ```
 
-The global command router is deliberately first so `/start` and `/menu` cannot be consumed by an active FSM's broad text handler. The extension callbacks then run before broad product/shell fallbacks while still performing fresh signed Admin API authorization. Active extras cover dedicated analytics, XLS export and approved-withdrawal/payment shortcut behavior.
+The global command router is deliberately first so `/start` and `/menu` cannot be consumed by an active FSM's broad text/media handler. The Quick Start bridge and new screen wizard precede legacy generation routers so new drafts cannot be swallowed by generic handlers, while older deployed Redis drafts remain recoverable. Admin extension callbacks still run before product/shell fallbacks and perform fresh signed Admin API authorization.
 
 Route enumeration plus enabled/disabled HTTP tests and Telegram callback tests protect this reachability contract.
 
