@@ -338,10 +338,7 @@ def create_app(
             app.state.reconciliation_service = ReconciliationService(lifecycle_repository)
         if app.state.miniapp_repository is None:
             app.state.miniapp_repository = _miniapp_repository(resolved_settings, database)
-        if (
-            app.state.reference_memory_service is None
-            or app.state.reference_media_delivery is None
-        ):
+        if app.state.reference_memory_service is None or app.state.reference_media_delivery is None:
             memory_service, media_delivery = _reference_memory_components(
                 resolved_settings,
                 database,

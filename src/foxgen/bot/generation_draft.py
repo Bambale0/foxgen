@@ -104,18 +104,12 @@ def stored_media(data: dict[str, Any] | dict[str, object]) -> list[StoredInput]:
 
 
 def temporary_storage_keys(media: list[StoredInput]) -> tuple[str, ...]:
-    return tuple(
-        item["storage_key"]
-        for item in media
-        if isinstance(item.get("storage_key"), str)
-    )
+    return tuple(item["storage_key"] for item in media if isinstance(item.get("storage_key"), str))
 
 
 def saved_reference_ids(media: list[StoredInput]) -> tuple[str, ...]:
     return tuple(
-        item["reference_id"]
-        for item in media
-        if isinstance(item.get("reference_id"), str)
+        item["reference_id"] for item in media if isinstance(item.get("reference_id"), str)
     )
 
 
@@ -189,9 +183,7 @@ def submission_payload(
                 "prompt": prompt,
                 "aspect_ratio": required_text(data, "aspect_ratio"),
                 "quality": str(data.get("quality") or capability.default_quality or "basic"),
-                "output_format": str(
-                    data.get("output_format") or capability.default_output_format
-                ),
+                "output_format": str(data.get("output_format") or capability.default_output_format),
                 "nsfw_checker": False,
             }
             if has_references:
@@ -207,12 +199,8 @@ def submission_payload(
             "prompt": prompt,
             "image_input": [item["url"] for item in media if item["kind"] == "image"],
             "aspect_ratio": required_text(data, "aspect_ratio"),
-            "resolution": str(
-                data.get("resolution") or capability.default_resolution or "1K"
-            ),
-            "output_format": str(
-                data.get("output_format") or capability.default_output_format
-            ),
+            "resolution": str(data.get("resolution") or capability.default_resolution or "1K"),
+            "output_format": str(data.get("output_format") or capability.default_output_format),
         }
 
     capability = video_capability(data)
@@ -238,15 +226,9 @@ def submission_payload(
         payload["first_frame_url"] = images[0]
         payload["last_frame_url"] = images[1]
     elif generation_type_value == VideoGenerationType.REFERENCES:
-        payload["reference_image_urls"] = [
-            item["url"] for item in media if item["kind"] == "image"
-        ]
-        payload["reference_video_urls"] = [
-            item["url"] for item in media if item["kind"] == "video"
-        ]
-        payload["reference_audio_urls"] = [
-            item["url"] for item in media if item["kind"] == "audio"
-        ]
+        payload["reference_image_urls"] = [item["url"] for item in media if item["kind"] == "image"]
+        payload["reference_video_urls"] = [item["url"] for item in media if item["kind"] == "video"]
+        payload["reference_audio_urls"] = [item["url"] for item in media if item["kind"] == "audio"]
     return capability.slug, payload
 
 

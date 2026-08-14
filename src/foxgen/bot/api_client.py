@@ -177,9 +177,7 @@ class FoxGenApiClient:
         if not isinstance(payload, dict) or not isinstance(payload.get("items"), list):
             raise FoxGenApiError("Не удалось подготовить сохранённые референсы.", status_code=502)
         return tuple(
-            self._saved_reference(item)
-            for item in payload["items"]
-            if isinstance(item, dict)
+            self._saved_reference(item) for item in payload["items"] if isinstance(item, dict)
         )
 
     async def delete_reference(self, *, user_id: int, reference_id: str) -> None:

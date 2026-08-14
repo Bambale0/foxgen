@@ -211,7 +211,9 @@ async def test_reference_save_rejects_foreign_temporary_prefix_before_read(tmp_p
 
 
 @pytest.mark.asyncio
-async def test_duplicate_reference_reuses_existing_asset_without_second_copy(tmp_path: Path) -> None:
+async def test_duplicate_reference_reuses_existing_asset_without_second_copy(
+    tmp_path: Path,
+) -> None:
     repository = FakeRepository()
     repository.asset = replace(repository.asset, status="active")
     repository.created = False

@@ -151,20 +151,17 @@ class SqlAlchemyReferenceMemoryRepository:
     ) -> tuple[tuple[ReferenceAssetSnapshot, ...], int, int]:
         async with self._database.session() as session:
             assets = (
-                (
-                    await session.scalars(
-                        select(ReferenceAsset)
-                        .where(
-                            ReferenceAsset.user_id == user_id,
-                            ReferenceAsset.status == "active",
-                        )
-                        .order_by(ReferenceAsset.created_at.desc(), ReferenceAsset.id.desc())
-                        .offset(offset)
-                        .limit(limit)
+                await session.scalars(
+                    select(ReferenceAsset)
+                    .where(
+                        ReferenceAsset.user_id == user_id,
+                        ReferenceAsset.status == "active",
                     )
+                    .order_by(ReferenceAsset.created_at.desc(), ReferenceAsset.id.desc())
+                    .offset(offset)
+                    .limit(limit)
                 )
-                .all()
-            )
+            ).all()
             usage_row = (
                 await session.execute(
                     select(
@@ -192,17 +189,14 @@ class SqlAlchemyReferenceMemoryRepository:
             return ()
         async with self._database.session() as session:
             assets = (
-                (
-                    await session.scalars(
-                        select(ReferenceAsset).where(
-                            ReferenceAsset.user_id == user_id,
-                            ReferenceAsset.id.in_(asset_ids),
-                            ReferenceAsset.status == "active",
-                        )
+                await session.scalars(
+                    select(ReferenceAsset).where(
+                        ReferenceAsset.user_id == user_id,
+                        ReferenceAsset.id.in_(asset_ids),
+                        ReferenceAsset.status == "active",
                     )
                 )
-                .all()
-            )
+            ).all()
             return tuple(_snapshot(asset) for asset in assets)
 
     async def get_active_by_id(self, asset_id: UUID) -> ReferenceAssetSnapshot | None:

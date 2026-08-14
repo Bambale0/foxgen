@@ -69,7 +69,9 @@ class ReferenceAsset(Base):
     content_type: Mapped[str] = mapped_column(String(255))
     size_bytes: Mapped[int] = mapped_column(BigInteger)
     checksum_sha256: Mapped[str] = mapped_column(String(64))
-    status: Mapped[str] = mapped_column(String(24), default="uploading", server_default="uploading", index=True)
+    status: Mapped[str] = mapped_column(
+        String(24), default="uploading", server_default="uploading", index=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
     )
@@ -183,9 +185,7 @@ class OutboxEvent(Base):
 
 class ProviderEvent(Base):
     __tablename__ = "provider_events"
-    __table_args__ = (
-        UniqueConstraint("event_hash", name="uq_provider_events_event_hash"),
-    )
+    __table_args__ = (UniqueConstraint("event_hash", name="uq_provider_events_event_hash"),)
 
     id: Mapped[UUIDValue] = mapped_column(
         UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid()
@@ -250,8 +250,7 @@ class GenerationDelivery(Base):
     __table_args__ = (
         UniqueConstraint("generation_id", name="uq_generation_deliveries_generation_id"),
         CheckConstraint(
-            "status IN ('pending', 'retry_wait', 'sending', 'sent', "
-            "'delivery_unknown', 'failed')",
+            "status IN ('pending', 'retry_wait', 'sending', 'sent', 'delivery_unknown', 'failed')",
             name="ck_generation_deliveries_status",
         ),
     )

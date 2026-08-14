@@ -27,8 +27,7 @@ def local_input_media_url(
     signature = sign_local_input_media_url(storage_key, expires_at, secret)
     quoted = quote(storage_key, safe="/")
     return (
-        f"{base_url.rstrip('/')}/v1/input-media/{quoted}"
-        f"?expires={expires_at}&signature={signature}"
+        f"{base_url.rstrip('/')}/v1/input-media/{quoted}?expires={expires_at}&signature={signature}"
     )
 
 

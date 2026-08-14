@@ -278,9 +278,7 @@ class GenerationWorker:
             )
         except ProviderError as exc:
             target = (
-                GenerationStatus.SUBMISSION_UNKNOWN
-                if exc.retryable
-                else GenerationStatus.FAILED
+                GenerationStatus.SUBMISSION_UNKNOWN if exc.retryable else GenerationStatus.FAILED
             )
             await self._repository.transition_generation(
                 generation_id=generation.id,
@@ -394,9 +392,7 @@ class GenerationWorker:
             return
         await self._repository.transition_generation(
             generation_id=generation.id,
-            expected=frozenset(
-                {GenerationStatus.SUBMITTED, GenerationStatus.PROCESSING}
-            ),
+            expected=frozenset({GenerationStatus.SUBMITTED, GenerationStatus.PROCESSING}),
             target=state.status,
             result_payload=state.result_payload,
             error_code=state.error_code,

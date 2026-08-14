@@ -96,10 +96,13 @@ def test_reference_api_requires_internal_user_context() -> None:
     )
 
     assert client.get("/v1/reference-memory").status_code == 401
-    assert client.get(
-        "/v1/reference-memory",
-        headers={"Authorization": "Bearer internal-secret"},
-    ).status_code == 400
+    assert (
+        client.get(
+            "/v1/reference-memory",
+            headers={"Authorization": "Bearer internal-secret"},
+        ).status_code
+        == 400
+    )
 
 
 def test_reference_api_save_list_resolve_delete() -> None:
