@@ -23,6 +23,7 @@ from foxgen.api.generations import (
     ReconciliationProtocol,
     create_generation_router,
 )
+from foxgen.api.publications import PublicationServiceProtocol, create_publication_router
 from foxgen.api.security import authenticate_submission, validate_idempotency_key
 from foxgen.application.generation_ops import GenerationOperationsService
 from foxgen.application.reconciliation import ReconciliationService
@@ -32,6 +33,7 @@ from foxgen.core.errors import ErrorCode, FoxGenError, WebhookVerificationError
 from foxgen.infra.billing import SqlAlchemyBillingRepository
 from foxgen.infra.billing_lifecycle_repository import BillingAwareLifecycleRepository
 from foxgen.infra.database import Database
+from foxgen.infra.publications import SqlAlchemyPublicationRepository
 from foxgen.infra.rate_limit import RedisSubmissionRateLimiter
 from foxgen.infra.redis import RedisPool
 from foxgen.infra.repositories import SqlAlchemyGenerationRepository
@@ -59,6 +61,7 @@ class SubmissionServiceProtocol(Protocol):
         model_slug: str,
         input_data: dict[str, object],
         idempotency_key: str,
+        source_publication_id: UUID | None = None,
     ) -> SubmissionReceipt: ...
 
 
@@ -188,6 +191,7 @@ def create_app(
     generation_operations: GenerationOperationsProtocol | None = None,
     reconciliation_service: ReconciliationProtocol | None = None,
     admin_services: AdminServices | None = None,
+    publication_service: PublicationServiceProtocol | None = None,
 ) -> FastAPI:
     resolved_settings = settings or get_settings()
     registry = ModelRegistry()
@@ -209,6 +213,8 @@ def create_app(
                 database,
                 bootstrap_superuser_ids=resolved_settings.admin_superuser_id_set,
             )
+        if app.state.publication_service is None:
+            app.state.publication_service = SqlAlchemyPublicationRepository(database)
         if app.state.submission_service is None:
             app.state.submission_service = SubmissionService(
                 repository=SqlAlchemyGenerationRepository(database),
@@ -252,8 +258,10 @@ def create_app(
     app.state.generation_operations = generation_operations
     app.state.reconciliation_service = reconciliation_service
     app.state.admin_services = admin_services
+    app.state.publication_service = publication_service
     app.include_router(create_billing_router(resolved_settings))
     app.include_router(create_generation_router(resolved_settings))
+    app.include_router(create_publication_router(resolved_settings))
     app.include_router(create_admin_router(resolved_settings))
     app.include_router(create_admin_extensions_router(resolved_settings))
     # Extension routes must precede the generic /internal/admin/ui/api/{section}
@@ -332,6 +340,10 @@ def create_app(
         idempotency_key_header: str | None = Header(default=None, alias="Idempotency-Key"),
         user_id_header: str | None = Header(default=None, alias="X-FoxGen-User-Id"),
         username: str | None = Header(default=None, alias="X-FoxGen-Username"),
+        source_publication_header: str | None = Header(
+            default=None,
+            alias="X-FoxGen-Source-Publication-Id",
+        ),
     ) -> dict[str, Any]:
         principal = authenticate_submission(
             settings=resolved_settings,
@@ -343,6 +355,15 @@ def create_app(
         idempotency_key = validate_idempotency_key(idempotency_key_header)
         item = model_or_404(registry, slug)
         validated_input_or_422(item.contract, body.input)
+        source_publication_id: UUID | None = None
+        if source_publication_header:
+            try:
+                source_publication_id = UUID(source_publication_header)
+            except ValueError as exc:
+                raise HTTPException(
+                    status_code=422,
+                    detail="Invalid source publication id",
+                ) from exc
 
         service: SubmissionServiceProtocol | None = request.app.state.submission_service
         if service is None:
@@ -356,6 +377,7 @@ def create_app(
             model_slug=slug,
             input_data=body.input,
             idempotency_key=idempotency_key,
+            source_publication_id=source_publication_id,
         )
         return receipt_payload(receipt)
 
