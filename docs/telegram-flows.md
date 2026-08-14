@@ -1,12 +1,31 @@
 # Telegram flows and FSM
 
-FoxGen uses aiogram 3 with Redis-backed FSM. Telegram handlers are transport/orchestration code; durable admission, billing and administrative writes are delegated to application/admin services or the internal API.
+FoxGen uses aiogram 3 with Redis-backed FSM. Telegram handlers are transport/orchestration code; durable admission, billing, publication and administrative writes are delegated to application/admin services or the internal API.
 
 ## Main menu
 
-The current main menu exposes active image/video generation actions plus the broader product map. Quick Start is the fastest reference-driven entrypoint. Some menu sections may still be planned product surfaces; documentation must not treat a visible placeholder callback as an implemented generator.
+The current main menu exposes active image/video generation actions plus social entrypoints:
 
-`/start` and `/menu` clear the active user draft and return to the current main menu.
+- `🌐 Лента`;
+- `👤 Профиль`;
+- `📣 Опубликовать генерацию`;
+- Quick Start and generation product actions.
+
+Some other menu sections may still be planned product surfaces; documentation must not treat a visible placeholder callback as an implemented generator.
+
+## Global `/start` and `/menu` interrupt
+
+`foxgen-global-commands` is registered before every state-specific router. `/start` and `/menu` therefore **always interrupt the current FSM state**, including generation and feed/profile/comment/publish states.
+
+The command handler:
+
+1. reads known temporary input keys;
+2. performs best-effort temporary input cleanup;
+3. clears Redis FSM state/data;
+4. for `/start <payload>`, dispatches a recognized post/profile/remix deep link;
+5. otherwise opens the current main menu.
+
+A state-specific `F.text` handler must never consume `/start` as a prompt, comment, profile field or generation ID. Regression tests enumerate every declared `GenerationStates` and `FeedStates` value.
 
 ## Standard generation flow
 
@@ -33,7 +52,7 @@ Quick Start lets a user begin from a reference before choosing the product/model
 ```text
 main menu -> Быстрый запуск
   -> send one photo or video
-  -> file is stored privately on disk
+  -> file is stored privately on local shared input storage
   -> "what create: image or video?"
   -> compatible model
   -> prompt/caption reuse
@@ -55,13 +74,91 @@ A video can route to compatible reference-to-video behavior. For image creation,
 
 Reference-prefilled navigation is explicit through `entrypoint=reference`. Back/edit actions preserve:
 
-- the original object storage key;
+- the original temporary input storage key;
 - optional preview/thumbnail key;
 - selected model;
 - prompt when already entered;
 - applicable model settings.
 
 The bot does not infer reference semantics just because a media list is non-empty.
+
+## Feed and public profile flow
+
+```text
+main menu -> Лента
+  -> recent/top-day/top publication card
+  -> like/unlike
+  -> surface comments
+  -> author profile
+  -> remix when server says allowed
+```
+
+The Telegram card does not expose storage credentials or provider result URLs. It requests an authenticated short-lived publication media URL from the internal API.
+
+Profile flow:
+
+```text
+main menu -> Профиль
+  -> own public slug/name/bio
+  -> profile publications
+  -> own publication management
+  -> edit slug/name/bio
+```
+
+Public profile links open through `profile_<slug>` start payloads. Product-facing profile slugs are constrained so the complete Telegram `start` payload stays within 64 characters.
+
+## Publish flow
+
+`📣 Опубликовать генерацию` is an explicit Telegram wizard:
+
+```text
+enter completed generation UUID
+  -> choose feed or profile
+  -> server validates owner + succeeded + all media stored
+  -> publication row is created/reactivated
+```
+
+The bot does not assume that a UUID is publishable because the user entered it. Eligibility and derivative restrictions are server-side.
+
+A derivative generation can be published to `profile`; publishing it to `feed` is rejected.
+
+## Comments
+
+`FeedStates.waiting_comment` stores the target publication UUID and the requested surface (`feed` or `profile`). The server verifies surface equality again before write. A copied callback cannot post into a different surface thread.
+
+Comments are currently flat messages up to 1000 characters.
+
+## Remix flow
+
+A remix starts only from an eligible active publication.
+
+```text
+publication -> Remix
+  -> server returns remix contract
+  -> bot stores source publication ID + source prompt in FSM
+  -> choose compatible model
+  -> ordinary aspect/quality/duration/audio settings
+  -> ordinary price/balance confirmation
+  -> final source revalidation
+  -> fetch fresh short-lived durable-result media URLs
+  -> paid submission with source publication header
+```
+
+The source publication ID is carried separately from the provider payload. The backend includes it in the idempotency fingerprint and commits lineage in the same transaction as paid admission.
+
+A derivative publication has no public prompt actions and is rejected as a remix source server-side.
+
+## Deep links
+
+Recognized Telegram start payloads:
+
+```text
+post_<publication UUID>
+profile_<slug>
+remix_<publication UUID>
+```
+
+Opening any deep link first clears the previous FSM due to the global `/start` rule, then dispatches the new product entrypoint.
 
 ## Declared generation FSM states
 
@@ -82,26 +179,40 @@ confirming
 submitting
 ```
 
-`fsm_contract.py` defines behavior expectations for every declared state.
+`fsm_contract.py` defines behavior expectations for every declared generation state.
+
+## Declared feed FSM states
+
+```text
+waiting_comment
+editing_profile_slug
+editing_profile_name
+editing_profile_bio
+waiting_publish_generation
+choosing_publish_scope
+```
+
+These are transport-only drafts; publication/profile/comment state is durable only after the internal API succeeds.
 
 ## Required state behavior
 
-Every state has an explicit contract for:
+Every state has an explicit user-recovery contract for:
 
 - valid next transitions;
-- back;
-- cancel/menu;
+- cancel/menu/start;
 - timeout/expiry;
 - invalid message/input;
-- stale callback.
+- stale callback where applicable.
 
-Known active state is preserved when a user presses an unrelated old button or sends input that belongs to another step. A missing/expired Redis state recovers to the menu with an expiry explanation. An unknown state name left by old deployed code is cleared fail-closed.
+Known active generation state is preserved when a user presses an unrelated old button or sends input that belongs to another step. `/start` and `/menu` are the deliberate exception: they always clear the current state. A missing/expired Redis state recovers to the menu with an expiry explanation. An unknown state name left by old deployed code is cleared fail-closed.
 
 ## Concurrency and duplicate protection
 
 Redis event isolation serializes updates for one FSM storage key. Two near-simultaneous reference messages from one user therefore cannot both observe the same empty state and race through upload/state mutation.
 
 Paid generation confirmation also has a stable draft idempotency key. Duplicate button presses cannot intentionally create two billable local generations for one draft; the internal API/PostgreSQL idempotency layer remains the durable final guard.
+
+Remix idempotency also includes `source_publication_id`, so reusing the same key for another source conflicts rather than silently changing lineage.
 
 ## Media validation
 
@@ -118,7 +229,9 @@ See `input-media-lifecycle.md`.
 
 Before confirmation the bot obtains current model price and wallet balance from the trusted internal API. Insufficient funds disable launch rather than allowing a provider request that would later fail after user confirmation.
 
-At final confirmation the stored private file keys are converted into fresh signed URLs with a bounded TTL. Those provider-readable URLs are not persisted as public product URLs and are not generated at the moment the user first uploads the reference.
+For normal reference generation, stored private temporary keys are converted into fresh signed URLs with bounded TTL at final confirmation.
+
+For remix, durable result media remains in S3-compatible storage. The bot requests fresh presigned result URLs immediately before paid admission. It does not copy a `generations/` object into local temporary input state.
 
 ## Submission state
 
@@ -151,21 +264,25 @@ The registered admin routers expose the operational transport for:
 
 Every privileged callback/FSM continuation re-checks admin policy through the signed server-side admin API. Destructive/expensive workflows use preview/confirm semantics and shared admin services rather than direct write SQL in Telegram handlers.
 
-### Admin router order
+### Runtime router order
 
-Runtime registration order is explicit:
+Registration order is explicit:
 
 ```text
+foxgen-global-commands
 foxgen-admin-extras
 foxgen-admin
+foxgen-feed
+foxgen-feed-publish
+foxgen-feed-remix
 foxgen-quick-start
 foxgen-generation
 foxgen-shell
 ```
 
-The extension router must remain ahead of the broad product/shell fallbacks. Otherwise a valid copied/issued admin callback can be treated as stale before the privileged handler gets a chance to re-authorize it.
+The first router protects the global `/start`/`/menu` interrupt contract. Admin extension handlers stay before broad shell fallbacks. Feed-remix handlers stay before the ordinary generation router so a remix draft can intercept model choice/final confirmation and preserve its source lineage instead of being treated as an ordinary generation draft.
 
-`register_runtime_routers()` centralizes this order so tests can verify it without starting polling or attaching the global routers to a second dispatcher.
+`register_runtime_routers()` centralizes this order so tests can verify it without starting polling.
 
 ### Extension callback security
 
@@ -178,18 +295,21 @@ The extension router must remain ahead of the broad product/shell fallbacks. Oth
 
 Every one of these callbacks calls Admin API health/authorization first. The payment shortcut generates a fresh idempotency key and sends explicit confirmation through the shared partner action endpoint. No payout state is mutated directly in Telegram code.
 
-See `admin-control-plane.md`, `admin-capability-matrix.md` and `api-reference.md`.
+See `admin-control-plane.md`, `admin-capability-matrix.md`, `api-reference.md` and `feed-profile-remix.md`.
 
 ## Error recovery rules
 
 - user validation error: keep the current recoverable state and explain the expected input;
-- stale callback with active known state: keep the draft and direct the user to the latest controls;
+- `/start` or `/menu`: always clear current state and temporary input references;
+- stale callback with active known generation state: keep the draft and direct the user to the latest controls;
 - Redis TTL expiry: clear and return to menu;
 - unknown old-release FSM state: clear fail-closed;
-- Telegram/API infrastructure error: do not pretend a generation was submitted;
+- Telegram/API infrastructure error: do not pretend a generation/publication/comment was committed;
 - duplicate confirm: converge through idempotency rather than creating another charge;
 - provider/delivery ambiguity after durable admission: handled by durable lifecycle, not Telegram FSM guessing.
 
 ## Testing expectations
 
-Regression coverage includes FSM contract completeness, stale callback recovery, active draft preservation, reference routing, event isolation, main admin authorization and extension transport reachability. Admin extension tests verify router order plus analytics, XLS and approved-withdrawal/payment callbacks. A new generation/admin FSM state or privileged callback must update its state/authorization tests at the same time.
+Regression coverage includes FSM contract completeness, global `/start` interruption for every generation/feed state, stale callback recovery, active draft preservation, reference routing, event isolation, feed deep-link parsing, remix media validation, router precedence, publication integration invariants, main admin authorization and extension transport reachability.
+
+A new generation/feed/admin FSM state or privileged callback must update its state/authorization tests at the same time.
