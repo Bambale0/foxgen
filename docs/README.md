@@ -20,7 +20,7 @@ This directory documents the executable state of FoxGen on `main`. Source code, 
 | [`input-media-lifecycle.md`](input-media-lifecycle.md) | Telegram input object lifecycle and cleanup requirements |
 | [`minio-lifecycle-runbook.md`](minio-lifecycle-runbook.md) | Compose MinIO lifecycle bootstrap, verification and recovery |
 | [`admin-capability-matrix.md`](admin-capability-matrix.md) | Admin capability/domain/transport matrix |
-| [`admin-control-plane.md`](admin-control-plane.md) | Admin security, HMAC, RBAC, workers and rollout |
+| [`admin-control-plane.md`](admin-control-plane.md) | Admin security, HMAC, RBAC, extensions, workers and rollout |
 | [`security.md`](security.md) | Consolidated trust boundaries and prohibited shortcuts |
 | [`testing-ci.md`](testing-ci.md) | Reproducible CI and local quality gates |
 | [`release-checklist.md`](release-checklist.md) | Pre-merge, pre-deploy and post-deploy checklist |
@@ -33,7 +33,7 @@ This directory documents the executable state of FoxGen on `main`. Source code, 
 
 ## Scope boundary
 
-The public Mini App is intentionally excluded from the current documentation baseline. Backend contracts that may later support an admin web/Mini App are documented as backend capabilities only. Do not infer a finished public UI from those routes.
+The public Mini App is intentionally excluded from the current documentation baseline. The backend-only admin operator web and its extension routes are implemented private operator surfaces; they do not imply a finished public Mini App.
 
 ## Current production architecture
 
@@ -73,11 +73,12 @@ PostgreSQL is the source of truth for generations, billing, outbox/inbox events,
 7. User/provider media remains private; public clients never receive storage credentials.
 8. Production deployment is gated by CI and deploys an exact tested `main` SHA.
 9. An existing source module/branch is not documented as active until it is wired/merged and covered by runtime tests.
-10. Compose-managed MinIO must verify the prefix-scoped temporary `inputs/` lifecycle before API, worker and bot startup.
+10. Specific privileged routes must stay ahead of generic route/callback fallbacks when matching order affects reachability.
+11. Compose-managed MinIO must verify the prefix-scoped temporary `inputs/` lifecycle before API, worker and bot startup.
 
 ## Known limitations are first-class documentation
 
-`known-limitations.md` records discrepancies such as currently unwired admin extension routers and the reserved/inactive `FOXGEN_S3_CREATE_BUCKET` application setting. This prevents roadmap/prepared code from being mistaken for production behavior.
+`known-limitations.md` records unresolved production discrepancies such as the reserved/inactive `FOXGEN_S3_CREATE_BUCKET` application setting. Resolved transport gaps are removed when executable wiring and regression coverage land.
 
 ## How to update documentation
 

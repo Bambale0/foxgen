@@ -241,13 +241,34 @@ Durable transitions cover pending review through approval/payment or rejection. 
 
 ## 13. Admin transport reachability
 
-The shared admin domain layer is implemented, but current runtime reachability is intentionally documented separately from source-module existence.
+The shared admin domain layer and intended transports are registered.
 
-Registered runtime currently includes the main signed admin API router, main backend operator web router and main Telegram admin router.
+FastAPI runtime includes:
 
-Prepared extension modules for direct admin-role management, dedicated analytics, privileged generation preview, XLS exports and several Telegram extra callbacks exist but are not registered by current entrypoints. This is a **transport wiring gap**, not a missing domain-state model.
+```text
+create_admin_router(...)
+create_admin_extensions_router(...)
+create_admin_web_extensions_router(...)
+create_admin_web_router(...)
+```
 
-Tracked by issue #55. Until it is fixed, those extension routes/callbacks are not production-active. See `known-limitations.md`, `api-reference.md` and `admin-capability-matrix.md`.
+The operator-web extension router deliberately precedes the generic base web router so `/analytics` and `/admins` cannot be shadowed by `GET /api/{section}`.
+
+Telegram runtime order is:
+
+```text
+foxgen-admin-extras
+foxgen-admin
+foxgen-quick-start
+foxgen-generation
+foxgen-shell
+```
+
+The extension callbacks therefore run before broad product/shell fallbacks while still performing fresh signed Admin API authorization. Active extras cover dedicated analytics, XLS export and approved-withdrawal/payment shortcut behavior.
+
+Route enumeration plus enabled/disabled HTTP tests and Telegram callback tests protect this reachability contract.
+
+See `api-reference.md`, `admin-capability-matrix.md` and `telegram-flows.md`.
 
 ## Completed implementation sequence
 
@@ -257,16 +278,15 @@ Historical delivery epics/tasks:
 2. #35 — Telegram FSM/recovery matrix — completed.
 3. #36 — durable generation lifecycle — completed.
 4. #37 — outbox/media/delivery/billing reconciliation — completed.
-5. #9 — administrative domain/control-plane core — completed through PR #54, with extension transport wiring separately tracked by #55.
+5. #9 — administrative domain/control-plane core — completed through PR #54.
 6. #50 — temporary input lifecycle automation — Compose MinIO bootstrap/verification and startup gating completed.
+7. #55 — admin extension transport wiring — signed HTTP/operator-web extension routers and Telegram extras registered with reachability/security regression coverage.
 
 ## Remaining known state/ops gaps
 
-At this documentation revision, the explicit state/transport gap is:
+No known durable-state or admin-transport wiring gap remains from the state-gap program above.
 
-1. **#55 — admin extension transport wiring.** Extension service/router modules exist but are not registered by current FastAPI/Telegram entrypoints. Documentation treats only the registered core admin transports as active.
-
-The separate configuration issue #57 tracks the reserved/inactive application setting `FOXGEN_S3_CREATE_BUCKET`; it does not change the Compose-managed MinIO lifecycle behavior described above.
+The separate configuration issue #57 tracks the reserved/inactive application setting `FOXGEN_S3_CREATE_BUCKET`; it does not change the Compose-managed MinIO lifecycle behavior described above and is not a missing durable state transition.
 
 Other future product epics can introduce new model/product/payment/referral states. When they do, this file must be updated at the same time as domain transitions, database constraints and tests.
 

@@ -128,13 +128,13 @@ During `submitting`, duplicate/cancel/back interactions are intentionally restri
 
 `/admin` is a separate privileged Telegram shell. Authorization is server-side; merely knowing callback data cannot grant access.
 
-The **currently registered main admin router** exposes the operational menu for:
+The registered admin routers expose the operational transport for:
 
 - summary/statistics;
 - user lookup, block/unblock and balance actions;
 - finance;
 - payments;
-- partners and withdrawal queue/actions supported by the main router;
+- partners and withdrawal queue/actions;
 - tariffs/pricing;
 - promos;
 - prompt moderation;
@@ -144,21 +144,41 @@ The **currently registered main admin router** exposes the operational menu for:
 - runtime/subscription/model controls;
 - AI diagnostics;
 - CMS;
-- currently wired export actions, including the registered CSV-backed flows exposed by the main adapter/API.
+- CSV export actions;
+- dedicated analytics callback;
+- XLS user/finance exports;
+- approved-withdrawal listing and confirmed payment shortcut.
 
 Every privileged callback/FSM continuation re-checks admin policy through the signed server-side admin API. Destructive/expensive workflows use preview/confirm semantics and shared admin services rather than direct write SQL in Telegram handlers.
 
-### Prepared Telegram admin extras — issue #55
+### Admin router order
 
-`src/foxgen/bot/admin_extras.py` exists in the source tree but its router is **not currently included by `foxgen.bot.app`**. Therefore these prepared callbacks are not active production behavior yet:
+Runtime registration order is explicit:
 
-- dedicated `adm:analytics` callback;
-- XLS export callbacks;
-- approved-withdrawal listing/payment shortcut callbacks.
+```text
+foxgen-admin-extras
+foxgen-admin
+foxgen-quick-start
+foxgen-generation
+foxgen-shell
+```
 
-The underlying shared services remain available. The correct fix is router registration plus reachability/security tests, not duplicate business logic. Until issue #55 is merged, documentation and operators must not rely on those extra callbacks.
+The extension router must remain ahead of the broad product/shell fallbacks. Otherwise a valid copied/issued admin callback can be treated as stale before the privileged handler gets a chance to re-authorize it.
 
-See `admin-control-plane.md`, `admin-capability-matrix.md` and `known-limitations.md`.
+`register_runtime_routers()` centralizes this order so tests can verify it without starting polling or attaching the global routers to a second dispatcher.
+
+### Extension callback security
+
+`src/foxgen/bot/admin_extras.py` is active runtime transport for:
+
+- `adm:analytics` → signed `GET /internal/admin/analytics`;
+- `adm:exportxls:users` / `adm:exportxls:finance` → signed XLS download;
+- `adm:withdrawals:approved` → signed filtered withdrawal read;
+- `adm:wdpay:{withdrawal_id}` → signed confirmed/idempotent `mark_paid` write.
+
+Every one of these callbacks calls Admin API health/authorization first. The payment shortcut generates a fresh idempotency key and sends explicit confirmation through the shared partner action endpoint. No payout state is mutated directly in Telegram code.
+
+See `admin-control-plane.md`, `admin-capability-matrix.md` and `api-reference.md`.
 
 ## Error recovery rules
 
@@ -172,4 +192,4 @@ See `admin-control-plane.md`, `admin-capability-matrix.md` and `known-limitation
 
 ## Testing expectations
 
-Regression coverage includes FSM contract completeness, stale callback recovery, active draft preservation, reference routing, event isolation and main admin authorization. A new generation/admin FSM state must update its state/authorization tests at the same time. Issue #55 additionally requires explicit tests proving the extra admin router is registered before those callbacks are documented as active.
+Regression coverage includes FSM contract completeness, stale callback recovery, active draft preservation, reference routing, event isolation, main admin authorization and extension transport reachability. Admin extension tests verify router order plus analytics, XLS and approved-withdrawal/payment callbacks. A new generation/admin FSM state or privileged callback must update its state/authorization tests at the same time.

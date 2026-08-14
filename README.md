@@ -17,7 +17,7 @@ This README describes code that is merged and reachable in `main`. The public Mi
 - Redis event isolation serializes concurrent updates for one FSM key;
 - Telegram albums are rejected before upload;
 - private object storage for Telegram reference files;
-- server-authorized `/admin` panel.
+- server-authorized `/admin` panel with privileged extension callbacks registered ahead of broad fallbacks.
 
 ### Generation and provider lifecycle
 
@@ -52,11 +52,13 @@ FoxGen has one administrative domain layer exposed through the registered Telegr
 Registered/current capabilities include:
 
 - server-side RBAC policy and bootstrap/durable admin identity model;
+- direct admin identity/role/scope management through signed/private web transports;
+- dedicated admin analytics and privileged generation preview;
 - user lookup, block/unblock and balance adjustment;
 - generation, operation, payment and finance inspection;
 - payment recheck/reprocess with double-credit protection;
 - versioned tariff publishing;
-- partner analytics and withdrawal actions;
+- partner analytics and withdrawal actions, including confirmed/idempotent Telegram payout shortcut;
 - promo management;
 - prompt-library moderation;
 - runtime flags and model availability without deployment;
@@ -65,13 +67,11 @@ Registered/current capabilities include:
 - notification preview/campaign create/test/start/cancel;
 - durable campaign deliveries, retries and rate limiting;
 - trends/feed moderation backend actions;
-- CSV exports;
+- CSV and XLS exports;
 - audit browsing and read-only AI diagnostics;
 - append-only admin command ledger with request/result snapshots and idempotent replay.
 
-Every admin write is server-authorized. Signed HTTP admin requests are network allowlisted and use HMAC-SHA256 over the exact raw body. Destructive or expensive actions require explicit confirmation.
-
-Prepared admin extension modules for direct admin-role management, dedicated analytics, privileged generation preview, XLS exports and several Telegram extra callbacks currently exist in the tree but are **not registered by runtime entrypoints**. They are tracked by issue #55 and documented in [`docs/known-limitations.md`](docs/known-limitations.md). Do not integrate against those extension paths until #55 is merged.
+Every admin write is server-authorized. Signed HTTP admin requests are network allowlisted and use HMAC-SHA256 over the exact raw body. Destructive or expensive actions require explicit confirmation. The operator-web extension router is registered before the generic `/api/{section}` route so dedicated analytics/admin endpoints cannot be shadowed.
 
 ## Architecture at a glance
 
