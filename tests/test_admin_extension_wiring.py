@@ -178,6 +178,7 @@ def test_telegram_extension_router_precedes_product_and_shell_fallbacks() -> Non
     dispatcher = RecordingDispatcher()
     register_runtime_routers(cast(Any, dispatcher))
     assert dispatcher.router_names == [
+        "foxgen-global-commands",
         "foxgen-admin-extras",
         "foxgen-admin",
         "foxgen-quick-start",
