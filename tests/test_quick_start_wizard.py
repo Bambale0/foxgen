@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
-from typing import Any, cast
+from typing import cast
 from unittest.mock import AsyncMock
 
 from aiogram.fsm.context import FSMContext
@@ -10,6 +10,7 @@ from aiogram.types import CallbackQuery
 from foxgen.bot.generation_capabilities import VideoGenerationType
 from foxgen.bot.quick_start_wizard import bridge_reference_to_wizard
 from foxgen.bot.states import GenerationStates
+from foxgen.bot.uploads import TelegramInputMediaStorage
 
 
 class StubState:
@@ -41,6 +42,10 @@ def _callback(data: str) -> SimpleNamespace:
     )
 
 
+def _input_media() -> TelegramInputMediaStorage:
+    return cast(TelegramInputMediaStorage, SimpleNamespace())
+
+
 async def test_image_quick_start_keeps_reference_and_enters_image_model_screen() -> None:
     state = StubState(
         {
@@ -59,6 +64,7 @@ async def test_image_quick_start_keeps_reference_and_enters_image_model_screen()
     await bridge_reference_to_wizard(
         cast(CallbackQuery, callback),
         cast(FSMContext, state),
+        _input_media(),
     )
 
     assert state.current == GenerationStates.image_selecting_model.state
@@ -92,6 +98,7 @@ async def test_video_quick_start_prefers_multimodal_references_for_video_source(
     await bridge_reference_to_wizard(
         cast(CallbackQuery, callback),
         cast(FSMContext, state),
+        _input_media(),
     )
 
     assert state.current == GenerationStates.video_selecting_model.state
