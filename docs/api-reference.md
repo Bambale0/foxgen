@@ -10,9 +10,9 @@ FoxGen uses separate credentials for separate trust boundaries.
 
 Health and model catalog/validation routes do not create paid work.
 
-### Trusted internal generation caller
+### Trusted internal user caller
 
-Paid generation/balance user-context routes require the configured internal bearer token. User-scoped routes also bind the request to `X-FoxGen-User-Id`. Paid task creation requires `Idempotency-Key`.
+Paid generation/balance and publication/profile user-context routes require the configured internal bearer token. User-scoped routes also bind the request to `X-FoxGen-User-Id`. Paid task creation requires `Idempotency-Key`.
 
 ### Legacy billing administrator
 
@@ -58,6 +58,8 @@ Admin writes require `Idempotency-Key`. Destructive/expensive writes additionall
 
 Paid task admission validates authentication, positive user identity, idempotency, strict model contract, registry/runtime availability, rate/concurrency limits, active price and sufficient balance before generation/reservation/outbox commit.
 
+A paid remix additionally sends `X-FoxGen-Source-Publication-Id`. The source publication ID is included in the idempotency fingerprint and its `generation_lineage` row is committed atomically with balance reservation/outbox. It is FoxGen metadata and is not forwarded inside the provider input payload.
+
 ## Billing and wallet
 
 | Method | Path | Auth | Purpose |
@@ -81,6 +83,37 @@ Paid task admission validates authentication, positive user identity, idempotenc
 | POST | `/v1/admin/generations/{id}/resolve-delivery` | legacy billing admin | Manual `delivery_unknown` resolution |
 
 Cancellation is rejected once provider submission may have started. Unknown provider/Telegram outcomes are never resolved through blind retry.
+
+## Feed, public profiles and remix
+
+All routes in this section require trusted internal Bearer authentication plus `X-FoxGen-User-Id`. `X-FoxGen-Username` is optional presentation metadata; it never replaces authenticated user identity.
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/v1/feed` | Active global feed; `sort=recent|top_day|top`, bounded `limit/offset` |
+| GET | `/v1/publications/{publication_id}` | Active publication detail with derivative prompt redaction |
+| GET | `/v1/publications/{publication_id}/media` | Fresh short-lived signed durable-result media URLs |
+| GET | `/v1/publications/{publication_id}/remix` | Server-validated remix source contract |
+| PUT | `/v1/publications/{publication_id}/like` | Set like state idempotently with `{"liked": true|false}` |
+| GET | `/v1/publications/{publication_id}/comments` | Read comments for explicit `surface=feed|profile` |
+| POST | `/v1/publications/{publication_id}/comments` | Add a surface-scoped comment |
+| GET | `/v1/profiles/{slug}` | Public profile detail |
+| GET | `/v1/profiles/{slug}/publications` | Active profile publications |
+| GET | `/v1/me/profile` | Ensure/read own public profile |
+| PUT | `/v1/me/profile` | Update own slug/display name/bio |
+| GET | `/v1/me/publications` | Own publication management view, including inactive rows |
+| POST | `/v1/generations/{generation_id}/publications` | Publish an eligible generation to `feed` or `profile` |
+| DELETE | `/v1/generations/{generation_id}/publications/{scope}` | Idempotently deactivate own publication |
+
+Publication is a social projection only. The server requires generation ownership, `succeeded` status and all required `media_assets` to be `stored`. The operation does not mutate billing, provider state or result storage.
+
+Derivative generations are rejected from the global `feed`. They may be published to `profile`, but public serialization forces `prompt=null` and `prompt_actions_allowed=false`; the server also rejects using a derivative publication as a new remix source.
+
+Publication media endpoints sign existing private S3-compatible `media_assets.storage_key` values. Provider temporary URLs are not copied into publication state and storage credentials are never returned.
+
+Likes are state-setting rather than counter toggles: `(publication_id,user_id)` is unique and the count is re-read after insert/delete. Comments are validated against the publication surface so feed/profile threads cannot leak across surfaces.
+
+See `feed-profile-remix.md` for the domain model, Telegram flow and explicit compromises.
 
 # Registered signed internal admin API
 
@@ -297,4 +330,4 @@ signature = hex(HMAC-SHA256(admin_hmac_key, canonical))
 
 Do not JSON-reserialize after signing. Query parameters are not included in the current canonical signature string; the URL path is.
 
-See `admin-control-plane.md`, `admin-capability-matrix.md` and `known-limitations.md` for the active admin contract and remaining production limitations.
+See `admin-control-plane.md`, `admin-capability-matrix.md`, `feed-profile-remix.md` and `known-limitations.md` for the active contracts and remaining production limitations.
