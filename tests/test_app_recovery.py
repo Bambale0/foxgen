@@ -1,9 +1,10 @@
 from typing import Any, cast
 
+import pytest
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
-from foxgen.bot.app import fallback_message, stale_callback
+from foxgen.bot.app import fallback_message, show_menu, stale_callback
 from foxgen.bot.states import GenerationStates
 from foxgen.bot.uploads import InputCleanupResult, TelegramInputMediaStorage
 
@@ -50,6 +51,29 @@ class StubMessage:
 
     async def answer(self, text: str, **kwargs: Any) -> None:
         self.answers.append((text, kwargs))
+
+
+@pytest.mark.parametrize("current", [state.state for state in GenerationStates.__all_states__])
+async def test_start_interrupts_every_generation_state_and_cleans_inputs(current: str) -> None:
+    state = StubState(
+        current,
+        data={"media": [{"kind": "image", "storage_key": "inputs/7/file.jpg"}]},
+    )
+    message = StubMessage()
+    media = StubInputMedia()
+
+    await show_menu(
+        cast(Message, message),
+        cast(FSMContext, state),
+        cast(TelegramInputMediaStorage, media),
+    )
+
+    assert state.cleared is True
+    assert state.current is None
+    assert media.deleted == ("inputs/7/file.jpg",)
+    assert message.answers
+    assert message.answers[0][0].startswith("<b>FoxGen</b>")
+    assert "reply_markup" in message.answers[0][1]
 
 
 async def test_stale_callback_does_not_destroy_an_active_draft() -> None:
