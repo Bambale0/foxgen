@@ -20,6 +20,7 @@ from foxgen.bot.fsm_contract import contract_for
 from foxgen.bot.generation_wizard import router as generation_wizard_router
 from foxgen.bot.keyboards import main_menu
 from foxgen.bot.quick_start import router as quick_start_router
+from foxgen.bot.quick_start_wizard import router as quick_start_wizard_router
 from foxgen.bot.uploads import TelegramInputMediaStorage, stored_input_keys
 from foxgen.core.config import Settings, get_settings
 from foxgen.infra.input_media import LocalInputMediaStorage
@@ -173,16 +174,16 @@ def create_event_isolation(storage: RedisStorage) -> BaseEventIsolation:
 def register_runtime_routers(dispatcher: Dispatcher) -> None:
     """Register interrupt commands first, then privileged/product routers and fallbacks."""
 
-    # /start and /menu are hard interrupts: they must run before any state-specific
-    # text handler (and before admin/product routers) so an active FSM can never
-    # swallow the command as ordinary user input.
+    # /start and /menu are hard interrupts and therefore stay ahead of every FSM.
     dispatcher.include_router(global_commands_router)
     dispatcher.include_router(admin_extras_router)
     dispatcher.include_router(admin_router)
-    # The screen wizard owns ordinary create:image/create:video callbacks and its
-    # confirmation/back handlers. Keep it before Quick Start and the legacy flow
-    # router so one callback can never be consumed by the old generic state machine.
+    # Quick Start already owns reference upload. This bridge only replaces its
+    # post-upload product/model/settings branch with the same screen wizard used
+    # by ordinary Create Image / Create Video entrypoints.
+    dispatcher.include_router(quick_start_wizard_router)
     dispatcher.include_router(generation_wizard_router)
+    # Keep old routers after the wizard for deployed Redis draft compatibility.
     dispatcher.include_router(quick_start_router)
     dispatcher.include_router(generation_router)
     dispatcher.include_router(router)
