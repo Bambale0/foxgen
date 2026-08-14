@@ -16,6 +16,7 @@ from foxgen.bot.admin_extras import router as admin_extras_router
 from foxgen.bot.api_client import FoxGenApiClient
 from foxgen.bot.callbacks import safe_edit_callback_message
 from foxgen.bot.feed import handle_start_payload, router as feed_router
+from foxgen.bot.feed_publish import router as feed_publish_router
 from foxgen.bot.feed_remix import router as feed_remix_router
 from foxgen.bot.flows import router as generation_router
 from foxgen.bot.fsm_contract import contract_for
@@ -190,6 +191,7 @@ def register_runtime_routers(dispatcher: Dispatcher) -> None:
     dispatcher.include_router(admin_extras_router)
     dispatcher.include_router(admin_router)
     dispatcher.include_router(feed_router)
+    dispatcher.include_router(feed_publish_router)
     dispatcher.include_router(feed_remix_router)
     dispatcher.include_router(quick_start_router)
     dispatcher.include_router(generation_router)
