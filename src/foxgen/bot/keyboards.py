@@ -18,6 +18,7 @@ def main_menu() -> InlineKeyboardMarkup:
                 InlineKeyboardButton(text="🌐 Лента", callback_data="feed:open"),
                 InlineKeyboardButton(text="👤 Профиль", callback_data="feed:profile:me"),
             ],
+            [InlineKeyboardButton(text="📣 Опубликовать генерацию", callback_data="feed:publish:start")],
             [InlineKeyboardButton(text="Мини апп", callback_data="planned:mini_app")],
             [InlineKeyboardButton(text="Быстрый запуск", callback_data="quick:start")],
             [
