@@ -8,6 +8,7 @@ from scripts.configure_minio_input_lifecycle import (
     RULE_ID,
     configure_lifecycle,
     lifecycle_rule_matches,
+    lifecycle_rule_matches_without_abort,
     merge_lifecycle_rules,
 )
 
@@ -51,6 +52,24 @@ class NonPersistingS3Client(FakeS3Client):
     ) -> dict[str, Any]:
         assert Bucket == "foxgen-media"
         self.put_calls += 1
+        return {}
+
+
+class MinioCompatibleS3Client(FakeS3Client):
+    def put_bucket_lifecycle_configuration(
+        self,
+        *,
+        Bucket: str,
+        LifecycleConfiguration: dict[str, Any],
+    ) -> dict[str, Any]:
+        assert Bucket == "foxgen-media"
+        self.put_calls += 1
+        rules = []
+        for rule in LifecycleConfiguration["Rules"]:
+            normalized = dict(rule)
+            normalized.pop("AbortIncompleteMultipartUpload", None)
+            rules.append(normalized)
+        self.rules = rules
         return {}
 
 
@@ -126,6 +145,24 @@ def test_configure_lifecycle_fails_closed_when_readback_does_not_match() -> None
         )
 
 
+def test_configure_lifecycle_accepts_minio_readback_without_abort_block() -> None:
+    client = MinioCompatibleS3Client()
+
+    configure_lifecycle(
+        client,
+        bucket="foxgen-media",
+        retention_days=2,
+        multipart_abort_days=1,
+    )
+
+    matching = [rule for rule in client.rules if rule.get("ID") == RULE_ID]
+    assert len(matching) == 1
+    assert lifecycle_rule_matches_without_abort(
+        matching[0],
+        retention_days=2,
+    )
+
+
 def test_both_compose_stacks_gate_app_services_on_verified_lifecycle() -> None:
     root = Path(__file__).resolve().parents[1]
     development = (root / "docker-compose.yml").read_text(encoding="utf-8")
@@ -136,6 +173,8 @@ def test_both_compose_stacks_gate_app_services_on_verified_lifecycle() -> None:
         assert "scripts/configure_minio_input_lifecycle.py" in compose
         assert "FOXGEN_INPUT_RETENTION_DAYS" in compose
         assert "FOXGEN_INPUT_MULTIPART_ABORT_DAYS" in compose
+        assert "MINIO_API_STALE_UPLOADS_EXPIRY" in compose
+        assert "MINIO_API_STALE_UPLOADS_CLEANUP_INTERVAL" in compose
         assert "condition: service_completed_successfully" in compose
         assert "minio/mc:" not in compose
 
