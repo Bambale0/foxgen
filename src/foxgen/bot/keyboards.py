@@ -1,4 +1,4 @@
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 
 from foxgen.bot.catalog import (
     IMAGE_ASPECT_RATIOS,
@@ -7,14 +7,37 @@ from foxgen.bot.catalog import (
     GenerationMode,
     Product,
 )
+from foxgen.core.config import Settings, get_settings
 
 
-def main_menu() -> InlineKeyboardMarkup:
-    """Return the product menu in the approved row order plus Quick Start."""
+def resolve_miniapp_url(settings: Settings | None = None) -> str | None:
+    """Return the public Happy Fox Mini App URL when Telegram can reach it."""
+
+    resolved = settings or get_settings()
+    if not resolved.miniapp_enabled or resolved.kie_callback_base_url is None:
+        return None
+    base_url = str(resolved.kie_callback_base_url).rstrip("/")
+    return f"{base_url}/mini-app/"
+
+
+def main_menu(*, miniapp_url: str | None = None) -> InlineKeyboardMarkup:
+    """Return the product menu with the real Happy Fox WebApp entrypoint."""
+
+    resolved_miniapp_url = miniapp_url or resolve_miniapp_url()
+    if resolved_miniapp_url is not None:
+        miniapp_button = InlineKeyboardButton(
+            text="🦊 Открыть Happy Fox",
+            web_app=WebAppInfo(url=resolved_miniapp_url),
+        )
+    else:
+        miniapp_button = InlineKeyboardButton(
+            text="🦊 Happy Fox Mini App",
+            callback_data="miniapp:unavailable",
+        )
 
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="Мини апп", callback_data="planned:mini_app")],
+            [miniapp_button],
             [InlineKeyboardButton(text="Быстрый запуск", callback_data="quick:start")],
             [
                 InlineKeyboardButton(text="Создать видео", callback_data="create:video"),
