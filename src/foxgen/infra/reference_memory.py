@@ -205,6 +205,16 @@ class SqlAlchemyReferenceMemoryRepository:
             )
             return tuple(_snapshot(asset) for asset in assets)
 
+    async def get_active_by_id(self, asset_id: UUID) -> ReferenceAssetSnapshot | None:
+        async with self._database.session() as session:
+            asset = await session.scalar(
+                select(ReferenceAsset).where(
+                    ReferenceAsset.id == asset_id,
+                    ReferenceAsset.status == "active",
+                )
+            )
+            return _snapshot(asset) if asset is not None else None
+
     async def schedule_delete(
         self,
         *,
