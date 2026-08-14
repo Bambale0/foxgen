@@ -125,6 +125,8 @@ services:
       - foxgen-api
     ports:
       - 127.0.0.1:${FOXGEN_PUBLIC_API_PORT:-8080}:8080
+    volumes:
+      - input_media_data:/var/lib/foxgen/input-media
     healthcheck:
       test:
         - CMD
@@ -159,6 +161,8 @@ services:
     <<: *app-service
     command:
       - foxgen-bot
+    volumes:
+      - input_media_data:/var/lib/foxgen/input-media
     depends_on:
       postgres:
         condition: service_healthy
@@ -173,6 +177,7 @@ volumes:
   postgres_data:
   redis_data:
   minio_data:
+  input_media_data:
 
 networks:
   backend:

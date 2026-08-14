@@ -4,7 +4,6 @@ import logging
 from aiogram import Bot, Dispatcher, F, Router
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
-from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command, CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.storage.base import BaseEventIsolation
@@ -15,14 +14,14 @@ from foxgen.bot.admin import router as admin_router
 from foxgen.bot.admin_api_client import AdminApiClient
 from foxgen.bot.admin_extras import router as admin_extras_router
 from foxgen.bot.api_client import FoxGenApiClient
+from foxgen.bot.callbacks import safe_edit_callback_message
 from foxgen.bot.flows import router as generation_router
 from foxgen.bot.fsm_contract import contract_for
 from foxgen.bot.keyboards import main_menu
 from foxgen.bot.quick_start import router as quick_start_router
 from foxgen.bot.uploads import TelegramInputMediaStorage, stored_input_keys
 from foxgen.core.config import Settings, get_settings
-from foxgen.infra.media import S3MediaStorage
-
+from foxgen.infra.input_media import LocalInputMediaStorage
 
 logger = logging.getLogger(__name__)
 router = Router(name="foxgen-shell")
@@ -64,13 +63,7 @@ async def return_to_menu(
     input_media: TelegramInputMediaStorage,
 ) -> None:
     await clear_state_with_inputs(state, input_media)
-    if callback.message:
-        try:
-            await callback.message.edit_text("Главное меню", reply_markup=main_menu())
-        except TelegramBadRequest as exc:
-            if "message is not modified" not in str(exc):
-                raise
-    await callback.answer()
+    await safe_edit_callback_message(callback, "Главное меню", main_menu())
 
 
 @router.callback_query(F.data == "nav:cancel")
@@ -80,26 +73,21 @@ async def cancel_flow(
     input_media: TelegramInputMediaStorage,
 ) -> None:
     await clear_state_with_inputs(state, input_media)
-    if callback.message:
-        await callback.message.edit_text(
-            "Действие отменено. Главное меню:",
-            reply_markup=main_menu(),
-        )
-    await callback.answer("Отменено")
+    await safe_edit_callback_message(
+        callback,
+        "Действие отменено. Главное меню:",
+        main_menu(),
+        answer_text="Отменено",
+    )
 
 
 @router.callback_query(F.data.startswith("planned:"))
 async def planned_section(callback: CallbackQuery) -> None:
-    if callback.message:
-        try:
-            await callback.message.edit_text(
-                "Раздел уже включён в дорожную карту и будет подключён отдельным PR.",
-                reply_markup=main_menu(),
-            )
-        except TelegramBadRequest as exc:
-            if "message is not modified" not in str(exc):
-                raise
-    await callback.answer()
+    await safe_edit_callback_message(
+        callback,
+        "Раздел уже включён в дорожную карту и будет подключён отдельным PR.",
+        main_menu(),
+    )
 
 
 @router.callback_query()
@@ -122,14 +110,12 @@ async def stale_callback(
         show_alert=True,
     )
     if callback.message:
-        try:
-            await callback.message.edit_text(
-                "Черновик уже недоступен. Главное меню:",
-                reply_markup=main_menu(),
-            )
-        except TelegramBadRequest as exc:
-            if "message is not modified" not in str(exc):
-                raise
+        await safe_edit_callback_message(
+            callback,
+            "Черновик уже недоступен. Главное меню:",
+            main_menu(),
+            answer_callback=False,
+        )
 
 
 @router.message()
@@ -219,24 +205,12 @@ async def run(settings: Settings | None = None) -> None:
             hmac_key=resolved.admin_hmac_key.get_secret_value(),
             timeout_seconds=resolved.internal_api_timeout_seconds,
         )
-    media_storage = S3MediaStorage(
-        bucket=resolved.s3_bucket,
-        region=resolved.s3_region,
-        endpoint_url=(
-            str(resolved.s3_endpoint_url) if resolved.s3_endpoint_url is not None else None
-        ),
-        access_key_id=(
-            resolved.s3_access_key_id.get_secret_value()
-            if resolved.s3_access_key_id is not None
-            else None
-        ),
-        secret_access_key=(
-            resolved.s3_secret_access_key.get_secret_value()
-            if resolved.s3_secret_access_key is not None
-            else None
-        ),
-        force_path_style=resolved.s3_force_path_style,
+    media_storage = LocalInputMediaStorage(
+        root=resolved.telegram_input_storage_root,
+        public_base_url=resolved.telegram_input_public_base_url,
+        signing_secret=internal_token.get_secret_value(),
         presigned_url_ttl_seconds=resolved.telegram_input_presigned_url_ttl_seconds,
+        retention_seconds=resolved.telegram_input_retention_seconds,
     )
     input_media = TelegramInputMediaStorage(
         storage=media_storage,

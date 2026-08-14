@@ -26,10 +26,16 @@ class Settings(BaseSettings):
         ge=1_048_576,
         le=2_147_483_648,
     )
+    telegram_input_storage_root: str = "/var/lib/foxgen/input-media"
     telegram_input_presigned_url_ttl_seconds: int = Field(
         default=21_600,
         ge=300,
         le=604_800,
+    )
+    telegram_input_retention_seconds: int = Field(
+        default=172_800,
+        ge=3_600,
+        le=2_592_000,
     )
 
     database_url: str = "postgresql+asyncpg://foxgen:foxgen@localhost:5432/foxgen"
@@ -92,6 +98,12 @@ class Settings(BaseSettings):
         if self.kie_callback_base_url is None:
             return None
         return f"{str(self.kie_callback_base_url).rstrip('/')}/webhooks/kie"
+
+    @property
+    def telegram_input_public_base_url(self) -> str:
+        if self.kie_callback_base_url is not None:
+            return str(self.kie_callback_base_url).rstrip("/")
+        return str(self.internal_api_base_url).rstrip("/")
 
     @property
     def admin_superuser_id_set(self) -> frozenset[int]:

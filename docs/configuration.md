@@ -20,9 +20,11 @@ This document groups settings by responsibility. Exact application validation ra
 | `FOXGEN_TELEGRAM_BOT_TOKEN` | empty | Bot credential; required to run `foxgen-bot` |
 | `FOXGEN_TELEGRAM_FSM_TTL_SECONDS` | `3600` | Redis state/data TTL |
 | `FOXGEN_TELEGRAM_INPUT_MAX_BYTES` | `52428800` | Maximum accepted input upload size |
-| `FOXGEN_TELEGRAM_INPUT_PRESIGNED_URL_TTL_SECONDS` | `21600` | Provider-readable URL lifetime for stored input references |
+| `FOXGEN_TELEGRAM_INPUT_STORAGE_ROOT` | `/var/lib/foxgen/input-media` | Private shared filesystem root for Telegram input files |
+| `FOXGEN_TELEGRAM_INPUT_PRESIGNED_URL_TTL_SECONDS` | `21600` | Provider-readable signed URL lifetime for stored input references |
+| `FOXGEN_TELEGRAM_INPUT_RETENTION_SECONDS` | `172800` | Best-effort local cleanup horizon for abandoned Telegram input files |
 
-Telegram input objects are private. See `input-media-lifecycle.md` for cleanup requirements.
+Telegram input files are private. `FOXGEN_KIE_CALLBACK_BASE_URL` is reused as the public origin for provider-readable signed download URLs when present; otherwise FoxGen falls back to `FOXGEN_INTERNAL_API_BASE_URL`. In production, keep the callback base URL configured so providers can fetch the reference through the public API host.
 
 ## PostgreSQL and Redis
 
@@ -119,7 +121,7 @@ The worker retry budget does not authorize a second billable provider POST. Prov
 | `FOXGEN_S3_SECRET_ACCESS_KEY` | empty | Storage credential |
 | `FOXGEN_S3_FORCE_PATH_STYLE` | `true` | Compatibility switch for MinIO/S3 implementations |
 
-`S3MediaStorage` intentionally does **not** create buckets during API requests, bot flows or worker execution. Bucket provisioning is an infrastructure responsibility:
+`S3MediaStorage` intentionally does **not** create buckets during API requests, bot flows or worker execution. It is used for durable generated result media, while Telegram input references now live in the private local input-storage root above. Bucket provisioning is an infrastructure responsibility:
 
 - repository Compose uses `minio-init` to create the bundled private MinIO bucket before application services start;
 - deployments using an external S3-compatible endpoint must provision the private bucket before FoxGen startup and grant only the required object/lifecycle permissions;
