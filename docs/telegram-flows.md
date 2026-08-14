@@ -17,13 +17,26 @@ Regression tests enumerate every declared `GenerationStates` value, so adding a 
 
 ## Screen-FSM design
 
-The normal image/video UX follows the proven screen pattern used in `banano_kling:tanyapi`:
+The normal image/video UX follows a compact screen contract derived from the proven `banano_kling` `v7_kate` interaction pattern:
 
 ```text
 screen = renderer + keyboard + state + transitions
 ```
 
-All temporary choices live in `FSMContext`. There are no process-global per-user draft dictionaries. A draft stores a stable `wizard_version`, a visible `*_flow_step`, selected UI model, model-specific settings, temporary media keys, prompt, idempotency key and the latest price/balance result.
+User-facing generation screens are single-purpose and are not numbered `1/4`, `2/4`, `1/5`, and so on. Titles describe the current action directly, for example:
+
+```text
+🖼 Создание фото
+🎬 Создание видео
+📎 Референсы
+⚙️ Параметры фото / видео
+📝 Промпт для фото / видео
+✅ Проверьте генерацию
+```
+
+All temporary choices live in `FSMContext`. There are no process-global per-user draft dictionaries. A draft stores a stable `wizard_version`, a visible `*_flow_step`, selected UI model, model-specific settings, temporary media keys, prompt, idempotency key, the latest price/balance result and, while useful, the Telegram chat/message id of the current control screen.
+
+The remembered control-message id is presentation state only. It does not own media and is never durable business state. If Telegram can no longer edit that message, the bot creates one replacement control message and remembers the new id.
 
 Capabilities and provider payload construction are separate from Telegram rendering:
 
@@ -34,16 +47,46 @@ generation_screens.py       -> text/keyboards for each user-visible screen
 generation_wizard.py        -> transitions only
 ```
 
+## Compact reference-screen contract
+
+Image and video reference/media screens use the same visual hierarchy:
+
+```text
+📎 Референсы
+
+Загружено: X/Y
+<short instruction for the selected model/scenario>
+
+[        Загружено: X/Y        ]
+[ ⏭ Пропустить ] [ ✅ Продолжить ]   # when skipping is valid
+[       🔄 Перезагрузить       ]
+[          ⬅️ Назад            ]
+```
+
+Important behavior:
+
+- `X/Y` is live and re-rendered after accepted uploads;
+- `Y` comes from FoxGen capability/contract data, not from a global hard-coded value;
+- `🔄 Перезагрузить` deletes all current temporary inputs for that screen and redraws it at zero;
+- image `⏭ Пропустить` means continue **without** references; if the user already uploaded temporary references, they are deleted first;
+- required video scenarios keep `✅ Продолжить` visible for a stable layout, but pressing it before the required media is complete returns the exact requirement as a Telegram alert and does not advance state;
+- `⬅️ Назад` is the only persistent bottom navigation button on generation sub-screens;
+- `/start` and `/menu` remain the global safe reset/exit paths, so a duplicate `❌ Отмена` row is not required on every sub-screen.
+
+After an upload, FoxGen tries to edit the remembered control message instead of sending another keyboard block. This prevents a long stack of stale controls in chat. A Telegram edit failure falls back to a new control message without changing media ownership or provider state.
+
+The screenshot-inspired `📚 Память реф` affordance is **not** presented until FoxGen has a real persistent saved-reference domain. Current temporary generation inputs are not silently promoted to durable user assets.
+
 ## Create image
 
-New image flow:
+Image flow:
 
 ```text
 main menu -> Создать фото
-  -> 1/4 model
-  -> 2/4 optional references
-  -> 3/4 dynamic model settings
-  -> 4/4 prompt
+  -> model
+  -> optional references with live X/Y
+  -> dynamic model settings
+  -> prompt
   -> live price + balance confirmation
   -> authenticated paid admission
 ```
@@ -56,6 +99,12 @@ The UI model is intentionally separate from the provider slug. For example, the 
 - one or more references -> `seedream-5-pro-edit`.
 
 This removes a redundant text/edit mode screen while preserving the provider's distinct validated contracts.
+
+Current reference limits are capability-driven. Examples from the current production wizard contract:
+
+- Seedream 5 Pro: up to 10 image references;
+- Nano Banana 2: up to 14 image references;
+- Nano Banana Pro: up to 14 image references.
 
 Current production wizard coverage is required by test to equal the production-enabled KIE submission allowlist. The wizard currently covers:
 
@@ -70,7 +119,7 @@ seedance-2-mini
 
 ### Dynamic image settings
 
-Settings are capability-driven and update on the same screen.
+Settings are capability-driven and update on the same control message.
 
 Examples:
 
@@ -81,15 +130,15 @@ A model never receives a UI option that is absent from its verified local provid
 
 ## Create video
 
-New video flow:
+Video flow:
 
 ```text
 main menu -> Создать видео
-  -> 1/5 model
-  -> 2/5 input type
-  -> 3/5 media when required
-  -> 4/5 dynamic model settings
-  -> 5/5 prompt
+  -> model
+  -> input type
+  -> media/reference screen when required
+  -> dynamic model settings
+  -> prompt
   -> live price + balance confirmation
   -> authenticated paid admission
 ```
@@ -104,6 +153,12 @@ first_frame
 first_last
 references
 ```
+
+The live media limit follows the scenario:
+
+- `first_frame`: 1 image;
+- `first_last`: 2 ordered images;
+- `references`: up to the local total multimodal reference limit (currently 6), additionally constrained by per-type model limits.
 
 `first_last` preserves upload order: the first uploaded image becomes `first_frame_url`, the second becomes `last_frame_url`.
 
@@ -204,7 +259,7 @@ video model <- type <- media/settings <- settings <- prompt <- confirmation
 
 For text-only video, Back from settings returns to input type because there is no media screen.
 
-Invalid messages do not destroy a valid draft. Button-only screens tell the user to use the current buttons; media screens restate their exact media requirement; prompt screens request text. An unrelated stale callback keeps a known active state and points the user to the latest controls.
+Invalid messages do not destroy a valid draft. Button-only screens tell the user to use the current buttons; media screens restate their exact media requirement and refresh the current controls; prompt screens request text. An unrelated stale callback keeps a known active state and points the user to the latest controls.
 
 ## Confirmation and billing
 
@@ -242,8 +297,9 @@ Each draft owns one stable `idempotency_key`. During `submitting`, repeated laun
 - unsupported documents fail as user validation errors;
 - input size is bounded by `FOXGEN_TELEGRAM_INPUT_MAX_BYTES`;
 - upload/storage failures do not advance the screen;
-- temporary files stay private and are cleaned on `/start`, `/menu`, cancel and explicit replacement/clear paths;
-- signed provider-readable URLs are generated only near final admission.
+- temporary files stay private and are cleaned on `/start`, `/menu`, cancel/reset, explicit reload, reference replacement and skip-without-reference paths;
+- signed provider-readable URLs are generated only near final admission;
+- editing/replacing a Telegram control message never changes temporary-file ownership.
 
 See `input-media-lifecycle.md`.
 
@@ -266,7 +322,7 @@ Reasons:
 
 - global commands must preempt every FSM;
 - Quick Start bridge must intercept post-upload product/back actions before legacy Quick Start handlers;
-- the new generation wizard must own ordinary `create:image`, `create:video`, its settings/back/confirmation callbacks before the generic legacy generation router;
+- the generation wizard must own ordinary `create:image`, `create:video`, its settings/back/confirmation callbacks before the generic legacy generation router;
 - legacy routers remain reachable only for older Redis drafts and unchanged reference ingestion paths;
 - shell catch-all remains last.
 
@@ -283,6 +339,8 @@ The generation screen change is incomplete unless tests preserve:
 - `STATE_CONTRACTS == all declared GenerationStates`;
 - `/start` interruption for every declared state;
 - exact runtime router order;
+- compact reference keyboard layout and live model/scenario counters;
+- no numbered wizard titles on the new screen flow;
 - wizard provider-slug coverage equals all production-enabled KIE submission models;
 - Seedream text/edit slug selection by reference presence;
 - per-model dynamic settings visibility;

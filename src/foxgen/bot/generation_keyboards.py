@@ -25,39 +25,30 @@ def image_model_keyboard(current: str | None = None) -> InlineKeyboardMarkup:
                 )
             ]
         )
-    rows.extend(_back_cancel_rows())
+    rows.extend(_back_rows())
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def image_reference_keyboard(*, count: int, max_count: int) -> InlineKeyboardMarkup:
-    rows: list[list[InlineKeyboardButton]] = []
-    if count:
-        rows.append(
-            [
-                InlineKeyboardButton(
-                    text=f"✅ Референсы добавлены ({count}/{max_count})",
-                    callback_data="gw:i:refs:done",
-                )
-            ]
-        )
-        rows.append(
-            [
-                InlineKeyboardButton(
-                    text="🗑 Очистить референсы",
-                    callback_data="gw:i:refs:clear",
-                )
-            ]
-        )
-    else:
-        rows.append(
-            [
-                InlineKeyboardButton(
-                    text="Пропустить без референсов",
-                    callback_data="gw:i:refs:skip",
-                )
-            ]
-        )
-    rows.extend(_back_cancel_rows())
+    rows = [
+        [
+            InlineKeyboardButton(
+                text=f"Загружено: {count}/{max_count}",
+                callback_data="gw:i:refs:status",
+            )
+        ],
+        [
+            InlineKeyboardButton(text="⏭ Пропустить", callback_data="gw:i:refs:skip"),
+            InlineKeyboardButton(text="✅ Продолжить", callback_data="gw:i:refs:done"),
+        ],
+        [
+            InlineKeyboardButton(
+                text="🔄 Перезагрузить",
+                callback_data="gw:i:refs:clear",
+            )
+        ],
+    ]
+    rows.extend(_back_rows())
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
@@ -109,8 +100,8 @@ def image_settings_keyboard(
                 for value in capability.output_formats
             ]
         )
-    rows.append([InlineKeyboardButton(text="Продолжить →", callback_data="gw:i:settings:done")])
-    rows.extend(_back_cancel_rows())
+    rows.append([InlineKeyboardButton(text="✅ Продолжить", callback_data="gw:i:settings:done")])
+    rows.extend(_back_rows())
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
@@ -126,7 +117,7 @@ def video_model_keyboard(current: str | None = None) -> InlineKeyboardMarkup:
                 )
             ]
         )
-    rows.extend(_back_cancel_rows())
+    rows.extend(_back_rows())
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
@@ -149,7 +140,7 @@ def video_type_keyboard(
         ]
         for item in capability.generation_types
     ]
-    rows.extend(_back_cancel_rows())
+    rows.extend(_back_rows())
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
@@ -157,24 +148,31 @@ def video_media_keyboard(
     *,
     generation_type: VideoGenerationType,
     count: int,
+    max_count: int,
     can_continue: bool,
 ) -> InlineKeyboardMarkup:
-    rows: list[list[InlineKeyboardButton]] = []
-    if can_continue:
-        label = "Продолжить →"
-        if generation_type == VideoGenerationType.REFERENCES:
-            label = f"✅ Референсы добавлены ({count})"
-        rows.append([InlineKeyboardButton(text=label, callback_data="gw:v:media:done")])
-    if count:
-        rows.append(
-            [
-                InlineKeyboardButton(
-                    text="🗑 Очистить медиа",
-                    callback_data="gw:v:media:clear",
-                )
-            ]
+    del can_continue
+    rows: list[list[InlineKeyboardButton]] = [
+        [
+            InlineKeyboardButton(
+                text=f"Загружено: {count}/{max_count}",
+                callback_data="gw:v:media:status",
+            )
+        ],
+        [InlineKeyboardButton(text="✅ Продолжить", callback_data="gw:v:media:done")],
+        [
+            InlineKeyboardButton(
+                text="🔄 Перезагрузить",
+                callback_data="gw:v:media:clear",
+            )
+        ],
+    ]
+    if generation_type == VideoGenerationType.TEXT:
+        rows.insert(
+            1,
+            [InlineKeyboardButton(text="⏭ Пропустить", callback_data="gw:v:media:done")],
         )
-    rows.extend(_back_cancel_rows())
+    rows.extend(_back_rows())
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
@@ -240,13 +238,13 @@ def video_settings_keyboard(
         )
     for index in range(0, len(toggles), 2):
         rows.append(toggles[index : index + 2])
-    rows.append([InlineKeyboardButton(text="Продолжить →", callback_data="gw:v:settings:done")])
-    rows.extend(_back_cancel_rows())
+    rows.append([InlineKeyboardButton(text="✅ Продолжить", callback_data="gw:v:settings:done")])
+    rows.extend(_back_rows())
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def prompt_keyboard() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(inline_keyboard=_back_cancel_rows())
+    return InlineKeyboardMarkup(inline_keyboard=_back_rows())
 
 
 def _choice_rows(
@@ -269,8 +267,5 @@ def _choice_rows(
     return [buttons[index : index + width] for index in range(0, len(buttons), width)]
 
 
-def _back_cancel_rows() -> list[list[InlineKeyboardButton]]:
-    return [
-        [InlineKeyboardButton(text="⬅️ Назад", callback_data="gw:back")],
-        [InlineKeyboardButton(text="❌ Отмена", callback_data="nav:cancel")],
-    ]
+def _back_rows() -> list[list[InlineKeyboardButton]]:
+    return [[InlineKeyboardButton(text="⬅️ Назад", callback_data="gw:back")]]

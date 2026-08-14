@@ -3,11 +3,13 @@ from __future__ import annotations
 from html import escape
 
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message
 
 from foxgen.bot.api_client import FoxGenApiClient, FoxGenApiError
 from foxgen.bot.callbacks import safe_edit_callback_message
+from foxgen.bot.generation_capabilities import VideoGenerationType
 from foxgen.bot.generation_draft import (
+    MAX_VIDEO_REFERENCE_TOTAL,
     image_capability,
     required_text,
     stored_media,
@@ -35,27 +37,23 @@ async def render_image_model(callback: CallbackQuery, state: FSMContext) -> None
     data = await state.get_data()
     await state.update_data(image_flow_step="select_model", can_submit=False)
     await state.set_state(GenerationStates.image_selecting_model)
+    await _remember_control_message(callback, state)
     await safe_edit_callback_message(
         callback,
-        "<b>Создать фото · 1/4</b>\n\nВыберите модель. Дальше можно добавить референсы.",
+        "🖼 <b>Создание фото</b>\n\nВыберите модель:",
         image_model_keyboard(str(data.get("image_model_key") or "")),
     )
 
 
 async def render_image_references(callback: CallbackQuery, state: FSMContext) -> None:
     data = await state.get_data()
-    capability = image_capability(data)
-    media = stored_media(data)
     await state.update_data(image_flow_step="references", can_submit=False)
     await state.set_state(GenerationStates.image_uploading_references)
+    await _remember_control_message(callback, state)
     await safe_edit_callback_message(
         callback,
-        (
-            "<b>Создать фото · 2/4</b>\n\n"
-            f"{escape(capability.title)} принимает до {capability.max_references} референсов. "
-            "Отправляйте изображения по одному или пропустите шаг."
-        ),
-        image_reference_keyboard(count=len(media), max_count=capability.max_references),
+        image_references_text(data),
+        image_reference_keyboard_for_data(data),
     )
 
 
@@ -64,6 +62,7 @@ async def render_image_settings(callback: CallbackQuery, state: FSMContext) -> N
     capability = image_capability(data)
     await state.update_data(image_flow_step="settings", can_submit=False)
     await state.set_state(GenerationStates.image_configuring)
+    await _remember_control_message(callback, state)
     await safe_edit_callback_message(
         callback,
         image_settings_text(data),
@@ -76,14 +75,19 @@ async def render_image_prompt(callback: CallbackQuery, state: FSMContext) -> Non
     caption = str(data.get("reference_caption") or "").strip()
     hint = ""
     if 3 <= len(caption) <= 3500:
-        hint = "\n\nПодпись исходного референса сохранена. Можно отправить её снова или написать новый промпт."
+        hint = (
+            "\n\nПодпись исходного референса сохранена. "
+            "Можно отправить её снова или написать новый промпт."
+        )
     await state.update_data(image_flow_step="prompt", can_submit=False)
     await state.set_state(GenerationStates.image_waiting_prompt)
+    await _remember_control_message(callback, state)
     await safe_edit_callback_message(
         callback,
         (
-            "<b>Создать фото · 4/4</b>\n\n"
-            "Опишите результат обычными словами: сюжет, стиль, свет, композицию и важные ограничения."
+            "📝 <b>Промпт для фото</b>\n\n"
+            "Опишите результат обычными словами: сюжет, стиль, свет, "
+            "композицию и важные ограничения."
             f"{hint}"
         ),
         prompt_keyboard(),
@@ -94,9 +98,10 @@ async def render_video_model(callback: CallbackQuery, state: FSMContext) -> None
     data = await state.get_data()
     await state.update_data(video_flow_step="select_model", can_submit=False)
     await state.set_state(GenerationStates.video_selecting_model)
+    await _remember_control_message(callback, state)
     await safe_edit_callback_message(
         callback,
-        "<b>Создать видео · 1/5</b>\n\nВыберите модель:",
+        "🎬 <b>Создание видео</b>\n\nВыберите модель:",
         video_model_keyboard(str(data.get("video_model_key") or "")),
     )
 
@@ -107,9 +112,10 @@ async def render_video_type(callback: CallbackQuery, state: FSMContext) -> None:
     current = video_type(data)
     await state.update_data(video_flow_step="select_type", can_submit=False)
     await state.set_state(GenerationStates.video_selecting_type)
+    await _remember_control_message(callback, state)
     await safe_edit_callback_message(
         callback,
-        "<b>Создать видео · 2/5</b>\n\nЧто используем как вход?",
+        "🎬 <b>Источник для видео</b>\n\nЧто используем как вход?",
         video_type_keyboard(capability, current),
     )
 
@@ -120,12 +126,14 @@ async def render_video_media(callback: CallbackQuery, state: FSMContext) -> None
     media = stored_media(data)
     await state.update_data(video_flow_step="media", can_submit=False)
     await state.set_state(GenerationStates.video_uploading_media)
+    await _remember_control_message(callback, state)
     await safe_edit_callback_message(
         callback,
-        f"<b>Создать видео · 3/5</b>\n\n{escape(video_media_requirement(generation_type))}",
+        video_media_text(data),
         video_media_keyboard(
             generation_type=generation_type,
             count=len(media),
+            max_count=video_media_max_count(data),
             can_continue=video_media_complete(generation_type, media),
         ),
     )
@@ -136,6 +144,7 @@ async def render_video_settings(callback: CallbackQuery, state: FSMContext) -> N
     capability = video_capability(data)
     await state.update_data(video_flow_step="settings", can_submit=False)
     await state.set_state(GenerationStates.video_configuring)
+    await _remember_control_message(callback, state)
     await safe_edit_callback_message(
         callback,
         video_settings_text(data),
@@ -153,10 +162,11 @@ async def render_video_prompt(callback: CallbackQuery, state: FSMContext) -> Non
         )
     await state.update_data(video_flow_step="prompt", can_submit=False)
     await state.set_state(GenerationStates.video_waiting_prompt)
+    await _remember_control_message(callback, state)
     await safe_edit_callback_message(
         callback,
         (
-            "<b>Создать видео · 5/5</b>\n\n"
+            "📝 <b>Промпт для видео</b>\n\n"
             "Опишите сцену, движение камеры/объектов, темп, свет, звук и ограничения."
             f"{hint}"
         ),
@@ -170,6 +180,7 @@ async def render_confirmation_callback(
     api_client: FoxGenApiClient,
 ) -> None:
     text, can_submit = await confirmation_text(state, api_client, callback.from_user.id)
+    await _remember_control_message(callback, state)
     await safe_edit_callback_message(
         callback,
         text,
@@ -184,7 +195,11 @@ async def render_confirmation_message(
 ) -> None:
     user_id = message.from_user.id if message.from_user else 0
     text, can_submit = await confirmation_text(state, api_client, user_id)
-    await message.answer(text, reply_markup=confirmation_keyboard(can_submit=can_submit))
+    control = await message.answer(text, reply_markup=confirmation_keyboard(can_submit=can_submit))
+    await state.update_data(
+        wizard_control_chat_id=control.chat.id,
+        wizard_control_message_id=control.message_id,
+    )
 
 
 async def confirmation_text(
@@ -219,7 +234,7 @@ async def confirmation_text(
         else f"⚠️ Доступно только {balance.available_units} {escape(balance.currency)}"
     )
     return (
-        "<b>Проверьте генерацию</b>\n\n"
+        "✅ <b>Проверьте генерацию</b>\n\n"
         f"{wizard_summary(data)}\n\n"
         f"Промпт: {escape(required_text(data, 'prompt'))}\n\n"
         f"Стоимость: <b>{quote.amount_units} {escape(quote.currency)}</b>\n"
@@ -229,10 +244,56 @@ async def confirmation_text(
     )
 
 
+def image_references_text(data: dict[str, object]) -> str:
+    capability = image_capability(data)
+    count = len(stored_media(data))
+    return (
+        "📎 <b>Референсы</b>\n\n"
+        f"Загружено: <code>{count}/{capability.max_references}</code>\n"
+        "Отправьте фото/изображение. После загрузки нажмите «Продолжить» "
+        "или выберите «Пропустить»."
+    )
+
+
+def image_reference_keyboard_for_data(data: dict[str, object]) -> InlineKeyboardMarkup:
+    capability = image_capability(data)
+    return image_reference_keyboard(
+        count=len(stored_media(data)),
+        max_count=capability.max_references,
+    )
+
+
+def video_media_text(data: dict[str, object]) -> str:
+    generation_type = video_type(data)
+    count = len(stored_media(data))
+    return (
+        "📎 <b>Референсы</b>\n\n"
+        f"Загружено: <code>{count}/{video_media_max_count(data)}</code>\n"
+        f"{escape(video_media_requirement(generation_type))}"
+    )
+
+
+def video_media_max_count(data: dict[str, object]) -> int:
+    generation_type = video_type(data)
+    if generation_type == VideoGenerationType.FIRST_FRAME:
+        return 1
+    if generation_type == VideoGenerationType.FIRST_LAST:
+        return 2
+    if generation_type == VideoGenerationType.TEXT:
+        return 0
+    capability = video_capability(data)
+    supported = (
+        capability.max_reference_images
+        + capability.max_reference_videos
+        + capability.max_reference_audio
+    )
+    return min(MAX_VIDEO_REFERENCE_TOTAL, supported)
+
+
 def image_settings_text(data: dict[str, object]) -> str:
     capability = image_capability(data)
     lines = [
-        "<b>Создать фото · 3/4</b>",
+        "⚙️ <b>Параметры фото</b>",
         "",
         f"Модель: <b>{escape(capability.title)}</b>",
         f"Референсы: {len(stored_media(data))}",
@@ -247,14 +308,14 @@ def image_settings_text(data: dict[str, object]) -> str:
     lines.append(
         f"Файл: {escape(str(data.get('output_format') or capability.default_output_format)).upper()}"
     )
-    lines.extend(("", "Настройки меняются на этом же экране — без лишних переходов."))
+    lines.extend(("", "Меняйте параметры кнопками ниже — экран обновится на месте."))
     return "\n".join(lines)
 
 
 def video_settings_text(data: dict[str, object]) -> str:
     capability = video_capability(data)
     return (
-        "<b>Создать видео · 4/5</b>\n\n"
+        "⚙️ <b>Параметры видео</b>\n\n"
         f"Модель: <b>{escape(capability.title)}</b>\n"
         f"Тип: {escape(video_type(data).value)}\n"
         f"Формат: {escape(str(data.get('aspect_ratio') or capability.default_aspect_ratio))}\n"
@@ -263,7 +324,7 @@ def video_settings_text(data: dict[str, object]) -> str:
         f"Звук: {'да' if bool(data.get('generate_audio')) else 'нет'}\n"
         f"Вернуть последний кадр: {'да' if bool(data.get('return_last_frame')) else 'нет'}\n"
         f"Web search: {'да' if bool(data.get('web_search')) else 'нет'}\n\n"
-        "Настройки меняются на этом же экране."
+        "Меняйте параметры кнопками ниже — экран обновится на месте."
     )
 
 
@@ -290,4 +351,13 @@ def wizard_summary(data: dict[str, object]) -> str:
         f"Формат: {escape(required_text(data, 'aspect_ratio'))}\n"
         f"Длительность: {int(data.get('duration') or capability.default_duration)} сек.\n"
         f"Звук: {'да' if bool(data.get('generate_audio')) else 'нет'}"
+    )
+
+
+async def _remember_control_message(callback: CallbackQuery, state: FSMContext) -> None:
+    if not isinstance(callback.message, Message):
+        return
+    await state.update_data(
+        wizard_control_chat_id=callback.message.chat.id,
+        wizard_control_message_id=callback.message.message_id,
     )
