@@ -10,7 +10,7 @@ from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMar
 
 from foxgen.bot.api_client import FoxGenApiClient, FoxGenApiError, SavedReferencePage
 from foxgen.bot.callbacks import safe_edit_callback_message
-from foxgen.bot.generation_capabilities import VideoGenerationType
+from foxgen.bot.generation_capabilities import VideoGenerationType, VideoModelCapability
 from foxgen.bot.generation_draft import (
     MAX_VIDEO_REFERENCE_TOTAL,
     ResolvedInput,
@@ -906,9 +906,7 @@ def _browser_keyboard(
         )
     else:
         rows.append([InlineKeyboardButton(text="🗑 Удалить", callback_data="rm:delete")])
-    rows.append(
-        [InlineKeyboardButton(text="✅ Использовать выбранные", callback_data="rm:apply")]
-    )
+    rows.append([InlineKeyboardButton(text="✅ Использовать выбранные", callback_data="rm:apply")])
     rows.append([InlineKeyboardButton(text="⬅️ Назад", callback_data="rm:back")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
@@ -944,7 +942,7 @@ def _is_first_last(data: dict[str, object]) -> bool:
 
 
 def _media_compatible_with_video_type(
-    capability: object,
+    capability: VideoModelCapability,
     selected_type: VideoGenerationType,
     media: list[StoredInput],
 ) -> bool:
@@ -953,7 +951,7 @@ def _media_compatible_with_video_type(
     try:
         for index, item in enumerate(media):
             validate_video_media(
-                video_capability_from_object(capability),
+                capability,
                 selected_type,
                 media[:index],
                 item["kind"],
@@ -961,10 +959,3 @@ def _media_compatible_with_video_type(
     except SubmissionError:
         return False
     return True
-
-
-def video_capability_from_object(capability: object):
-    # Keep the compatibility helper strict without duplicating model selection logic.
-    if hasattr(capability, "supports_type") and hasattr(capability, "generation_types"):
-        return capability
-    raise SubmissionError(ErrorCode.VALIDATION, "Видео-модель повреждена.")
