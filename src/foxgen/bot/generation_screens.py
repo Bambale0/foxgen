@@ -148,7 +148,9 @@ async def render_video_prompt(callback: CallbackQuery, state: FSMContext) -> Non
     caption = str(data.get("reference_caption") or "").strip()
     hint = ""
     if 3 <= len(caption) <= 3500:
-        hint = "\n\nПодпись исходного референса сохранена. Можно использовать её как основу промпта."
+        hint = (
+            "\n\nПодпись исходного референса сохранена. Можно использовать её как основу промпта."
+        )
     await state.update_data(video_flow_step="prompt", can_submit=False)
     await state.set_state(GenerationStates.video_waiting_prompt)
     await safe_edit_callback_message(
@@ -241,9 +243,7 @@ def image_settings_text(data: dict[str, object]) -> str:
             f"Разрешение: {escape(str(data.get('resolution') or capability.default_resolution))}"
         )
     if capability.qualities:
-        lines.append(
-            f"Качество: {escape(str(data.get('quality') or capability.default_quality))}"
-        )
+        lines.append(f"Качество: {escape(str(data.get('quality') or capability.default_quality))}")
     lines.append(
         f"Файл: {escape(str(data.get('output_format') or capability.default_output_format)).upper()}"
     )
