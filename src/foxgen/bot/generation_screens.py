@@ -3,7 +3,7 @@ from __future__ import annotations
 from html import escape
 
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message
 
 from foxgen.bot.api_client import FoxGenApiClient, FoxGenApiError
 from foxgen.bot.callbacks import safe_edit_callback_message
@@ -157,7 +157,9 @@ async def render_video_prompt(callback: CallbackQuery, state: FSMContext) -> Non
     caption = str(data.get("reference_caption") or "").strip()
     hint = ""
     if 3 <= len(caption) <= 3500:
-        hint = "\n\nПодпись исходного референса сохранена. Можно использовать её как основу промпта."
+        hint = (
+            "\n\nПодпись исходного референса сохранена. Можно использовать её как основу промпта."
+        )
     await state.update_data(video_flow_step="prompt", can_submit=False)
     await state.set_state(GenerationStates.video_waiting_prompt)
     await _remember_control_message(callback, state)
@@ -253,7 +255,7 @@ def image_references_text(data: dict[str, object]) -> str:
     )
 
 
-def image_reference_keyboard_for_data(data: dict[str, object]):
+def image_reference_keyboard_for_data(data: dict[str, object]) -> InlineKeyboardMarkup:
     capability = image_capability(data)
     return image_reference_keyboard(
         count=len(stored_media(data)),
