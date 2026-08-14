@@ -15,6 +15,7 @@ from foxgen.bot.admin_api_client import AdminApiClient
 from foxgen.bot.admin_extras import router as admin_extras_router
 from foxgen.bot.api_client import FoxGenApiClient
 from foxgen.bot.callbacks import safe_edit_callback_message
+from foxgen.bot.feed import handle_start_payload, router as feed_router
 from foxgen.bot.flows import router as generation_router
 from foxgen.bot.fsm_contract import contract_for
 from foxgen.bot.keyboards import main_menu
@@ -49,10 +50,16 @@ async def show_menu(
     message: Message,
     state: FSMContext,
     input_media: TelegramInputMediaStorage,
+    api_client: FoxGenApiClient | None = None,
 ) -> None:
-    """Interrupt any active FSM draft and return to the canonical entrypoint."""
+    """Interrupt any active FSM draft, then dispatch a safe deep link or main menu."""
 
     await clear_state_with_inputs(state, input_media)
+    text = message.text or ""
+    payload = text.partition(" ")[2].strip() if text.startswith("/start") else ""
+    if payload and api_client is not None:
+        if await handle_start_payload(message, state, api_client, payload):
+            return
     await message.answer(
         "<b>FoxGen</b>\n\nВыберите раздел.",
         reply_markup=main_menu(),
@@ -181,6 +188,7 @@ def register_runtime_routers(dispatcher: Dispatcher) -> None:
     # swallow a valid privileged action.
     dispatcher.include_router(admin_extras_router)
     dispatcher.include_router(admin_router)
+    dispatcher.include_router(feed_router)
     dispatcher.include_router(quick_start_router)
     dispatcher.include_router(generation_router)
     dispatcher.include_router(router)
