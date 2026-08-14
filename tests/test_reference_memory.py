@@ -13,13 +13,13 @@ from foxgen.application.reference_memory import (
     ReferenceDeleteProcessor,
     ReferenceMemoryService,
 )
+from foxgen.bot.generation_capabilities import VideoGenerationType
 from foxgen.bot.generation_draft import (
     default_image_flow_data,
     saved_reference_ids,
     stored_media,
     temporary_storage_keys,
 )
-from foxgen.bot.generation_capabilities import VideoGenerationType
 from foxgen.bot.generation_keyboards import image_reference_keyboard, video_media_keyboard
 from foxgen.core.errors import SubmissionError
 
@@ -56,8 +56,10 @@ class FakeStorage:
     async def delete(self, storage_key: str) -> None:
         self.deleted.append(storage_key)
 
-    async def presigned_url(self, storage_key: str) -> str:
-        return f"https://private.example/{storage_key}?signed=1"
+
+class FakeUrlSigner:
+    async def url(self, asset_id: UUID) -> str:
+        return f"https://foxgen.example/v1/reference-media/{asset_id}?signed=1"
 
 
 class FakeRepository:
@@ -158,17 +160,26 @@ def _media(tmp_path: Path) -> DownloadedMedia:
     )
 
 
+def _service(
+    repository: FakeRepository,
+    source: FakeInputSource,
+    storage: FakeStorage,
+) -> ReferenceMemoryService:
+    return ReferenceMemoryService(
+        repository=repository,
+        input_source=source,
+        storage=storage,
+        url_signer=FakeUrlSigner(),
+        max_items=50,
+        max_bytes=1024,
+    )
+
+
 @pytest.mark.asyncio
 async def test_reference_service_copies_explicit_input_to_durable_prefix(tmp_path: Path) -> None:
     repository = FakeRepository()
     storage = FakeStorage()
-    service = ReferenceMemoryService(
-        repository=repository,
-        input_source=FakeInputSource(_media(tmp_path)),
-        storage=storage,
-        max_items=50,
-        max_bytes=1024,
-    )
+    service = _service(repository, FakeInputSource(_media(tmp_path)), storage)
 
     result = await service.save_from_temporary_input(
         user_id=42,
@@ -181,19 +192,13 @@ async def test_reference_service_copies_explicit_input_to_durable_prefix(tmp_pat
     assert repository.asset.status == "active"
     assert storage.stored == [repository.asset.storage_key]
     assert repository.asset.storage_key.startswith("references/42/")
-    assert result.item.preview_url.endswith("?signed=1")
+    assert "/v1/reference-media/" in result.item.preview_url
 
 
 @pytest.mark.asyncio
 async def test_reference_save_rejects_foreign_temporary_prefix_before_read(tmp_path: Path) -> None:
     source = FakeInputSource(_media(tmp_path))
-    service = ReferenceMemoryService(
-        repository=FakeRepository(),
-        input_source=source,
-        storage=FakeStorage(),
-        max_items=50,
-        max_bytes=1024,
-    )
+    service = _service(FakeRepository(), source, FakeStorage())
 
     with pytest.raises(SubmissionError):
         await service.save_from_temporary_input(
@@ -211,13 +216,7 @@ async def test_duplicate_reference_reuses_existing_asset_without_second_copy(tmp
     repository.asset = replace(repository.asset, status="active")
     repository.created = False
     storage = FakeStorage()
-    service = ReferenceMemoryService(
-        repository=repository,
-        input_source=FakeInputSource(_media(tmp_path)),
-        storage=storage,
-        max_items=50,
-        max_bytes=1024,
-    )
+    service = _service(repository, FakeInputSource(_media(tmp_path)), storage)
 
     result = await service.save_from_temporary_input(
         user_id=42,
@@ -233,13 +232,7 @@ async def test_duplicate_reference_reuses_existing_asset_without_second_copy(tmp
 async def test_resolve_is_owner_scoped_and_rejects_missing_reference(tmp_path: Path) -> None:
     repository = FakeRepository()
     repository.asset = replace(repository.asset, status="active")
-    service = ReferenceMemoryService(
-        repository=repository,
-        input_source=FakeInputSource(_media(tmp_path)),
-        storage=FakeStorage(),
-        max_items=50,
-        max_bytes=1024,
-    )
+    service = _service(repository, FakeInputSource(_media(tmp_path)), FakeStorage())
 
     resolved = await service.resolve(user_id=42, asset_ids=(repository.asset.id,))
     assert resolved[0].id == repository.asset.id
@@ -252,13 +245,7 @@ async def test_resolve_is_owner_scoped_and_rejects_missing_reference(tmp_path: P
 async def test_delete_processor_is_idempotent_and_removes_durable_object(tmp_path: Path) -> None:
     repository = FakeRepository()
     repository.asset = replace(repository.asset, status="active")
-    service = ReferenceMemoryService(
-        repository=repository,
-        input_source=FakeInputSource(_media(tmp_path)),
-        storage=FakeStorage(),
-        max_items=50,
-        max_bytes=1024,
-    )
+    service = _service(repository, FakeInputSource(_media(tmp_path)), FakeStorage())
     await service.delete(user_id=42, asset_id=repository.asset.id)
 
     storage = FakeStorage()
