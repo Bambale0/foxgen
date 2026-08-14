@@ -234,7 +234,6 @@ class SqlAlchemyReferenceMemoryRepository:
                     )
                 if asset.status == "active":
                     asset.status = "delete_pending"
-                    asset.updated_at = func.now()
                     await session.flush()
                 await session.execute(
                     pg_insert(OutboxEvent)
