@@ -49,7 +49,9 @@ Infrastructure orphan cleanup is also enforced for repository Compose deployment
 - the lifecycle configuration is read back and must match exactly before startup succeeds;
 - API, worker and bot are gated on successful `minio-init` completion;
 - the short rule never targets durable `generations/` results;
-- deployments that replace bundled MinIO with external S3-compatible storage must provide equivalent lifecycle enforcement through that infrastructure.
+- deployments that replace bundled MinIO with external S3-compatible storage must provision the private bucket and provide equivalent lifecycle enforcement through infrastructure.
+
+Application request/worker code intentionally has no bucket-creation toggle. Storage provisioning is explicit rather than opportunistic.
 
 See `input-media-lifecycle.md` and `minio-lifecycle-runbook.md`.
 
@@ -281,12 +283,11 @@ Historical delivery epics/tasks:
 5. #9 — administrative domain/control-plane core — completed through PR #54.
 6. #50 — temporary input lifecycle automation — Compose MinIO bootstrap/verification and startup gating completed.
 7. #55 — admin extension transport wiring — signed HTTP/operator-web extension routers and Telegram extras registered with reachability/security regression coverage.
+8. #57 — storage provisioning contract — removed the unused `FOXGEN_S3_CREATE_BUCKET` setting; application storage never provisions buckets, Compose provisions bundled MinIO, external S3 is infrastructure-owned.
 
 ## Remaining known state/ops gaps
 
-No known durable-state or admin-transport wiring gap remains from the state-gap program above.
-
-The separate configuration issue #57 tracks the reserved/inactive application setting `FOXGEN_S3_CREATE_BUCKET`; it does not change the Compose-managed MinIO lifecycle behavior described above and is not a missing durable state transition.
+No known durable-state, admin-transport or ambiguous storage-provisioning gap remains from the state-gap program above.
 
 Other future product epics can introduce new model/product/payment/referral states. When they do, this file must be updated at the same time as domain transitions, database constraints and tests.
 

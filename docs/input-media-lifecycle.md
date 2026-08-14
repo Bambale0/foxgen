@@ -68,7 +68,7 @@ inputs/       -> short temporary retention
 generations/  -> product retention policy, never the input rule
 ```
 
-The repository production Compose stack manages its bundled MinIO instance. A deployment that replaces that storage topology with an external S3-compatible service must provision the private bucket and an equivalent `inputs/` lifecycle policy through that provider's infrastructure controls; `FOXGEN_S3_CREATE_BUCKET` remains a separate inactive application setting tracked by issue #57.
+The repository production Compose stack manages its bundled MinIO instance and provisions that bucket through `minio-init`. A deployment that replaces the storage topology with an external S3-compatible service must provision the private bucket before FoxGen startup and enforce an equivalent `inputs/` lifecycle policy through that provider's infrastructure controls. Application request/worker code never creates buckets.
 
 ## Private storage invariant
 
@@ -151,6 +151,7 @@ This policy avoids ambiguous ordering, partial album upload and double-processin
 7. Verify no equivalent short-expiry rule targets `generations/` or other durable result prefixes.
 8. Verify the bucket has no public ACL/policy exposing user media.
 9. Verify API, worker and bot do not start if lifecycle bootstrap cannot be verified.
+10. For external S3-compatible storage, verify the private bucket exists before deployment and application credentials cannot create arbitrary infrastructure.
 
 ## Incident handling
 
