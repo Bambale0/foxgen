@@ -50,6 +50,7 @@ class GenerationRepository(Protocol):
         media_kind: MediaKind,
         prompt: str | None,
         input_payload: dict[str, object],
+        source_publication_id: UUID | None,
         user_concurrency_limit: int,
         global_concurrency_limit: int,
     ) -> tuple[GenerationSnapshot, bool]: ...
@@ -82,9 +83,20 @@ class NoopUserAccessGuard:
         del user_id
 
 
-def request_fingerprint(*, model_slug: str, input_payload: dict[str, object]) -> str:
+def request_fingerprint(
+    *,
+    model_slug: str,
+    input_payload: dict[str, object],
+    source_publication_id: UUID | None = None,
+) -> str:
     canonical = json.dumps(
-        {"model": model_slug, "input": input_payload},
+        {
+            "model": model_slug,
+            "input": input_payload,
+            "source_publication_id": (
+                str(source_publication_id) if source_publication_id is not None else None
+            ),
+        },
         ensure_ascii=False,
         sort_keys=True,
         separators=(",", ":"),
@@ -136,6 +148,7 @@ class SubmissionService:
         model_slug: str,
         input_data: dict[str, object],
         idempotency_key: str,
+        source_publication_id: UUID | None = None,
     ) -> SubmissionReceipt:
         await self._user_access_guard.ensure_allowed(user_id)
         model = self._registry.get(model_slug)
@@ -156,7 +169,11 @@ class SubmissionService:
         await self._availability_guard.ensure_enabled(model.slug)
 
         normalized = validate_input(model.contract, input_data)
-        request_hash = request_fingerprint(model_slug=model.slug, input_payload=normalized)
+        request_hash = request_fingerprint(
+            model_slug=model.slug,
+            input_payload=normalized,
+            source_publication_id=source_publication_id,
+        )
 
         existing = await self._repository.find_by_idempotency(
             user_id=user_id,
@@ -176,6 +193,7 @@ class SubmissionService:
             media_kind=model.media_kind,
             prompt=str(normalized.get("prompt")) if normalized.get("prompt") is not None else None,
             input_payload=normalized,
+            source_publication_id=source_publication_id,
             user_concurrency_limit=self._user_concurrency_limit,
             global_concurrency_limit=self._global_concurrency_limit,
         )
