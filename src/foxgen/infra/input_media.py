@@ -1,3 +1,4 @@
+import asyncio
 import hashlib
 import hmac
 import mimetypes
@@ -79,6 +80,24 @@ class LocalInputMediaStorage:
             content_type=media.content_type,
             size_bytes=media.size_bytes,
             checksum_sha256=media.checksum_sha256,
+        )
+
+    async def describe(self, storage_key: str) -> DownloadedMedia:
+        """Describe one private temporary input without copying or exposing its path."""
+
+        path = resolve_input_media_path(self._root, storage_key)
+        if not path.is_file():
+            raise SubmissionError(ErrorCode.TASK_NOT_FOUND, "Входной файл не найден.")
+        size_bytes = path.stat().st_size
+        if size_bytes <= 0:
+            raise SubmissionError(ErrorCode.VALIDATION, "Получен пустой входной файл.")
+        checksum = await asyncio.to_thread(_checksum_sha256, path)
+        return DownloadedMedia(
+            path=path,
+            filename=path.name,
+            content_type=input_media_content_type(path),
+            size_bytes=size_bytes,
+            checksum_sha256=checksum,
         )
 
     async def delete(self, storage_key: str) -> None:
@@ -165,3 +184,11 @@ async def _delete_empty_parents(path: Path, stop_at: Path) -> None:
 def input_media_content_type(path: Path) -> str:
     content_type, _ = mimetypes.guess_type(path.name)
     return content_type or "application/octet-stream"
+
+
+def _checksum_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as source:
+        while chunk := source.read(1024 * 1024):
+            digest.update(chunk)
+    return digest.hexdigest()
