@@ -16,3 +16,10 @@ class GenerationStates(StatesGroup):
     choosing_audio = State()
     confirming = State()
     submitting = State()
+
+
+class FeedStates(StatesGroup):
+    waiting_comment = State()
+    editing_profile_slug = State()
+    editing_profile_name = State()
+    editing_profile_bio = State()
