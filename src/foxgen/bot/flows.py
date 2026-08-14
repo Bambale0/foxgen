@@ -3,11 +3,11 @@ from typing import Any, TypedDict
 from uuid import uuid4
 
 from aiogram import Bot, F, Router
-from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message
 
 from foxgen.bot.api_client import FoxGenApiClient, FoxGenApiError
+from foxgen.bot.callbacks import safe_edit_callback_message
 from foxgen.bot.catalog import (
     MODE_CALLBACKS,
     MODE_TITLES,
@@ -34,7 +34,6 @@ from foxgen.bot.keyboards import (
 from foxgen.bot.states import GenerationStates
 from foxgen.bot.uploads import TelegramInputMediaStorage, message_media_kind
 from foxgen.core.errors import ErrorCode, SubmissionError
-
 
 router = Router(name="generation-flows")
 
@@ -326,9 +325,10 @@ async def confirm_generation(
         return
 
     await state.set_state(GenerationStates.submitting)
-    if callback.message:
-        await callback.message.edit_text("⏳ Проверяю баланс и ставлю генерацию в очередь…")
-    await callback.answer()
+    await safe_edit_callback_message(
+        callback,
+        "⏳ Проверяю баланс и ставлю генерацию в очередь…",
+    )
 
     try:
         resolved_media = await _resolve_media(data, input_media)
@@ -343,20 +343,20 @@ async def confirm_generation(
     except SubmissionError as exc:
         await state.set_state(GenerationStates.confirming)
         await state.update_data(can_submit=False)
-        if callback.message:
-            await callback.message.edit_text(
-                f"⚠️ {escape(exc.public_message)}\n\nПараметры сохранены.",
-                reply_markup=confirmation_keyboard(can_submit=False),
-            )
+        await safe_edit_callback_message(
+            callback,
+            f"⚠️ {escape(exc.public_message)}\n\nПараметры сохранены.",
+            confirmation_keyboard(can_submit=False),
+        )
         return
     except FoxGenApiError as exc:
         await state.set_state(GenerationStates.confirming)
         await state.update_data(can_submit=False)
-        if callback.message:
-            await callback.message.edit_text(
-                f"⚠️ {escape(exc.message)}\n\nПараметры сохранены.",
-                reply_markup=confirmation_keyboard(can_submit=False),
-            )
+        await safe_edit_callback_message(
+            callback,
+            f"⚠️ {escape(exc.message)}\n\nПараметры сохранены.",
+            confirmation_keyboard(can_submit=False),
+        )
         return
 
     await state.clear()
@@ -365,16 +365,16 @@ async def confirm_generation(
         if queued.replayed
         else ""
     )
-    if callback.message:
-        await callback.message.edit_text(
-            (
-                "✅ <b>Генерация поставлена в очередь</b>\n\n"
-                f"ID: <code>{escape(queued.generation_id)}</code>\n"
-                "Результат придёт сюда автоматически после сохранения."
-                f"{replay_text}"
-            ),
-            reply_markup=after_submit_keyboard(),
-        )
+    await safe_edit_callback_message(
+        callback,
+        (
+            "✅ <b>Генерация поставлена в очередь</b>\n\n"
+            f"ID: <code>{escape(queued.generation_id)}</code>\n"
+            "Результат придёт сюда автоматически после сохранения."
+            f"{replay_text}"
+        ),
+        after_submit_keyboard(),
+    )
 
 
 @router.callback_query(GenerationStates.submitting, F.data == "draft:confirm")
@@ -503,7 +503,12 @@ async def go_back(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer("Назад перейти уже нельзя. Открыл меню.", show_alert=True)
     await state.clear()
     if callback.message:
-        await callback.message.edit_text("Что создаём?", reply_markup=main_menu())
+        await safe_edit_callback_message(
+            callback,
+            "Что создаём?",
+            main_menu(),
+            answer_callback=False,
+        )
 
 
 @router.message(GenerationStates.waiting_media)
@@ -748,10 +753,4 @@ async def _edit_callback(
     text: str,
     reply_markup: InlineKeyboardMarkup,
 ) -> None:
-    if callback.message:
-        try:
-            await callback.message.edit_text(text, reply_markup=reply_markup)
-        except TelegramBadRequest as exc:
-            if "message is not modified" not in str(exc):
-                raise
-    await callback.answer()
+    await safe_edit_callback_message(callback, text, reply_markup)

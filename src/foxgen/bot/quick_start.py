@@ -3,12 +3,12 @@ from typing import Any, TypedDict
 from uuid import uuid4
 
 from aiogram import Bot, F, Router
-from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Filter, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message, PhotoSize
 
 from foxgen.bot.api_client import FoxGenApiClient
+from foxgen.bot.callbacks import safe_edit_callback_message
 from foxgen.bot.catalog import GenerationMode, model_choice, product_for_mode
 from foxgen.bot.flows import _show_confirmation_message
 from foxgen.bot.keyboards import (
@@ -27,7 +27,6 @@ from foxgen.bot.uploads import (
 )
 from foxgen.core.errors import SubmissionError
 
-
 router = Router(name="quick-start")
 
 
@@ -37,7 +36,8 @@ class StoredInput(TypedDict):
 
 
 class ReferenceDraftFilter(Filter):
-    async def __call__(self, state: FSMContext) -> bool:
+    async def __call__(self, callback: CallbackQuery, state: FSMContext) -> bool:
+        del callback
         data = await state.get_data()
         return data.get("entrypoint") == "reference"
 
@@ -429,7 +429,12 @@ async def _reset_broken_reference(callback: CallbackQuery, state: FSMContext) ->
     await state.clear()
     await callback.answer("Референс устарел. Начните заново.", show_alert=True)
     if callback.message:
-        await callback.message.edit_text("Главное меню", reply_markup=main_menu())
+        await safe_edit_callback_message(
+            callback,
+            "Главное меню",
+            main_menu(),
+            answer_callback=False,
+        )
 
 
 async def _edit_callback(
@@ -437,10 +442,4 @@ async def _edit_callback(
     text: str,
     reply_markup: InlineKeyboardMarkup,
 ) -> None:
-    if callback.message:
-        try:
-            await callback.message.edit_text(text, reply_markup=reply_markup)
-        except TelegramBadRequest as exc:
-            if "message is not modified" not in str(exc):
-                raise
-    await callback.answer()
+    await safe_edit_callback_message(callback, text, reply_markup)

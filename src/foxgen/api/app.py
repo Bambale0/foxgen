@@ -2,11 +2,12 @@ import hashlib
 import json
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Any, Protocol
 from uuid import UUID
 
 from fastapi import FastAPI, Header, HTTPException, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, ConfigDict, ValidationError
 
 from foxgen import __version__
@@ -32,6 +33,7 @@ from foxgen.core.errors import ErrorCode, FoxGenError, WebhookVerificationError
 from foxgen.infra.billing import SqlAlchemyBillingRepository
 from foxgen.infra.billing_lifecycle_repository import BillingAwareLifecycleRepository
 from foxgen.infra.database import Database
+from foxgen.infra.input_media import LocalInputMediaStorage, input_media_content_type
 from foxgen.infra.rate_limit import RedisSubmissionRateLimiter
 from foxgen.infra.redis import RedisPool
 from foxgen.infra.repositories import SqlAlchemyGenerationRepository
@@ -309,6 +311,27 @@ def create_app(
             raise HTTPException(status_code=503, detail=dependencies) from exc
         return HealthResponse(status="ok", version=__version__, dependencies=dependencies)
 
+    @app.get("/v1/input-media/{storage_key:path}")
+    async def get_input_media(
+        storage_key: str,
+        expires: int,
+        signature: str,
+    ) -> FileResponse:
+        if resolved_settings.internal_api_token is None:
+            raise HTTPException(status_code=503, detail="input media delivery is unavailable")
+        storage = LocalInputMediaStorage(
+            root=resolved_settings.telegram_input_storage_root,
+            public_base_url=resolved_settings.telegram_input_public_base_url,
+            signing_secret=resolved_settings.internal_api_token.get_secret_value(),
+            presigned_url_ttl_seconds=resolved_settings.telegram_input_presigned_url_ttl_seconds,
+            retention_seconds=resolved_settings.telegram_input_retention_seconds,
+        )
+        try:
+            path = await storage.validate_request(storage_key, expires, signature)
+        except FoxGenError as exc:
+            raise HTTPException(status_code=_error_status(exc.code), detail=exc.public_message) from exc
+        return _input_media_response(path)
+
     @app.get("/v1/models")
     async def models() -> list[dict[str, Any]]:
         return [model_payload(item) for item in registry.list()]
@@ -405,6 +428,15 @@ def create_app(
         return {"status": "accepted", "task_id": task_id, "duplicate": not inserted}
 
     return app
+
+
+def _input_media_response(path: Path) -> FileResponse:
+    return FileResponse(
+        path,
+        media_type=input_media_content_type(path),
+        filename=path.name,
+        headers={"Cache-Control": "private, no-store"},
+    )
 
 
 app = create_app()

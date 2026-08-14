@@ -1,5 +1,6 @@
 import asyncio
 import hashlib
+import logging
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -9,9 +10,10 @@ from uuid import uuid4
 from aiogram import Bot
 from aiogram.types import Message, PhotoSize
 
-from foxgen.application.media import DownloadedMedia
+from foxgen.application.media import DownloadedMedia, MediaStorage
 from foxgen.core.errors import ErrorCode, SubmissionError
-from foxgen.infra.media import S3MediaStorage
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
@@ -27,7 +29,7 @@ class InputCleanupResult:
 
 
 class TelegramInputMediaStorage:
-    def __init__(self, *, storage: S3MediaStorage, max_bytes: int) -> None:
+    def __init__(self, *, storage: MediaStorage, max_bytes: int) -> None:
         self._storage = storage
         self._max_bytes = max_bytes
 
@@ -101,6 +103,7 @@ class TelegramInputMediaStorage:
             try:
                 await bot.download(file_id, destination=path)
             except Exception as exc:
+                logger.exception("telegram_input_download_failed")
                 raise SubmissionError(
                     ErrorCode.INPUT_DOWNLOAD_FAILED,
                     "Не удалось скачать файл из Telegram. Отправьте его ещё раз.",
@@ -131,8 +134,10 @@ class TelegramInputMediaStorage:
             try:
                 stored = await self._storage.store(key=storage_key, media=media)
             except SubmissionError:
+                logger.exception("telegram_input_storage_rejected")
                 raise
             except Exception as exc:
+                logger.exception("telegram_input_storage_failed", extra={"storage_key": storage_key})
                 raise SubmissionError(
                     ErrorCode.INPUT_STORAGE_FAILED,
                     "Не удалось сохранить файл. Повторите попытку позже.",

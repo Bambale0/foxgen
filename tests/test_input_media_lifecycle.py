@@ -4,10 +4,9 @@ import pytest
 from aiogram import Bot
 from aiogram.types import Message
 
-from foxgen.application.media import DownloadedMedia, StoredMedia
+from foxgen.application.media import DownloadedMedia, MediaStorage, StoredMedia
 from foxgen.bot.uploads import TelegramInputMediaStorage, stored_input_keys
 from foxgen.core.errors import ErrorCode, SubmissionError
-from foxgen.infra.media import S3MediaStorage
 
 
 class StubStorage:
@@ -39,7 +38,7 @@ class AlbumMessage:
 async def test_album_is_rejected_before_any_telegram_download() -> None:
     storage = StubStorage()
     service = TelegramInputMediaStorage(
-        storage=cast(S3MediaStorage, storage),
+        storage=cast(MediaStorage, storage),
         max_bytes=10_000,
     )
 
@@ -57,7 +56,7 @@ async def test_album_is_rejected_before_any_telegram_download() -> None:
 async def test_delete_many_is_idempotent_scoped_and_reports_failures() -> None:
     storage = StubStorage(fail={"inputs/7/b.jpg"})
     service = TelegramInputMediaStorage(
-        storage=cast(S3MediaStorage, storage),
+        storage=cast(MediaStorage, storage),
         max_bytes=10_000,
     )
 

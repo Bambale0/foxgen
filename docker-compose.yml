@@ -72,6 +72,8 @@ services:
     command: ["foxgen-api"]
     ports:
       - "8080:8080"
+    volumes:
+      - input_media_data:/var/lib/foxgen/input-media
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -97,6 +99,8 @@ services:
     build: .
     env_file: .env
     command: ["foxgen-bot"]
+    volumes:
+      - input_media_data:/var/lib/foxgen/input-media
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -109,3 +113,4 @@ volumes:
   postgres_data:
   redis_data:
   minio_data:
+  input_media_data:

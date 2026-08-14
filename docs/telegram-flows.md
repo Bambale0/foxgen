@@ -33,7 +33,7 @@ Quick Start lets a user begin from a reference before choosing the product/model
 ```text
 main menu -> Быстрый запуск
   -> send one photo or video
-  -> object is stored privately
+  -> file is stored privately on disk
   -> "what create: image or video?"
   -> compatible model
   -> prompt/caption reuse
@@ -109,7 +109,7 @@ Paid generation confirmation also has a stable draft idempotency key. Duplicate 
 - albums/media groups are rejected before download;
 - unsupported documents are rejected as user validation errors;
 - media size is capped by `FOXGEN_TELEGRAM_INPUT_MAX_BYTES`;
-- Telegram download failure and object-storage failure are separate retryable error classes;
+- Telegram download failure and local-storage failure are separate retryable error classes;
 - FSM does not advance when upload fails.
 
 See `input-media-lifecycle.md`.
@@ -118,7 +118,7 @@ See `input-media-lifecycle.md`.
 
 Before confirmation the bot obtains current model price and wallet balance from the trusted internal API. Insufficient funds disable launch rather than allowing a provider request that would later fail after user confirmation.
 
-At final confirmation the stored private object keys are converted into fresh presigned URLs with a bounded TTL. Those provider-readable URLs are not persisted as public product URLs and are not generated at the moment the user first uploads the reference.
+At final confirmation the stored private file keys are converted into fresh signed URLs with a bounded TTL. Those provider-readable URLs are not persisted as public product URLs and are not generated at the moment the user first uploads the reference.
 
 ## Submission state
 

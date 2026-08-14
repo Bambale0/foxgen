@@ -16,7 +16,7 @@ This README describes code that is merged and reachable in `main`. The public Mi
 - Redis-backed FSM with back/cancel/menu, invalid-input handling, stale callback recovery and TTL expiry;
 - Redis event isolation serializes concurrent updates for one FSM key;
 - Telegram albums are rejected before upload;
-- private object storage for Telegram reference files;
+- private local storage for Telegram reference files;
 - server-authorized `/admin` panel with privileged extension callbacks registered ahead of broad fallbacks.
 
 ### Generation and provider lifecycle
@@ -134,7 +134,7 @@ cp .env.example .env
 docker compose up --build
 ```
 
-Local Compose provides PostgreSQL, Redis, MinIO, migrations, API, worker and bot. MinIO bootstrap creates the private bucket when needed, installs the short-retention `inputs/` lifecycle rule, verifies it and gates API/worker/bot startup. MinIO ports are exposed for development only.
+Local Compose provides PostgreSQL, Redis, MinIO, migrations, API, worker and bot. Telegram input files are stored in a private shared volume mounted into `bot` and `api`; generated result archives remain in MinIO. MinIO bootstrap creates the private results bucket when needed, installs the short-retention `inputs/` lifecycle rule for S3-backed deployments, verifies it and gates API/worker/bot startup. MinIO ports are exposed for development only.
 
 Paid provider submission remains disabled until explicitly enabled:
 
