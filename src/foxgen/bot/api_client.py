@@ -112,6 +112,19 @@ class FoxGenApiClient:
         )
         return _dict_payload(payload, "Публикация временно недоступна.")
 
+    async def publication_media(
+        self,
+        *,
+        user_id: int,
+        publication_id: str,
+    ) -> dict[str, object]:
+        payload = await self._user_request(
+            "GET",
+            f"/v1/publications/{publication_id}/media",
+            user_id=user_id,
+        )
+        return _dict_payload(payload, "Медиа публикации временно недоступно.")
+
     async def profile(self, *, user_id: int, slug: str) -> dict[str, object]:
         payload = await self._user_request(
             "GET",
@@ -133,6 +146,24 @@ class FoxGenApiClient:
             username=username,
         )
         return _dict_payload(payload, "Профиль временно недоступен.")
+
+    async def update_profile(
+        self,
+        *,
+        user_id: int,
+        username: str | None,
+        slug: str,
+        display_name: str | None,
+        bio: str | None,
+    ) -> dict[str, object]:
+        payload = await self._user_request(
+            "PUT",
+            "/v1/me/profile",
+            user_id=user_id,
+            username=username,
+            json={"slug": slug, "display_name": display_name, "bio": bio},
+        )
+        return _dict_payload(payload, "Не удалось обновить профиль.")
 
     async def profile_publications(
         self,
