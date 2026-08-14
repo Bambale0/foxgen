@@ -18,7 +18,11 @@ def main_menu() -> InlineKeyboardMarkup:
                 InlineKeyboardButton(text="🌐 Лента", callback_data="feed:open"),
                 InlineKeyboardButton(text="👤 Профиль", callback_data="feed:profile:me"),
             ],
-            [InlineKeyboardButton(text="📣 Опубликовать генерацию", callback_data="feed:publish:start")],
+            [
+                InlineKeyboardButton(
+                    text="📣 Опубликовать генерацию", callback_data="feed:publish:start"
+                )
+            ],
             [InlineKeyboardButton(text="Мини апп", callback_data="planned:mini_app")],
             [InlineKeyboardButton(text="Быстрый запуск", callback_data="quick:start")],
             [
@@ -121,7 +125,9 @@ def model_keyboard(mode: GenerationMode) -> InlineKeyboardMarkup:
 def navigation_keyboard(*, media_done: bool = False) -> InlineKeyboardMarkup:
     rows: list[list[InlineKeyboardButton]] = []
     if media_done:
-        rows.append([InlineKeyboardButton(text="✅ Референсы добавлены", callback_data="media:done")])
+        rows.append(
+            [InlineKeyboardButton(text="✅ Референсы добавлены", callback_data="media:done")]
+        )
     rows.extend(
         [
             [InlineKeyboardButton(text="⬅️ Назад", callback_data="nav:back")],
@@ -194,7 +200,11 @@ def confirmation_keyboard(*, can_submit: bool = True) -> InlineKeyboardMarkup:
     else:
         rows.extend(
             [
-                [InlineKeyboardButton(text="🔄 Обновить цену и баланс", callback_data="draft:refresh")],
+                [
+                    InlineKeyboardButton(
+                        text="🔄 Обновить цену и баланс", callback_data="draft:refresh"
+                    )
+                ],
                 [InlineKeyboardButton(text="💳 Открыть баланс", callback_data="account:balance")],
             ]
         )
