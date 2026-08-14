@@ -11,8 +11,9 @@ This directory documents the executable state of FoxGen on `main`. Source code, 
 | [`architecture.md`](architecture.md) | Service boundaries, durable pipelines and safety invariants |
 | [`database-schema.md`](database-schema.md) | PostgreSQL table/state/constraint map |
 | [`configuration.md`](configuration.md) | Complete configuration groups and production rules |
-| [`api-reference.md`](api-reference.md) | Core, billing/generation and signed internal-admin HTTP surface |
-| [`telegram-flows.md`](telegram-flows.md) | User Telegram flows, Quick Start, FSM and `/admin` shell |
+| [`api-reference.md`](api-reference.md) | Core, billing/generation, publication and signed internal-admin HTTP surface |
+| [`telegram-flows.md`](telegram-flows.md) | User Telegram flows, Quick Start, feed/profile/remix FSM and `/admin` shell |
+| [`feed-profile-remix.md`](feed-profile-remix.md) | Publication/profile/remix domain, invariants, deep links and compromises |
 | [`model-matrix.md`](model-matrix.md) | KIE model readiness and contract policy |
 | [`billing.md`](billing.md) | Pricing, wallet, immutable ledger and settlement |
 | [`generation-operations.md`](generation-operations.md) | Status/cancel/operator resolution for durable generations |
@@ -33,7 +34,7 @@ This directory documents the executable state of FoxGen on `main`. Source code, 
 
 ## Scope boundary
 
-The public Mini App is intentionally excluded from the current documentation baseline. The backend-only admin operator web and its extension routes are implemented private operator surfaces; they do not imply a finished public Mini App.
+The public Mini App is intentionally excluded from the current documentation baseline. Telegram includes the implemented publication/feed/profile/remix product surface. The backend-only admin operator web and its extension routes remain private operator surfaces; neither implies a finished public Mini App.
 
 ## Current production architecture
 
@@ -42,27 +43,31 @@ Telegram bot / trusted services
           |
           v
        FastAPI
-       |  |  \
-       |  |   +--> signed internal admin control plane
-       |  +------> provider callback intake
-       +---------> paid generation admission
+       |  |  | \
+       |  |  |  +--> publication/profile/remix API
+       |  |  +-----> signed internal admin control plane
+       |  +--------> provider callback intake
+       +-----------> paid generation admission
           |
           v
       PostgreSQL <----> foxgen-worker
-          |                 |
-          |                 +--> KIE status/submission
-          |                 +--> archive/delivery
-          |                 +--> admin/support/campaign jobs
-          |
-       Redis             S3-compatible storage
-       FSM/locks         private media
+       |  |                 |
+       |  |                 +--> KIE status/submission
+       |  |                 +--> archive/delivery
+       |  |                 +--> admin/support/campaign jobs
+       |  +--> publications/profiles/likes/comments/lineage
+       |
+       Redis             S3-compatible result storage
+       FSM/locks         private durable media
 ```
+
+Temporary Telegram input references use the current local shared input-media topology; durable generated results referenced by publications remain in private S3-compatible storage.
 
 ## Durable state ownership
 
-PostgreSQL is the source of truth for generations, billing, outbox/inbox events, media metadata, delivery, administrative commands/audit, support, campaigns, tariffs and runtime admin data. Redis is intentionally non-authoritative for business state: it stores Telegram FSM data, per-key event isolation and rate/lock data. S3-compatible storage stores private input/result bytes.
+PostgreSQL is the source of truth for generations, billing, outbox/inbox events, media metadata, delivery, publication/profile/remix lineage, likes/comments, administrative commands/audit, support, campaigns, tariffs and runtime admin data. Redis is intentionally non-authoritative for business state: it stores Telegram FSM data, per-key event isolation and rate/lock data. S3-compatible storage stores durable private generation result bytes.
 
-Storage provisioning is infrastructure-owned: repository Compose provisions bundled MinIO through `minio-init`; application request/worker code never creates buckets; external S3-compatible deployments pre-provision a private bucket and equivalent temporary-input lifecycle.
+Storage provisioning is infrastructure-owned: repository Compose provisions bundled MinIO through `minio-init`; application request/worker code never creates buckets; external S3-compatible deployments pre-provision a private bucket and equivalent lifecycle where applicable.
 
 ## Safety invariants shared by all docs
 
@@ -76,15 +81,18 @@ Storage provisioning is infrastructure-owned: repository Compose provisions bund
 8. Production deployment is gated by CI and deploys an exact tested `main` SHA.
 9. An existing source module/branch is not documented as active until it is wired/merged and covered by runtime tests.
 10. Specific privileged routes must stay ahead of generic route/callback fallbacks when matching order affects reachability.
-11. Compose-managed MinIO must verify the prefix-scoped temporary `inputs/` lifecycle before API, worker and bot startup.
-12. Application media execution must not opportunistically provision S3 infrastructure.
+11. Application media execution must not opportunistically provision S3 infrastructure.
+12. Publication never changes generation/billing/provider state; it only projects eligible completed generations.
+13. A derivative generation cannot enter the global feed, and derivative public projections never expose its prompt/actions.
+14. Remix lineage is committed atomically with paid admission and is part of the request fingerprint.
+15. `/start` and `/menu` are global Telegram interrupts ahead of every generation/feed FSM router.
 
 ## Known limitations are first-class documentation
 
-`known-limitations.md` is retained even when no entry is currently listed. Add a limitation there whenever executable/configuration state could otherwise be mistaken for a completed production behavior, and remove it in the same PR that lands the tested fix.
+`known-limitations.md` is retained even when no entry is currently listed. Add a limitation there whenever executable/configuration state could otherwise be mistaken for a completed production behavior, and remove it in the same PR that lands the tested fix. Product compromises specific to feed/profile/remix are recorded in `feed-profile-remix.md`.
 
 ## How to update documentation
 
-When code changes, update documentation by behavior area rather than adding an isolated note. Remove obsolete roadmap language. For a schema change, update architecture/schema/state docs and operational rollback notes. For a new admin capability, update capability matrix, API/runbook and limitation status. For new configuration, update `configuration.md`, `.env.example` and `deploy/production.env.example` together.
+When code changes, update documentation by behavior area rather than adding an isolated note. Remove obsolete roadmap language. For a schema change, update architecture/schema/state docs and operational rollback notes. For a new publication capability, update `feed-profile-remix.md`, API/Telegram docs and migration/schema docs together. For a new admin capability, update capability matrix, API/runbook and limitation status. For new configuration, update `configuration.md`, `.env.example` and `deploy/production.env.example` together.
 
 Review [`documentation-policy.md`](documentation-policy.md) and [`../AGENTS.md`](../AGENTS.md) for maintenance rules.
