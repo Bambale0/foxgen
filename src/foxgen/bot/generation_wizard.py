@@ -9,7 +9,12 @@ from aiogram.types import CallbackQuery, Message
 
 from foxgen.bot.api_client import FoxGenApiClient, FoxGenApiError
 from foxgen.bot.callbacks import safe_edit_callback_message
-from foxgen.bot.generation_capabilities import VideoGenerationType, image_model, video_model
+from foxgen.bot.generation_capabilities import (
+    VideoGenerationType,
+    VideoModelCapability,
+    image_model,
+    video_model,
+)
 from foxgen.bot.generation_draft import (
     WIZARD_VERSION,
     ResolvedInput,
@@ -561,9 +566,7 @@ async def confirm_wizard_generation(
 
     await state.clear()
     replay = (
-        "\nПовторный запрос распознан — новая задача не создавалась."
-        if queued.replayed
-        else ""
+        "\nПовторный запрос распознан — новая задача не создавалась." if queued.replayed else ""
     )
     await safe_edit_callback_message(
         callback,
@@ -707,19 +710,21 @@ async def _resolve_media(
     ]
 
 
-def _compatible_video_type(capability: object, data: dict[str, object]) -> VideoGenerationType:
-    candidate: VideoGenerationType
+def _compatible_video_type(
+    capability: VideoModelCapability,
+    data: dict[str, object],
+) -> VideoGenerationType:
     try:
         candidate = video_type(data)
     except SubmissionError:
         candidate = VideoGenerationType.TEXT
-    if hasattr(capability, "supports_type") and capability.supports_type(candidate):
+    if capability.supports_type(candidate):
         return candidate
     return capability.generation_types[0]
 
 
 def _media_compatible_with_video_type(
-    capability: object,
+    capability: VideoModelCapability,
     selected_type: VideoGenerationType,
     media: list[StoredInput],
 ) -> bool:
