@@ -66,6 +66,8 @@ States:
 pending, retry_wait, stored, failed
 ```
 
+Publication/feed never copies provider URLs into a social table. A publication projects these stored durable result objects.
+
 ### `generation_deliveries`
 
 One Telegram delivery record per generation.
@@ -77,6 +79,77 @@ pending, retry_wait, sending, sent, delivery_unknown, failed
 ```
 
 Stores recipient, attempts/retry scheduling, returned Telegram message IDs, last error and send time.
+
+## Feed, profiles and remix lineage
+
+Alembic revision `20260814_0009_publication_feed.py` adds social/publication state without changing existing generation/billing rows.
+
+### `public_profiles`
+
+One public-profile sidecar per `users.id`.
+
+Key fields:
+
+- `user_id` — primary key and FK to `users`;
+- `slug` — unique public identifier;
+- optional display name and bio;
+- timestamps.
+
+The user row remains identity; this table owns presentation only.
+
+### `publications`
+
+Independent social projection of a generation. Fields include generation, author user, scope, active state and timestamps.
+
+Allowed scope:
+
+```text
+feed, profile
+```
+
+Unique invariant:
+
+```text
+(generation_id, scope)
+```
+
+Publishing an already-known generation/scope reactivates the row. Unpublish sets `active=false`; generation/media rows remain intact.
+
+Eligibility is enforced in the service rather than encoded only in schema: owner, generation `succeeded`, all required media `stored`, and no derivative in global `feed`.
+
+### `generation_lineage`
+
+Optional one-to-one derivative marker:
+
+```text
+generation_id -> source_publication_id
+```
+
+`generation_id` is the primary key, so a generation has at most one social remix source. The source publication uses restrictive delete semantics so lineage cannot silently lose meaning through source deletion.
+
+For paid remixes the lineage row is inserted in the same database transaction as generation admission, balance reservation and submit-outbox creation. The source publication ID is also part of the submission request fingerprint.
+
+### `publication_likes`
+
+Composite primary key:
+
+```text
+(publication_id, user_id)
+```
+
+This makes `liked=true` state-setting naturally idempotent and prevents counter drift from duplicate toggle requests. Counts are derived from rows rather than maintained by an independently mutable cached integer.
+
+### `publication_comments`
+
+Comment row with publication, author, body, surface and timestamps.
+
+Allowed surface:
+
+```text
+feed, profile
+```
+
+The repository additionally verifies that the requested comment surface equals the publication's own scope, preventing feed/profile thread leakage.
 
 ## Billing
 
@@ -267,9 +340,13 @@ Administrative trend content records with payload/active state.
 
 Durable moderation decisions against content IDs with action/reason/active flag/admin/time.
 
+This admin moderation overlay is not publication storage; social state lives in the publication tables above.
+
 ## Foreign-key/delete intent
 
 Generation-owned media/delivery and similar child records use database foreign-key relationships appropriate to their lifecycle. Some operational/audit references intentionally use nullable/set-null semantics so deleting a parent business object does not erase the historical meaning of the administrative operation.
+
+Publication lineage is intentionally stricter: deleting a source publication must not silently orphan/erase derivative meaning.
 
 Do not infer permission to delete production business/audit data from an ORM cascade alone. Operational retention is a product/security decision.
 
@@ -278,8 +355,8 @@ Do not infer permission to delete production business/audit data from an ORM cas
 - Do not edit historical deployed migrations to change schema truth.
 - Add a new forward Alembic revision.
 - Import new SQLAlchemy metadata into migration environment when required.
-- Keep status check constraints synchronized with domain enums/transitions.
-- Ensure `scripts/check_schema.py` covers critical new tables/columns.
+- Keep status/scope check constraints synchronized with domain enums/transitions.
+- Ensure `scripts/check_schema.py` covers critical new tables/columns where required by production gate.
 - Run upgrade/head/downgrade-reupgrade CI.
 - Document operational rollback/data-retention consequences.
 
@@ -292,10 +369,13 @@ For normal operation:
 - use compensating/refund/adjustment records and new audit events;
 - use reconciliation/admin services instead of direct SQL.
 
+Publication/unpublish is deliberately separate from this financial history and never changes ledger/reservation records.
+
 ## Related docs
 
 - `architecture.md` — data ownership and pipelines;
 - `billing.md` — financial lifecycle;
+- `feed-profile-remix.md` — social projection and remix invariants;
 - `postprocessing-reconciliation.md` — cross-table consistency;
 - `admin-capability-matrix.md` — admin domain behavior;
 - migrations/models — exact schema source of truth.
