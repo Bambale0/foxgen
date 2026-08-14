@@ -3,9 +3,10 @@ from __future__ import annotations
 from html import escape
 
 from aiogram import Bot, F, Router
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Filter, StateFilter
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message
 
 from foxgen.bot.api_client import FoxGenApiClient, FoxGenApiError
 from foxgen.bot.callbacks import safe_edit_callback_message
@@ -30,7 +31,6 @@ from foxgen.bot.generation_draft import (
     video_capability,
     video_media_complete,
     video_media_requirement,
-    video_media_status,
     video_type,
 )
 from foxgen.bot.generation_keyboards import (
@@ -39,6 +39,8 @@ from foxgen.bot.generation_keyboards import (
     video_media_keyboard,
 )
 from foxgen.bot.generation_screens import (
+    image_reference_keyboard_for_data,
+    image_references_text,
     render_confirmation_callback,
     render_confirmation_message,
     render_image_model,
@@ -50,6 +52,8 @@ from foxgen.bot.generation_screens import (
     render_video_prompt,
     render_video_settings,
     render_video_type,
+    video_media_max_count,
+    video_media_text,
 )
 from foxgen.bot.keyboards import after_submit_keyboard, confirmation_keyboard, main_menu
 from foxgen.bot.states import GenerationStates
@@ -143,13 +147,8 @@ async def upload_image_reference(
         await message.answer("Выбранная модель не принимает референсы.")
         return
     if len(media) >= capability.max_references:
-        await message.answer(
-            f"Лимит этой модели — {capability.max_references} референсов.",
-            reply_markup=image_reference_keyboard(
-                count=len(media),
-                max_count=capability.max_references,
-            ),
-        )
+        await message.answer(f"Лимит этой модели — {capability.max_references} референсов.")
+        await _refresh_image_reference_control(bot, message, state)
         return
     try:
         kind = message_media_kind(message)
@@ -169,19 +168,47 @@ async def upload_image_reference(
 
     media.append({"kind": uploaded.kind, "storage_key": uploaded.storage_key})
     await state.update_data(media=media, can_submit=False)
-    await message.answer(
-        f"Референс добавлен. Сейчас {len(media)} из {capability.max_references}.",
-        reply_markup=image_reference_keyboard(
-            count=len(media),
-            max_count=capability.max_references,
-        ),
-    )
+    await _refresh_image_reference_control(bot, message, state)
 
 
 @router.callback_query(
     GenerationStates.image_uploading_references,
     WIZARD_DRAFT,
-    F.data.in_({"gw:i:refs:skip", "gw:i:refs:done"}),
+    F.data == "gw:i:refs:status",
+)
+async def image_reference_status(callback: CallbackQuery, state: FSMContext) -> None:
+    data = await state.get_data()
+    capability = image_capability(data)
+    await callback.answer(f"Загружено: {len(stored_media(data))}/{capability.max_references}")
+
+
+@router.callback_query(
+    GenerationStates.image_uploading_references,
+    WIZARD_DRAFT,
+    F.data == "gw:i:refs:skip",
+)
+async def skip_image_references(
+    callback: CallbackQuery,
+    state: FSMContext,
+    input_media: TelegramInputMediaStorage,
+) -> None:
+    data = await state.get_data()
+    media = stored_media(data)
+    if media:
+        await input_media.delete_many(tuple(item["storage_key"] for item in media))
+    capability = image_capability(data)
+    await state.update_data(
+        media=[],
+        model_slug=capability.submission_slug(has_references=False),
+        can_submit=False,
+    )
+    await render_image_settings(callback, state)
+
+
+@router.callback_query(
+    GenerationStates.image_uploading_references,
+    WIZARD_DRAFT,
+    F.data == "gw:i:refs:done",
 )
 async def finish_image_references(callback: CallbackQuery, state: FSMContext) -> None:
     data = await state.get_data()
@@ -373,14 +400,17 @@ async def upload_video_media(
 
     media.append({"kind": uploaded.kind, "storage_key": uploaded.storage_key})
     await state.update_data(media=media, can_submit=False)
-    await message.answer(
-        video_media_status(selected_type, media),
-        reply_markup=video_media_keyboard(
-            generation_type=selected_type,
-            count=len(media),
-            can_continue=video_media_complete(selected_type, media),
-        ),
-    )
+    await _refresh_video_media_control(bot, message, state)
+
+
+@router.callback_query(
+    GenerationStates.video_uploading_media,
+    WIZARD_DRAFT,
+    F.data == "gw:v:media:status",
+)
+async def video_reference_status(callback: CallbackQuery, state: FSMContext) -> None:
+    data = await state.get_data()
+    await callback.answer(f"Загружено: {len(stored_media(data))}/{video_media_max_count(data)}")
 
 
 @router.callback_query(
@@ -659,31 +689,16 @@ async def wizard_button_screen_invalid_message(message: Message) -> None:
 
 
 @router.message(GenerationStates.image_uploading_references, WIZARD_DRAFT)
-async def invalid_image_reference(message: Message, state: FSMContext) -> None:
-    data = await state.get_data()
-    capability = image_capability(data)
-    await message.answer(
-        "Отправьте изображение или используйте кнопки ниже.",
-        reply_markup=image_reference_keyboard(
-            count=len(stored_media(data)),
-            max_count=capability.max_references,
-        ),
-    )
+async def invalid_image_reference(message: Message, state: FSMContext, bot: Bot) -> None:
+    await message.answer("Отправьте изображение или используйте кнопки на экране референсов.")
+    await _refresh_image_reference_control(bot, message, state)
 
 
 @router.message(GenerationStates.video_uploading_media, WIZARD_DRAFT)
-async def invalid_video_media(message: Message, state: FSMContext) -> None:
+async def invalid_video_media(message: Message, state: FSMContext, bot: Bot) -> None:
     data = await state.get_data()
-    selected_type = video_type(data)
-    media = stored_media(data)
-    await message.answer(
-        video_media_requirement(selected_type),
-        reply_markup=video_media_keyboard(
-            generation_type=selected_type,
-            count=len(media),
-            can_continue=video_media_complete(selected_type, media),
-        ),
-    )
+    await message.answer(video_media_requirement(video_type(data)))
+    await _refresh_video_media_control(bot, message, state)
 
 
 @router.message(
@@ -694,6 +709,73 @@ async def invalid_wizard_prompt(message: Message) -> None:
     await message.answer(
         "На этом шаге нужен текстовый промпт. /start полностью сбросит черновик.",
         reply_markup=prompt_keyboard(),
+    )
+
+
+async def _refresh_image_reference_control(
+    bot: Bot,
+    fallback_message: Message,
+    state: FSMContext,
+) -> None:
+    data = await state.get_data()
+    await _refresh_control_message(
+        bot=bot,
+        fallback_message=fallback_message,
+        state=state,
+        text=image_references_text(data),
+        reply_markup=image_reference_keyboard_for_data(data),
+    )
+
+
+async def _refresh_video_media_control(
+    bot: Bot,
+    fallback_message: Message,
+    state: FSMContext,
+) -> None:
+    data = await state.get_data()
+    selected_type = video_type(data)
+    media = stored_media(data)
+    await _refresh_control_message(
+        bot=bot,
+        fallback_message=fallback_message,
+        state=state,
+        text=video_media_text(data),
+        reply_markup=video_media_keyboard(
+            generation_type=selected_type,
+            count=len(media),
+            max_count=video_media_max_count(data),
+            can_continue=video_media_complete(selected_type, media),
+        ),
+    )
+
+
+async def _refresh_control_message(
+    *,
+    bot: Bot,
+    fallback_message: Message,
+    state: FSMContext,
+    text: str,
+    reply_markup: InlineKeyboardMarkup,
+) -> None:
+    data = await state.get_data()
+    chat_id = data.get("wizard_control_chat_id")
+    message_id = data.get("wizard_control_message_id")
+    if isinstance(chat_id, int) and isinstance(message_id, int):
+        try:
+            await bot.edit_message_text(
+                chat_id=chat_id,
+                message_id=message_id,
+                text=text,
+                reply_markup=reply_markup,
+            )
+            return
+        except TelegramBadRequest as exc:
+            if "message is not modified" in str(exc):
+                return
+    control = await fallback_message.answer(text, reply_markup=reply_markup)
+    await state.update_data(
+        wizard_control_chat_id=control.chat.id,
+        wizard_control_message_id=control.message_id,
     )
 
 
