@@ -17,6 +17,7 @@ from foxgen.bot.generation_draft import (
 from foxgen.bot.generation_screens import render_image_model, render_video_model
 from foxgen.bot.keyboards import main_menu, reference_product_keyboard
 from foxgen.bot.states import GenerationStates
+from foxgen.bot.uploads import TelegramInputMediaStorage, stored_input_keys
 
 
 router = Router(name="foxgen-quick-start-wizard")
@@ -40,7 +41,11 @@ QUICK_START_WIZARD = QuickStartWizardFilter()
     GenerationStates.reference_choosing_product,
     F.data.in_({"reference:product:image", "reference:product:video"}),
 )
-async def bridge_reference_to_wizard(callback: CallbackQuery, state: FSMContext) -> None:
+async def bridge_reference_to_wizard(
+    callback: CallbackQuery,
+    state: FSMContext,
+    input_media: TelegramInputMediaStorage,
+) -> None:
     data = await state.get_data()
     reference_kind = str(data.get("reference_kind") or "")
     original = _stored_input(data.get("reference_original"))
@@ -49,6 +54,7 @@ async def bridge_reference_to_wizard(callback: CallbackQuery, state: FSMContext)
     previous_idempotency_key = str(data.get("idempotency_key") or "")
 
     if original is None or reference_kind not in {"image", "video"}:
+        await input_media.delete_many(stored_input_keys(data))
         await state.clear()
         await callback.answer("Референс устарел. Отправьте его заново.", show_alert=True)
         await safe_edit_callback_message(
@@ -119,11 +125,16 @@ async def bridge_reference_to_wizard(callback: CallbackQuery, state: FSMContext)
     QUICK_START_WIZARD,
     F.data == "gw:back",
 )
-async def quick_start_back_to_product(callback: CallbackQuery, state: FSMContext) -> None:
+async def quick_start_back_to_product(
+    callback: CallbackQuery,
+    state: FSMContext,
+    input_media: TelegramInputMediaStorage,
+) -> None:
     data = await state.get_data()
     reference_kind = str(data.get("reference_kind") or "")
     original = _stored_input(data.get("reference_original"))
     if reference_kind not in {"image", "video"} or original is None or not stored_media(data):
+        await input_media.delete_many(stored_input_keys(data))
         await state.clear()
         await safe_edit_callback_message(callback, "Что создаём?", main_menu())
         return
