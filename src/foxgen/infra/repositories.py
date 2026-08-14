@@ -9,6 +9,7 @@ from foxgen.domain.models import ACTIVE_GENERATION_STATUSES, GenerationStatus, M
 from foxgen.infra.admin_user_models import UserRestriction
 from foxgen.infra.billing import reserve_generation_charge
 from foxgen.infra.database import Database, Generation, OutboxEvent, User
+from foxgen.infra.publication_models import GenerationLineage, Publication
 
 
 _ACTIVE_STATUS_VALUES = tuple(status.value for status in ACTIVE_GENERATION_STATUSES)
@@ -56,6 +57,7 @@ class SqlAlchemyGenerationRepository:
         media_kind: MediaKind,
         prompt: str | None,
         input_payload: dict[str, object],
+        source_publication_id: UUID | None,
         user_concurrency_limit: int,
         global_concurrency_limit: int,
     ) -> tuple[GenerationSnapshot, bool]:
@@ -77,6 +79,19 @@ class SqlAlchemyGenerationRepository:
                         "Доступ к генерациям для этого аккаунта ограничен.",
                         details={"reason": restriction.reason},
                     )
+
+                if source_publication_id is not None:
+                    source_publication = await session.scalar(
+                        select(Publication).where(
+                            Publication.id == source_publication_id,
+                            Publication.active.is_(True),
+                        )
+                    )
+                    if source_publication is None:
+                        raise SubmissionError(
+                            ErrorCode.VALIDATION,
+                            "Источник ремикса больше недоступен.",
+                        )
 
                 global_active = await session.scalar(
                     select(func.count(Generation.id)).where(
@@ -132,6 +147,18 @@ class SqlAlchemyGenerationRepository:
                 )
                 generation = insert_result.scalar_one_or_none()
                 if generation is not None:
+                    # Remix lineage is committed in the same admission transaction as
+                    # billing reservation and submit outbox. A derived generation can
+                    # therefore never become billable while losing its source marker.
+                    if source_publication_id is not None:
+                        session.add(
+                            GenerationLineage(
+                                generation_id=generation.id,
+                                source_publication_id=source_publication_id,
+                            )
+                        )
+                        await session.flush()
+
                     # Price lookup, wallet lock, reserve movement, immutable ledger entry,
                     # generation and outbox are committed as one transaction.
                     await reserve_generation_charge(
