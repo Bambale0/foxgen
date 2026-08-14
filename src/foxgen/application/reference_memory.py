@@ -129,10 +129,11 @@ class ReferenceMemoryService:
     ) -> ReferenceSaveResult:
         if user_id <= 0:
             raise SubmissionError(ErrorCode.VALIDATION, "Не удалось определить пользователя.")
-        if not storage_key.startswith("inputs/"):
+        expected_prefix = f"inputs/{user_id}/"
+        if not storage_key.startswith(expected_prefix):
             raise SubmissionError(
-                ErrorCode.VALIDATION,
-                "В память можно сохранить только текущий приватный входной файл.",
+                ErrorCode.AUTHORIZATION,
+                "Этот временный файл не принадлежит текущему пользователю.",
             )
 
         media = await self._input_source.describe(storage_key)
