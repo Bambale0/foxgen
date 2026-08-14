@@ -2,23 +2,7 @@
 
 This file records known gaps that must not be silently described as completed production behavior.
 
-## 1. Automatic temporary-input lifecycle bootstrap
-
-Status: **not active in current `main`**.
-
-Application cleanup removes temporary `inputs/` objects while the draft still knows their keys, but Redis TTL/crash abandonment can orphan objects. Production storage therefore requires an externally configured lifecycle rule.
-
-Recommended baseline:
-
-```text
-prefix: inputs/
-expire current objects after: 2 days
-abort incomplete multipart uploads after: 1 day
-```
-
-Tracked by issue **#50**. An implementation exists on an unmerged branch/PR but must be rebased/revalidated against current `main` before documentation can describe it as active.
-
-## 2. Admin extension transport wiring
+## 1. Admin extension transport wiring
 
 Status: **service/extension modules exist, but selected extension routers are not registered by the current runtime entrypoints**.
 
@@ -56,7 +40,7 @@ The underlying admin services/domain models remain present. Existing registered 
 
 Do not work around this gap by duplicating service logic in new handlers. The correct fix is to register the existing extension routers before broad fallbacks, add route/FSM regression tests and then update this document/API reference.
 
-## 3. `FOXGEN_S3_CREATE_BUCKET` is declared but inactive
+## 2. `FOXGEN_S3_CREATE_BUCKET` is declared but inactive
 
 Status: **reserved setting; current application storage does not consume it**.
 
@@ -70,11 +54,9 @@ FOXGEN_S3_CREATE_BUCKET=false
 
 but current `S3MediaStorage` has no create-bucket option and expects the configured bucket to already exist. Setting this variable to `true` therefore does not provision an external S3 bucket.
 
-Current Compose MinIO bootstrap creates the configured local/production MinIO bucket through infrastructure setup. For an external S3-compatible deployment, provision the private bucket separately.
+Repository Compose MinIO bootstrap creates the bundled private bucket and enforces the temporary `inputs/` lifecycle rule through `minio-init`. For an external S3-compatible deployment, provision the private bucket separately and configure an equivalent temporary-input lifecycle policy.
 
-This is distinct from issue #50: an existing bucket still requires the temporary `inputs/` lifecycle policy.
-
-The eventual fix should either wire controlled bootstrap semantics with tests or remove/deprecate the unused setting. Normal request-time media upload should not opportunistically create production buckets.
+The eventual #57 fix should either wire controlled application bootstrap semantics with tests or remove/deprecate the unused setting. Normal request-time media upload should not opportunistically create production buckets.
 
 ## Documentation rule
 
