@@ -12,7 +12,7 @@ The managed rule must:
 - abort incomplete multipart uploads after `FOXGEN_INPUT_MULTIPART_ABORT_DAYS`;
 - preserve every lifecycle rule not owned by FoxGen.
 
-`minio-init` also preserves the previous Compose responsibility of creating the bundled private MinIO bucket when it does not yet exist. This does not activate the separate application setting `FOXGEN_S3_CREATE_BUCKET`; external S3-compatible deployments remain responsible for their own bucket provisioning contract.
+`minio-init` also preserves the Compose responsibility of creating the bundled private MinIO bucket when it does not yet exist. Application API/bot/worker code has no bucket-creation switch and never provisions external S3 infrastructure.
 
 ## Normal deployment
 
@@ -63,7 +63,15 @@ Re-running the initializer is safe and idempotent. It replaces only the FoxGen-m
 
 ## External S3-compatible storage
 
-`docker-compose.prod.yml` manages the bundled MinIO service. If production deliberately replaces that topology with an external S3-compatible provider, configure an equivalent private-bucket `inputs/` lifecycle rule through that provider's infrastructure mechanism and verify it during deployment. Do not point public clients at storage credentials or make the bucket public as a workaround.
+`docker-compose.prod.yml` manages the bundled MinIO service. If production deliberately replaces that topology with an external S3-compatible provider:
+
+1. provision the private bucket explicitly before FoxGen startup;
+2. give FoxGen only the object permissions required by normal media operations;
+3. configure an equivalent private-bucket `inputs/` lifecycle rule through the provider's infrastructure mechanism;
+4. verify bucket existence, privacy and lifecycle during deployment;
+5. do not expect application request/worker execution to create the bucket.
+
+Do not point public clients at storage credentials or make the bucket public as a workaround.
 
 ## Rollback
 

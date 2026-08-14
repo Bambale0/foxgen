@@ -2,7 +2,7 @@
 
 FoxGen application configuration is defined by `foxgen.core.config.Settings`. Application variables use the `FOXGEN_` prefix and empty optional values from `.env` are ignored by pydantic-settings. Infrastructure bootstrap scripts may also consume explicitly documented `FOXGEN_` variables without adding them to the application `Settings` model.
 
-This document groups settings by responsibility. Exact application validation ranges remain enforced by the `Settings` model. A declared setting is not assumed to be operational unless executable code consumes it; reserved/inactive settings are called out explicitly.
+This document groups settings by responsibility. Exact application validation ranges remain enforced by the `Settings` model. A configuration name is part of the supported contract only when executable code consumes it and this documentation describes that behavior.
 
 ## Runtime
 
@@ -118,11 +118,14 @@ The worker retry budget does not authorize a second billable provider POST. Prov
 | `FOXGEN_S3_ACCESS_KEY_ID` | empty | Storage credential |
 | `FOXGEN_S3_SECRET_ACCESS_KEY` | empty | Storage credential |
 | `FOXGEN_S3_FORCE_PATH_STYLE` | `true` | Compatibility switch for MinIO/S3 implementations |
-| `FOXGEN_S3_CREATE_BUCKET` | `false` | **Reserved/inactive in current application runtime.** Declared by `Settings` but not consumed by `S3MediaStorage`; setting it to `true` does not create an external bucket. Tracked by issue #57. |
 
-Current `S3MediaStorage` writes/reads the configured bucket and can health-check it, but it does not perform application request-time bucket creation. Repository Compose uses a separate `minio-init` infrastructure bootstrap to ensure its bundled MinIO bucket exists. Deployments using an external S3-compatible endpoint outside that topology must provision the private bucket separately.
+`S3MediaStorage` intentionally does **not** create buckets during API requests, bot flows or worker execution. Bucket provisioning is an infrastructure responsibility:
 
-Do not depend on `FOXGEN_S3_CREATE_BUCKET=true` for external production provisioning until #57 is explicitly implemented or the setting is removed.
+- repository Compose uses `minio-init` to create the bundled private MinIO bucket before application services start;
+- deployments using an external S3-compatible endpoint must provision the private bucket before FoxGen startup and grant only the required object/lifecycle permissions;
+- temporary `inputs/` lifecycle enforcement remains mandatory as described below.
+
+The previously documented `FOXGEN_S3_CREATE_BUCKET` flag has been removed from `Settings` and both env examples because no runtime code consumed it. Keeping a dead toggle would make production behavior ambiguous. Legacy deployments that still have that environment variable set may remove it; `Settings` ignores unknown variables and no bucket creation behavior is attached to that name.
 
 Local `.env.example` contains development MinIO credentials. They are forbidden in production; `scripts/deploy-production.sh` rejects known development secrets.
 
@@ -141,7 +144,7 @@ These are not application request settings and are intentionally not part of `fo
 
 Never choose an input retention shorter than the legitimate provider fetch/interaction window. The managed rule targets `inputs/` only; durable `generations/` objects must retain their product storage policy.
 
-External S3-compatible deployments that do not use the repository's bundled MinIO Compose topology must implement and verify an equivalent prefix-scoped policy through their infrastructure provider.
+External S3-compatible deployments that do not use the repository's bundled MinIO Compose topology must provision the private bucket and implement/verify an equivalent prefix-scoped lifecycle policy through their infrastructure provider.
 
 See `input-media-lifecycle.md` and `minio-lifecycle-runbook.md`.
 

@@ -2,29 +2,25 @@
 
 This file records known gaps that must not be silently described as completed production behavior.
 
-## 1. `FOXGEN_S3_CREATE_BUCKET` is declared but inactive
+## Current status
 
-Status: **reserved setting; current application storage does not consume it**.
+No repository-level production limitation is currently listed here.
 
-Tracked by issue **#57**.
+This does **not** mean the whole FoxGen product roadmap is complete. Open product/model/feed/payment/referral issues remain tracked in GitHub. This document is reserved for mismatches where code/configuration could otherwise be mistaken for active production behavior.
 
-`Settings` declares:
-
-```text
-FOXGEN_S3_CREATE_BUCKET=false
-```
-
-but current `S3MediaStorage` has no create-bucket option and expects the configured bucket to already exist. Setting this variable to `true` therefore does not provision an external S3 bucket.
-
-Repository Compose MinIO bootstrap creates the bundled private bucket and enforces the temporary `inputs/` lifecycle rule through `minio-init`. For an external S3-compatible deployment, provision the private bucket separately and configure an equivalent temporary-input lifecycle policy.
-
-The eventual #57 fix should either wire controlled application bootstrap semantics with tests or remove/deprecate the unused setting. Normal request-time media upload should not opportunistically create production buckets.
+Storage provisioning is now explicit: application request/worker code never creates S3 buckets, repository Compose provisions its bundled private MinIO bucket through `minio-init`, and external S3-compatible deployments must provision a private bucket before FoxGen startup.
 
 ## Documentation rule
+
+When a new limitation is discovered:
+
+1. create/identify the tracked issue;
+2. document only executable current behavior and the exact gap;
+3. do not describe prepared/unwired code as production-active.
 
 When a limitation is resolved:
 
 1. merge executable code and tests first;
 2. remove/update the limitation in the same PR;
-3. update `api-reference.md`, `admin-capability-matrix.md`, `telegram-flows.md`, `configuration.md` or `input-media-lifecycle.md` as applicable;
-4. update env examples and production preflight/runbook if operational setup changes.
+3. update the relevant API/configuration/runbook documentation;
+4. update env examples and production preflight when operational setup changes.
