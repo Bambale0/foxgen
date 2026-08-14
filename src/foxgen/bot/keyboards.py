@@ -14,7 +14,11 @@ def resolve_miniapp_url(settings: Settings | None = None) -> str | None:
     """Return the public Happy Fox Mini App URL when Telegram can reach it."""
 
     resolved = settings or get_settings()
-    if not resolved.miniapp_enabled or resolved.kie_callback_base_url is None:
+    if not resolved.miniapp_enabled:
+        return None
+    if resolved.miniapp_public_url is not None:
+        return f"{str(resolved.miniapp_public_url).rstrip('/')}/"
+    if resolved.kie_callback_base_url is None:
         return None
     base_url = str(resolved.kie_callback_base_url).rstrip("/")
     return f"{base_url}/mini-app/"
