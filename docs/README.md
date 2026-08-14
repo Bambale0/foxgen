@@ -11,13 +11,14 @@ This directory documents the executable state of FoxGen on `main`. Source code, 
 | [`architecture.md`](architecture.md) | Service boundaries, durable pipelines and safety invariants |
 | [`database-schema.md`](database-schema.md) | PostgreSQL table/state/constraint map |
 | [`configuration.md`](configuration.md) | Complete configuration groups and production rules |
-| [`api-reference.md`](api-reference.md) | Core, billing/generation and signed internal-admin HTTP surface |
+| [`api-reference.md`](api-reference.md) | Core, public Mini App, billing/generation and signed internal-admin HTTP surface |
+| [`miniapp.md`](miniapp.md) | Happy Fox public Telegram Mini App UX, auth, API and media boundaries |
 | [`telegram-flows.md`](telegram-flows.md) | User Telegram flows, Quick Start, FSM and `/admin` shell |
 | [`model-matrix.md`](model-matrix.md) | KIE model readiness and contract policy |
 | [`billing.md`](billing.md) | Pricing, wallet, immutable ledger and settlement |
 | [`generation-operations.md`](generation-operations.md) | Status/cancel/operator resolution for durable generations |
 | [`postprocessing-reconciliation.md`](postprocessing-reconciliation.md) | Retry/dead-letter/media/delivery reconciliation |
-| [`input-media-lifecycle.md`](input-media-lifecycle.md) | Telegram input object lifecycle and cleanup requirements |
+| [`input-media-lifecycle.md`](input-media-lifecycle.md) | Telegram/Mini App input object lifecycle and cleanup requirements |
 | [`minio-lifecycle-runbook.md`](minio-lifecycle-runbook.md) | Compose MinIO lifecycle bootstrap, verification and recovery |
 | [`admin-capability-matrix.md`](admin-capability-matrix.md) | Admin capability/domain/transport matrix |
 | [`admin-control-plane.md`](admin-control-plane.md) | Admin security, HMAC, RBAC, extensions, workers and rollout |
@@ -33,34 +34,35 @@ This directory documents the executable state of FoxGen on `main`. Source code, 
 
 ## Scope boundary
 
-The public Mini App is intentionally excluded from the current documentation baseline. The backend-only admin operator web and its extension routes are implemented private operator surfaces; they do not imply a finished public Mini App.
+The public Telegram Mini App is implemented as the **Happy Fox** transport surface at `/mini-app/` with owner-scoped `/v1/miniapp/*` APIs. It reuses existing application/domain services for generation and billing rather than duplicating business logic. The backend-only admin operator web remains a separate private operator surface.
 
 ## Current production architecture
 
 ```text
-Telegram bot / trusted services
-          |
-          v
-       FastAPI
-       |  |  \
-       |  |   +--> signed internal admin control plane
-       |  +------> provider callback intake
-       +---------> paid generation admission
-          |
-          v
-      PostgreSQL <----> foxgen-worker
-          |                 |
-          |                 +--> KIE status/submission
-          |                 +--> archive/delivery
-          |                 +--> admin/support/campaign jobs
-          |
-       Redis             S3-compatible storage
-       FSM/locks         private media
+Telegram bot -----------+
+                        |
+Happy Fox Mini App -----+--> FastAPI
+                        |    |  |  \
+Trusted services -------+    |  |   +--> signed internal admin control plane
+                             |  +------> provider callback intake
+                             +---------> shared paid generation admission
+                                |
+                                v
+                            PostgreSQL <----> foxgen-worker
+                                |                 |
+                                |                 +--> KIE status/submission
+                                |                 +--> archive/delivery
+                                |                 +--> admin/support/campaign jobs
+                                |
+                             Redis             S3-compatible storage
+                             FSM/locks         private media
 ```
 
 ## Durable state ownership
 
 PostgreSQL is the source of truth for generations, billing, outbox/inbox events, media metadata, delivery, administrative commands/audit, support, campaigns, tariffs and runtime admin data. Redis is intentionally non-authoritative for business state: it stores Telegram FSM data, per-key event isolation and rate/lock data. S3-compatible storage stores private input/result bytes.
+
+The Happy Fox browser holds only a short-lived Telegram-derived JWT and short-lived media capabilities. It does not become a business-state source of truth and never receives internal API, KIE, admin or S3 credentials.
 
 Storage provisioning is infrastructure-owned: repository Compose provisions bundled MinIO through `minio-init`; application request/worker code never creates buckets; external S3-compatible deployments pre-provision a private bucket and equivalent temporary-input lifecycle.
 
@@ -73,11 +75,12 @@ Storage provisioning is infrastructure-owned: repository Compose provisions bund
 5. Administrative writes are server-authorized, audited and idempotent; destructive/expensive operations require confirmation.
 6. Admin HTTP is backend-only, network allowlisted and signed over exact raw request bytes.
 7. User/provider media remains private; public clients never receive storage credentials.
-8. Production deployment is gated by CI and deploys an exact tested `main` SHA.
-9. An existing source module/branch is not documented as active until it is wired/merged and covered by runtime tests.
-10. Specific privileged routes must stay ahead of generic route/callback fallbacks when matching order affects reachability.
-11. Compose-managed MinIO must verify the prefix-scoped temporary `inputs/` lifecycle before API, worker and bot startup.
-12. Application media execution must not opportunistically provision S3 infrastructure.
+8. Happy Fox validates Telegram `initData` server-side and uses owner-scoped APIs with short-lived JWT/media URLs.
+9. Production deployment is gated by CI and deploys an exact tested `main` SHA.
+10. An existing source module/branch is not documented as active until it is wired/merged and covered by runtime tests.
+11. Specific privileged routes must stay ahead of generic route/callback fallbacks when matching order affects reachability.
+12. Compose-managed MinIO must verify the prefix-scoped temporary `inputs/` lifecycle before API, worker and bot startup.
+13. Application media execution must not opportunistically provision S3 infrastructure.
 
 ## Known limitations are first-class documentation
 
@@ -85,6 +88,6 @@ Storage provisioning is infrastructure-owned: repository Compose provisions bund
 
 ## How to update documentation
 
-When code changes, update documentation by behavior area rather than adding an isolated note. Remove obsolete roadmap language. For a schema change, update architecture/schema/state docs and operational rollback notes. For a new admin capability, update capability matrix, API/runbook and limitation status. For new configuration, update `configuration.md`, `.env.example` and `deploy/production.env.example` together.
+When code changes, update documentation by behavior area rather than adding an isolated note. Remove obsolete roadmap language. For a schema change, update architecture/schema/state docs and operational rollback notes. For a new admin capability, update capability matrix, API/runbook and limitation status. For new configuration, update `configuration.md`, `.env.example` and `deploy/production.env.example` together. For Happy Fox changes, keep `miniapp.md`, API/security/configuration docs and user-facing branding synchronized.
 
 Review [`documentation-policy.md`](documentation-policy.md) and [`../AGENTS.md`](../AGENTS.md) for maintenance rules.

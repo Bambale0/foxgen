@@ -8,7 +8,8 @@ from uuid import UUID
 
 from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse
-from pydantic import BaseModel, ConfigDict, ValidationError
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel, ConfigDict, SecretStr, ValidationError
 
 from foxgen import __version__
 from foxgen.admin.availability import SqlAlchemyModelAvailabilityGuard
@@ -24,6 +25,7 @@ from foxgen.api.generations import (
     ReconciliationProtocol,
     create_generation_router,
 )
+from foxgen.api.miniapp import MiniAppRepositoryProtocol, create_miniapp_router
 from foxgen.api.security import authenticate_submission, validate_idempotency_key
 from foxgen.application.generation_ops import GenerationOperationsService
 from foxgen.application.reconciliation import ReconciliationService
@@ -34,6 +36,8 @@ from foxgen.infra.billing import SqlAlchemyBillingRepository
 from foxgen.infra.billing_lifecycle_repository import BillingAwareLifecycleRepository
 from foxgen.infra.database import Database
 from foxgen.infra.input_media import LocalInputMediaStorage, input_media_content_type
+from foxgen.infra.media import S3MediaStorage
+from foxgen.infra.miniapp import SqlAlchemyMiniAppRepository
 from foxgen.infra.rate_limit import RedisSubmissionRateLimiter
 from foxgen.infra.redis import RedisPool
 from foxgen.infra.repositories import SqlAlchemyGenerationRepository
@@ -146,6 +150,7 @@ def _error_status(code: ErrorCode) -> int:
         ErrorCode.AUTHENTICATION: 401,
         ErrorCode.AUTHORIZATION: 403,
         ErrorCode.INSUFFICIENT_CREDITS: 402,
+        ErrorCode.PRICING_UNAVAILABLE: 503,
         ErrorCode.IDEMPOTENCY_CONFLICT: 409,
         ErrorCode.RATE_LIMITED: 429,
         ErrorCode.CONCURRENCY_LIMITED: 429,
@@ -180,6 +185,27 @@ def _webhook_hash(payload: dict[str, object]) -> str:
     return hashlib.sha256(canonical).hexdigest()
 
 
+def _secret_value(value: SecretStr | None) -> str | None:
+    if value is None:
+        return None
+    return value.get_secret_value()
+
+
+def _miniapp_repository(settings: Settings, database: Database) -> SqlAlchemyMiniAppRepository:
+    media_signer = S3MediaStorage(
+        bucket=settings.s3_bucket,
+        region=settings.s3_region,
+        endpoint_url=str(settings.s3_endpoint_url)
+        if settings.s3_endpoint_url is not None
+        else None,
+        access_key_id=_secret_value(settings.s3_access_key_id),
+        secret_access_key=_secret_value(settings.s3_secret_access_key),
+        force_path_style=settings.s3_force_path_style,
+        presigned_url_ttl_seconds=settings.miniapp_media_url_ttl_seconds,
+    )
+    return SqlAlchemyMiniAppRepository(database, media_signer)
+
+
 def create_app(
     settings: Settings | None = None,
     *,
@@ -189,6 +215,7 @@ def create_app(
     billing_service: BillingServiceProtocol | None = None,
     generation_operations: GenerationOperationsProtocol | None = None,
     reconciliation_service: ReconciliationProtocol | None = None,
+    miniapp_repository: MiniAppRepositoryProtocol | None = None,
     admin_services: AdminServices | None = None,
 ) -> FastAPI:
     resolved_settings = settings or get_settings()
@@ -216,7 +243,7 @@ def create_app(
                 repository=SqlAlchemyGenerationRepository(database),
                 rate_limiter=RedisSubmissionRateLimiter(
                     redis.client,
-                    user_limit_per_minute=(resolved_settings.submission_user_rate_limit_per_minute),
+                    user_limit_per_minute=resolved_settings.submission_user_rate_limit_per_minute,
                     global_limit_per_minute=(
                         resolved_settings.submission_global_rate_limit_per_minute
                     ),
@@ -234,6 +261,8 @@ def create_app(
             app.state.generation_operations = GenerationOperationsService(lifecycle_repository)
         if app.state.reconciliation_service is None:
             app.state.reconciliation_service = ReconciliationService(lifecycle_repository)
+        if app.state.miniapp_repository is None:
+            app.state.miniapp_repository = _miniapp_repository(resolved_settings, database)
 
         try:
             yield
@@ -253,9 +282,12 @@ def create_app(
     app.state.billing_service = billing_service
     app.state.generation_operations = generation_operations
     app.state.reconciliation_service = reconciliation_service
+    app.state.miniapp_repository = miniapp_repository
     app.state.admin_services = admin_services
     app.include_router(create_billing_router(resolved_settings))
     app.include_router(create_generation_router(resolved_settings))
+    if resolved_settings.miniapp_enabled:
+        app.include_router(create_miniapp_router(resolved_settings))
     app.include_router(create_admin_router(resolved_settings))
     app.include_router(create_admin_extensions_router(resolved_settings))
     # Extension routes must precede the generic /internal/admin/ui/api/{section}
@@ -329,7 +361,9 @@ def create_app(
         try:
             path = await storage.validate_request(storage_key, expires, signature)
         except FoxGenError as exc:
-            raise HTTPException(status_code=_error_status(exc.code), detail=exc.public_message) from exc
+            raise HTTPException(
+                status_code=_error_status(exc.code), detail=exc.public_message
+            ) from exc
         return _input_media_response(path)
 
     @app.get("/v1/models")
@@ -426,6 +460,14 @@ def create_app(
             payload=raw_payload,
         )
         return {"status": "accepted", "task_id": task_id, "duplicate": not inserted}
+
+    if resolved_settings.miniapp_enabled:
+        miniapp_directory = Path(__file__).resolve().parents[1] / "miniapp_static"
+        app.mount(
+            "/mini-app",
+            StaticFiles(directory=miniapp_directory, html=True),
+            name="happy-fox-miniapp",
+        )
 
     return app
 
