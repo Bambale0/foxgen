@@ -55,7 +55,9 @@ class ReferenceObjectStorage(Protocol):
 
     async def delete(self, storage_key: str) -> None: ...
 
-    async def presigned_url(self, storage_key: str) -> str: ...
+
+class ReferenceReadUrlSigner(Protocol):
+    async def url(self, asset_id: UUID) -> str: ...
 
 
 class ReferenceMemoryRepository(Protocol):
@@ -111,12 +113,14 @@ class ReferenceMemoryService:
         repository: ReferenceMemoryRepository,
         input_source: TemporaryInputSource,
         storage: ReferenceObjectStorage,
+        url_signer: ReferenceReadUrlSigner,
         max_items: int,
         max_bytes: int,
     ) -> None:
         self._repository = repository
         self._input_source = input_source
         self._storage = storage
+        self._url_signer = url_signer
         self._max_items = max_items
         self._max_bytes = max_bytes
 
@@ -239,7 +243,7 @@ class ReferenceMemoryService:
             content_type=asset.content_type,
             size_bytes=asset.size_bytes,
             created_at=asset.created_at,
-            preview_url=await self._storage.presigned_url(asset.storage_key),
+            preview_url=await self._url_signer.url(asset.id),
         )
 
 
