@@ -37,6 +37,7 @@ class PublicationView:
     generation_id: UUID
     author: PublicProfileView
     scope: PublicationScope
+    active: bool
     model_slug: str
     media_kind: str
     prompt: str | None
