@@ -9,8 +9,9 @@ The managed rule must:
 - use ID `foxgen-expire-telegram-inputs`;
 - filter only the `inputs/` prefix;
 - expire completed input objects after `FOXGEN_INPUT_RETENTION_DAYS`;
-- abort incomplete multipart uploads after `FOXGEN_INPUT_MULTIPART_ABORT_DAYS`;
 - preserve every lifecycle rule not owned by FoxGen.
+
+Bundled MinIO does not round-trip `AbortIncompleteMultipartUpload` through `PutBucketLifecycle`/`GetBucketLifecycleConfiguration`, so FoxGen configures stale multipart cleanup separately through MinIO server settings instead of treating it as a lifecycle read-back invariant.
 
 `minio-init` also preserves the Compose responsibility of creating the bundled private MinIO bucket when it does not yet exist. Application API/bot/worker code has no bucket-creation switch and never provisions external S3 infrastructure.
 
@@ -33,6 +34,8 @@ Defaults:
 ```env
 FOXGEN_INPUT_RETENTION_DAYS=2
 FOXGEN_INPUT_MULTIPART_ABORT_DAYS=1
+FOXGEN_MINIO_STALE_UPLOADS_EXPIRY=24h
+FOXGEN_MINIO_STALE_UPLOADS_CLEANUP_INTERVAL=6h
 FOXGEN_MINIO_INIT_ATTEMPTS=30
 FOXGEN_MINIO_INIT_RETRY_SECONDS=2
 ```
@@ -46,9 +49,9 @@ docker compose --env-file .env -f docker-compose.prod.yml logs minio-init
 docker compose --env-file .env -f docker-compose.prod.yml ps
 ```
 
-Expected initializer output includes the bucket, `inputs/` prefix, retention days and multipart-abort days. API, worker and bot must not start when `minio-init` exits unsuccessfully.
+Expected initializer output includes the bucket, `inputs/` prefix and retention days. On bundled MinIO it may also log that multipart-abort read-back is omitted and that server-wide stale multipart cleanup is being relied on. API, worker and bot must not start when `minio-init` exits unsuccessfully.
 
-The initializer reads the bucket lifecycle back after writing it. Success means exactly one enabled rule with ID `foxgen-expire-telegram-inputs` matches the requested `inputs/` policy. Unrelated lifecycle rules must remain intact.
+The initializer reads the bucket lifecycle back after writing it. Success means exactly one enabled rule with ID `foxgen-expire-telegram-inputs` matches the requested `inputs/` prefix-scoped expiration policy. Unrelated lifecycle rules must remain intact.
 
 ## Failure recovery
 
@@ -56,8 +59,9 @@ The initializer reads the bucket lifecycle back after writing it. Success means 
 2. Confirm access key, secret key, bucket and region values in the server-side `.env`.
 3. Run `minio-init` manually and inspect the exact S3 error.
 4. Check that the credentials can read and write bucket lifecycle configuration.
-5. Do not bypass the dependency gate by starting application services with `--no-deps`.
-6. Do not broaden the rule to the whole bucket or to `generations/`.
+5. Confirm bundled MinIO stale multipart cleanup settings are present when using repository Compose.
+6. Do not bypass the dependency gate by starting application services with `--no-deps`.
+7. Do not broaden the rule to the whole bucket or to `generations/`.
 
 Re-running the initializer is safe and idempotent. It replaces only the FoxGen-managed rule and preserves unrelated rules.
 

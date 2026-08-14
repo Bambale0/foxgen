@@ -79,7 +79,7 @@ Storage provisioning is infrastructure-owned: repository Compose provisions bund
 9. Production deployment is gated by CI and deploys an exact tested `main` SHA.
 10. An existing source module/branch is not documented as active until it is wired/merged and covered by runtime tests.
 11. Specific privileged routes must stay ahead of generic route/callback fallbacks when matching order affects reachability.
-12. Compose-managed MinIO must verify the prefix-scoped temporary `inputs/` lifecycle before API, worker and bot startup.
+12. Compose-managed MinIO must verify the prefix-scoped temporary `inputs/` lifecycle and bundled stale-multipart cleanup prerequisites before API, worker and bot startup.
 13. Application media execution must not opportunistically provision S3 infrastructure.
 
 ## Known limitations are first-class documentation

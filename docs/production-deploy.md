@@ -137,7 +137,8 @@ Default policy:
 ```text
 prefix: inputs/
 expire after: 2 days
-abort incomplete multipart uploads after: 1 day
+bundled MinIO stale multipart expiry: 24h
+bundled MinIO stale multipart cleanup interval: 6h
 ```
 
 Configuration:
@@ -145,11 +146,13 @@ Configuration:
 ```env
 FOXGEN_INPUT_RETENTION_DAYS=2
 FOXGEN_INPUT_MULTIPART_ABORT_DAYS=1
+FOXGEN_MINIO_STALE_UPLOADS_EXPIRY=24h
+FOXGEN_MINIO_STALE_UPLOADS_CLEANUP_INTERVAL=6h
 FOXGEN_MINIO_INIT_ATTEMPTS=30
 FOXGEN_MINIO_INIT_RETRY_SECONDS=2
 ```
 
-The initializer preserves unrelated lifecycle rules, replaces only the FoxGen-managed rule and fails startup when read-back verification does not match. Do not bypass the Compose dependency gate. Do not apply short retention to durable generated results.
+The initializer preserves unrelated lifecycle rules, replaces only the FoxGen-managed rule and fails startup when read-back verification does not match. Bundled MinIO does not round-trip `AbortIncompleteMultipartUpload` through the lifecycle API, so Compose also sets explicit server-wide stale multipart cleanup values. Do not bypass the Compose dependency gate. Do not apply short retention to durable generated results.
 
 A deployment that replaces bundled MinIO with external S3-compatible storage must provision the private bucket and equivalent `inputs/` lifecycle enforcement through that external infrastructure. See `input-media-lifecycle.md` and `minio-lifecycle-runbook.md`.
 
@@ -233,7 +236,7 @@ docker compose --env-file .env -f docker-compose.prod.yml logs --tail=200 api wo
 curl --fail --silent http://127.0.0.1:${FOXGEN_PUBLIC_API_PORT:-8080}/health/ready
 ```
 
-Confirm `minio-init` reports the intended bucket, `inputs/` prefix and retention values before considering the storage preflight complete.
+Confirm `minio-init` reports the intended bucket, `inputs/` prefix and retention values before considering the storage preflight complete. On bundled MinIO a compatibility notice about omitted multipart-abort read-back is expected.
 
 Also smoke test according to enabled features:
 
