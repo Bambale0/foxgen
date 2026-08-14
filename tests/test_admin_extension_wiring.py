@@ -160,8 +160,6 @@ async def test_signed_and_web_analytics_extensions_are_reachable_when_enabled() 
 
     assert signed.status_code == 200
     assert signed.json() == {"admin": 100, "hours": 12}
-    # This also guards route ordering: the base web router has a generic
-    # /api/{section} GET which would otherwise shadow this extension route.
     assert web.status_code == 200
     assert web.json() == {"admin": 100, "hours": 6}
 
@@ -181,6 +179,7 @@ def test_telegram_extension_router_precedes_product_and_shell_fallbacks() -> Non
         "foxgen-global-commands",
         "foxgen-admin-extras",
         "foxgen-admin",
+        "foxgen-generation-wizard",
         "foxgen-quick-start",
         "foxgen-generation",
         "foxgen-shell",
