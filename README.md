@@ -2,9 +2,28 @@
 
 FoxGen is a Telegram-first multimodal AI generation platform built on Python 3.12, FastAPI, aiogram 3, PostgreSQL, Redis, S3-compatible object storage and KIE.ai.
 
-This README describes code that is merged and reachable in `main`. The public Mini App is intentionally treated as a separate product surface and is not documented as implemented here.
+The public user-facing Mini App is branded **Happy Fox**. Internal repository/package/service identifiers remain `foxgen`; the brand change does not alter durable backend contracts.
 
 ## What is implemented
+
+### Happy Fox public Mini App
+
+- packaged public mobile surface at `/mini-app/` with dark graphite/orange UI;
+- user-facing brand is `Happy Fox` only;
+- Telegram `initData` is verified server-side before a short-lived Mini App JWT is issued;
+- owner-scoped `/v1/miniapp/*` APIs expose real balance, immutable ledger history, active prices, model catalog and recent generations;
+- image creation for Seedream 5 Pro, Nano Banana 2 and Nano Banana Pro with optional private references and model-specific settings;
+- video creation for Seedance 2 / Mini with text, first-frame, first+last and multimodal-reference scenarios;
+- paid launches reuse the same `SubmissionService`, model contracts, rate/concurrency gates, atomic reservation and durable outbox as Telegram;
+- private authenticated input upload under a user namespace and short-lived result-media URLs;
+- gallery/history, lifecycle polling, safe cancellation boundary, remix into a new draft and download;
+- profile/wallet screen with real balance and ledger projection;
+- Telegram viewport/content-safe-area and BackButton integration;
+- browser-only demo mode for visual review; demo cannot perform authenticated balance/upload/paid operations.
+
+The public payment-provider invoice flow remains owned by EPIC #7. Happy Fox does not fake a top-up or mutate balances from the browser when that flow is not configured.
+
+See [`docs/miniapp.md`](docs/miniapp.md).
 
 ### Telegram product shell
 
@@ -12,8 +31,9 @@ This README describes code that is merged and reachable in `main`. The public Mi
 - Quick Start from the main menu;
 - photo/video sent with no active FSM is accepted as a reference entrypoint;
 - user chooses whether to create an image or a video from the received reference;
-- compatible model selection and model-specific settings;
+- user-friendly image/video screen FSM with model-specific dynamic settings;
 - Redis-backed FSM with back/cancel/menu, invalid-input handling, stale callback recovery and TTL expiry;
+- `/start` and `/menu` are global first-priority interrupts and clear every active generation screen plus known temporary inputs;
 - Redis event isolation serializes concurrent updates for one FSM key;
 - Telegram albums are rejected before upload;
 - private local storage for Telegram reference files;
@@ -47,7 +67,7 @@ This README describes code that is merged and reachable in `main`. The public Mi
 
 ### Administrative control plane
 
-FoxGen has one administrative domain layer exposed through the registered Telegram `/admin`, signed backend HTTP API and internal operator web surface. The public Mini App is not part of this implementation.
+FoxGen has one administrative domain layer exposed through the registered Telegram `/admin`, signed backend HTTP API and internal operator web surface. Happy Fox is a separate public transport surface and cannot use administrative credentials.
 
 Registered/current capabilities include:
 
@@ -77,32 +97,33 @@ Every admin write is server-authorized. Signed HTTP admin requests are network a
 
 ```text
 Telegram bot ────────────────┐
-                            │
-Trusted internal clients ───┼──> FastAPI
-                            │      ├── paid generation admission
-Telegram /admin ────────────┤      ├── registered signed internal admin API
-                            │      └── provider callbacks
-                            │
-                            v
-                     Application services
-                     ├── submissions
-                     ├── generation lifecycle
-                     ├── billing
-                     ├── reconciliation
-                     └── admin services
-                            │
-             ┌──────────────┼──────────────┐
-             v              v              v
-         PostgreSQL        Redis       S3-compatible
-         source of truth   FSM/locks   private media
-             │
-             v
-         foxgen-worker
-         ├── provider submission/polling
-         ├── callback processing
-         ├── archive/delivery
-         └── admin/support/campaign work
+Happy Fox Mini App ──────────┼──> FastAPI
+Trusted internal clients ────┤      ├── shared paid generation admission
+Telegram /admin ─────────────┤      ├── registered signed internal admin API
+                             │      └── provider callbacks
+                             │
+                             v
+                      Application services
+                      ├── submissions
+                      ├── generation lifecycle
+                      ├── billing
+                      ├── reconciliation
+                      └── admin services
+                             │
+              ┌──────────────┼──────────────┐
+              v              v              v
+          PostgreSQL        Redis       S3-compatible
+          source of truth   FSM/locks   private media
+              │
+              v
+          foxgen-worker
+          ├── provider submission/polling
+          ├── callback processing
+          ├── archive/delivery
+          └── admin/support/campaign work
 ```
+
+Happy Fox is transport only: Telegram identity validation and owner-scoped projection happen at the API edge, while paid work continues through existing application/domain services.
 
 See [`docs/architecture.md`](docs/architecture.md) for boundaries and invariants.
 
@@ -134,7 +155,21 @@ cp .env.example .env
 docker compose up --build
 ```
 
-Local Compose provides PostgreSQL, Redis, MinIO, migrations, API, worker and bot. Telegram input files are stored in a private shared volume mounted into `bot` and `api`; generated result archives remain in MinIO. MinIO bootstrap creates the private results bucket when needed, installs the short-retention `inputs/` lifecycle rule for S3-backed deployments, verifies it and gates API/worker/bot startup. MinIO ports are exposed for development only.
+Local Compose provides PostgreSQL, Redis, MinIO, migrations, API, worker and bot. Telegram/Mini App temporary input files are stored in a private shared volume mounted into `bot` and `api`; generated result archives remain in MinIO. MinIO bootstrap creates the private results bucket when needed, installs the short-retention `inputs/` lifecycle rule for S3-backed deployments, verifies it and gates API/worker/bot startup. MinIO ports are exposed for development only.
+
+The visual Happy Fox shell is available at:
+
+```text
+http://localhost:8080/mini-app/
+```
+
+Outside Telegram it runs in non-mutating demo mode. For authenticated Mini App tests configure a Telegram bot token and dedicated JWT secret:
+
+```env
+FOXGEN_MINIAPP_ENABLED=true
+FOXGEN_TELEGRAM_BOT_TOKEN=<bot-token>
+FOXGEN_MINIAPP_JWT_SECRET=<dedicated-miniapp-secret>
+```
 
 Paid provider submission remains disabled until explicitly enabled:
 
@@ -144,9 +179,9 @@ FOXGEN_INTERNAL_API_TOKEN=<dedicated-internal-secret>
 FOXGEN_KIE_API_KEY=<kie-key>
 ```
 
-A test wallet also needs an active model price and enough credits before Telegram confirmation can launch a paid task.
+A test wallet also needs an active model price and enough credits before Telegram or Happy Fox can launch a paid task.
 
-See [`docs/development.md`](docs/development.md).
+See [`docs/development.md`](docs/development.md) and [`docs/miniapp.md`](docs/miniapp.md).
 
 ## Administrative bootstrap
 
@@ -175,7 +210,20 @@ POST /v1/models/{slug}/tasks
 POST /webhooks/kie
 ```
 
-Billing/generation operator routes and the **registered** signed `/internal/admin/*` surface are documented in [`docs/api-reference.md`](docs/api-reference.md).
+Happy Fox adds:
+
+```text
+POST   /v1/miniapp/auth
+GET    /v1/miniapp/bootstrap
+GET    /v1/miniapp/generations
+GET    /v1/miniapp/generations/{id}
+POST   /v1/miniapp/generations/{id}/cancel
+POST   /v1/miniapp/tasks
+POST   /v1/miniapp/input-media
+DELETE /v1/miniapp/input-media/{storage_key}
+```
+
+Billing/generation operator routes and the **registered** signed `/internal/admin/*` surface are documented in [`docs/api-reference.md`](docs/api-reference.md). Happy Fox security/transport details are in [`docs/miniapp.md`](docs/miniapp.md).
 
 Never place internal API tokens, admin HMAC keys, billing credentials or object-storage credentials in Telegram clients, browsers or a public Mini App.
 
@@ -214,9 +262,12 @@ The server keeps its own `.env`; GitHub Actions does not upload application secr
 
 Production Compose runs a fail-closed `minio-init` bootstrap before API/worker/bot startup. It preserves unrelated bucket rules, installs and reads back the short-retention `inputs/` rule, and never targets durable `generations/` results. External S3-compatible topologies must provide equivalent lifecycle enforcement themselves.
 
+For Happy Fox, the public reverse proxy serves `/mini-app/` and `/v1/miniapp/*`; `/internal/admin/*` remains private. Configure the Telegram Main Mini App URL to the public HTTPS `/mini-app/` URL after deploying the tested SHA.
+
 See:
 
 - [`docs/production-deploy.md`](docs/production-deploy.md)
+- [`docs/miniapp.md`](docs/miniapp.md)
 - [`docs/minio-lifecycle-runbook.md`](docs/minio-lifecycle-runbook.md)
 - [`docs/github-environment-setup.md`](docs/github-environment-setup.md)
 - [`docs/operations-runbook.md`](docs/operations-runbook.md)
@@ -224,7 +275,7 @@ See:
 
 ## Documentation index
 
-Start with [`docs/README.md`](docs/README.md). It maps architecture, schema, configuration, API, Telegram FSM, model contracts, billing, admin, security, CI, deployment, reconciliation and operations.
+Start with [`docs/README.md`](docs/README.md). It maps architecture, schema, configuration, API, Happy Fox, Telegram FSM, model contracts, billing, admin, security, CI, deployment, reconciliation and operations.
 
 ## Source-of-truth rules
 
