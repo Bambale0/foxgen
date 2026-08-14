@@ -24,6 +24,7 @@ from foxgen.core.config import Settings, get_settings
 from foxgen.infra.input_media import LocalInputMediaStorage
 
 logger = logging.getLogger(__name__)
+global_commands_router = Router(name="foxgen-global-commands")
 router = Router(name="foxgen-shell")
 FSM_EVENT_LOCK_TIMEOUT_SECONDS = 180
 
@@ -42,13 +43,15 @@ async def clear_state_with_inputs(
     await state.clear()
 
 
-@router.message(CommandStart())
-@router.message(Command("menu"))
+@global_commands_router.message(CommandStart())
+@global_commands_router.message(Command("menu"))
 async def show_menu(
     message: Message,
     state: FSMContext,
     input_media: TelegramInputMediaStorage,
 ) -> None:
+    """Interrupt any active FSM draft and return to the canonical entrypoint."""
+
     await clear_state_with_inputs(state, input_media)
     await message.answer(
         "<b>FoxGen</b>\n\nВыберите раздел.",
@@ -167,8 +170,12 @@ def create_event_isolation(storage: RedisStorage) -> BaseEventIsolation:
 
 
 def register_runtime_routers(dispatcher: Dispatcher) -> None:
-    """Register privileged routers before broad product and shell fallbacks."""
+    """Register interrupt commands first, then privileged/product routers and fallbacks."""
 
+    # /start and /menu are hard interrupts: they must run before any state-specific
+    # text handler (and before admin/product routers) so an active FSM can never
+    # swallow the command as ordinary user input.
+    dispatcher.include_router(global_commands_router)
     # Extension callbacks re-authorize through the signed Admin API on every action.
     # Keep them before the shell's catch-all callback handler so stale recovery cannot
     # swallow a valid privileged action.
