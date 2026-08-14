@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#080808">
+  <meta name="color-scheme" content="dark">
+  <meta name="description" content="Happy Fox — создание изображений и видео с помощью AI прямо в Telegram">
+  <title>Happy Fox</title>
+  <script src="https://telegram.org/js/telegram-web-app.js?63"></script>
+  <link rel="stylesheet" href="/mini-app/app.css">
+</head>
+<body>
+  <div id="app" class="app-shell" aria-live="polite">
+    <main class="boot-screen">
+      <div class="brand-lockup brand-lockup--center">
+        <div class="fox-mark" aria-hidden="true">
+          <svg viewBox="0 0 64 64" role="img">
+            <path d="M8 10 23 18 32 12l9 6 15-8-4 27-20 17L12 37 8 10Z" fill="currentColor"/>
+            <path d="m19 27 9 5-6 4-3-9Zm26 0-9 5 6 4 3-9Z" fill="#090909"/>
+            <path d="m25 40 7 4 7-4-7 10-7-10Z" fill="#090909"/>
+          </svg>
+        </div>
+        <div>
+          <strong>Happy <span>Fox</span></strong>
+          <small>AI-студия в Telegram</small>
+        </div>
+      </div>
+      <div class="boot-orbit" aria-hidden="true"></div>
+      <div class="boot-spinner" aria-label="Загрузка"></div>
+      <p id="boot-message">Подготавливаем студию…</p>
+    </main>
+  </div>
+  <input id="media-picker" class="visually-hidden" type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,audio/mpeg,audio/mp4,audio/wav">
+  <script type="module" src="/mini-app/app.js"></script>
+</body>
+</html>

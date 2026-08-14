@@ -38,6 +38,14 @@ class Settings(BaseSettings):
         le=2_592_000,
     )
 
+    # Public Telegram Mini App. Static UI is safe to serve without secrets; every
+    # user-scoped API operation remains fail-closed until auth is configured.
+    miniapp_enabled: bool = True
+    miniapp_jwt_secret: SecretStr | None = None
+    miniapp_auth_max_age_seconds: int = Field(default=86_400, ge=60, le=604_800)
+    miniapp_jwt_ttl_seconds: int = Field(default=3600, ge=300, le=86_400)
+    miniapp_media_url_ttl_seconds: int = Field(default=300, ge=60, le=3600)
+
     database_url: str = "postgresql+asyncpg://foxgen:foxgen@localhost:5432/foxgen"
     redis_url: str = "redis://localhost:6379/0"
 

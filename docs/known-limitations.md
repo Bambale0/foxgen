@@ -4,11 +4,19 @@ This file records known gaps that must not be silently described as completed pr
 
 ## Current status
 
-No repository-level production limitation is currently listed here.
+### Happy Fox balance top-up
 
-This does **not** mean the whole FoxGen product roadmap is complete. Open product/model/feed/payment/referral issues remain tracked in GitHub. This document is reserved for mismatches where code/configuration could otherwise be mistaken for active production behavior.
+Happy Fox exposes the real materialized wallet balance and immutable ledger history, and paid generation uses the normal atomic FoxGen admission path. The public **Пополнить** affordance does not create a payment invoice yet because the public payment-provider/invoice/webhook portion of EPIC #7 is still open.
 
-Storage provisioning is now explicit: application request/worker code never creates S3 buckets, repository Compose provisions its bundled private MinIO bucket through `minio-init`, and external S3-compatible deployments must provision a private bucket before FoxGen startup.
+The frontend therefore performs no balance mutation and explicitly reports that top-up is not connected. Do not describe Mini App payments as complete until EPIC #7 lands a user-facing payment flow with idempotent provider webhooks and ledger credit.
+
+This is intentionally different from admin payment inspection/recheck/reprocess, which is a private operator capability and must not be exposed as a user payment API.
+
+### Publication feed integration
+
+Happy Fox currently presents the authenticated owner's generation history. The separate publication/feed/profile/remix domain from issue #58 / PR #63 is not treated as merged production behavior by the Mini App until that work lands in `main` and is integrated explicitly.
+
+Storage provisioning is explicit: application request/worker code never creates S3 buckets, repository Compose provisions its bundled private MinIO bucket through `minio-init`, and external S3-compatible deployments must provision a private bucket before FoxGen startup.
 
 ## Documentation rule
 
