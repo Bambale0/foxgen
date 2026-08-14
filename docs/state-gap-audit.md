@@ -41,13 +41,17 @@ See `telegram-flows.md`.
 
 Application-known temporary objects under `inputs/` are cleaned on explicit draft abandonment/replacement paths where the keys remain known.
 
-Remaining infrastructure hardening gap:
+Infrastructure orphan cleanup is also enforced for repository Compose deployments:
 
-- Redis TTL can orphan input objects after draft state disappears;
-- current `main` therefore requires an external bucket lifecycle rule;
-- automatic lifecycle bootstrap/verification remains tracked by open issue #50 and is **not** treated as merged production behavior.
+- Redis TTL/crash abandonment may still orphan keys after conversational state disappears;
+- `minio-init` creates the bundled private bucket when necessary and installs the FoxGen-managed `inputs/` lifecycle rule;
+- unrelated bucket lifecycle rules are preserved;
+- the lifecycle configuration is read back and must match exactly before startup succeeds;
+- API, worker and bot are gated on successful `minio-init` completion;
+- the short rule never targets durable `generations/` results;
+- deployments that replace bundled MinIO with external S3-compatible storage must provide equivalent lifecycle enforcement through that infrastructure.
 
-Recommended rule is documented in `input-media-lifecycle.md`.
+See `input-media-lifecycle.md` and `minio-lifecycle-runbook.md`.
 
 ## 3. Durable generation state
 
@@ -65,6 +69,8 @@ succeeded
 failed
 cancelled
 ```
+
+Recovery/terminal branches include `submission_unknown`, `failed` and `cancelled`.
 
 Completed lifecycle behavior:
 
@@ -245,20 +251,22 @@ Tracked by issue #55. Until it is fixed, those extension routes/callbacks are no
 
 ## Completed implementation sequence
 
-Historical delivery epics:
+Historical delivery epics/tasks:
 
 1. #34 — Quick Start and inbound reference routing — completed.
 2. #35 — Telegram FSM/recovery matrix — completed.
 3. #36 — durable generation lifecycle — completed.
 4. #37 — outbox/media/delivery/billing reconciliation — completed.
 5. #9 — administrative domain/control-plane core — completed through PR #54, with extension transport wiring separately tracked by #55.
+6. #50 — temporary input lifecycle automation — Compose MinIO bootstrap/verification and startup gating completed.
 
 ## Remaining known state/ops gaps
 
-At this documentation revision, two explicit gaps remain:
+At this documentation revision, the explicit state/transport gap is:
 
-1. **#50 — temporary input lifecycle automation.** Current `main` requires an external short-retention bucket rule for abandoned `inputs/` objects. Automatic application/verification of that lifecycle is not merged production behavior.
-2. **#55 — admin extension transport wiring.** Extension service/router modules exist but are not registered by current FastAPI/Telegram entrypoints. Documentation treats only the registered core admin transports as active.
+1. **#55 — admin extension transport wiring.** Extension service/router modules exist but are not registered by current FastAPI/Telegram entrypoints. Documentation treats only the registered core admin transports as active.
+
+The separate configuration issue #57 tracks the reserved/inactive application setting `FOXGEN_S3_CREATE_BUCKET`; it does not change the Compose-managed MinIO lifecycle behavior described above.
 
 Other future product epics can introduce new model/product/payment/referral states. When they do, this file must be updated at the same time as domain transitions, database constraints and tests.
 
