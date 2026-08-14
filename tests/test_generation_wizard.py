@@ -6,13 +6,13 @@ from foxgen.bot.generation_capabilities import (
     VideoGenerationType,
     wizard_submission_slugs,
 )
-from foxgen.bot.generation_keyboards import image_settings_keyboard, video_settings_keyboard
-from foxgen.bot.generation_wizard import (
-    _submission_payload,
-    _video_media_complete,
+from foxgen.bot.generation_draft import (
     default_image_flow_data,
     default_video_flow_data,
+    submission_payload,
+    video_media_complete,
 )
+from foxgen.bot.generation_keyboards import image_settings_keyboard, video_settings_keyboard
 from foxgen.providers.kie.registry import ModelRegistry
 
 
@@ -122,7 +122,7 @@ def test_first_last_video_payload_preserves_media_order() -> None:
             ],
         }
     )
-    slug, payload = _submission_payload(
+    slug, payload = submission_payload(
         data,
         [
             {"kind": "image", "url": "https://media.example/first.png"},
@@ -147,7 +147,7 @@ def test_multimodal_video_payload_separates_reference_types() -> None:
             ],
         }
     )
-    slug, payload = _submission_payload(
+    slug, payload = submission_payload(
         data,
         [
             {"kind": "image", "url": "https://media.example/image.png"},
@@ -167,7 +167,7 @@ def test_video_media_completion_is_screen_specific() -> None:
         {"kind": "image", "storage_key": "inputs/one.png"},
         {"kind": "image", "storage_key": "inputs/two.png"},
     ]
-    assert _video_media_complete(VideoGenerationType.FIRST_FRAME, one_image) is True
-    assert _video_media_complete(VideoGenerationType.FIRST_LAST, one_image) is False
-    assert _video_media_complete(VideoGenerationType.FIRST_LAST, two_images) is True
-    assert _video_media_complete(VideoGenerationType.REFERENCES, one_image) is True
+    assert video_media_complete(VideoGenerationType.FIRST_FRAME, one_image) is True
+    assert video_media_complete(VideoGenerationType.FIRST_LAST, one_image) is False
+    assert video_media_complete(VideoGenerationType.FIRST_LAST, two_images) is True
+    assert video_media_complete(VideoGenerationType.REFERENCES, one_image) is True
