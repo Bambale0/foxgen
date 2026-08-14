@@ -26,6 +26,7 @@ submitting
 Implemented invariants:
 
 - every declared state has a behavior contract for success/back/cancel/timeout/invalid input/stale callback;
+- `/start` and `/menu` are registered ahead of every state-specific router and always interrupt the active FSM before returning to the canonical entrypoint;
 - known active drafts survive unrelated stale callbacks/messages;
 - expired/unknown state recovers fail-closed;
 - reference-prefilled drafts preserve stored media across back/edit navigation;
@@ -259,6 +260,7 @@ The operator-web extension router deliberately precedes the generic base web rou
 Telegram runtime order is:
 
 ```text
+foxgen-global-commands
 foxgen-admin-extras
 foxgen-admin
 foxgen-quick-start
@@ -266,7 +268,7 @@ foxgen-generation
 foxgen-shell
 ```
 
-The extension callbacks therefore run before broad product/shell fallbacks while still performing fresh signed Admin API authorization. Active extras cover dedicated analytics, XLS export and approved-withdrawal/payment shortcut behavior.
+The global command router is deliberately first so `/start` and `/menu` cannot be consumed by an active FSM's broad text handler. The extension callbacks then run before broad product/shell fallbacks while still performing fresh signed Admin API authorization. Active extras cover dedicated analytics, XLS export and approved-withdrawal/payment shortcut behavior.
 
 Route enumeration plus enabled/disabled HTTP tests and Telegram callback tests protect this reachability contract.
 
