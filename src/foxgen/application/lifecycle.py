@@ -74,6 +74,10 @@ class OutboxProcessor(Protocol):
     async def process(self, message: OutboxMessage) -> None: ...
 
 
+class ReferenceDeleteProcessorProtocol(Protocol):
+    async def delete(self, asset_id: UUID) -> None: ...
+
+
 class LifecycleRepository(Protocol):
     async def claim_outbox(
         self,
@@ -146,6 +150,7 @@ class GenerationWorker:
         registry: ModelRegistry | None = None,
         callback_url: str | None = None,
         media_pipeline: OutboxProcessor | None = None,
+        reference_delete_processor: ReferenceDeleteProcessorProtocol | None = None,
         worker_id: str = "foxgen-worker",
         batch_size: int = 10,
         lease_seconds: int = 120,
@@ -158,6 +163,7 @@ class GenerationWorker:
         self._registry = registry or ModelRegistry()
         self._callback_url = callback_url
         self._media_pipeline = media_pipeline
+        self._reference_delete_processor = reference_delete_processor
         self._worker_id = worker_id
         self._batch_size = batch_size
         self._lease_seconds = lease_seconds
@@ -211,6 +217,15 @@ class GenerationWorker:
                         retryable=True,
                     )
                 await self._media_pipeline.process(message)
+            elif message.event_type == "reference.delete":
+                if self._reference_delete_processor is None:
+                    raise SubmissionError(
+                        ErrorCode.PROVIDER_UNAVAILABLE,
+                        "Reference deletion processor is not configured",
+                        retryable=True,
+                    )
+                await self._reference_delete_processor.delete(message.aggregate_id)
+                await self._repository.complete_outbox(message.id)
             else:
                 raise SubmissionError(
                     ErrorCode.VALIDATION,
