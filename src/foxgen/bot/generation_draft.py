@@ -15,7 +15,7 @@ from foxgen.bot.generation_capabilities import (
 from foxgen.core.errors import ErrorCode, SubmissionError
 
 
-WIZARD_VERSION = "screen-v3-reference-memory"
+WIZARD_VERSION = "screen-v2"
 MAX_VIDEO_REFERENCE_TOTAL = 6
 
 
@@ -189,7 +189,9 @@ def submission_payload(
                 "prompt": prompt,
                 "aspect_ratio": required_text(data, "aspect_ratio"),
                 "quality": str(data.get("quality") or capability.default_quality or "basic"),
-                "output_format": str(data.get("output_format") or capability.default_output_format),
+                "output_format": str(
+                    data.get("output_format") or capability.default_output_format
+                ),
                 "nsfw_checker": False,
             }
             if has_references:
@@ -205,8 +207,12 @@ def submission_payload(
             "prompt": prompt,
             "image_input": [item["url"] for item in media if item["kind"] == "image"],
             "aspect_ratio": required_text(data, "aspect_ratio"),
-            "resolution": str(data.get("resolution") or capability.default_resolution or "1K"),
-            "output_format": str(data.get("output_format") or capability.default_output_format),
+            "resolution": str(
+                data.get("resolution") or capability.default_resolution or "1K"
+            ),
+            "output_format": str(
+                data.get("output_format") or capability.default_output_format
+            ),
         }
 
     capability = video_capability(data)
@@ -232,9 +238,15 @@ def submission_payload(
         payload["first_frame_url"] = images[0]
         payload["last_frame_url"] = images[1]
     elif generation_type_value == VideoGenerationType.REFERENCES:
-        payload["reference_image_urls"] = [item["url"] for item in media if item["kind"] == "image"]
-        payload["reference_video_urls"] = [item["url"] for item in media if item["kind"] == "video"]
-        payload["reference_audio_urls"] = [item["url"] for item in media if item["kind"] == "audio"]
+        payload["reference_image_urls"] = [
+            item["url"] for item in media if item["kind"] == "image"
+        ]
+        payload["reference_video_urls"] = [
+            item["url"] for item in media if item["kind"] == "video"
+        ]
+        payload["reference_audio_urls"] = [
+            item["url"] for item in media if item["kind"] == "audio"
+        ]
     return capability.slug, payload
 
 
