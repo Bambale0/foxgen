@@ -1,6 +1,6 @@
 # Production operations runbook
 
-This runbook is the day-2 operational reference for FoxGen. Use it together with `production-deploy.md`, `postprocessing-reconciliation.md` and `admin-control-plane.md`.
+This runbook is the day-2 operational reference for FoxGen. Use it together with `production-deploy.md`, `postprocessing-reconciliation.md`, `minio-lifecycle-runbook.md` and `admin-control-plane.md`.
 
 ## Safety priorities
 
@@ -31,6 +31,7 @@ curl --fail --silent http://127.0.0.1:${FOXGEN_PUBLIC_API_PORT:-8080}/health/rea
 Recent logs:
 
 ```bash
+docker compose --env-file .env -f docker-compose.prod.yml logs --tail=200 minio-init
 docker compose --env-file .env -f docker-compose.prod.yml logs --tail=200 api
 docker compose --env-file .env -f docker-compose.prod.yml logs --tail=200 worker
 docker compose --env-file .env -f docker-compose.prod.yml logs --tail=200 bot
@@ -193,18 +194,31 @@ For repeated `retry_wait`/`failed`:
 
 ## Temporary `inputs/` storage
 
-Current production requires an external lifecycle rule for `inputs/`.
+Repository Compose deployments enforce the temporary `inputs/` lifecycle through the `minio-init` service. API, worker and bot are gated on successful lifecycle read-back verification.
 
-Inspect bucket lifecycle regularly and after storage migrations. Recommended baseline is short prefix-scoped retention (2-day objects, 1-day incomplete multipart cleanup where supported).
+Normal verification:
 
-If object count grows unexpectedly:
+```bash
+docker compose --env-file .env -f docker-compose.prod.yml logs --tail=200 minio-init
+docker compose --env-file .env -f docker-compose.prod.yml run --rm minio-init
+```
 
-- verify lifecycle still exists;
+Expected policy is prefix-scoped short retention, by default 2-day completed objects and 1-day incomplete multipart cleanup. The initializer preserves unrelated lifecycle rules and must never target `generations/`.
+
+If object count grows unexpectedly or the bootstrap fails:
+
+- inspect the current lifecycle configuration and `minio-init` error;
+- verify MinIO reachability and lifecycle permissions;
+- verify `FOXGEN_INPUT_RETENTION_DAYS` / `FOXGEN_INPUT_MULTIPART_ABORT_DAYS` values;
+- rerun `minio-init` after fixing the root cause;
+- do not start API/worker/bot with `--no-deps` to bypass the gate;
 - do not delete durable result objects;
-- do not make bucket public;
+- do not make the bucket public;
 - scope any manual cleanup strictly to confirmed abandoned temporary inputs.
 
-See `input-media-lifecycle.md`.
+If the deployment intentionally uses external S3-compatible storage instead of the repository's bundled MinIO topology, provide and verify an equivalent `inputs/` lifecycle policy in that infrastructure.
+
+See `input-media-lifecycle.md` and `minio-lifecycle-runbook.md`.
 
 ## Billing checks
 
@@ -313,6 +327,8 @@ After recovery:
 
 Provider-complete generations may remain in result/storage stages. Preserve provider result metadata and retry only storage-safe actions. Do not mark success before archive/delivery completes.
 
+After bundled MinIO recovery, rerun `minio-init` and require lifecycle verification before restoring the full Compose application stack. For external storage, verify the equivalent lifecycle policy through that provider.
+
 ## Telegram outage
 
 Provider work may finish while delivery waits/retries. If send attempts become ambiguous, retain `delivery_unknown` for operator evidence. Do not mass-resend after Telegram recovery without durable state review.
@@ -344,6 +360,8 @@ If any secret enters Git history/logs/public chat:
 Prefer a Git revert on `main`, followed by normal CI/deploy. Do not force-reset production.
 
 For migration-bearing releases, separate application rollback from schema/data rollback. Retain newer schema when the old application can tolerate it or use a forward repair migration. Never downgrade away admin/outbox/audit data while it is operationally required.
+
+If rollback returns to code that no longer runs `minio-init`, keep the already installed `inputs/` rule in place and verify it externally before bringing application traffic back.
 
 ## Post-incident checklist
 

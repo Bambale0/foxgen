@@ -134,7 +134,7 @@ cp .env.example .env
 docker compose up --build
 ```
 
-Local Compose provides PostgreSQL, Redis, MinIO, migrations, API, worker and bot. MinIO ports are exposed for development only.
+Local Compose provides PostgreSQL, Redis, MinIO, migrations, API, worker and bot. MinIO bootstrap creates the private bucket when needed, installs the short-retention `inputs/` lifecycle rule, verifies it and gates API/worker/bot startup. MinIO ports are exposed for development only.
 
 Paid provider submission remains disabled until explicitly enabled:
 
@@ -212,11 +212,12 @@ A successful CI run on `main` can trigger the protected production deployment wo
 
 The server keeps its own `.env`; GitHub Actions does not upload application secrets. Deployment is exact-SHA, fast-forward only, serialized with `flock`, runs migrations before application replacement and requires `/health/ready` to pass.
 
-Current production also requires an external object-storage lifecycle rule for temporary `inputs/`; automatic lifecycle bootstrap is tracked separately by issue #50.
+Production Compose runs a fail-closed `minio-init` bootstrap before API/worker/bot startup. It preserves unrelated bucket rules, installs and reads back the short-retention `inputs/` rule, and never targets durable `generations/` results. External S3-compatible topologies must provide equivalent lifecycle enforcement themselves.
 
 See:
 
 - [`docs/production-deploy.md`](docs/production-deploy.md)
+- [`docs/minio-lifecycle-runbook.md`](docs/minio-lifecycle-runbook.md)
 - [`docs/github-environment-setup.md`](docs/github-environment-setup.md)
 - [`docs/operations-runbook.md`](docs/operations-runbook.md)
 - [`docs/known-limitations.md`](docs/known-limitations.md)
@@ -230,7 +231,8 @@ Start with [`docs/README.md`](docs/README.md). It maps architecture, schema, con
 - runtime behavior/reachability: registered code paths + tests;
 - database schema: Alembic migrations + SQLAlchemy models;
 - model provider IDs/payload contracts: reviewed provider registry/contracts + tests;
-- environment variables: `foxgen.core.config.Settings`, `.env.example`, `deploy/production.env.example`;
+- application environment variables: `foxgen.core.config.Settings`, `.env.example`, `deploy/production.env.example`;
+- infrastructure bootstrap variables: Compose/scripts plus the same env examples and `docs/configuration.md`;
 - deploy behavior: `.github/workflows/`, `docker-compose.prod.yml`, `scripts/deploy-production.sh`;
 - current limitations: `docs/known-limitations.md` plus open tracked issue/PR state.
 

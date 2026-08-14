@@ -88,28 +88,25 @@ services:
       - backend
 
   minio-init:
-    image: minio/mc:RELEASE.2025-08-13T08-35-41Z
+    <<: *app-service
     restart: "no"
+    read_only: true
+    command:
+      - python
+      - scripts/configure_minio_input_lifecycle.py
     environment:
-      MINIO_ROOT_USER: ${FOXGEN_S3_ACCESS_KEY_ID:?FOXGEN_S3_ACCESS_KEY_ID is required}
-      MINIO_ROOT_PASSWORD: ${FOXGEN_S3_SECRET_ACCESS_KEY:?FOXGEN_S3_SECRET_ACCESS_KEY is required}
-      MINIO_BUCKET: ${FOXGEN_S3_BUCKET:-foxgen-media}
-    entrypoint:
-      - /bin/sh
-      - -ec
-      - |
-        until mc alias set local http://minio:9000 "$${MINIO_ROOT_USER}" "$${MINIO_ROOT_PASSWORD}"; do
-          sleep 2
-        done
-        mc mb --ignore-existing "local/$${MINIO_BUCKET}"
+      FOXGEN_S3_ENDPOINT_URL: http://minio:9000
+      FOXGEN_S3_ACCESS_KEY_ID: ${FOXGEN_S3_ACCESS_KEY_ID:?FOXGEN_S3_ACCESS_KEY_ID is required}
+      FOXGEN_S3_SECRET_ACCESS_KEY: ${FOXGEN_S3_SECRET_ACCESS_KEY:?FOXGEN_S3_SECRET_ACCESS_KEY is required}
+      FOXGEN_S3_BUCKET: ${FOXGEN_S3_BUCKET:-foxgen-media}
+      FOXGEN_S3_REGION: ${FOXGEN_S3_REGION:-us-east-1}
+      FOXGEN_INPUT_RETENTION_DAYS: ${FOXGEN_INPUT_RETENTION_DAYS:-2}
+      FOXGEN_INPUT_MULTIPART_ABORT_DAYS: ${FOXGEN_INPUT_MULTIPART_ABORT_DAYS:-1}
+      FOXGEN_MINIO_INIT_ATTEMPTS: ${FOXGEN_MINIO_INIT_ATTEMPTS:-30}
+      FOXGEN_MINIO_INIT_RETRY_SECONDS: ${FOXGEN_MINIO_INIT_RETRY_SECONDS:-2}
     depends_on:
       minio:
         condition: service_started
-    security_opt:
-      - no-new-privileges:true
-    logging: *default-logging
-    networks:
-      - backend
 
   migrate:
     <<: *app-service
@@ -143,8 +140,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-      minio:
-        condition: service_started
+      minio-init:
+        condition: service_completed_successfully
 
   worker:
     <<: *app-service
@@ -155,8 +152,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-      minio:
-        condition: service_started
+      minio-init:
+        condition: service_completed_successfully
 
   bot:
     <<: *app-service
@@ -167,6 +164,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
       api:
         condition: service_healthy
 

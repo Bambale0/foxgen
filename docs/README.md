@@ -18,6 +18,7 @@ This directory documents the executable state of FoxGen on `main`. Source code, 
 | [`generation-operations.md`](generation-operations.md) | Status/cancel/operator resolution for durable generations |
 | [`postprocessing-reconciliation.md`](postprocessing-reconciliation.md) | Retry/dead-letter/media/delivery reconciliation |
 | [`input-media-lifecycle.md`](input-media-lifecycle.md) | Telegram input object lifecycle and cleanup requirements |
+| [`minio-lifecycle-runbook.md`](minio-lifecycle-runbook.md) | Compose MinIO lifecycle bootstrap, verification and recovery |
 | [`admin-capability-matrix.md`](admin-capability-matrix.md) | Admin capability/domain/transport matrix |
 | [`admin-control-plane.md`](admin-control-plane.md) | Admin security, HMAC, RBAC, workers and rollout |
 | [`security.md`](security.md) | Consolidated trust boundaries and prohibited shortcuts |
@@ -72,10 +73,11 @@ PostgreSQL is the source of truth for generations, billing, outbox/inbox events,
 7. User/provider media remains private; public clients never receive storage credentials.
 8. Production deployment is gated by CI and deploys an exact tested `main` SHA.
 9. An existing source module/branch is not documented as active until it is wired/merged and covered by runtime tests.
+10. Compose-managed MinIO must verify the prefix-scoped temporary `inputs/` lifecycle before API, worker and bot startup.
 
 ## Known limitations are first-class documentation
 
-`known-limitations.md` records discrepancies such as external `inputs/` lifecycle enforcement and currently unwired admin extension routers. This prevents roadmap/prepared code from being mistaken for production behavior.
+`known-limitations.md` records discrepancies such as currently unwired admin extension routers and the reserved/inactive `FOXGEN_S3_CREATE_BUCKET` application setting. This prevents roadmap/prepared code from being mistaken for production behavior.
 
 ## How to update documentation
 

@@ -1,6 +1,6 @@
 # Telegram input media lifecycle
 
-Telegram references are stored privately under the `inputs/` object prefix. This document distinguishes cleanup implemented by application code from the bucket lifecycle rule that production infrastructure must currently provide.
+Telegram references are stored privately under the `inputs/` object prefix. This document distinguishes cleanup implemented by application code from the storage lifecycle that Compose enforces for abandoned temporary inputs.
 
 ## Current application behavior
 
@@ -22,13 +22,23 @@ The bot:
 
 Redis FSM state has a TTL. After expiry, the application may no longer know which private object keys belonged to an abandoned draft. A process crash or client abandonment can have the same effect.
 
-Therefore production object storage must enforce lifecycle cleanup for the temporary prefix independently of conversational state.
+Storage-level lifecycle cleanup is therefore required independently of conversational state.
 
-## Current production requirement
+## Compose-enforced lifecycle
 
-**Current `main` does not automatically install or verify the bucket lifecycle rule.**
+Both repository Compose stacks run `scripts/configure_minio_input_lifecycle.py` through `minio-init` before API, worker and bot startup. The bootstrap fails closed when the required rule cannot be applied and verified.
 
-The storage administrator must configure an equivalent rule externally. Recommended baseline:
+The initializer:
+
+- creates the Compose-managed private MinIO bucket when necessary;
+- reads the existing lifecycle configuration;
+- preserves every lifecycle rule not owned by FoxGen;
+- replaces only the managed rule with ID `foxgen-expire-telegram-inputs`;
+- scopes expiration and incomplete-multipart cleanup to `inputs/`;
+- reads the lifecycle configuration back after writing it;
+- exits unsuccessfully unless exactly one enabled FoxGen rule matches the requested policy.
+
+Default policy:
 
 ```text
 prefix: inputs/
@@ -36,7 +46,16 @@ expire current objects after: 2 days
 abort incomplete multipart uploads after: 1 day
 ```
 
-The exact retention must remain longer than:
+Configuration:
+
+```env
+FOXGEN_INPUT_RETENTION_DAYS=2
+FOXGEN_INPUT_MULTIPART_ABORT_DAYS=1
+FOXGEN_MINIO_INIT_ATTEMPTS=30
+FOXGEN_MINIO_INIT_RETRY_SECONDS=2
+```
+
+The retention must remain longer than:
 
 - the maximum legitimate provider fetch delay for a confirmed input URL;
 - the expected Telegram FSM interaction lifetime;
@@ -46,10 +65,10 @@ Do not apply the short temporary-input retention to durable generation results.
 
 ```text
 inputs/       -> short temporary retention
-result media  -> product retention policy, not the input rule
+generations/  -> product retention policy, never the input rule
 ```
 
-An open implementation may automate this infrastructure rule in the future, but documentation must not assume that automation until it is merged and revalidated on the current production branch.
+The repository production Compose stack manages its bundled MinIO instance. A deployment that replaces that storage topology with an external S3-compatible service must provision the private bucket and an equivalent `inputs/` lifecycle policy through that provider's infrastructure controls; `FOXGEN_S3_CREATE_BUCKET` remains a separate inactive application setting tracked by issue #57.
 
 ## Private storage invariant
 
@@ -87,6 +106,10 @@ Failure while writing private input bytes also prevents FSM transition. Retrying
 
 Best-effort explicit cleanup failure should be logged/observable but must not turn a successful cancel/menu action into a dangerous provider operation. The bucket lifecycle rule is the final orphan cleanup safety net.
 
+### Lifecycle bootstrap failure
+
+A failed `minio-init` verification blocks API, worker and bot startup in the Compose stacks. Do not bypass that dependency with `--no-deps`; fix storage reachability, credentials or lifecycle permissions first.
+
 ## Quick Start ownership
 
 A reference draft can hold:
@@ -119,22 +142,25 @@ This policy avoids ambiguous ordering, partial album upload and double-processin
 
 ### Infrastructure
 
-1. Inspect the bucket lifecycle configuration.
-2. Verify the temporary rule targets only `inputs/`.
-3. Verify current-object expiration is configured.
-4. Verify incomplete multipart cleanup is configured when the storage supports it.
-5. Verify no equivalent short-expiry rule targets durable generated result objects.
-6. Verify the bucket has no public ACL/policy exposing user media.
+1. Run or inspect `minio-init` and require a successful exit.
+2. Inspect the bucket lifecycle configuration.
+3. Verify exactly one enabled FoxGen-managed rule targets only `inputs/`.
+4. Verify current-object expiration matches `FOXGEN_INPUT_RETENTION_DAYS`.
+5. Verify incomplete multipart cleanup matches `FOXGEN_INPUT_MULTIPART_ABORT_DAYS`.
+6. Verify unrelated lifecycle rules remain unchanged.
+7. Verify no equivalent short-expiry rule targets `generations/` or other durable result prefixes.
+8. Verify the bucket has no public ACL/policy exposing user media.
+9. Verify API, worker and bot do not start if lifecycle bootstrap cannot be verified.
 
 ## Incident handling
 
 If abandoned `inputs/` objects accumulate:
 
-1. do not delete all bucket content;
-2. inspect the prefix and current lifecycle rule;
+1. inspect `minio-init` logs and current bucket lifecycle configuration;
+2. do not delete all bucket content;
 3. confirm no active confirmed generation still depends on an unexpired input object;
-4. restore/fix the prefix-scoped lifecycle rule;
-5. remove stale temporary objects through a controlled prefix-scoped operation if necessary;
+4. rerun the idempotent `minio-init` bootstrap after fixing credentials/reachability;
+5. remove stale temporary objects only through a controlled prefix-scoped operation if necessary;
 6. document the retention incident.
 
 If objects disappear before provider fetch, increase the temporary retention only after identifying the actual fetch delay; do not compensate by making the entire bucket public.
@@ -142,6 +168,7 @@ If objects disappear before provider fetch, increase the temporary retention onl
 ## Related docs
 
 - `telegram-flows.md` — reference/Quick Start behavior;
-- `configuration.md` — input size and presigned TTL settings;
+- `configuration.md` — input, storage and lifecycle settings;
 - `architecture.md` — storage ownership;
-- `production-deploy.md` — production preflight checks.
+- `production-deploy.md` — production startup gating;
+- `minio-lifecycle-runbook.md` — bootstrap verification, failure recovery and rollback.
