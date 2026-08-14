@@ -26,6 +26,30 @@ class QueuedGeneration:
     replayed: bool
 
 
+@dataclass(frozen=True, slots=True)
+class SavedReference:
+    id: str
+    content_type: str
+    size_bytes: int
+    created_at: str
+    preview_url: str
+
+
+@dataclass(frozen=True, slots=True)
+class SavedReferencePage:
+    items: tuple[SavedReference, ...]
+    total: int
+    used_bytes: int
+    max_items: int
+    max_bytes: int
+
+
+@dataclass(frozen=True, slots=True)
+class SavedReferenceResult:
+    item: SavedReference
+    duplicate: bool
+
+
 class FoxGenApiError(Exception):
     def __init__(self, message: str, *, status_code: int, retryable: bool = False) -> None:
         super().__init__(message)
@@ -75,13 +99,94 @@ class FoxGenApiClient:
         return quotes
 
     async def balance(self, user_id: int) -> BalanceView:
-        payload = await self._request("GET", f"/v1/users/{user_id}/balance")
+        payload = await self._request(
+            "GET",
+            f"/v1/users/{user_id}/balance",
+            headers={"X-FoxGen-User-Id": str(user_id)},
+        )
         if not isinstance(payload, dict):
             raise FoxGenApiError("Баланс временно недоступен.", status_code=502)
         return BalanceView(
             available_units=int(payload.get("available_units", 0)),
             reserved_units=int(payload.get("reserved_units", 0)),
             currency=str(payload.get("currency", "CREDIT")),
+        )
+
+    async def list_references(
+        self,
+        *,
+        user_id: int,
+        offset: int = 0,
+        limit: int = 20,
+    ) -> SavedReferencePage:
+        payload = await self._request(
+            "GET",
+            "/v1/reference-memory",
+            headers={"X-FoxGen-User-Id": str(user_id)},
+            params={"offset": offset, "limit": limit},
+        )
+        if not isinstance(payload, dict):
+            raise FoxGenApiError("Память референсов временно недоступна.", status_code=502)
+        raw_items = payload.get("items")
+        if not isinstance(raw_items, list):
+            raise FoxGenApiError("Сервер вернул повреждённую память референсов.", status_code=502)
+        items = tuple(self._saved_reference(item) for item in raw_items if isinstance(item, dict))
+        return SavedReferencePage(
+            items=items,
+            total=int(payload.get("total", 0)),
+            used_bytes=int(payload.get("used_bytes", 0)),
+            max_items=int(payload.get("max_items", 0)),
+            max_bytes=int(payload.get("max_bytes", 0)),
+        )
+
+    async def save_reference(
+        self,
+        *,
+        user_id: int,
+        username: str | None,
+        storage_key: str,
+    ) -> SavedReferenceResult:
+        headers = {"X-FoxGen-User-Id": str(user_id)}
+        if username:
+            headers["X-FoxGen-Username"] = username
+        payload = await self._request(
+            "POST",
+            "/v1/reference-memory",
+            headers=headers,
+            json={"storage_key": storage_key},
+        )
+        if not isinstance(payload, dict):
+            raise FoxGenApiError("Не удалось сохранить референс.", status_code=502)
+        return SavedReferenceResult(
+            item=self._saved_reference(payload),
+            duplicate=bool(payload.get("duplicate", False)),
+        )
+
+    async def resolve_references(
+        self,
+        *,
+        user_id: int,
+        reference_ids: tuple[str, ...],
+    ) -> tuple[SavedReference, ...]:
+        payload = await self._request(
+            "POST",
+            "/v1/reference-memory/resolve",
+            headers={"X-FoxGen-User-Id": str(user_id)},
+            json={"reference_ids": list(reference_ids)},
+        )
+        if not isinstance(payload, dict) or not isinstance(payload.get("items"), list):
+            raise FoxGenApiError("Не удалось подготовить сохранённые референсы.", status_code=502)
+        return tuple(
+            self._saved_reference(item)
+            for item in payload["items"]
+            if isinstance(item, dict)
+        )
+
+    async def delete_reference(self, *, user_id: int, reference_id: str) -> None:
+        await self._request(
+            "DELETE",
+            f"/v1/reference-memory/{reference_id}",
+            headers={"X-FoxGen-User-Id": str(user_id)},
         )
 
     async def submit(
@@ -115,6 +220,29 @@ class FoxGenApiClient:
             generation_id=generation_id,
             status=status,
             replayed=bool(payload.get("replayed", False)),
+        )
+
+    @staticmethod
+    def _saved_reference(payload: dict[str, Any]) -> SavedReference:
+        reference_id = payload.get("id")
+        content_type = payload.get("content_type")
+        created_at = payload.get("created_at")
+        preview_url = payload.get("preview_url")
+        if not all(
+            isinstance(value, str)
+            for value in (reference_id, content_type, created_at, preview_url)
+        ):
+            raise FoxGenApiError("Сервер вернул повреждённый референс.", status_code=502)
+        try:
+            size_bytes = int(payload.get("size_bytes", 0))
+        except (TypeError, ValueError) as exc:
+            raise FoxGenApiError("Сервер вернул повреждённый референс.", status_code=502) from exc
+        return SavedReference(
+            id=reference_id,
+            content_type=content_type,
+            size_bytes=size_bytes,
+            created_at=created_at,
+            preview_url=preview_url,
         )
 
     async def _request(
