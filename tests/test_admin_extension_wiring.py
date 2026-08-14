@@ -93,9 +93,7 @@ def test_extension_routes_are_registered_with_expected_methods() -> None:
         admin_services=cast(Any, FakeAdminServices()),
     )
     methods_by_path = {
-        route.path: set(route.methods or set())
-        for route in app.routes
-        if hasattr(route, "methods")
+        route.path: set(route.methods or set()) for route in app.routes if hasattr(route, "methods")
     }
 
     expected = {
