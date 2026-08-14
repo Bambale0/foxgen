@@ -21,10 +21,7 @@ def _callbacks(markup: object) -> set[str]:
 
 def _rows(markup: object) -> list[list[tuple[str, str | None]]]:
     inline_keyboard = getattr(markup, "inline_keyboard")
-    return [
-        [(button.text, button.callback_data) for button in row]
-        for row in inline_keyboard
-    ]
+    return [[(button.text, button.callback_data) for button in row] for row in inline_keyboard]
 
 
 def test_launch_button_is_hidden_until_quote_and_balance_are_valid() -> None:
@@ -40,7 +37,7 @@ def test_launch_button_is_hidden_until_quote_and_balance_are_valid() -> None:
 
 def test_main_menu_matches_approved_product_sketch_with_quick_start() -> None:
     assert _rows(main_menu()) == [
-        [("Мини апп", "planned:mini_app")],
+        [("🦊 Happy Fox Mini App", "miniapp:unavailable")],
         [("Быстрый запуск", "quick:start")],
         [
             ("Создать видео", "create:video"),
@@ -68,6 +65,16 @@ def test_main_menu_matches_approved_product_sketch_with_quick_start() -> None:
         ],
         [("Тарифы", "planned:tariffs")],
     ]
+
+
+def test_main_menu_renders_real_webapp_button_when_public_url_is_available() -> None:
+    markup = main_menu(miniapp_url="https://fox.example.com/mini-app/")
+    button = markup.inline_keyboard[0][0]
+
+    assert button.callback_data is None
+    assert button.text == "🦊 Открыть Happy Fox"
+    assert button.web_app is not None
+    assert button.web_app.url == "https://fox.example.com/mini-app/"
 
 
 def test_main_menu_exposes_quick_image_video_and_balance_actions() -> None:
