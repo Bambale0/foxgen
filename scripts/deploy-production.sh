@@ -45,7 +45,7 @@ fi
 cd "$APP_DIR"
 [ -d .git ] || fail "$APP_DIR is not a Git repository"
 [ -f "$COMPOSE_FILE" ] || fail "$COMPOSE_FILE is missing"
-[ -f .env ] || fail ".env is missing; deployment never creates or overwrites production secrets"
+[ -f .env ] || fail ".env is missing; deployment never creates the production environment file"
 
 read_env_value() {
   local key="$1"
@@ -60,6 +60,43 @@ read_env_value() {
   ' .env
 }
 
+bootstrap_miniapp_jwt_secret() {
+  local existing generated temporary
+  existing="$(read_env_value FOXGEN_MINIAPP_JWT_SECRET)"
+  if [ -n "$existing" ]; then
+    return 0
+  fi
+
+  command -v openssl >/dev/null 2>&1 || \
+    fail "openssl is required to bootstrap the missing Mini App JWT secret"
+  generated="$(openssl rand -hex 48)"
+  [ "${#generated}" -eq 96 ] || fail "failed to generate Mini App JWT secret"
+
+  umask 077
+  temporary="$(mktemp "$APP_DIR/.env.miniapp.XXXXXX")"
+  MINIAPP_SECRET="$generated" awk '
+    BEGIN { replaced = 0 }
+    index($0, "FOXGEN_MINIAPP_JWT_SECRET=") == 1 {
+      if (!replaced) {
+        print "FOXGEN_MINIAPP_JWT_SECRET=" ENVIRON["MINIAPP_SECRET"]
+        replaced = 1
+      }
+      next
+    }
+    { print }
+    END {
+      if (!replaced) {
+        print "FOXGEN_MINIAPP_JWT_SECRET=" ENVIRON["MINIAPP_SECRET"]
+      }
+    }
+  ' .env > "$temporary"
+  chmod 600 "$temporary"
+  mv "$temporary" .env
+  chmod 600 .env
+  unset generated MINIAPP_SECRET
+  log "bootstrapped missing dedicated Mini App JWT secret in server-side .env"
+}
+
 require_env_value() {
   local key="$1"
   local value
@@ -71,6 +108,10 @@ require_env_value() {
       ;;
   esac
 }
+
+# Legacy production environments predate Happy Fox. This is the only credential
+# deploy is allowed to create automatically, and only once while holding the lock.
+bootstrap_miniapp_jwt_secret
 
 for required_key in \
   FOXGEN_ENV \
