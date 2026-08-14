@@ -113,8 +113,41 @@ fi
 CURRENT_BRANCH="$(git branch --show-current)"
 [ "$CURRENT_BRANCH" = "main" ] || fail "repository must be on main, found: $CURRENT_BRANCH"
 
-if ! git diff --quiet || ! git diff --cached --quiet; then
-  fail "working tree has tracked local changes; refusing to overwrite them"
+# Production may contain tracked files manually copied from a newer commit while
+# HEAD is still old. Reconcile that drift only when the effective working-tree
+# content is already identical to the tested origin/main version. Unique server
+# edits remain a hard stop. Untracked files (including .env) are never touched.
+dirty_paths=()
+while IFS= read -r -d '' path; do
+  dirty_paths+=("$path")
+done < <(
+  {
+    git diff --name-only -z
+    git diff --cached --name-only -z
+  } | sort -zu
+)
+
+if [ "${#dirty_paths[@]}" -gt 0 ]; then
+  divergent_paths=()
+  for path in "${dirty_paths[@]}"; do
+    if ! git diff --quiet origin/main -- "$path"; then
+      divergent_paths+=("$path")
+    fi
+  done
+
+  if [ "${#divergent_paths[@]}" -gt 0 ]; then
+    printf '[foxgen-deploy] ERROR: tracked server changes differ from tested origin/main:\n' >&2
+    for path in "${divergent_paths[@]}"; do
+      printf '[foxgen-deploy] ERROR:   %s\n' "$path" >&2
+    done
+    fail "refusing to overwrite unique tracked production changes"
+  fi
+
+  log "tracked server drift already matches origin/main; reconciling ${#dirty_paths[@]} path(s)"
+  git restore --staged --worktree -- "${dirty_paths[@]}"
+  if ! git diff --quiet || ! git diff --cached --quiet; then
+    fail "tracked working tree remained dirty after safe reconciliation"
+  fi
 fi
 
 PREVIOUS_SHA="$(git rev-parse HEAD)"
