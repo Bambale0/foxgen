@@ -27,7 +27,7 @@ This directory documents the executable state of FoxGen on `main`. Source code, 
 | [`production-deploy.md`](production-deploy.md) | Exact-SHA production deployment workflow |
 | [`github-environment-setup.md`](github-environment-setup.md) | GitHub `production` Environment setup |
 | [`operations-runbook.md`](operations-runbook.md) | Day-2 operations, smoke checks and incident handling |
-| [`known-limitations.md`](known-limitations.md) | Known gaps that must not be described as active production behavior |
+| [`known-limitations.md`](known-limitations.md) | Current executable production limitations when any are known |
 | [`state-gap-audit.md`](state-gap-audit.md) | Historical state-gap audit with current completion status |
 | [`documentation-policy.md`](documentation-policy.md) | Documentation source-of-truth and maintenance rules |
 
@@ -62,6 +62,8 @@ Telegram bot / trusted services
 
 PostgreSQL is the source of truth for generations, billing, outbox/inbox events, media metadata, delivery, administrative commands/audit, support, campaigns, tariffs and runtime admin data. Redis is intentionally non-authoritative for business state: it stores Telegram FSM data, per-key event isolation and rate/lock data. S3-compatible storage stores private input/result bytes.
 
+Storage provisioning is infrastructure-owned: repository Compose provisions bundled MinIO through `minio-init`; application request/worker code never creates buckets; external S3-compatible deployments pre-provision a private bucket and equivalent temporary-input lifecycle.
+
 ## Safety invariants shared by all docs
 
 1. Billable provider submission is never blindly retried after an ambiguous external response.
@@ -75,10 +77,11 @@ PostgreSQL is the source of truth for generations, billing, outbox/inbox events,
 9. An existing source module/branch is not documented as active until it is wired/merged and covered by runtime tests.
 10. Specific privileged routes must stay ahead of generic route/callback fallbacks when matching order affects reachability.
 11. Compose-managed MinIO must verify the prefix-scoped temporary `inputs/` lifecycle before API, worker and bot startup.
+12. Application media execution must not opportunistically provision S3 infrastructure.
 
 ## Known limitations are first-class documentation
 
-`known-limitations.md` records unresolved production discrepancies such as the reserved/inactive `FOXGEN_S3_CREATE_BUCKET` application setting. Resolved transport gaps are removed when executable wiring and regression coverage land.
+`known-limitations.md` is retained even when no entry is currently listed. Add a limitation there whenever executable/configuration state could otherwise be mistaken for a completed production behavior, and remove it in the same PR that lands the tested fix.
 
 ## How to update documentation
 
