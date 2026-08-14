@@ -1,19 +1,19 @@
 # Telegram flows and FSM
 
-FoxGen uses aiogram 3 with Redis-backed FSM. Telegram handlers own only conversational drafts and screen navigation; durable admission, billing, provider execution and delivery remain in the internal API/worker lifecycle.
+FoxGen uses aiogram 3 with Redis-backed FSM. Telegram handlers own only conversational drafts and screen navigation; durable admission, billing, provider execution, reference-memory ownership and delivery remain in the internal API/PostgreSQL/worker lifecycle.
 
 ## Global `/start` and `/menu`
 
-`foxgen-global-commands` is the first runtime router. `/start` and `/menu` therefore interrupt **every** active generation screen before any state-specific text/media handler can consume the command.
+`foxgen-global-commands` is the first runtime router. `/start` and `/menu` therefore interrupt **every** active generation or reference-memory screen before any state-specific text/media handler can consume the command.
 
 The interrupt contract is:
 
-1. collect all known temporary input keys from FSM data;
+1. collect all known temporary `inputs/` keys from FSM data;
 2. best-effort delete those temporary files;
 3. clear Redis state/data;
 4. open the canonical main menu.
 
-Regression tests enumerate every declared `GenerationStates` value, so adding a new screen cannot silently weaken this rule.
+Durable saved references are never deleted by this reset path. Regression tests enumerate every declared `GenerationStates` value, so adding a new screen cannot silently weaken the global interrupt rule.
 
 ## Screen-FSM design
 
@@ -34,7 +34,7 @@ User-facing generation screens are single-purpose and are not numbered `1/4`, `2
 ✅ Проверьте генерацию
 ```
 
-All temporary choices live in `FSMContext`. There are no process-global per-user draft dictionaries. A draft stores a stable `wizard_version`, a visible `*_flow_step`, selected UI model, model-specific settings, temporary media keys, prompt, idempotency key, the latest price/balance result and, while useful, the Telegram chat/message id of the current control screen.
+All temporary choices live in `FSMContext`. There are no process-global per-user draft dictionaries. A draft stores a stable `wizard_version`, a visible `*_flow_step`, selected UI model, model-specific settings, temporary media keys and/or durable reference UUIDs, prompt, idempotency key, the latest price/balance result and, while useful, the Telegram chat/message id of the current control screen.
 
 The remembered control-message id is presentation state only. It does not own media and is never durable business state. If Telegram can no longer edit that message, the bot creates one replacement control message and remembers the new id.
 
@@ -44,7 +44,8 @@ Capabilities and provider payload construction are separate from Telegram render
 generation_capabilities.py  -> which screens/options a model supports
 generation_draft.py         -> stable draft + validation + provider payload
 generation_screens.py       -> text/keyboards for each user-visible screen
-generation_wizard.py        -> transitions only
+generation_wizard.py        -> ordinary wizard transitions
+reference_memory.py          -> saved-reference browser + reference-aware transitions
 ```
 
 ## Compact reference-screen contract
@@ -59,23 +60,57 @@ Image and video reference/media screens use the same visual hierarchy:
 
 [        Загружено: X/Y        ]
 [ ⏭ Пропустить ] [ ✅ Продолжить ]   # when skipping is valid
-[       🔄 Перезагрузить       ]
+[ 📚 Память реф ] [ 🔄 Перезагрузить ]
 [          ⬅️ Назад            ]
 ```
 
 Important behavior:
 
-- `X/Y` is live and re-rendered after accepted uploads;
+- `X/Y` is live and re-rendered after accepted uploads or memory selection;
 - `Y` comes from FoxGen capability/contract data, not from a global hard-coded value;
-- `🔄 Перезагрузить` deletes all current temporary inputs for that screen and redraws it at zero;
-- image `⏭ Пропустить` means continue **without** references; if the user already uploaded temporary references, they are deleted first;
-- required video scenarios keep `✅ Продолжить` visible for a stable layout, but pressing it before the required media is complete returns the exact requirement as a Telegram alert and does not advance state;
+- `🔄 Перезагрузить` removes all references from the current draft and deletes only its temporary `inputs/` objects;
+- image `⏭ Пропустить` means continue **without** references; temporary files are deleted first, durable library assets are only detached from the draft;
+- required video scenarios keep `✅ Продолжить` visible for a stable layout, but pressing it before the required media is complete returns the exact requirement and does not advance state;
 - `⬅️ Назад` is the only persistent bottom navigation button on generation sub-screens;
-- `/start` and `/menu` remain the global safe reset/exit paths, so a duplicate `❌ Отмена` row is not required on every sub-screen.
+- `/start` and `/menu` remain the global safe reset/exit paths.
 
-After an upload, FoxGen tries to edit the remembered control message instead of sending another keyboard block. This prevents a long stack of stale controls in chat. A Telegram edit failure falls back to a new control message without changing media ownership or provider state.
+After an upload, FoxGen tries to edit the remembered control message instead of sending another keyboard block. The memory browser itself uses one replaceable preview/control message and removes the previous preview when navigating.
 
-The screenshot-inspired `📚 Память реф` affordance is **not** presented until FoxGen has a real persistent saved-reference domain. Current temporary generation inputs are not silently promoted to durable user assets.
+## Durable `📚 Память реф`
+
+`📚 Память реф` opens a private, owner-scoped saved-image library. Durable metadata belongs to PostgreSQL and durable bytes belong to private S3-compatible storage under `references/<user>/...`; Redis stores only the browser cursor, transient selection and reference UUIDs used by the current draft.
+
+The browser supports:
+
+```text
+private image preview
+selected X/Y
+previous / next
+select / unselect
+➕ add photo
+💾 save currently uploaded temporary images  # when present
+🗑 delete with confirmation
+✅ use selected
+⬅️ back without applying changes
+```
+
+Saving is explicit. A normal Telegram upload remains temporary until the user chooses `➕ Добавить фото` inside memory or `💾 Сохранить загруженные`. The internal API accepts only a temporary key under the authenticated user's own `inputs/<user-id>/` prefix, reserves quota, de-duplicates identical active bytes by SHA-256 for that owner, copies the image into durable private S3 storage and activates the PostgreSQL row only after storage succeeds.
+
+Selection is constrained by the current generation capability before it can be applied:
+
+- image models: `max_references`;
+- first-frame video: one image total;
+- first+last-frame video: two ordered images total;
+- multimodal video: both global total-reference and per-model image-reference limits;
+- text-only video: memory is not exposed because the scenario accepts no image input.
+
+For first+last-frame video, selection order is frame order. Existing temporary inputs remain first, followed by saved references in the order selected.
+
+Deletion changes the durable row to `delete_pending`, hides it immediately from list/resolve, and writes a deduplicated `reference.delete` outbox event. `foxgen-worker` performs idempotent S3 deletion and marks the row `deleted`.
+
+An old Redis draft may still contain a UUID that was deleted in another flow. Final confirmation therefore re-resolves every durable reference through the owner-scoped internal API immediately before payload construction. A missing, deleted or foreign UUID fails closed before provider submission.
+
+See `reference-memory.md` for quotas, storage and recovery details.
 
 ## Create image
 
@@ -84,10 +119,11 @@ Image flow:
 ```text
 main menu -> Создать фото
   -> model
-  -> optional references with live X/Y
+  -> optional temporary/saved references with live X/Y
   -> dynamic model settings
   -> prompt
   -> live price + balance confirmation
+  -> re-resolve saved refs + fresh signed URLs
   -> authenticated paid admission
 ```
 
@@ -98,15 +134,13 @@ The UI model is intentionally separate from the provider slug. For example, the 
 - no references -> `seedream-5-pro`;
 - one or more references -> `seedream-5-pro-edit`.
 
-This removes a redundant text/edit mode screen while preserving the provider's distinct validated contracts.
-
-Current reference limits are capability-driven. Examples from the current production wizard contract:
+Current reference limits are capability-driven:
 
 - Seedream 5 Pro: up to 10 image references;
 - Nano Banana 2: up to 14 image references;
 - Nano Banana Pro: up to 14 image references.
 
-Current production wizard coverage is required by test to equal the production-enabled KIE submission allowlist. The wizard currently covers:
+Current production wizard coverage is required by test to equal the production-enabled KIE submission allowlist:
 
 ```text
 seedream-5-pro
@@ -119,14 +153,7 @@ seedance-2-mini
 
 ### Dynamic image settings
 
-Settings are capability-driven and update on the same control message.
-
-Examples:
-
-- Seedream 5 Pro: supported aspect ratios, Basic/High quality, PNG/JPG;
-- Nano Banana 2/Pro: supported aspect ratios including auto, 1K/2K/4K, PNG/JPG.
-
-A model never receives a UI option that is absent from its verified local provider contract.
+Settings are capability-driven and update on the same control message. Seedream exposes only its verified aspect ratios/quality/formats; Nano Banana exposes its verified aspect ratios/resolutions/formats. A model never receives a UI option absent from its verified local provider contract.
 
 ## Create video
 
@@ -136,16 +163,17 @@ Video flow:
 main menu -> Создать видео
   -> model
   -> input type
-  -> media/reference screen when required
+  -> temporary/saved media screen when required
   -> dynamic model settings
   -> prompt
   -> live price + balance confirmation
+  -> re-resolve saved refs + fresh signed URLs
   -> authenticated paid admission
 ```
 
 ### Video input types
 
-For Seedance 2 / Seedance 2 Mini the wizard exposes the verified input modes:
+For Seedance 2 / Seedance 2 Mini the wizard exposes the verified modes:
 
 ```text
 text
@@ -160,26 +188,15 @@ The live media limit follows the scenario:
 - `first_last`: 2 ordered images;
 - `references`: up to the local total multimodal reference limit (currently 6), additionally constrained by per-type model limits.
 
-`first_last` preserves upload order: the first uploaded image becomes `first_frame_url`, the second becomes `last_frame_url`.
-
-Multimodal references are separated before provider admission into image/video/audio URL lists. The local contract enforces per-type and total limits before a billable provider request exists.
+Multimodal references are separated before provider admission into image/video/audio URL lists. Saved memory currently contributes image references; temporary uploads can still contribute image/video/audio. The local contract enforces per-type and total limits before a billable provider request exists.
 
 ### Dynamic video settings
 
-The Seedance screen exposes only verified options:
-
-- aspect ratio;
-- duration 5/10/15 seconds;
-- resolution supported by the contract;
-- generated audio;
-- return last frame;
-- web search.
-
-A setting toggle updates FSM data and re-renders the same screen rather than creating another one-off state.
+The Seedance screen exposes only verified options: aspect ratio, 5/10/15-second duration, supported resolution, generated audio, return-last-frame and web search. A toggle updates FSM data and re-renders the same screen.
 
 ## Quick Start convergence
 
-Quick Start still owns the fastest reference ingestion path:
+Quick Start remains the fastest temporary reference-ingestion path:
 
 ```text
 main menu -> Быстрый запуск
@@ -188,18 +205,16 @@ main menu -> Быстрый запуск
   -> same generation screen wizard as ordinary creation
 ```
 
-The uploaded local input is not downloaded again or copied. It becomes prefilled `media` in the wizard draft.
+The uploaded local input is not downloaded again or copied. It becomes prefilled temporary `media`. The user may then explicitly save compatible temporary image inputs into reference memory from the reference screen.
 
 Default video interpretation:
 
 - image reference -> `first_frame`;
 - video reference -> multimodal `references`.
 
-If the user switches to a compatible video input type, the prefilled reference survives. If the new type cannot accept the stored media, the old temporary file is deleted before the state changes.
+If a new video input type cannot accept existing media, only temporary input keys are deleted; durable saved-reference assets are detached from the draft and remain in the library.
 
-Quick Start also preserves its original reference metadata so Back from the first wizard model screen can return to the image/video product choice while the source is still valid. Abandoning an invalid/cleared Quick Start draft cleans all known reference keys.
-
-Legacy `reference_choosing_model` / generic generation states remain temporarily declared and routed **after** the new wizard so Redis drafts created by an older deployed release can still recover instead of becoming unknown state names.
+Legacy reference/generic generation states remain routed after the new screens so older Redis drafts can recover.
 
 ## Declared generation FSM states
 
@@ -215,6 +230,8 @@ video_selecting_type
 video_uploading_media
 video_configuring
 video_waiting_prompt
+reference_memory_browsing
+reference_memory_adding
 ```
 
 Quick Start/reference compatibility states:
@@ -239,7 +256,7 @@ choosing_duration
 choosing_audio
 ```
 
-Shared terminal conversational states:
+Shared terminal states:
 
 ```text
 confirming
@@ -250,58 +267,41 @@ submitting
 
 ## Back / invalid input / stale callback
 
-Each new screen has an explicit backwards edge:
+Each normal generation screen has an explicit backwards edge. Reference-memory Back returns to the originating generation reference screen **without applying the transient browser selection**. Adding a new memory photo has its own Back edge to the browser.
 
-```text
-image model <- references <- settings <- prompt <- confirmation
-video model <- type <- media/settings <- settings <- prompt <- confirmation
-```
-
-For text-only video, Back from settings returns to input type because there is no media screen.
-
-Invalid messages do not destroy a valid draft. Button-only screens tell the user to use the current buttons; media screens restate their exact media requirement and refresh the current controls; prompt screens request text. An unrelated stale callback keeps a known active state and points the user to the latest controls.
+Invalid messages do not destroy a valid draft. Button-only screens tell the user to use current controls; media screens restate exact requirements; the memory add screen accepts one photo/image document; prompt screens request text. An unrelated stale callback keeps a known active state and points the user to the latest controls.
 
 ## Confirmation and billing
 
-Confirmation does not synthesize a provider payload just to calculate price. It resolves the final provider model slug from the current draft, then reads current price and wallet balance through the trusted internal API.
+Confirmation resolves final provider model slug, current price and wallet balance through trusted internal services. Launch is enabled only when price, balance and draft are valid.
 
-Launch is enabled only when:
+At final launch:
 
-- the current model has an active price;
-- the wallet has enough available units;
-- the draft remains valid.
+1. temporary `storage_key` inputs become fresh signed local URLs;
+2. durable `reference_id` inputs are owner/active-state re-resolved through `/v1/reference-memory/resolve` to fresh signed S3 URLs;
+3. the ordinary strict provider payload is built;
+4. authenticated paid admission performs idempotency, limits and atomic balance reservation.
 
-At final launch, private local storage keys are converted to fresh signed URLs and only then is the strict provider payload constructed.
-
-Paid admission remains unchanged:
-
-```text
-authenticated internal request
-  -> model/runtime validation
-  -> idempotency
-  -> rate/concurrency limits
-  -> atomic price/balance reservation
-  -> generation + durable submit outbox
-```
-
-The Telegram wizard never calls KIE directly and never performs its own wallet mutation.
+The memory browser never calls KIE and never mutates a wallet.
 
 ## Duplicate confirmation
 
-Each draft owns one stable `idempotency_key`. During `submitting`, repeated launch presses are rejected conversationally; the internal API/PostgreSQL idempotency boundary remains the durable final guard if transport ambiguity occurs.
+Each draft owns one stable `idempotency_key`. During `submitting`, repeated launch presses are rejected conversationally; the internal API/PostgreSQL idempotency boundary remains the durable final guard.
 
 ## Media safety
 
 - one Telegram message equals one upload operation;
 - albums/media groups are rejected before download;
 - unsupported documents fail as user validation errors;
-- input size is bounded by `FOXGEN_TELEGRAM_INPUT_MAX_BYTES`;
-- upload/storage failures do not advance the screen;
-- temporary files stay private and are cleaned on `/start`, `/menu`, cancel/reset, explicit reload, reference replacement and skip-without-reference paths;
-- signed provider-readable URLs are generated only near final admission;
-- editing/replacing a Telegram control message never changes temporary-file ownership.
+- temporary input size is bounded by `FOXGEN_TELEGRAM_INPUT_MAX_BYTES`;
+- save/list/delete memory operations create no provider side effect;
+- temporary files stay private and are cleaned on `/start`, `/menu`, reset/reload, replacement and explicit save staging cleanup;
+- saved references stay private and survive FSM expiry/reset/redeploy until owner deletion;
+- `inputs/` cleanup ignores durable `reference_id` locators;
+- private S3 URLs are short-lived and generated on demand;
+- final saved-reference ownership/state validation occurs before provider admission.
 
-See `input-media-lifecycle.md`.
+See `input-media-lifecycle.md` and `reference-memory.md`.
 
 ## Runtime router order
 
@@ -312,6 +312,7 @@ foxgen-global-commands
 foxgen-admin-extras
 foxgen-admin
 foxgen-quick-start-wizard
+foxgen-reference-memory
 foxgen-generation-wizard
 foxgen-quick-start
 foxgen-generation
@@ -320,32 +321,33 @@ foxgen-shell
 
 Reasons:
 
-- global commands must preempt every FSM;
-- Quick Start bridge must intercept post-upload product/back actions before legacy Quick Start handlers;
-- the generation wizard must own ordinary `create:image`, `create:video`, its settings/back/confirmation callbacks before the generic legacy generation router;
-- legacy routers remain reachable only for older Redis drafts and unchanged reference ingestion paths;
-- shell catch-all remains last.
+- global commands preempt every FSM;
+- Quick Start bridge handles its post-upload convergence;
+- reference-memory owns its browser states and must intercept reference-aware clear/type/final-confirm callbacks before the generic generation wizard;
+- generation wizard owns ordinary generation controls;
+- legacy routers remain reachable only for older Redis drafts;
+- shell catch-all stays last.
 
 `register_runtime_routers()` and its regression test protect this ordering.
 
 ## `/admin`
 
-`/admin` remains a separate privileged Telegram shell. Every privileged callback/FSM continuation re-authorizes through the signed server-side admin API; screen-wizard work does not bypass or alter that boundary.
+`/admin` remains a separate privileged Telegram shell. Reference memory does not relax signed admin API, RBAC or audit boundaries.
 
 ## Testing expectations
 
-The generation screen change is incomplete unless tests preserve:
+Reference memory/generation work is incomplete unless tests preserve:
 
 - `STATE_CONTRACTS == all declared GenerationStates`;
 - `/start` interruption for every declared state;
-- exact runtime router order;
-- compact reference keyboard layout and live model/scenario counters;
-- no numbered wizard titles on the new screen flow;
-- wizard provider-slug coverage equals all production-enabled KIE submission models;
+- exact runtime router order including `foxgen-reference-memory` before the ordinary wizard;
+- compact reference keyboard and live model/scenario counters;
+- owner-scoped temporary-save and durable resolve/delete;
+- reference item/byte quotas and checksum de-duplication;
+- saved-reference preview/navigation/multi-selection/delete/apply controls;
+- temporary-vs-durable cleanup separation;
 - Seedream text/edit slug selection by reference presence;
-- per-model dynamic settings visibility;
-- first/last frame order;
-- multimodal reference separation;
-- media-completion rules;
-- Quick Start reference preservation into the same wizard;
+- first/last-frame ordering;
+- multimodal total/per-kind limits;
+- stale/deleted durable reference fail-closed behavior before paid admission;
 - price/balance gating and existing submission idempotency tests.
