@@ -26,9 +26,14 @@ from foxgen.api.generations import (
     create_generation_router,
 )
 from foxgen.api.miniapp import MiniAppRepositoryProtocol, create_miniapp_router
+from foxgen.api.reference_memory import (
+    ReferenceMemoryServiceProtocol,
+    create_reference_memory_router,
+)
 from foxgen.api.security import authenticate_submission, validate_idempotency_key
 from foxgen.application.generation_ops import GenerationOperationsService
 from foxgen.application.reconciliation import ReconciliationService
+from foxgen.application.reference_memory import ReferenceMemoryService
 from foxgen.application.submissions import SubmissionReceipt, SubmissionService
 from foxgen.core.config import Settings, get_settings
 from foxgen.core.errors import ErrorCode, FoxGenError, WebhookVerificationError
@@ -40,6 +45,7 @@ from foxgen.infra.media import S3MediaStorage
 from foxgen.infra.miniapp import SqlAlchemyMiniAppRepository
 from foxgen.infra.rate_limit import RedisSubmissionRateLimiter
 from foxgen.infra.redis import RedisPool
+from foxgen.infra.reference_memory import SqlAlchemyReferenceMemoryRepository
 from foxgen.infra.repositories import SqlAlchemyGenerationRepository
 from foxgen.providers.kie.contracts import contract_schema, validate_input
 from foxgen.providers.kie.registry import ModelRegistry
@@ -191,19 +197,52 @@ def _secret_value(value: SecretStr | None) -> str | None:
     return value.get_secret_value()
 
 
-def _miniapp_repository(settings: Settings, database: Database) -> SqlAlchemyMiniAppRepository:
-    media_signer = S3MediaStorage(
+def _s3_storage(settings: Settings, *, ttl_seconds: int) -> S3MediaStorage:
+    return S3MediaStorage(
         bucket=settings.s3_bucket,
         region=settings.s3_region,
-        endpoint_url=str(settings.s3_endpoint_url)
-        if settings.s3_endpoint_url is not None
-        else None,
+        endpoint_url=(
+            str(settings.s3_endpoint_url) if settings.s3_endpoint_url is not None else None
+        ),
         access_key_id=_secret_value(settings.s3_access_key_id),
         secret_access_key=_secret_value(settings.s3_secret_access_key),
         force_path_style=settings.s3_force_path_style,
-        presigned_url_ttl_seconds=settings.miniapp_media_url_ttl_seconds,
+        presigned_url_ttl_seconds=ttl_seconds,
     )
-    return SqlAlchemyMiniAppRepository(database, media_signer)
+
+
+def _miniapp_repository(settings: Settings, database: Database) -> SqlAlchemyMiniAppRepository:
+    return SqlAlchemyMiniAppRepository(
+        database,
+        _s3_storage(settings, ttl_seconds=settings.miniapp_media_url_ttl_seconds),
+    )
+
+
+def _reference_memory_service(
+    settings: Settings,
+    database: Database,
+) -> ReferenceMemoryService | None:
+    internal_token = settings.internal_api_token
+    if internal_token is None:
+        return None
+    input_source = LocalInputMediaStorage(
+        root=settings.telegram_input_storage_root,
+        public_base_url=settings.telegram_input_public_base_url,
+        signing_secret=internal_token.get_secret_value(),
+        presigned_url_ttl_seconds=settings.telegram_input_presigned_url_ttl_seconds,
+        retention_seconds=settings.telegram_input_retention_seconds,
+    )
+    storage = _s3_storage(
+        settings,
+        ttl_seconds=settings.reference_memory_presigned_url_ttl_seconds,
+    )
+    return ReferenceMemoryService(
+        repository=SqlAlchemyReferenceMemoryRepository(database),
+        input_source=input_source,
+        storage=storage,
+        max_items=settings.reference_memory_max_items,
+        max_bytes=settings.reference_memory_max_total_bytes,
+    )
 
 
 def create_app(
@@ -216,6 +255,7 @@ def create_app(
     generation_operations: GenerationOperationsProtocol | None = None,
     reconciliation_service: ReconciliationProtocol | None = None,
     miniapp_repository: MiniAppRepositoryProtocol | None = None,
+    reference_memory_service: ReferenceMemoryServiceProtocol | None = None,
     admin_services: AdminServices | None = None,
 ) -> FastAPI:
     resolved_settings = settings or get_settings()
@@ -263,6 +303,11 @@ def create_app(
             app.state.reconciliation_service = ReconciliationService(lifecycle_repository)
         if app.state.miniapp_repository is None:
             app.state.miniapp_repository = _miniapp_repository(resolved_settings, database)
+        if app.state.reference_memory_service is None:
+            app.state.reference_memory_service = _reference_memory_service(
+                resolved_settings,
+                database,
+            )
 
         try:
             yield
@@ -283,9 +328,11 @@ def create_app(
     app.state.generation_operations = generation_operations
     app.state.reconciliation_service = reconciliation_service
     app.state.miniapp_repository = miniapp_repository
+    app.state.reference_memory_service = reference_memory_service
     app.state.admin_services = admin_services
     app.include_router(create_billing_router(resolved_settings))
     app.include_router(create_generation_router(resolved_settings))
+    app.include_router(create_reference_memory_router(resolved_settings))
     if resolved_settings.miniapp_enabled:
         app.include_router(create_miniapp_router(resolved_settings))
     app.include_router(create_admin_router(resolved_settings))
