@@ -521,7 +521,7 @@ function renderSchemaField(name,field,draft,required,isPrompt) {
     return `<div class="schema-field ${error?'invalid':''}"><label>${esc(label)} ${requiredMark}</label><select data-field-select="${esc(name)}">${choices.map(option=>`<option value="${esc(String(option))}" ${String(value)===String(option)?'selected':''}>${esc(VALUE_LABELS[String(option)]??String(option))}</option>`).join('')}</select><small>${esc(description)}</small>${fieldError(error)}</div>`;
   }
   if (isPrompt || (field.type==='string' && Number(field.maxLength??0)>300)) {
-    return `<div class="schema-field schema-field--wide ${error?'invalid':''}"><div class="field-counter"><label>${esc(label)} ${requiredMark}</label><span>${String(value??'').length}${field.maxLength?` / ${field.maxLength}`:''}</span></div><textarea data-field-input="${esc(name)}" maxlength="${Number(field.maxLength??10000)}" placeholder="${esc(promptPlaceholder(item))}">${esc(value??'')}</textarea><small>${esc(description)}</small>${fieldError(error)}</div>`;
+    return `<div class="schema-field schema-field--wide ${error?'invalid':''}"><div class="field-counter"><label>${esc(label)} ${requiredMark}</label><span>${String(value??'').length}${field.maxLength?` / ${field.maxLength}`:''}</span></div><textarea data-field-input="${esc(name)}" maxlength="${Number(field.maxLength??10000)}" placeholder="${esc(promptPlaceholder(modelBySlug(draft.modelSlug) ?? {}))}">${esc(value??'')}</textarea><small>${esc(description)}</small>${fieldError(error)}</div>`;
   }
   const type = field.type==='integer'||field.type==='number'?'number':'text';
   const step = field.type==='integer'?'1':'any';
