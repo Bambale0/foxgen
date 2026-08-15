@@ -1,6 +1,6 @@
 # HTTP API reference
 
-This reference describes routes actually registered by the current FastAPI application. The public Mini App is outside scope; `/internal/admin/ui` is a backend-only operator surface.
+This reference describes routes actually registered by the current FastAPI application, including the public Happy Fox Mini App. `/internal/admin/ui` remains a backend-only operator surface.
 
 ## Authentication classes
 
@@ -81,6 +81,29 @@ Paid task admission validates authentication, positive user identity, idempotenc
 | POST | `/v1/admin/generations/{id}/resolve-delivery` | legacy billing admin | Manual `delivery_unknown` resolution |
 
 Cancellation is rejected once provider submission may have started. Unknown provider/Telegram outcomes are never resolved through blind retry.
+
+# Happy Fox public Mini App API
+
+Happy Fox uses a short-lived Telegram-derived JWT. These routes are owner-scoped/read-only except for paid task admission, safe cancellation and private input-media lifecycle. Internal/admin credentials are never accepted by or exposed to the browser.
+
+| Method | Path | Purpose |
+|---|---|---|
+| POST | `/v1/miniapp/auth` | Validate Telegram `initData` and issue Mini App JWT |
+| GET | `/v1/miniapp/bootstrap` | Initial user, wallet, prices, compact ledger, model schemas, recent jobs, feature flags and limits |
+| GET | `/v1/miniapp/models` | Submission-enabled model catalog + JSON schemas |
+| GET | `/v1/miniapp/models/{model_slug}` | Submission-enabled model detail |
+| POST | `/v1/miniapp/models/{model_slug}/validate` | Free model-contract validation and normalization |
+| GET | `/v1/miniapp/balance` | Current authenticated owner wallet projection |
+| GET | `/v1/miniapp/prices` | Current active prices |
+| GET | `/v1/miniapp/ledger` | Authenticated owner immutable ledger projection, max 200 |
+| GET | `/v1/miniapp/generations` | Authenticated owner history, max 100 |
+| GET | `/v1/miniapp/generations/{generation_id}` | Owner detail + short-lived stored-media URLs |
+| POST | `/v1/miniapp/generations/{generation_id}/cancel` | Existing safe pre-provider cancellation boundary |
+| POST | `/v1/miniapp/tasks` | Paid admission through shared `SubmissionService` + `Idempotency-Key` |
+| POST | `/v1/miniapp/input-media` | Authenticated private image/video/audio upload |
+| DELETE | `/v1/miniapp/input-media/{storage_key}` | Owner-scoped temporary input cleanup |
+
+The frontend renders enabled model controls from the backend `input_schema` and calls the Mini App validation route before paid admission. The paid route validates again; browser validation is never a trust boundary. Wallet routes are projections only and cannot mutate balances.
 
 # Registered signed internal admin API
 
