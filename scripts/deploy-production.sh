@@ -109,6 +109,28 @@ require_env_value() {
   esac
 }
 
+miniapp_enabled() {
+  local raw
+  raw="$(read_env_value FOXGEN_MINIAPP_ENABLED)"
+  raw="${raw:-true}"
+  case "${raw,,}" in
+    0|false|no|off) return 1 ;;
+    *) return 0 ;;
+  esac
+}
+
+resolved_miniapp_url() {
+  local explicit base
+  explicit="$(read_env_value FOXGEN_MINIAPP_PUBLIC_URL)"
+  if [ -n "$explicit" ]; then
+    printf '%s/\n' "${explicit%/}"
+    return 0
+  fi
+  base="$(read_env_value FOXGEN_KIE_CALLBACK_BASE_URL)"
+  [ -n "$base" ] || return 1
+  printf '%s/mini-app/\n' "${base%/}"
+}
+
 # Legacy production environments predate Happy Fox. This is the only credential
 # deploy is allowed to create automatically, and only once while holding the lock.
 bootstrap_miniapp_jwt_secret
@@ -202,12 +224,16 @@ if [ -n "$EXPECTED_SHA" ] && [ "$DEPLOYED_SHA" != "$EXPECTED_SHA" ]; then
 fi
 
 export FOXGEN_IMAGE_TAG="$DEPLOYED_SHA"
+EXPECTED_IMAGE="foxgen:$DEPLOYED_SHA"
 
 log "validating production Compose configuration"
 compose config --quiet
 
-log "building immutable application image foxgen:$DEPLOYED_SHA"
+log "building immutable application image $EXPECTED_IMAGE"
 compose build --pull api
+
+docker image inspect "$EXPECTED_IMAGE" >/dev/null 2>&1 || \
+  fail "immutable application image $EXPECTED_IMAGE was not built"
 
 log "starting stateful dependencies"
 compose up -d postgres redis minio
@@ -241,6 +267,94 @@ wait_for_container() {
   fail "$service did not become ready within ${timeout_seconds}s"
 }
 
+assert_service_image() {
+  local service="$1"
+  local container_id image
+  container_id="$(compose ps -q "$service")"
+  [ -n "$container_id" ] || fail "$service container is missing"
+  image="$(docker inspect --format '{{.Config.Image}}' "$container_id")"
+  [ "$image" = "$EXPECTED_IMAGE" ] || \
+    fail "$service is running $image instead of tested $EXPECTED_IMAGE"
+}
+
+reload_local_https_ingress() {
+  local api_container backend_network
+  local -a candidates=()
+  api_container="$(compose ps -q api)"
+  [ -n "$api_container" ] || fail "api container is missing before ingress reload"
+  backend_network="$(
+    docker inspect --format '{{range $name, $_ := .NetworkSettings.Networks}}{{println $name}}{{end}}' \
+      "$api_container" | awk '/_backend$/ { print; exit }'
+  )"
+  if [ -z "$backend_network" ]; then
+    log "no local backend network found; relying on public ingress smoke"
+    return 0
+  fi
+
+  while IFS= read -r container_id; do
+    [ -n "$container_id" ] && candidates+=("$container_id")
+  done < <(docker ps -q --filter "network=$backend_network" --filter publish=443)
+
+  if [ "${#candidates[@]}" -eq 0 ]; then
+    log "no local HTTPS ingress container found on $backend_network; relying on public ingress smoke"
+    return 0
+  fi
+  [ "${#candidates[@]}" -eq 1 ] || \
+    fail "multiple HTTPS ingress containers found on $backend_network; refusing ambiguous reload"
+
+  if ! docker exec "${candidates[0]}" sh -lc 'command -v nginx >/dev/null 2>&1'; then
+    log "local HTTPS ingress is not nginx; relying on public ingress smoke"
+    return 0
+  fi
+  log "validating and reloading local shared nginx ingress"
+  docker exec "${candidates[0]}" nginx -t
+  docker exec "${candidates[0]}" nginx -s reload
+}
+
+verify_live_bot_webapp_code() {
+  local bot_container
+  bot_container="$(compose ps -q bot)"
+  [ -n "$bot_container" ] || fail "bot container is missing"
+  docker exec "$bot_container" python -c '
+import foxgen.bot.app as app
+from foxgen.bot.keyboards import main_menu, resolve_miniapp_url
+url = resolve_miniapp_url()
+button = main_menu().inline_keyboard[0][0]
+assert hasattr(app, "configure_miniapp_menu")
+assert url
+assert button.web_app is not None
+assert button.callback_data is None
+' || fail "live bot image does not expose the Happy Fox WebApp entrypoint"
+}
+
+verify_telegram_menu() {
+  local miniapp_url bot_token menu_json
+  miniapp_url="$1"
+  bot_token="$(read_env_value FOXGEN_TELEGRAM_BOT_TOKEN)"
+  sleep 2
+  menu_json="$(
+    curl --fail --silent --show-error --max-time 15 \
+      "https://api.telegram.org/bot${bot_token}/getChatMenuButton"
+  )"
+  MINIAPP_URL="$miniapp_url" MENU_JSON="$menu_json" python3 - <<'PY'
+import json
+import os
+
+expected = os.environ["MINIAPP_URL"].rstrip("/") + "/"
+payload = json.loads(os.environ["MENU_JSON"])
+if payload.get("ok") is not True:
+    raise SystemExit("Telegram getChatMenuButton returned ok=false")
+result = payload.get("result") or {}
+if result.get("type") != "web_app":
+    raise SystemExit("Telegram default chat menu is not web_app")
+if result.get("text") != "Happy Fox":
+    raise SystemExit("Telegram default chat menu text is not Happy Fox")
+actual = ((result.get("web_app") or {}).get("url") or "").rstrip("/") + "/"
+if actual != expected:
+    raise SystemExit("Telegram default chat menu URL does not match Happy Fox")
+PY
+}
+
 wait_for_container postgres healthy 120
 wait_for_container redis healthy 120
 wait_for_container minio none 120
@@ -251,12 +365,20 @@ compose run --rm minio-init
 log "applying database migrations"
 compose run --rm migrate
 
-log "starting API, worker and Telegram bot"
-compose up -d --remove-orphans api worker bot
+log "force-recreating API, worker and Telegram bot from $EXPECTED_IMAGE"
+compose up -d --force-recreate --no-deps api worker bot
 
 wait_for_container api healthy 180
 wait_for_container worker none 120
 wait_for_container bot none 120
+
+for service in api worker bot; do
+  assert_service_image "$service"
+done
+log "all application services run the exact tested image $EXPECTED_IMAGE"
+
+verify_live_bot_webapp_code
+reload_local_https_ingress
 
 PUBLIC_PORT="$(read_env_value FOXGEN_PUBLIC_API_PORT)"
 PUBLIC_PORT="${PUBLIC_PORT:-8080}"
@@ -267,6 +389,15 @@ curl \
   --show-error \
   --max-time 10 \
   "http://127.0.0.1:${PUBLIC_PORT}/health/ready" >/dev/null
+
+if miniapp_enabled; then
+  MINIAPP_URL="$(resolved_miniapp_url)" || fail "Mini App is enabled but no public URL is configured"
+  log "checking public Happy Fox Mini App"
+  curl --fail --silent --show-error --location --max-time 15 "$MINIAPP_URL" | \
+    grep -q 'Happy Fox' || fail "public Happy Fox Mini App smoke failed"
+  verify_telegram_menu "$MINIAPP_URL" || fail "Telegram Happy Fox menu verification failed"
+  log "Happy Fox public WebApp and Telegram menu verified"
+fi
 
 log "deployment completed: $PREVIOUS_SHA -> $DEPLOYED_SHA"
 compose ps
