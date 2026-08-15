@@ -7,8 +7,8 @@ MINIAPP = Path(__file__).resolve().parents[1] / "src" / "foxgen" / "miniapp_stat
 def test_complete_menu_assets_are_loaded() -> None:
     html = (MINIAPP / "index.html").read_text(encoding="utf-8")
 
-    assert '/mini-app/complete-menu.css' in html
-    assert '/mini-app/complete-menu.js' in html
+    assert "/mini-app/complete-menu.css" in html
+    assert "/mini-app/complete-menu.js" in html
 
 
 def test_complete_menu_surfaces_all_telegram_product_entries() -> None:
