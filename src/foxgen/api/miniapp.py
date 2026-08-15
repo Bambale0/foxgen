@@ -23,6 +23,7 @@ from foxgen.api.miniapp_security import (
     issue_miniapp_token,
     validate_telegram_init_data,
 )
+from foxgen.api.user_portal import create_miniapp_user_portal_router
 from foxgen.application.media import DownloadedMedia
 from foxgen.application.submissions import SubmissionReceipt
 from foxgen.core.config import Settings
@@ -497,4 +498,5 @@ def create_miniapp_router(settings: Settings) -> APIRouter:
             raise
 
     router.include_router(create_miniapp_parity_router(settings))
+    router.include_router(create_miniapp_user_portal_router(settings))
     return router

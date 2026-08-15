@@ -4,6 +4,7 @@ from uuid import UUID
 
 from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from foxgen.application.user_portal import (
     PartnerProfileSnapshot,
@@ -308,7 +309,7 @@ class SqlAlchemyUserPortalService:
                 return self._withdrawal_snapshot(withdrawal)
 
     @staticmethod
-    async def _ensure_user(session: object, *, user_id: int, username: str | None) -> None:
+    async def _ensure_user(session: AsyncSession, *, user_id: int, username: str | None) -> None:
         # Kept as a small insert-only identity side effect: Telegram auth remains authoritative.
         await session.execute(
             pg_insert(User)
@@ -320,7 +321,7 @@ class SqlAlchemyUserPortalService:
         )
 
     @staticmethod
-    async def _pending_withdrawal_units(session: object, *, user_id: int) -> int:
+    async def _pending_withdrawal_units(session: AsyncSession, *, user_id: int) -> int:
         value = await session.scalar(
             select(func.coalesce(func.sum(PartnerWithdrawal.amount_units), 0)).where(
                 PartnerWithdrawal.user_id == user_id,
