@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
@@ -18,7 +19,6 @@ from foxgen.domain.models import GenerationStatus
 from foxgen.domain.publications import (
     FeedSort,
     PublicationCommentView,
-    PublicationMediaView,
     PublicationScope,
     PublicationView,
     PublicProfileView,
@@ -94,9 +94,8 @@ class FakePublicationService:
     async def get_profile(self, *, slug: str) -> PublicProfileView | None:
         return self.profile if slug == self.profile.slug else None
 
-    async def get_own_profile(
-        self, *, user_id: int, username: str | None
-    ) -> PublicProfileView:
+    async def get_own_profile(self, *, user_id: int, username: str | None) -> PublicProfileView:
+        del username
         self.viewer_ids.append(user_id)
         return self.profile
 
@@ -129,7 +128,7 @@ class FakePublicationService:
     ) -> PublicationView:
         del username, generation_id
         self.viewer_ids.append(user_id)
-        return PublicationView(**{**self.publication.__dict__, "scope": scope})
+        return replace(self.publication, scope=scope)
 
     async def unpublish(
         self,
@@ -271,9 +270,7 @@ class FakeReferenceService:
         assert storage_key.startswith(f"inputs/miniapp/{user_id}/")
         return ReferenceSaveResult(item=self.item, duplicate=False)
 
-    async def list(
-        self, *, user_id: int, offset: int = 0, limit: int = 20
-    ) -> ReferenceMemoryPage:
+    async def list(self, *, user_id: int, offset: int = 0, limit: int = 20) -> ReferenceMemoryPage:
         del offset, limit
         self.user_ids.append(user_id)
         return ReferenceMemoryPage(
@@ -323,7 +320,9 @@ class FakeSubmissionService:
         )
 
 
-def app_with_services() -> tuple[TestClient, FakePublicationService, FakeReferenceService, FakeSubmissionService]:
+def app_with_services() -> tuple[
+    TestClient, FakePublicationService, FakeReferenceService, FakeSubmissionService
+]:
     publications = FakePublicationService()
     references = FakeReferenceService()
     submissions = FakeSubmissionService()
@@ -387,9 +386,7 @@ def test_reference_memory_list_resolve_delete_are_owner_scoped() -> None:
             headers=headers(),
             json={"reference_ids": [str(REFERENCE_ID)]},
         )
-        deleted = client.delete(
-            f"/v1/miniapp/reference-memory/{REFERENCE_ID}", headers=headers()
-        )
+        deleted = client.delete(f"/v1/miniapp/reference-memory/{REFERENCE_ID}", headers=headers())
 
     assert listed.status_code == 200
     assert listed.json()["items"][0]["id"] == str(REFERENCE_ID)
