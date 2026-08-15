@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from foxgen.application.media import DownloadedMedia, StoredMedia
+from foxgen.application.media import DownloadedMedia
 from foxgen.application.reference_memory import ReferenceMemoryService
 from foxgen.core.errors import SubmissionError
 from tests.test_reference_memory import FakeRepository, FakeStorage, FakeUrlSigner
