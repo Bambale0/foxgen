@@ -36,6 +36,15 @@ def test_deploy_smokes_public_happy_fox_and_telegram_menu() -> None:
     assert 'result.get("text") != "Happy Fox"' in script
 
 
+def test_streamed_deploy_disables_stdin_for_one_shot_compose_runs() -> None:
+    script = _deploy_script()
+
+    assert "compose run -T --rm minio-init" in script
+    assert "compose run -T --rm migrate" in script
+    assert "compose run --rm minio-init" not in script
+    assert "compose run --rm migrate" not in script
+
+
 def test_deploy_never_reconciles_untracked_production_files() -> None:
     script = _deploy_script()
 
