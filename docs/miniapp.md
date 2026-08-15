@@ -1,141 +1,179 @@
 # Happy Fox Telegram Mini App
 
-`Happy Fox` is the public browser/WebView product surface for the FoxGen backend. The user-facing brand is **Happy Fox only**; internal Python packages, database resources and service names retain `foxgen` so product branding does not destabilize backend contracts.
+`Happy Fox` is FoxGen's public Telegram Mini App. User-facing branding is **Happy Fox only**; internal package/database/service names remain `foxgen`.
+
+The Mini App is served by FastAPI at `/mini-app/`; user-safe browser APIs are under `/v1/miniapp/*`. The browser never receives the internal API token, admin HMAC, KIE key, S3 credentials or any operator credential.
 
 ## Telegram entrypoints
 
-The Mini App is a real Telegram Web App, not a callback-only bot screen.
+When a public HTTPS URL is configured, Happy Fox is reachable through:
 
-When a public URL is configured, FoxGen exposes Happy Fox through two Telegram entrypoints:
+- the first `/start` / `/menu` inline WebApp button;
+- Telegram's default chat menu button (`Happy Fox`);
+- BotFather Main Mini App when configured;
+- `startapp` deep links used for post/profile/remix/generation/model entry.
 
-- the first button in the bot `/start` and `/menu` keyboard: **🦊 Открыть Happy Fox**;
-- the default Telegram chat menu button: **Happy Fox**.
+`FOXGEN_MINIAPP_PUBLIC_URL` is preferred. If absent, FoxGen derives `/mini-app/` from `FOXGEN_KIE_CALLBACK_BASE_URL`. Missing public configuration fails closed instead of presenting a fake working entrypoint.
 
-`FOXGEN_MINIAPP_PUBLIC_URL` is the preferred explicit production URL and should point to the HTTPS `/mini-app/` path. If it is omitted, FoxGen falls back to `FOXGEN_KIE_CALLBACK_BASE_URL + /mini-app/`. If neither public URL exists, the bot fails closed and shows an unavailable alert instead of pretending the Mini App is connected.
+## Authentication and trust boundary
 
-## Product surface
+1. Telegram provides opaque `Telegram.WebApp.initData`.
+2. `POST /v1/miniapp/auth` sends it to FoxGen.
+3. FoxGen validates Telegram's HMAC and `auth_date` server-side.
+4. FoxGen issues a short-lived HS256 JWT with audience `happy-fox-miniapp`.
+5. Every owner-scoped browser action derives `user_id` from that JWT; browser-supplied user IDs are never trusted.
 
-The FastAPI process serves the packaged frontend at `/mini-app/`. Public Mini App API routes live under `/v1/miniapp/*`.
+Demo mode outside Telegram is presentation-only. It cannot create paid work, mutate wallet/social state, upload private media or access owner data.
 
-The browser UI is now a schema-driven transport over the complete user-safe Mini App API rather than a second hard-coded implementation of provider contracts. The backend model registry and Pydantic JSON schemas remain the source of truth for enabled models, defaults, enums, lengths, numeric bounds and media fields.
+## Current navigation
 
-Current navigation:
+The canonical parity runtime is `miniapp_static/parity-app.js` with:
 
-- **Главная** — Telegram identity, real available balance, active jobs, backend-ranked model shortcuts and recent work;
-- **Модели** — every currently submission-enabled backend model, capabilities, recommendations, tier and real active price;
-- **Создать** — one adaptive studio that renders model fields from `input_schema`, applies backend defaults, supports the exact media modes accepted by the selected contract and performs server validation before paid admission;
-- **Работы** — up to the backend-advertised 100 most recent owner-scoped generations with kind/status/model filters, lifecycle polling, detail, cancellation, remix and download;
-- **Баланс** — materialized available/reserved/total credit balance, current model prices and immutable ledger history up to the backend-advertised 200 entries;
-- **Generation detail** — lifecycle state, stored media, normalized public error information, progress, safe cancel boundary and retry-as-new-draft behavior.
+- **Лента** — recent/top-day/top publications, profiles, likes, comments and remix;
+- **Создать** — schema-driven model catalog, Quick Start and adaptive generation studio;
+- **Работы** — owner generation history/detail/status polling/cancel/repeat/publish;
+- **Профиль** — public profile, own publications, wallet/ledger and reference memory.
 
-The base visual language remains dark graphite/orange Happy Fox. A secondary `studio.css` layer adds restrained grunge accents to selected hero/card surfaces, stamps and dividers only. Form controls, gallery media, navigation and wallet rows remain clean; the design token `--grunge-opacity` is capped below `0.30` and is regression-tested.
+Secondary screens include generation detail, publication detail, public profile, wallet and durable reference memory.
 
-The layout is mobile-first and uses Telegram content-safe-area CSS variables plus `WebApp.BackButton` for in-app navigation.
+The previous `app.js` remains packaged only as a rollback artifact; `index.html` loads `parity-app.js`.
 
-## Schema-driven model UI
+## Visual contract
 
-Every enabled model returned by `/v1/miniapp/models` includes:
+Happy Fox uses a dark graphite/orange system. `parity.css` adds restrained grunge to selected hero/card backgrounds, stamps and dividers only. Controls, media, comments, generation settings and wallet rows stay clean.
 
-- stable slug and display metadata;
-- media kind, capabilities, recommendations, tier and rank;
-- reviewed provider input contract name;
-- backend defaults;
-- Pydantic-generated `input_schema`.
+`--grunge-opacity` is regression-tested and must remain `<= 0.30`.
 
-The frontend maps this schema to controls:
+The layout is mobile-first and uses Telegram content-safe-area CSS variables, BackButton navigation, theme/viewport events and reduced-motion support.
 
-- `boolean` → switch;
-- enum → compact segmented control or select;
-- long string / `prompt` → bounded textarea;
-- number/integer → bounded numeric input;
-- image/video/audio URL fields → authenticated private media picker rather than a raw URL text field.
+## Schema-driven generation studio
 
-Before `POST /v1/miniapp/tasks`, the draft is sent to `POST /v1/miniapp/models/{slug}/validate`. Validation errors are projected onto the matching field where possible. The paid task endpoint validates the payload again, so browser validation is UX rather than a trust boundary.
+Backend registry + Pydantic JSON schema are the only source of truth for enabled generation models and their parameters.
 
-Seedance frame mode and multimodal-reference mode remain mutually exclusive because that is a backend contract invariant. The UI exposes text-only, first-frame, first+last-frame and multimodal-reference modes without inventing combinations the provider contract rejects.
+Each enabled model exposes:
 
-## Authentication
+- slug/title/family/media kind;
+- capability metadata and recommendations;
+- defaults;
+- reviewed input contract;
+- `input_schema` including enums, bounds, required fields and media fields;
+- current active FoxGen price via wallet pricing.
 
-The browser never receives an internal FoxGen credential.
+The UI maps schema fields to bounded controls and authenticated media pickers. Before paid admission, the browser calls `/v1/miniapp/models/{slug}/validate`; `/v1/miniapp/tasks` validates again and enters the shared `SubmissionService`.
 
-1. The Telegram WebView provides `Telegram.WebApp.initData`.
-2. `POST /v1/miniapp/auth` sends that opaque string to FoxGen.
-3. FoxGen validates the Telegram HMAC over the sorted data-check string, validates `auth_date`, and parses the signed user payload.
-4. FoxGen returns a short-lived HS256 JWT with audience `happy-fox-miniapp`.
-5. Every user-scoped `/v1/miniapp/*` call requires that JWT.
+The browser never calls KIE directly and never changes wallet state directly.
 
-`FOXGEN_MINIAPP_JWT_SECRET` is a dedicated backend-only secret. Do not reuse the Telegram bot token, KIE key, internal API token, webhook secret or admin HMAC key.
+### Current image/video behavior
 
-If the page is opened outside Telegram it renders a visual demo using local fixture data. Demo mode cannot call authenticated balance, upload, cancellation or paid-generation endpoints.
+- Seedream text/edit provider slug is resolved from reference presence without a redundant user mode screen.
+- Nano Banana image references follow backend max-item bounds.
+- Seedance exposes text, first-frame, first+last-frame and multimodal-reference modes; frame and multimodal modes remain mutually exclusive.
+- private temporary uploads are stored under `inputs/miniapp/<telegram-user-id>/...`;
+- incompatible/reset uploads are explicitly cleaned where possible; retention remains the final orphan backstop.
 
-## Public API boundary
+## Paid admission and remix lineage
 
-Happy Fox may use only owner-scoped/user-safe routes. Internal and administrative credentials or routes are never exposed to browser JavaScript. The private admin operator web remains a separate backend-only transport.
+`POST /v1/miniapp/tasks` requires `Idempotency-Key` and uses the same admission transaction as Telegram.
+
+For a social remix, the request also includes `source_publication_id`. That value reaches the same `SubmissionService`; lineage is part of the request fingerprint and is committed atomically with generation admission, wallet reservation and submit outbox creation. Source publication media is re-read immediately before submit so the browser does not rely on an old signed URL.
+
+## Feed, profiles and publication
+
+The social domain from #58 is now merged and exposed to Happy Fox through Telegram-JWT-safe wrappers.
+
+### Feed/read routes
 
 | Method | Path | Purpose |
 |---|---|---|
-| `POST` | `/v1/miniapp/auth` | validate Telegram `initData`, issue short JWT |
-| `GET` | `/v1/miniapp/bootstrap` | initial user, wallet, prices, compact ledger, models, recent jobs, feature flags and frontend-safe limits |
-| `GET` | `/v1/miniapp/models` | current submission-enabled model catalog with contracts/schemas |
-| `GET` | `/v1/miniapp/models/{slug}` | current model detail |
-| `POST` | `/v1/miniapp/models/{slug}/validate` | free server-side draft validation/normalization |
-| `GET` | `/v1/miniapp/balance` | refresh current owner materialized balance |
-| `GET` | `/v1/miniapp/prices` | refresh active model prices |
-| `GET` | `/v1/miniapp/ledger` | owner immutable ledger projection, bounded to 200 |
-| `GET` | `/v1/miniapp/generations` | owner generation history, bounded to 100 |
-| `GET` | `/v1/miniapp/generations/{id}` | owner generation detail + stored media URLs |
+| `GET` | `/v1/miniapp/feed` | `recent`, `top_day`, `top` feed pagination |
+| `GET` | `/v1/miniapp/publications/{id}` | publication detail |
+| `GET` | `/v1/miniapp/profiles/{slug}` | public profile |
+| `GET` | `/v1/miniapp/profiles/{slug}/publications` | profile publication grid |
+| `GET` | `/v1/miniapp/me/profile` | ensure/read own public profile |
+| `GET` | `/v1/miniapp/me/publications` | own publication management |
+
+### Social writes
+
+| Method | Path | Purpose |
+|---|---|---|
+| `PUT` | `/v1/miniapp/publications/{id}/like` | set like state idempotently |
+| `GET/POST` | `/v1/miniapp/publications/{id}/comments` | surface-scoped comments |
+| `PUT` | `/v1/miniapp/me/profile` | update own slug/name/bio |
+| `POST` | `/v1/miniapp/generations/{id}/publications` | publish eligible generation |
+| `DELETE` | `/v1/miniapp/generations/{id}/publications/{scope}` | unpublish without deleting generation |
+| `GET` | `/v1/miniapp/publications/{id}/remix` | fresh server-validated remix source |
+
+Publication remains a projection over an immutable succeeded generation + stored media. Provider temporary URLs are never social storage. Derivatives cannot enter the global feed; derivative public prompt/action redaction remains server-enforced.
+
+Likes are state-setting rather than browser-owned counters. Comments remain isolated between `feed` and `profile` surfaces.
+
+## Durable reference memory
+
+The reference-memory domain from #69 is now merged and exposed in Happy Fox.
+
+### Browser routes
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/v1/miniapp/reference-memory` | owner library, usage and quotas |
+| `POST` | `/v1/miniapp/reference-memory` | explicitly promote an owner temporary image |
+| `POST` | `/v1/miniapp/reference-memory/resolve` | fresh active/owner validation + preview/provider capability URLs |
+| `DELETE` | `/v1/miniapp/reference-memory/{id}` | schedule durable deletion |
+
+Reference metadata lives in PostgreSQL; bytes live under private `references/<user>/<uuid>` S3 keys. Redis owns only ephemeral UI selection. Saved references survive FSM expiry/redeploys until explicit deletion.
+
+The service accepts exactly two temporary owner namespaces:
+
+```text
+inputs/<telegram-user-id>/...
+inputs/miniapp/<telegram-user-id>/...
+```
+
+A foreign Mini App/Telegram input is rejected before file access. The library enforces configured item/byte quotas and per-owner checksum deduplication. Deletion immediately makes the reference unresolvable, then the worker deletes S3 bytes through the durable outbox lifecycle.
+
+Immediately before paid generation the Mini App calls `/reference-memory/resolve` again; stale/deleted/foreign references fail before provider side effects.
+
+## Generation history and lifecycle
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/v1/miniapp/generations` | owner history, bounded to 100 |
+| `GET` | `/v1/miniapp/generations/{id}` | detail + short-lived stored-media URLs |
 | `POST` | `/v1/miniapp/generations/{id}/cancel` | existing safe cancellation boundary |
-| `POST` | `/v1/miniapp/tasks` | paid admission through shared `SubmissionService` |
-| `POST` | `/v1/miniapp/input-media` | authenticated private input upload |
-| `DELETE` | `/v1/miniapp/input-media/{storage_key}` | owner-scoped temporary input cleanup |
 
-`bootstrap.features` advertises whether task submission and authenticated input upload are currently usable. `bootstrap.limits` publishes the current input byte limit and bounded frontend history sizes so the browser does not hard-code a looser policy.
+Active detail screens poll until terminal state. Cancellation remains forbidden after the existing provider-side-effect safety boundary; the browser does not invent a blind retry. Repeat creates a new draft/idempotency key.
 
-## Paid generation boundary
+## Wallet and pricing
 
-The Mini App does **not** implement an alternative billing or provider path.
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/v1/miniapp/balance` | available/reserved/total materialized balance |
+| `GET` | `/v1/miniapp/prices` | active generation prices |
+| `GET` | `/v1/miniapp/ledger` | immutable owner ledger, bounded to 200 |
 
-`POST /v1/miniapp/tasks`:
+Paid generation remains responsible for atomic reserve/capture/release/refund. Happy Fox only reads wallet projections and submits through the shared paid boundary.
 
-1. authenticates the Telegram-derived JWT;
-2. requires a caller-provided `Idempotency-Key`;
-3. resolves the existing production model registry;
-4. runs the existing strict KIE contract validator;
-5. calls the same `SubmissionService` used by the trusted Telegram path.
+A user-safe payment-provider invoice API is not yet merged. Happy Fox therefore shows that boundary as unavailable instead of presenting a fake top-up button.
 
-The existing admission transaction therefore remains responsible for user/model availability checks, rate/concurrency gates, active price lookup, sufficient balance, immutable ledger reservation, generation persistence and durable outbox creation.
+## Full user-parity program
 
-The Mini App cannot mutate a wallet directly. Wallet refresh endpoints are projections only.
+Issue #89 is the master parity contract. Social and reference-memory parity are now part of the executable product. Remaining `planned:*` Telegram entries must **not** be represented as working browser features until their backend/product domains are implemented and tested.
 
-## Private input media
+Still tracked for backend + Telegram + Happy Fox delivery:
 
-`POST /v1/miniapp/input-media` accepts a raw authenticated body for supported image/video/audio MIME types. The endpoint:
+- voice/TTS/dialogue/audio cleanup;
+- Suno music/extend/cover/lyrics/vocals/instrumental/stems/MIDI;
+- motion control/talking avatar;
+- Prompt AI and conversational assistant;
+- dedicated Gemini Omni / Runway / Veo adapters where required;
+- payment/top-up flow;
+- referrals/partners;
+- user support and published tariff/product purchase surface;
+- the currently undefined `boring_work` product requires an explicit product contract before implementation.
 
-- streams to a temporary file and enforces `FOXGEN_TELEGRAM_INPUT_MAX_BYTES`;
-- stores under `inputs/miniapp/<telegram-user-id>/...`;
-- returns a signed provider-readable URL, never the signing secret;
-- lets the authenticated owner explicitly delete the temporary object/path;
-- keeps the existing temporary-input retention policy as a final cleanup backstop.
-
-The browser compares selected file size against the same backend-advertised limit before upload, but server enforcement remains authoritative. Switching an incompatible media mode or resetting a draft explicitly cleans temporary uploaded inputs. Stored result media reused for remix are not deleted as temporary inputs.
-
-## Result media and ownership
-
-Generation history is queried by the authenticated Telegram user ID. A generation owned by another user is returned as `404`, not projected cross-user.
-
-Only archived `stored` media assets receive browser URLs. Result URLs are generated by the server with the short `FOXGEN_MINIAPP_MEDIA_URL_TTL_SECONDS` TTL. S3 credentials never enter HTML/JavaScript responses.
-
-The gallery requests the full bounded history rather than treating the 12-item bootstrap projection as the complete account history. Generation detail is refreshed independently and active jobs are polled until a terminal state.
-
-## Wallet behavior
-
-Balance and ledger are real backend projections. The frontend can refresh available/reserved/total units, active model prices and immutable ledger entries, but it has no route that directly adjusts balance.
-
-The public payment-provider invoice flow remains owned by EPIC #7. Until a user-safe payment endpoint lands in `main`, Happy Fox deliberately shows the missing payment boundary instead of rendering a fake top-up action.
+Operator/admin APIs remain separate and are not ordinary Mini App parity.
 
 ## Production setup
-
-Required backend configuration:
 
 ```env
 FOXGEN_MINIAPP_ENABLED=true
@@ -146,38 +184,23 @@ FOXGEN_MINIAPP_JWT_TTL_SECONDS=3600
 FOXGEN_MINIAPP_MEDIA_URL_TTL_SECONDS=300
 ```
 
-The public reverse proxy must serve `/mini-app/` and `/v1/miniapp/*` to the API service while continuing to deny public `/internal/admin/*` access.
-
-On bot startup FoxGen calls Telegram `setChatMenuButton` for the default `Happy Fox` Web App menu. The inline `/start` keyboard uses the same resolved URL. BotFather Main Mini App configuration may also point to the same HTTPS `/mini-app/` URL when a profile-level launch button is desired.
-
-## Current product boundary
-
-The frontend covers the complete **Mini App-safe** backend surface in `main`; that does not mean browser access is added to backend-only capabilities.
-
-Not exposed to Happy Fox:
-
-- signed/internal admin APIs and admin credentials;
-- direct balance adjustment and tariff writes;
-- operator reconciliation/unknown-resolution actions;
-- provider/webhook/internal service credentials;
-- unfinished branches or domains that are not merged into `main`.
-
-Feed/profile publication from issue #58 / PR #63 and durable reference-memory work from its separate branch remain independent until merged. The Mini App must not document or simulate those branch-only capabilities as current production behavior.
+The public reverse proxy must route `/mini-app/`, `/v1/miniapp/*` and the signed read-only reference-media route to FoxGen while keeping `/internal/admin/*` private.
 
 ## Tests and rollback
 
-Regression coverage includes:
+Required regression coverage includes:
 
-- valid/tampered/stale Telegram `initData`;
-- JWT round-trip and missing-token rejection;
-- owner binding for bootstrap/history/detail/wallet projection;
-- complete enabled model catalog with JSON schemas;
-- server-side model validation/normalization before paid admission;
-- task submission identity + idempotency through shared `SubmissionService`;
-- private upload user namespace;
-- frontend contract markers for history, ledger, model validation, media lifecycle and cancel;
-- restrained-grunge token capped at `0.30`;
-- Telegram inline WebApp button URL and fail-closed fallback;
-- packaged static shell showing `Happy Fox` rather than the old user-facing brand.
+- valid/tampered/stale Telegram initData and JWT owner binding;
+- no internal/admin credential in browser surface;
+- schema-driven model validation before paid admission;
+- stable idempotency and remix source lineage;
+- owner generation history/detail/cancel;
+- feed/profile/publish/like/comment/remix JWT boundary;
+- reference-memory owner namespace, resolve/delete and foreign-key rejection;
+- parity runtime/index markers and four primary navigation surfaces;
+- restrained grunge token `<=0.30`;
+- Alembic upgrade/downgrade/re-upgrade, real PostgreSQL/Redis lifecycle tests;
+- production image build/security scans;
+- final Telegram WebView/public HTTPS smoke after deployment.
 
-The feature is controlled by `FOXGEN_MINIAPP_ENABLED`. Disabling it removes the public Mini App router/static mount and suppresses Telegram WebApp entrypoints without changing worker, billing or provider lifecycle state.
+`FOXGEN_MINIAPP_ENABLED=false` removes the public Mini App router/static mount and suppresses Telegram WebApp entrypoints without changing durable generation, billing, publication or reference-memory state.
