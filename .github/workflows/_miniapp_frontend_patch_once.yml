@@ -20,7 +20,7 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          python -c "from pathlib import Path; p=Path('src/foxgen/miniapp_static/app.js'); s=p.read_text(encoding='utf-8'); old='promptPlaceholder(item)'; new='promptPlaceholder(modelBySlug(draft.modelSlug) ?? {})'; assert s.count(old)==1, s.count(old); p.write_text(s.replace(old,new),encoding='utf-8')"
+          python -c "from pathlib import Path; p=Path('src/foxgen/miniapp_static/app.js'); s=p.read_text(encoding='utf-8'); old='promptPlaceholder(item))}\"'; new='promptPlaceholder(modelBySlug(draft.modelSlug) ?? {}))}\"'; assert s.count(old)==1, s.count(old); p.write_text(s.replace(old,new),encoding='utf-8')"
           node --check src/foxgen/miniapp_static/app.js
           grep -q '/mini-app/studio.css' src/foxgen/miniapp_static/index.html
           grep -q -- '--grunge-opacity: .18' src/foxgen/miniapp_static/studio.css
