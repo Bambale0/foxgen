@@ -116,4 +116,5 @@ class UserPortalServiceProtocol(Protocol):
         user_id: int,
         amount_units: int,
         destination: str,
+        idempotency_key: str,
     ) -> PartnerWithdrawalSnapshot: ...

@@ -15,7 +15,7 @@ const state = {
   publication:null, comments:[], publicProfile:null, profilePublications:[],
   ownProfile:null, ownPublications:[], references:null, referenceSelection:[],
   referenceReturn:null, generation:null, draft:null, pickerPolicy:null,
-  tariff:null, supportTickets:[], supportTicket:null, partner:null, portalBusy:false,
+  tariff:null, supportTickets:[], supportTicket:null, partner:null, portalBusy:false, partnerWithdrawalKey:null,
   filters:{kind:'all',status:'all'}, toast:null,
 };
 
@@ -176,7 +176,7 @@ function bindForms(){
   const comment=document.getElementById('comment-form');if(comment)comment.addEventListener('submit',async e=>{e.preventDefault();const body=new FormData(comment).get('body')?.toString().trim();if(!body)return;try{const c=await api(`/publications/${state.publication.id}/comments`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({surface:state.publication.scope,body})});state.comments.push(c);comment.reset();render();}catch(err){toast(err.message,'error');}});
   const create=document.getElementById('support-create-form');if(create)create.addEventListener('submit',async e=>{e.preventDefault();const f=new FormData(create);const subject=f.get('subject')?.toString().trim();const body=f.get('body')?.toString().trim();if(!subject||!body)return;try{state.portalBusy=true;const item=await api('/support',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({subject,body})});state.supportTicket=item;await loadSupport();nav('supportTicket');toast('Обращение создано');}catch(err){toast(err.message,'error');}finally{state.portalBusy=false;render();}});
   const reply=document.getElementById('support-reply-form');if(reply)reply.addEventListener('submit',async e=>{e.preventDefault();const body=new FormData(reply).get('body')?.toString().trim();if(!body||!state.supportTicket)return;try{state.supportTicket=await api(`/support/${state.supportTicket.id}/messages`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({body})});render();toast('Ответ отправлен');}catch(err){toast(err.message,'error');}});
-  const withdrawal=document.getElementById('partner-withdraw-form');if(withdrawal)withdrawal.addEventListener('submit',async e=>{e.preventDefault();const f=new FormData(withdrawal);const amount_units=Number(f.get('amount_units'));const destination=f.get('destination')?.toString().trim();if(!Number.isInteger(amount_units)||amount_units<=0||!destination)return;try{await api('/partner/withdrawals',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({amount_units,destination})});await loadPartner();render();toast('Заявка на выплату создана');}catch(err){toast(err.message,'error');}});
+  const withdrawal=document.getElementById('partner-withdraw-form');if(withdrawal)withdrawal.addEventListener('submit',async e=>{e.preventDefault();const f=new FormData(withdrawal);const amount_units=Number(f.get('amount_units'));const destination=f.get('destination')?.toString().trim();if(!Number.isInteger(amount_units)||amount_units<=0||!destination)return;try{state.partnerWithdrawalKey??=`partner-withdrawal:${user().id}:${randomId()}`;await api('/partner/withdrawals',{method:'POST',headers:{'Content-Type':'application/json','Idempotency-Key':state.partnerWithdrawalKey},body:JSON.stringify({amount_units,destination})});state.partnerWithdrawalKey=null;await loadPartner();render();toast('Заявка на выплату создана');}catch(err){toast(err.message,'error');}});
 }
 
 root.addEventListener('click',async event=>{

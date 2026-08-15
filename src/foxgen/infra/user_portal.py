@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import hashlib
+import json
+
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -274,8 +277,10 @@ class SqlAlchemyUserPortalService:
         user_id: int,
         amount_units: int,
         destination: str,
+        idempotency_key: str,
     ) -> PartnerWithdrawalSnapshot:
         clean_destination = destination.strip()
+        clean_key = idempotency_key.strip()
         if amount_units <= 0:
             raise SubmissionError(ErrorCode.VALIDATION, "Сумма выплаты должна быть положительной.")
         if not 3 <= len(clean_destination) <= 255:
@@ -283,6 +288,16 @@ class SqlAlchemyUserPortalService:
                 ErrorCode.VALIDATION,
                 "Укажите корректные реквизиты для выплаты.",
             )
+        if not 8 <= len(clean_key) <= 128:
+            raise SubmissionError(ErrorCode.VALIDATION, "Некорректный ключ операции выплаты.")
+        request_hash = hashlib.sha256(
+            json.dumps(
+                {"amount_units": amount_units, "destination": clean_destination},
+                sort_keys=True,
+                separators=(",", ":"),
+                ensure_ascii=False,
+            ).encode("utf-8")
+        ).hexdigest()
         async with self._database.session() as session:
             async with session.begin():
                 partner = await session.get(PartnerProfile, user_id, with_for_update=True)
@@ -291,6 +306,19 @@ class SqlAlchemyUserPortalService:
                         ErrorCode.AUTHORIZATION,
                         "Сначала подключите партнёрскую программу.",
                     )
+                existing = await session.scalar(
+                    select(PartnerWithdrawal).where(
+                        PartnerWithdrawal.user_id == user_id,
+                        PartnerWithdrawal.idempotency_key == clean_key,
+                    )
+                )
+                if existing is not None:
+                    if existing.request_hash != request_hash:
+                        raise SubmissionError(
+                            ErrorCode.VALIDATION,
+                            "Ключ операции уже использован с другими параметрами выплаты.",
+                        )
+                    return self._withdrawal_snapshot(existing)
                 pending = await self._pending_withdrawal_units(session, user_id=user_id)
                 available = max(0, partner.earned_units - partner.withdrawn_units - pending)
                 if amount_units > available:
@@ -303,6 +331,8 @@ class SqlAlchemyUserPortalService:
                     amount_units=amount_units,
                     status="pending",
                     destination=clean_destination,
+                    idempotency_key=clean_key,
+                    request_hash=request_hash,
                 )
                 session.add(withdrawal)
                 await session.flush()

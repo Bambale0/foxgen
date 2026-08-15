@@ -6,7 +6,7 @@ from fastapi import APIRouter, Header, HTTPException, Request, status
 from pydantic import BaseModel, ConfigDict, Field
 
 from foxgen.api.miniapp_security import MiniAppPrincipal, decode_miniapp_token
-from foxgen.api.security import authenticate_submission
+from foxgen.api.security import authenticate_user_context, validate_idempotency_key
 from foxgen.application.user_portal import (
     PartnerProfileSnapshot,
     PartnerWithdrawalSnapshot,
@@ -124,7 +124,7 @@ def create_user_portal_router(settings: Settings) -> APIRouter:
         authorization: str | None,
         user_id_header: str | None,
     ) -> int:
-        return authenticate_submission(
+        return authenticate_user_context(
             settings=settings,
             authorization=authorization,
             user_id_header=user_id_header,
@@ -240,13 +240,16 @@ def create_user_portal_router(settings: Settings) -> APIRouter:
         request: Request,
         authorization: str | None = Header(default=None),
         user_id_header: str | None = Header(default=None, alias="X-FoxGen-User-Id"),
+        idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     ) -> dict[str, object]:
         user_id = principal(authorization, user_id_header)
+        key = validate_idempotency_key(idempotency_key)
         return _withdrawal_payload(
             await _service(request).request_partner_withdrawal(
                 user_id=user_id,
                 amount_units=body.amount_units,
                 destination=body.destination,
+                idempotency_key=key,
             )
         )
 
@@ -365,13 +368,16 @@ def create_miniapp_user_portal_router(settings: Settings) -> APIRouter:
         body: PartnerWithdrawalRequest,
         request: Request,
         authorization: str | None = Header(default=None),
+        idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     ) -> dict[str, object]:
         principal = _miniapp_principal(settings, authorization)
+        key = validate_idempotency_key(idempotency_key)
         return _withdrawal_payload(
             await _service(request).request_partner_withdrawal(
                 user_id=principal.user_id,
                 amount_units=body.amount_units,
                 destination=body.destination,
+                idempotency_key=key,
             )
         )
 

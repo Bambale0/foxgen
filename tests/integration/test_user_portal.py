@@ -34,6 +34,7 @@ async def test_user_portal_support_tariff_and_partner_invariants() -> None:
                 session.add(
                     TariffVersion(
                         version=tariff_version,
+                        created_by=user_id,
                         payload={
                             "title": "Happy Fox Creator",
                             "description": "Актуальные условия",
@@ -101,7 +102,23 @@ async def test_user_portal_support_tariff_and_partner_invariants() -> None:
             user_id=user_id,
             amount_units=700,
             destination="SBP:+79990000000",
+            idempotency_key="withdrawal:first:portal-test",
         )
+        replay = await service.request_partner_withdrawal(
+            user_id=user_id,
+            amount_units=700,
+            destination="SBP:+79990000000",
+            idempotency_key="withdrawal:first:portal-test",
+        )
+        assert replay.id == first.id
+        with pytest.raises(SubmissionError) as mismatch:
+            await service.request_partner_withdrawal(
+                user_id=user_id,
+                amount_units=600,
+                destination="SBP:+79990000000",
+                idempotency_key="withdrawal:first:portal-test",
+            )
+        assert mismatch.value.code == ErrorCode.VALIDATION
         assert first.status == "pending"
         assert first.amount_units == 700
 
@@ -116,6 +133,7 @@ async def test_user_portal_support_tariff_and_partner_invariants() -> None:
                 user_id=user_id,
                 amount_units=400,
                 destination="SBP:+79990000000",
+                idempotency_key="withdrawal:overspend:portal-test",
             )
         assert overspend.value.code == ErrorCode.INSUFFICIENT_CREDITS
 
