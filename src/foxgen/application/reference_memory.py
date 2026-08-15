@@ -133,8 +133,11 @@ class ReferenceMemoryService:
     ) -> ReferenceSaveResult:
         if user_id <= 0:
             raise SubmissionError(ErrorCode.VALIDATION, "Не удалось определить пользователя.")
-        expected_prefix = f"inputs/{user_id}/"
-        if not storage_key.startswith(expected_prefix):
+        allowed_prefixes = (
+            f"inputs/{user_id}/",
+            f"inputs/miniapp/{user_id}/",
+        )
+        if not any(storage_key.startswith(prefix) for prefix in allowed_prefixes):
             raise SubmissionError(
                 ErrorCode.AUTHORIZATION,
                 "Этот временный файл не принадлежит текущему пользователю.",
