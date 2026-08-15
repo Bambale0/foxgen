@@ -346,7 +346,9 @@ def create_app(
         if app.state.publication_service is None:
             app.state.publication_service = SqlAlchemyPublicationRepository(database)
         if app.state.reference_memory_service is None or app.state.reference_media_delivery is None:
-            memory_service, media_delivery = _reference_memory_components(resolved_settings, database)
+            memory_service, media_delivery = _reference_memory_components(
+                resolved_settings, database
+            )
             if app.state.reference_memory_service is None:
                 app.state.reference_memory_service = memory_service
             if app.state.reference_media_delivery is None:
