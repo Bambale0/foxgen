@@ -208,7 +208,7 @@ async def _remix_payload(
 
 
 def create_miniapp_parity_router(settings: Settings) -> APIRouter:
-    router = APIRouter(prefix="/v1/miniapp", tags=["miniapp-parity"])
+    router = APIRouter(tags=["miniapp-parity"])
 
     @router.get("/feed")
     async def feed(
