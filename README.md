@@ -12,8 +12,8 @@ The public user-facing Mini App is branded **Happy Fox**. Internal repository/pa
 - user-facing brand is `Happy Fox` only;
 - Telegram `initData` is verified server-side before a short-lived Mini App JWT is issued;
 - owner-scoped `/v1/miniapp/*` APIs expose real balance, immutable ledger history, active prices, model catalog and recent generations;
-- image creation for Seedream 5 Pro, Nano Banana 2 and Nano Banana Pro with optional private references and model-specific settings;
-- video creation for Seedance 2 / Mini with text, first-frame, first+last and multimodal-reference scenarios;
+- schema-driven creation studio for every submission-enabled backend model; controls, defaults, enums and media limits come from the reviewed backend `input_schema`;
+- image/video/audio input modes are wired to authenticated private uploads, including Seedance text, first-frame, first+last and multimodal-reference scenarios;
 - paid launches reuse the same `SubmissionService`, model contracts, rate/concurrency gates, atomic reservation and durable outbox as Telegram;
 - private authenticated input upload under a user namespace and short-lived result-media URLs;
 - gallery/history, lifecycle polling, safe cancellation boundary, remix into a new draft and download;
@@ -215,6 +215,12 @@ Happy Fox adds:
 ```text
 POST   /v1/miniapp/auth
 GET    /v1/miniapp/bootstrap
+GET    /v1/miniapp/models
+GET    /v1/miniapp/models/{slug}
+POST   /v1/miniapp/models/{slug}/validate
+GET    /v1/miniapp/balance
+GET    /v1/miniapp/prices
+GET    /v1/miniapp/ledger
 GET    /v1/miniapp/generations
 GET    /v1/miniapp/generations/{id}
 POST   /v1/miniapp/generations/{id}/cancel

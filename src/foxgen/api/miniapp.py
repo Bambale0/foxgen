@@ -41,6 +41,10 @@ class MiniAppTaskRequest(BaseModel):
     input: dict[str, Any]
 
 
+class MiniAppValidationRequest(BaseModel):
+    input: dict[str, Any]
+
+
 class MiniAppSubmissionServiceProtocol(Protocol):
     async def submit(
         self,
@@ -160,11 +164,14 @@ def _public_model_payload(item: Any) -> dict[str, object]:
         "ui_key": ui_key,
         "variant": variant,
         "title": item.title,
+        "family": item.family,
         "media_kind": item.media_kind.value,
         "capabilities": sorted(capability.value for capability in item.capabilities),
+        "contract": item.contract,
         "defaults": dict(item.defaults),
         "recommended_for": list(item.recommended_for),
         "tier": item.tier,
+        "rank": item.rank,
         "enabled": item.enabled_for_submission,
         "input_schema": contract_schema(item.contract),
     }
@@ -199,6 +206,23 @@ def _receipt_payload(receipt: SubmissionReceipt) -> dict[str, object]:
         "status": receipt.status,
         "replayed": receipt.replayed,
     }
+
+
+def _submission_model(registry: ModelRegistry, model_slug: str) -> Any:
+    try:
+        item = registry.get(model_slug)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    if not item.enabled_for_submission:
+        raise HTTPException(status_code=503, detail="Selected model is not enabled")
+    return item
+
+
+def _validated_model_input(item: Any, input_data: dict[str, Any]) -> dict[str, Any]:
+    try:
+        return validate_input(item.contract, input_data)
+    except ValidationError as exc:
+        raise HTTPException(status_code=422, detail=exc.errors(include_url=False)) from exc
 
 
 def create_miniapp_router(settings: Settings) -> APIRouter:
@@ -265,7 +289,71 @@ def create_miniapp_router(settings: Settings) -> APIRouter:
             "ledger": [ledger_payload(entry) for entry in ledger],
             "models": models,
             "recent": [_generation_payload(item) for item in recent],
+            "features": {
+                "task_submission": settings.task_submission_enabled,
+                "input_media": settings.internal_api_token is not None,
+            },
+            "limits": {
+                "input_media_max_bytes": settings.telegram_input_max_bytes,
+                "generation_history_max": 100,
+                "ledger_history_max": 200,
+            },
         }
+
+    @router.get("/models")
+    async def list_models(
+        authorization: str | None = Header(default=None),
+    ) -> list[dict[str, object]]:
+        _principal(settings, authorization)
+        return [
+            _public_model_payload(item) for item in registry.list() if item.enabled_for_submission
+        ]
+
+    @router.get("/models/{model_slug}")
+    async def model_detail(
+        model_slug: str,
+        authorization: str | None = Header(default=None),
+    ) -> dict[str, object]:
+        _principal(settings, authorization)
+        return _public_model_payload(_submission_model(registry, model_slug))
+
+    @router.post("/models/{model_slug}/validate")
+    async def validate_model_payload(
+        model_slug: str,
+        body: MiniAppValidationRequest,
+        authorization: str | None = Header(default=None),
+    ) -> dict[str, object]:
+        _principal(settings, authorization)
+        item = _submission_model(registry, model_slug)
+        normalized = _validated_model_input(item, body.input)
+        return {"model_slug": model_slug, "input": normalized}
+
+    @router.get("/balance")
+    async def current_balance(
+        request: Request,
+        authorization: str | None = Header(default=None),
+    ) -> dict[str, object]:
+        principal = _principal(settings, authorization)
+        return balance_payload(await _billing(request).get_balance(principal.user_id))
+
+    @router.get("/prices")
+    async def current_prices(
+        request: Request,
+        authorization: str | None = Header(default=None),
+    ) -> list[dict[str, object]]:
+        _principal(settings, authorization)
+        prices = await _billing(request).list_active_prices()
+        return [price_payload(price) for price in prices]
+
+    @router.get("/ledger")
+    async def ledger_history(
+        request: Request,
+        authorization: str | None = Header(default=None),
+        limit: int = Query(default=50, ge=1, le=200),
+    ) -> list[dict[str, object]]:
+        principal = _principal(settings, authorization)
+        ledger = await _billing(request).list_ledger(user_id=principal.user_id, limit=limit)
+        return [ledger_payload(entry) for entry in ledger]
 
     @router.get("/generations")
     async def list_generations(
@@ -325,16 +413,8 @@ def create_miniapp_router(settings: Settings) -> APIRouter:
             raise HTTPException(status_code=503, detail="KIE API key is not configured")
         if not idempotency_key or not 8 <= len(idempotency_key) <= 128:
             raise HTTPException(status_code=400, detail="Valid Idempotency-Key is required")
-        try:
-            item = registry.get(body.model_slug)
-        except KeyError as exc:
-            raise HTTPException(status_code=404, detail=str(exc)) from exc
-        if not item.enabled_for_submission:
-            raise HTTPException(status_code=503, detail="Selected model is not enabled")
-        try:
-            normalized = validate_input(item.contract, body.input)
-        except ValidationError as exc:
-            raise HTTPException(status_code=422, detail=exc.errors(include_url=False)) from exc
+        item = _submission_model(registry, body.model_slug)
+        normalized = _validated_model_input(item, body.input)
         receipt = await _submissions(request).submit(
             user_id=principal.user_id,
             username=principal.username,
