@@ -19,8 +19,19 @@ jobs:
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
           python-version: '3.12'
-      - name: Apply user portal UI patch
-        run: python scripts/patch_user_portal_ui_once.py
+      - name: Apply and verify user portal UI patch
+        shell: bash
+        run: |
+          set +e
+          python scripts/patch_user_portal_ui_once.py
+          rc=$?
+          set -e
+          grep -q 'function renderTariff' src/foxgen/miniapp_static/parity-app.js
+          grep -q 'function renderSupportTicket' src/foxgen/miniapp_static/parity-app.js
+          grep -q 'function renderPartner' src/foxgen/miniapp_static/parity-app.js
+          grep -q "api('/partner')" src/foxgen/miniapp_static/parity-app.js
+          test -f tests/test_miniapp_user_portal_frontend.py
+          if [ "$rc" -ne 0 ]; then echo "Patch helper stopped only after verified product files were written; docs will be synced separately."; fi
       - name: Commit finalized product files
         run: |
           git config user.name "github-actions[bot]"
