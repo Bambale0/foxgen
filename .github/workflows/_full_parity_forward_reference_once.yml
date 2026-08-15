@@ -62,25 +62,197 @@ jobs:
             tests/test_submission_service.py
           )
           git diff --binary b5d0f395d07a3c2fad4e8b3238a6e3b7c1fb9cac..origin/agent/reference-memory -- "${files[@]}" > /tmp/reference.patch
-          if ! git apply --3way --index /tmp/reference.patch; then
-            echo 'THREE_WAY_APPLY_FAILED'
-            echo 'CONFLICTS:'
-            git diff --name-only --diff-filter=U
-            exit 1
+          set +e
+          git apply --3way --index /tmp/reference.patch
+          apply_rc=$?
+          set -e
+          if [ "$apply_rc" -ne 0 ]; then
+            conflicts=(
+              .env.example
+              deploy/production.env.example
+              src/foxgen/api/app.py
+              src/foxgen/bot/api_client.py
+            )
+            actual="$(git diff --name-only --diff-filter=U | sort)"
+            expected="$(printf '%s\n' "${conflicts[@]}" | sort)"
+            if [ "$actual" != "$expected" ]; then
+              echo 'Unexpected conflict set:'
+              echo "$actual"
+              exit 1
+            fi
+            git checkout --ours -- "${conflicts[@]}"
+            git add "${conflicts[@]}"
           fi
 
-          git mv migrations/versions/20260815_0009_reference_memory.py migrations/versions/20260815_0010_reference_memory.py
           python - <<'PY'
           from pathlib import Path
-          p = Path('migrations/versions/20260815_0010_reference_memory.py')
+
+          def replace_once(path: str, old: str, new: str) -> None:
+              p = Path(path)
+              text = p.read_text(encoding='utf-8')
+              if new in text:
+                  return
+              if old not in text:
+                  raise SystemExit(f'expected block not found in {path}: {old[:120]!r}')
+              p.write_text(text.replace(old, new, 1), encoding='utf-8')
+
+          # Preserve current Happy Fox + social env and add durable saved-reference limits.
+          for path, comment in (
+              ('.env.example', '# Durable user-owned image reference memory. Stored under references/ in private S3-compatible storage.'),
+              ('deploy/production.env.example', '# Durable, owner-scoped saved image references. references/ is never covered by the short inputs/ lifecycle.'),
+          ):
+              replace_once(
+                  path,
+                  'FOXGEN_TELEGRAM_INPUT_RETENTION_SECONDS=172800\n\n',
+                  'FOXGEN_TELEGRAM_INPUT_RETENTION_SECONDS=172800\n\n'
+                  + comment + '\n'
+                  + 'FOXGEN_REFERENCE_MEMORY_MAX_ITEMS=50\n'
+                  + 'FOXGEN_REFERENCE_MEMORY_MAX_TOTAL_BYTES=524288000\n'
+                  + 'FOXGEN_REFERENCE_MEMORY_PRESIGNED_URL_TTL_SECONDS=21600\n\n',
+              )
+          replace_once(
+              '.env.example',
+              '# Durable generated result objects under generations/ are never targeted by this short retention.',
+              '# Durable generated result objects under generations/ and saved references/ are never targeted by this short retention.',
+          )
+          replace_once(
+              'deploy/production.env.example',
+              '# Applies only to temporary Telegram input objects under inputs/; never to durable generations/.',
+              '# Applies only to temporary Telegram input objects under inputs/; never to durable generations/ or references/.',
+          )
+
+          # Merge reference-memory runtime into current social + Mini App FastAPI runtime.
+          replace_once(
+              'src/foxgen/api/app.py',
+              'from foxgen.api.publications import PublicationServiceProtocol, create_publication_router\nfrom foxgen.api.security',
+              'from foxgen.api.publications import PublicationServiceProtocol, create_publication_router\n'
+              'from foxgen.api.reference_memory import (\n'
+              '    ReferenceMediaDeliveryProtocol,\n'
+              '    ReferenceMemoryServiceProtocol,\n'
+              '    create_reference_media_router,\n'
+              '    create_reference_memory_router,\n'
+              ')\n'
+              'from foxgen.api.security',
+          )
+          replace_once(
+              'src/foxgen/api/app.py',
+              'from foxgen.application.reconciliation import ReconciliationService\nfrom foxgen.application.submissions',
+              'from foxgen.application.reconciliation import ReconciliationService\n'
+              'from foxgen.application.reference_memory import ReferenceMemoryService\n'
+              'from foxgen.application.submissions',
+          )
+          replace_once(
+              'src/foxgen/api/app.py',
+              'from foxgen.infra.publications import SqlAlchemyPublicationRepository\nfrom foxgen.infra.rate_limit',
+              'from foxgen.infra.publications import SqlAlchemyPublicationRepository\n'
+              'from foxgen.infra.reference_media import (\n'
+              '    ReferenceMediaDelivery,\n'
+              '    ReferenceMediaUrlSigner,\n'
+              '    S3ReferenceMediaReader,\n'
+              ')\n'
+              'from foxgen.infra.reference_memory import SqlAlchemyReferenceMemoryRepository\n'
+              'from foxgen.infra.rate_limit',
+          )
+          replace_once(
+              'src/foxgen/api/app.py',
+              '        ErrorCode.SUBMISSION_DISABLED: 503,\n        ErrorCode.PROVIDER_UNAVAILABLE: 503,',
+              '        ErrorCode.SUBMISSION_DISABLED: 503,\n'
+              '        ErrorCode.INPUT_DOWNLOAD_FAILED: 503,\n'
+              '        ErrorCode.INPUT_STORAGE_FAILED: 503,\n'
+              '        ErrorCode.PROVIDER_UNAVAILABLE: 503,',
+          )
+
+          p = Path('src/foxgen/api/app.py')
           text = p.read_text(encoding='utf-8')
+          old = '''def _miniapp_repository(settings: Settings, database: Database) -> SqlAlchemyMiniAppRepository:\n    media_signer = S3MediaStorage(\n        bucket=settings.s3_bucket,\n        region=settings.s3_region,\n        endpoint_url=str(settings.s3_endpoint_url)\n        if settings.s3_endpoint_url is not None\n        else None,\n        access_key_id=_secret_value(settings.s3_access_key_id),\n        secret_access_key=_secret_value(settings.s3_secret_access_key),\n        force_path_style=settings.s3_force_path_style,\n        presigned_url_ttl_seconds=settings.miniapp_media_url_ttl_seconds,\n    )\n    return SqlAlchemyMiniAppRepository(database, media_signer)\n'''
+          new = '''def _s3_storage(settings: Settings, *, ttl_seconds: int) -> S3MediaStorage:\n    return S3MediaStorage(\n        bucket=settings.s3_bucket,\n        region=settings.s3_region,\n        endpoint_url=(\n            str(settings.s3_endpoint_url) if settings.s3_endpoint_url is not None else None\n        ),\n        access_key_id=_secret_value(settings.s3_access_key_id),\n        secret_access_key=_secret_value(settings.s3_secret_access_key),\n        force_path_style=settings.s3_force_path_style,\n        presigned_url_ttl_seconds=ttl_seconds,\n    )\n\n\ndef _miniapp_repository(settings: Settings, database: Database) -> SqlAlchemyMiniAppRepository:\n    return SqlAlchemyMiniAppRepository(\n        database,\n        _s3_storage(settings, ttl_seconds=settings.miniapp_media_url_ttl_seconds),\n    )\n\n\ndef _reference_memory_components(\n    settings: Settings,\n    database: Database,\n) -> tuple[ReferenceMemoryService | None, ReferenceMediaDelivery | None]:\n    internal_token = settings.internal_api_token\n    if internal_token is None:\n        return None, None\n\n    secret = internal_token.get_secret_value()\n    repository = SqlAlchemyReferenceMemoryRepository(database)\n    signer = ReferenceMediaUrlSigner(\n        public_base_url=settings.telegram_input_public_base_url,\n        secret=secret,\n        ttl_seconds=settings.reference_memory_presigned_url_ttl_seconds,\n    )\n    input_source = LocalInputMediaStorage(\n        root=settings.telegram_input_storage_root,\n        public_base_url=settings.telegram_input_public_base_url,\n        signing_secret=secret,\n        presigned_url_ttl_seconds=settings.telegram_input_presigned_url_ttl_seconds,\n        retention_seconds=settings.telegram_input_retention_seconds,\n    )\n    storage = _s3_storage(\n        settings,\n        ttl_seconds=settings.reference_memory_presigned_url_ttl_seconds,\n    )\n    service = ReferenceMemoryService(\n        repository=repository,\n        input_source=input_source,\n        storage=storage,\n        url_signer=signer,\n        max_items=settings.reference_memory_max_items,\n        max_bytes=settings.reference_memory_max_total_bytes,\n    )\n    reader = S3ReferenceMediaReader(\n        bucket=settings.s3_bucket,\n        region=settings.s3_region,\n        endpoint_url=(\n            str(settings.s3_endpoint_url) if settings.s3_endpoint_url is not None else None\n        ),\n        access_key_id=_secret_value(settings.s3_access_key_id),\n        secret_access_key=_secret_value(settings.s3_secret_access_key),\n        force_path_style=settings.s3_force_path_style,\n    )\n    delivery = ReferenceMediaDelivery(\n        repository=repository,\n        reader=reader,\n        signer=signer,\n    )\n    return service, delivery\n'''
+          if new not in text:
+              if old not in text:
+                  raise SystemExit('miniapp repository block not found')
+              text = text.replace(old, new, 1)
+              p.write_text(text, encoding='utf-8')
+
+          replace_once(
+              'src/foxgen/api/app.py',
+              '    miniapp_repository: MiniAppRepositoryProtocol | None = None,\n    publication_service: PublicationServiceProtocol | None = None,\n    admin_services: AdminServices | None = None,',
+              '    miniapp_repository: MiniAppRepositoryProtocol | None = None,\n'
+              '    publication_service: PublicationServiceProtocol | None = None,\n'
+              '    reference_memory_service: ReferenceMemoryServiceProtocol | None = None,\n'
+              '    reference_media_delivery: ReferenceMediaDeliveryProtocol | None = None,\n'
+              '    admin_services: AdminServices | None = None,',
+          )
+          replace_once(
+              'src/foxgen/api/app.py',
+              '        if app.state.publication_service is None:\n            app.state.publication_service = SqlAlchemyPublicationRepository(database)\n',
+              '        if app.state.publication_service is None:\n'
+              '            app.state.publication_service = SqlAlchemyPublicationRepository(database)\n'
+              '        if app.state.reference_memory_service is None or app.state.reference_media_delivery is None:\n'
+              '            memory_service, media_delivery = _reference_memory_components(resolved_settings, database)\n'
+              '            if app.state.reference_memory_service is None:\n'
+              '                app.state.reference_memory_service = memory_service\n'
+              '            if app.state.reference_media_delivery is None:\n'
+              '                app.state.reference_media_delivery = media_delivery\n',
+          )
+          replace_once(
+              'src/foxgen/api/app.py',
+              '    app.state.miniapp_repository = miniapp_repository\n    app.state.publication_service = publication_service\n    app.state.admin_services = admin_services',
+              '    app.state.miniapp_repository = miniapp_repository\n'
+              '    app.state.publication_service = publication_service\n'
+              '    app.state.reference_memory_service = reference_memory_service\n'
+              '    app.state.reference_media_delivery = reference_media_delivery\n'
+              '    app.state.admin_services = admin_services',
+          )
+          replace_once(
+              'src/foxgen/api/app.py',
+              '    app.include_router(create_publication_router(resolved_settings))\n    app.include_router(create_publication_media_router(resolved_settings))\n    if resolved_settings.miniapp_enabled:',
+              '    app.include_router(create_publication_router(resolved_settings))\n'
+              '    app.include_router(create_publication_media_router(resolved_settings))\n'
+              '    app.include_router(create_reference_memory_router(resolved_settings))\n'
+              '    app.include_router(create_reference_media_router())\n'
+              '    if resolved_settings.miniapp_enabled:',
+          )
+
+          # Merge reference-memory methods into the social-aware Telegram API client.
+          replace_once(
+              'src/foxgen/bot/api_client.py',
+              '''@dataclass(frozen=True, slots=True)\nclass QueuedGeneration:\n    generation_id: str\n    status: str\n    replayed: bool\n\n\nclass FoxGenApiError''',
+              '''@dataclass(frozen=True, slots=True)\nclass QueuedGeneration:\n    generation_id: str\n    status: str\n    replayed: bool\n\n\n@dataclass(frozen=True, slots=True)\nclass SavedReference:\n    id: str\n    content_type: str\n    size_bytes: int\n    created_at: str\n    preview_url: str\n\n\n@dataclass(frozen=True, slots=True)\nclass SavedReferencePage:\n    items: tuple[SavedReference, ...]\n    total: int\n    used_bytes: int\n    max_items: int\n    max_bytes: int\n\n\n@dataclass(frozen=True, slots=True)\nclass SavedReferenceResult:\n    item: SavedReference\n    duplicate: bool\n\n\nclass FoxGenApiError''',
+          )
+
+          reference_methods = '''    async def list_references(\n        self,\n        *,\n        user_id: int,\n        offset: int = 0,\n        limit: int = 20,\n    ) -> SavedReferencePage:\n        payload = await self._request(\n            "GET",\n            "/v1/reference-memory",\n            headers={"X-FoxGen-User-Id": str(user_id)},\n            params={"offset": offset, "limit": limit},\n        )\n        if not isinstance(payload, dict):\n            raise FoxGenApiError("Память референсов временно недоступна.", status_code=502)\n        raw_items = payload.get("items")\n        if not isinstance(raw_items, list):\n            raise FoxGenApiError("Сервер вернул повреждённую память референсов.", status_code=502)\n        items = tuple(self._saved_reference(item) for item in raw_items if isinstance(item, dict))\n        return SavedReferencePage(\n            items=items,\n            total=int(payload.get("total", 0)),\n            used_bytes=int(payload.get("used_bytes", 0)),\n            max_items=int(payload.get("max_items", 0)),\n            max_bytes=int(payload.get("max_bytes", 0)),\n        )\n\n    async def save_reference(\n        self,\n        *,\n        user_id: int,\n        username: str | None,\n        storage_key: str,\n    ) -> SavedReferenceResult:\n        headers = {"X-FoxGen-User-Id": str(user_id)}\n        if username:\n            headers["X-FoxGen-Username"] = username\n        payload = await self._request(\n            "POST",\n            "/v1/reference-memory",\n            headers=headers,\n            json={"storage_key": storage_key},\n        )\n        if not isinstance(payload, dict):\n            raise FoxGenApiError("Не удалось сохранить референс.", status_code=502)\n        return SavedReferenceResult(\n            item=self._saved_reference(payload),\n            duplicate=bool(payload.get("duplicate", False)),\n        )\n\n    async def resolve_references(\n        self,\n        *,\n        user_id: int,\n        reference_ids: tuple[str, ...],\n    ) -> tuple[SavedReference, ...]:\n        payload = await self._request(\n            "POST",\n            "/v1/reference-memory/resolve",\n            headers={"X-FoxGen-User-Id": str(user_id)},\n            json={"reference_ids": list(reference_ids)},\n        )\n        if not isinstance(payload, dict) or not isinstance(payload.get("items"), list):\n            raise FoxGenApiError("Не удалось подготовить сохранённые референсы.", status_code=502)\n        return tuple(\n            self._saved_reference(item) for item in payload["items"] if isinstance(item, dict)\n        )\n\n    async def delete_reference(self, *, user_id: int, reference_id: str) -> None:\n        await self._request(\n            "DELETE",\n            f"/v1/reference-memory/{reference_id}",\n            headers={"X-FoxGen-User-Id": str(user_id)},\n        )\n\n'''
+          p = Path('src/foxgen/bot/api_client.py')
+          text = p.read_text(encoding='utf-8')
+          marker = '    async def feed(\n'
+          if '    async def list_references(\n' not in text:
+              if marker not in text:
+                  raise SystemExit('feed marker not found in bot api client')
+              text = text.replace(marker, reference_methods + marker, 1)
+              p.write_text(text, encoding='utf-8')
+
+          saved_parser = '''    @staticmethod\n    def _saved_reference(payload: dict[str, Any]) -> SavedReference:\n        reference_id = payload.get("id")\n        content_type = payload.get("content_type")\n        created_at = payload.get("created_at")\n        preview_url = payload.get("preview_url")\n        if not all(\n            isinstance(value, str)\n            for value in (reference_id, content_type, created_at, preview_url)\n        ):\n            raise FoxGenApiError("Сервер вернул повреждённый референс.", status_code=502)\n        try:\n            size_bytes = int(payload.get("size_bytes", 0))\n        except (TypeError, ValueError) as exc:\n            raise FoxGenApiError("Сервер вернул повреждённый референс.", status_code=502) from exc\n        return SavedReference(\n            id=reference_id,\n            content_type=content_type,\n            size_bytes=size_bytes,\n            created_at=created_at,\n            preview_url=preview_url,\n        )\n\n'''
+          text = p.read_text(encoding='utf-8')
+          marker = '    async def _user_request(\n'
+          if '    def _saved_reference(' not in text:
+              if marker not in text:
+                  raise SystemExit('user request marker not found in bot api client')
+              text = text.replace(marker, saved_parser + marker, 1)
+              p.write_text(text, encoding='utf-8')
+
+          # Linearize the old standalone 0009 migration after the newly merged feed 0009.
+          old_migration = Path('migrations/versions/20260815_0009_reference_memory.py')
+          new_migration = Path('migrations/versions/20260815_0010_reference_memory.py')
+          if old_migration.exists():
+              old_migration.rename(new_migration)
+          text = new_migration.read_text(encoding='utf-8')
           text = text.replace('Revision ID: 20260815_0009', 'Revision ID: 20260815_0010')
           text = text.replace('Revises: 20260813_0008', 'Revises: 20260814_0009')
           text = text.replace('revision: str = "20260815_0009"', 'revision: str = "20260815_0010"')
           text = text.replace('down_revision: str | None = "20260813_0008"', 'down_revision: str | None = "20260814_0009"')
-          p.write_text(text, encoding='utf-8')
+          new_migration.write_text(text, encoding='utf-8')
           PY
+
           git add .env.example deploy migrations scripts src tests
+          git diff --check
           git status --short
       - name: Commit
         run: |
