@@ -16,6 +16,7 @@ from foxgen.api.billing import (
     price_payload,
 )
 from foxgen.api.generations import GenerationOperationsProtocol
+from foxgen.api.miniapp_parity import create_miniapp_parity_router
 from foxgen.api.miniapp_security import (
     MiniAppPrincipal,
     decode_miniapp_token,
@@ -39,6 +40,7 @@ class MiniAppAuthRequest(BaseModel):
 class MiniAppTaskRequest(BaseModel):
     model_slug: str = Field(min_length=1, max_length=128)
     input: dict[str, Any]
+    source_publication_id: UUID | None = None
 
 
 class MiniAppValidationRequest(BaseModel):
@@ -54,6 +56,7 @@ class MiniAppSubmissionServiceProtocol(Protocol):
         model_slug: str,
         input_data: dict[str, object],
         idempotency_key: str,
+        source_publication_id: UUID | None = None,
     ) -> SubmissionReceipt: ...
 
 
@@ -292,6 +295,8 @@ def create_miniapp_router(settings: Settings) -> APIRouter:
             "features": {
                 "task_submission": settings.task_submission_enabled,
                 "input_media": settings.internal_api_token is not None,
+                "feed": True,
+                "reference_memory": True,
             },
             "limits": {
                 "input_media_max_bytes": settings.telegram_input_max_bytes,
@@ -421,6 +426,7 @@ def create_miniapp_router(settings: Settings) -> APIRouter:
             model_slug=body.model_slug,
             input_data=normalized,
             idempotency_key=f"miniapp:{idempotency_key}",
+            source_publication_id=body.source_publication_id,
         )
         return _receipt_payload(receipt)
 
@@ -490,4 +496,5 @@ def create_miniapp_router(settings: Settings) -> APIRouter:
                 raise HTTPException(status_code=404, detail=exc.public_message) from exc
             raise
 
+    router.include_router(create_miniapp_parity_router(settings))
     return router
