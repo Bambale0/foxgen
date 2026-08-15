@@ -3,93 +3,147 @@ const picker = document.getElementById('media-picker');
 const tg = window.Telegram?.WebApp ?? null;
 
 const TERMINAL = new Set(['succeeded', 'failed', 'cancelled']);
+const ACTIVE = new Set([
+  'queued', 'submitting', 'submitted', 'processing', 'submission_unknown',
+  'result_ready', 'storing_media', 'delivery_pending',
+]);
+const MEDIA_FIELDS = new Set([
+  'image_url', 'image_urls', 'image_input', 'input_urls',
+  'video_url', 'video_urls', 'audio_url',
+  'first_frame_url', 'last_frame_url',
+  'reference_image_urls', 'reference_video_urls', 'reference_audio_urls',
+]);
+
+const FIELD_LABELS = {
+  prompt: 'Промпт',
+  aspect_ratio: 'Соотношение сторон',
+  quality: 'Качество',
+  output_format: 'Формат',
+  resolution: 'Разрешение',
+  nsfw_checker: 'Проверка безопасности',
+  return_last_frame: 'Вернуть последний кадр',
+  generate_audio: 'Сгенерировать аудио',
+  duration: 'Длительность',
+  web_search: 'Веб-поиск',
+};
+
+const VALUE_LABELS = {
+  basic: 'Стандарт',
+  high: 'Высокое',
+  png: 'PNG',
+  jpg: 'JPG',
+  true: 'Да',
+  false: 'Нет',
+};
+
+const CAPABILITY_LABELS = {
+  text_to_image: 'Текст → изображение',
+  image_to_image: 'Изображение → изображение',
+  image_edit: 'Редактирование',
+  text_to_video: 'Текст → видео',
+  image_to_video: 'Кадр → видео',
+  reference_images: 'Фото-референсы',
+  reference_video: 'Видео-референсы',
+  reference_audio: 'Аудио-референсы',
+  audio_generation: 'Генерация аудио',
+};
+
+const ERROR_LABELS = {
+  insufficient_credits: 'Недостаточно кредитов для запуска.',
+  pricing_unavailable: 'Цена модели временно недоступна.',
+  rate_limited: 'Слишком много запросов. Повторите чуть позже.',
+  concurrency_limited: 'Уже выполняется максимум одновременных задач.',
+  provider_unavailable: 'Провайдер модели временно недоступен.',
+  provider_rejected: 'Модель отклонила параметры задачи.',
+  provider_protocol: 'Провайдер вернул некорректный ответ.',
+  submission_disabled: 'Запуск генераций временно отключён.',
+  validation: 'Проверьте параметры генерации.',
+};
+
 const state = {
   token: null,
   demo: false,
   busy: false,
   uploadBusy: false,
+  galleryBusy: false,
+  walletBusy: false,
   screen: 'home',
   stack: [],
-  galleryFilter: 'all',
   bootstrap: null,
+  gallery: [],
+  ledger: [],
   activeGeneration: null,
-  imageDraft: freshImageDraft(),
-  videoDraft: freshVideoDraft(),
+  draft: null,
+  validationErrors: {},
+  filters: { kind: 'all', status: 'all', model: 'all' },
+  modelKind: 'all',
+  modelSearch: '',
+  pickerPolicy: null,
 };
 
-function freshImageDraft() {
+const DEMO = createDemo();
+
+function createDemo() {
+  const schemaImage = {
+    type: 'object', required: ['prompt'], properties: {
+      prompt: { type: 'string', minLength: 1, maxLength: 10000 },
+      image_input: { type: 'array', items: { type: 'string', format: 'uri' }, maxItems: 14, default: [] },
+      aspect_ratio: { enum: ['auto','1:1','16:9','9:16','4:3','3:4','3:2','2:3','21:9'], default: 'auto' },
+      resolution: { enum: ['1K','2K','4K'], default: '1K' },
+      output_format: { enum: ['png','jpg'], default: 'png' },
+    },
+  };
+  const schemaVideo = {
+    type: 'object', required: ['prompt'], properties: {
+      prompt: { type: 'string', minLength: 1, maxLength: 10000 },
+      first_frame_url: { anyOf: [{ type: 'string', format: 'uri' }, { type: 'null' }], default: null },
+      last_frame_url: { anyOf: [{ type: 'string', format: 'uri' }, { type: 'null' }], default: null },
+      reference_image_urls: { type: 'array', maxItems: 6, default: [] },
+      reference_video_urls: { type: 'array', maxItems: 3, default: [] },
+      reference_audio_urls: { type: 'array', maxItems: 3, default: [] },
+      return_last_frame: { type: 'boolean', default: false },
+      generate_audio: { type: 'boolean', default: false },
+      resolution: { enum: ['720p'], default: '720p' },
+      aspect_ratio: { enum: ['16:9','9:16','1:1'], default: '16:9' },
+      duration: { enum: [5,10,15], default: 5 },
+      web_search: { type: 'boolean', default: false },
+    },
+  };
   return {
-    model: 'seedream-5-pro',
-    prompt: '',
-    aspectRatio: '16:9',
-    quality: 'high',
-    resolution: '1K',
-    outputFormat: 'png',
-    style: 'Фотореализм',
-    media: [],
-    idempotencyKey: randomId(),
+    brand: 'Happy Fox',
+    user: { id: 1, display_name: 'Алексей', username: 'alex_fox', photo_url: null, is_premium: true },
+    balance: { available_units: 2450, reserved_units: 20, total_units: 2470, currency: 'CREDIT' },
+    prices: [
+      { model_slug: 'nano-banana-2', amount_units: 7, currency: 'CREDIT' },
+      { model_slug: 'nano-banana-pro', amount_units: 12, currency: 'CREDIT' },
+      { model_slug: 'seedance-2', amount_units: 20, currency: 'CREDIT' },
+      { model_slug: 'seedance-2-mini', amount_units: 12, currency: 'CREDIT' },
+    ],
+    ledger: [
+      { entry_type: 'credit', available_delta: 1000, reserved_delta: 0, reason: 'Пополнение', created_at: new Date().toISOString() },
+      { entry_type: 'capture', available_delta: 0, reserved_delta: -20, reason: 'Генерация видео', created_at: new Date(Date.now()-3600000).toISOString() },
+    ],
+    models: [
+      { slug:'nano-banana-2', ui_key:'nano-banana-2', variant:'default', title:'Nano Banana 2', family:'Nano Banana', media_kind:'image', capabilities:['text_to_image','image_to_image'], defaults:{aspect_ratio:'auto',resolution:'1K',output_format:'png'}, recommended_for:['fast production','editing'], tier:'standard', rank:1, enabled:true, input_schema:schemaImage },
+      { slug:'nano-banana-pro', ui_key:'nano-banana-pro', variant:'default', title:'Nano Banana Pro', family:'Nano Banana', media_kind:'image', capabilities:['text_to_image','image_to_image'], defaults:{aspect_ratio:'auto',resolution:'1K',output_format:'png'}, recommended_for:['detail','commercial visuals'], tier:'premium', rank:2, enabled:true, input_schema:schemaImage },
+      { slug:'seedance-2', ui_key:'seedance-2', variant:'default', title:'Seedance 2', family:'Seedance', media_kind:'video', capabilities:['text_to_video','image_to_video','reference_images','reference_video','reference_audio','audio_generation'], defaults:{resolution:'720p',aspect_ratio:'16:9',duration:5}, recommended_for:['cinematic video','multimodal references'], tier:'premium', rank:1, enabled:true, input_schema:schemaVideo },
+      { slug:'seedance-2-mini', ui_key:'seedance-2-mini', variant:'default', title:'Seedance 2 Mini', family:'Seedance', media_kind:'video', capabilities:['text_to_video','image_to_video'], defaults:{resolution:'720p',aspect_ratio:'16:9',duration:5}, recommended_for:['fast video'], tier:'standard', rank:2, enabled:true, input_schema:schemaVideo },
+    ],
+    recent: [
+      demoGeneration('image','nano-banana-pro','Кинематографичный портрет',5),
+      demoGeneration('video','seedance-2','Неоновая улица и спортивный автомобиль',24),
+      demoGeneration('image','nano-banana-2','Горный пейзаж на рассвете',61),
+    ],
+    features: { task_submission: true, input_media: true },
+    limits: { input_media_max_bytes: 50*1024*1024, generation_history_max:100, ledger_history_max:200 },
   };
 }
-
-function freshVideoDraft() {
-  return {
-    model: 'seedance-2',
-    type: 'text',
-    prompt: '',
-    aspectRatio: '16:9',
-    duration: 10,
-    resolution: '720p',
-    generateAudio: true,
-    returnLastFrame: false,
-    webSearch: false,
-    media: [],
-    idempotencyKey: randomId(),
-  };
-}
-
-const DEMO = {
-  brand: 'Happy Fox',
-  user: { id: 1, display_name: 'Алексей', username: 'alex_fox', photo_url: null, is_premium: true },
-  balance: { available_units: 2450, reserved_units: 0, total_units: 2450, currency: 'CREDIT' },
-  prices: [
-    { model_slug: 'seedream-5-pro', amount_units: 10, currency: 'CREDIT' },
-    { model_slug: 'seedream-5-pro-edit', amount_units: 12, currency: 'CREDIT' },
-    { model_slug: 'nano-banana-2', amount_units: 7, currency: 'CREDIT' },
-    { model_slug: 'nano-banana-pro', amount_units: 12, currency: 'CREDIT' },
-    { model_slug: 'seedance-2', amount_units: 20, currency: 'CREDIT' },
-    { model_slug: 'seedance-2-mini', amount_units: 12, currency: 'CREDIT' },
-  ],
-  ledger: [
-    { entry_type: 'credit', available_delta: 1000, reason: 'Пополнение баланса', created_at: new Date().toISOString() },
-    { entry_type: 'capture', available_delta: 0, reserved_delta: -20, reason: 'Генерация видео', created_at: new Date(Date.now() - 3600000).toISOString() },
-    { entry_type: 'reserve', available_delta: -10, reserved_delta: 10, reason: 'Генерация изображения', created_at: new Date(Date.now() - 7200000).toISOString() },
-  ],
-  models: [
-    { slug: 'seedream-5-pro', ui_key: 'seedream-5-pro', variant: 'default', title: 'Seedream 5 Pro', media_kind: 'image', enabled: true },
-    { slug: 'seedream-5-pro-edit', ui_key: 'seedream-5-pro', variant: 'edit', title: 'Seedream 5 Pro Edit', media_kind: 'image', enabled: true },
-    { slug: 'nano-banana-2', ui_key: 'nano-banana-2', variant: 'default', title: 'Nano Banana 2', media_kind: 'image', enabled: true },
-    { slug: 'nano-banana-pro', ui_key: 'nano-banana-pro', variant: 'default', title: 'Nano Banana Pro', media_kind: 'image', enabled: true },
-    { slug: 'seedance-2', ui_key: 'seedance-2', variant: 'default', title: 'Seedance 2', media_kind: 'video', enabled: true },
-    { slug: 'seedance-2-mini', ui_key: 'seedance-2-mini', variant: 'default', title: 'Seedance 2 Mini', media_kind: 'video', enabled: true },
-  ],
-  recent: [
-    demoGeneration('image', 'seedream-5-pro', 'Футуристический город на закате', 5),
-    demoGeneration('video', 'seedance-2', 'Неоновая улица и спортивный автомобиль', 18),
-    demoGeneration('image', 'nano-banana-pro', 'Кинематографичный портрет', 63),
-    demoGeneration('image', 'nano-banana-2', 'Горный пейзаж на рассвете', 95),
-  ],
-};
 
 function demoGeneration(kind, model, prompt, minutesAgo) {
   return {
-    id: randomId(),
-    model_slug: model,
-    media_kind: kind,
-    status: 'succeeded',
-    prompt,
-    created_at: new Date(Date.now() - minutesAgo * 60000).toISOString(),
-    completed_at: new Date(Date.now() - (minutesAgo - 1) * 60000).toISOString(),
-    media: [],
+    id: randomId(), model_slug:model, media_kind:kind, status:'succeeded', prompt,
+    created_at:new Date(Date.now()-minutesAgo*60000).toISOString(), completed_at:new Date().toISOString(),
+    error_code:null, media:[],
   };
 }
 
@@ -99,36 +153,8 @@ function randomId() {
 
 function esc(value) {
   return String(value ?? '')
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#039;');
-}
-
-function icon(name) {
-  const paths = {
-    home: '<path d="M3 11.5 12 4l9 7.5v8a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1v-8Z"/><path d="M9 20.5h6"/>',
-    grid: '<rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><rect x="14" y="14" width="6" height="6" rx="1"/>',
-    plus: '<path d="M12 5v14M5 12h14"/>',
-    user: '<circle cx="12" cy="8" r="4"/><path d="M4.5 21a7.5 7.5 0 0 1 15 0"/>',
-    image: '<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m5 18 5-5 3.5 3.5L16 14l3 4"/>',
-    video: '<rect x="3" y="5" width="14" height="14" rx="2"/><path d="m17 10 4-2v8l-4-2v-4Z"/>',
-    wallet: '<path d="M4 7.5h14a2 2 0 0 1 2 2V18H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h12"/><path d="M16 11h5v4h-5a2 2 0 1 1 0-4Z"/>',
-    spark: '<path d="m12 2 1.5 5.5L19 9l-5.5 1.5L12 16l-1.5-5.5L5 9l5.5-1.5L12 2Z"/><path d="m19 15 .7 2.3L22 18l-2.3.7L19 21l-.7-2.3L16 18l2.3-.7L19 15Z"/>',
-    upload: '<path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5"/><path d="M5 14v5h14v-5"/>',
-    trash: '<path d="M4 7h16M9 7V4h6v3m-9 0 1 14h10l1-14M10 11v6m4-6v6"/>',
-    text: '<path d="M5 5h14M12 5v14M8 19h8"/>',
-    frames: '<rect x="3" y="5" width="12" height="14" rx="2"/><path d="M9 9h12v10a2 2 0 0 1-2 2H9"/>',
-    folder: '<path d="M3 7h7l2 2h9v10H3V7Z"/>',
-    download: '<path d="M12 3v12m0 0-4-4m4 4 4-4"/><path d="M5 19h14"/>',
-    remix: '<path d="M7 7h8a4 4 0 0 1 4 4v1"/><path d="m16 9 3 3 3-3"/><path d="M17 17H9a4 4 0 0 1-4-4v-1"/><path d="m8 15-3-3-3 3"/>',
-    clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
-    back: '<path d="m15 5-7 7 7 7"/>',
-    check: '<path d="m5 12 4 4L19 6"/>',
-    settings: '<circle cx="12" cy="12" r="3"/><path d="M19 13.5v-3l-2-.7-.7-1.7.9-1.9-2.1-2.1-1.9.9-1.7-.7L10.5 2h-3l-.7 2-1.7.7-1.9-.9-2.1 2.1.9 1.9-.7 1.7-2 .7v3l2 .7.7 1.7-.9 1.9 2.1 2.1 1.9-.9 1.7.7.7 2h3l.7-2 1.7-.7 1.9.9 2.1-2.1-.9-1.9.7-1.7 2-.7Z" transform="scale(.8) translate(3 3)"/>',
-  };
-  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths[name] ?? paths.spark}</svg>`;
+    .replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;')
+    .replaceAll('"','&quot;').replaceAll("'",'&#039;');
 }
 
 function setupTelegram() {
@@ -140,13 +166,11 @@ function setupTelegram() {
     tg.setBackgroundColor?.('#070707');
     tg.setBottomBarColor?.('#080808');
     tg.disableVerticalSwipes?.();
-  } catch (_) {
-    // Older Telegram clients may not expose every optional method.
-  }
-  tg.BackButton?.onClick(goBack);
-  tg.onEvent?.('themeChanged', syncTelegramChrome);
-  tg.onEvent?.('safeAreaChanged', syncTelegramChrome);
-  tg.onEvent?.('contentSafeAreaChanged', syncTelegramChrome);
+    tg.BackButton?.onClick(goBack);
+    tg.onEvent?.('themeChanged', syncTelegramChrome);
+    tg.onEvent?.('safeAreaChanged', syncTelegramChrome);
+    tg.onEvent?.('contentSafeAreaChanged', syncTelegramChrome);
+  } catch (_) {}
 }
 
 function syncTelegramChrome() {
@@ -157,678 +181,863 @@ function syncTelegramChrome() {
   } catch (_) {}
 }
 
-function haptic(type = 'light') {
+function haptic(type='light') {
   try { tg?.HapticFeedback?.impactOccurred?.(type); } catch (_) {}
 }
 
-function notify(type = 'success') {
+function notify(type='success') {
   try { tg?.HapticFeedback?.notificationOccurred?.(type); } catch (_) {}
 }
 
 async function init() {
   setupTelegram();
-  if (tg?.initData) {
-    try {
+  try {
+    if (tg?.initData) {
       const auth = await rawApi('/auth', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ init_data: tg.initData }),
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({ init_data:tg.initData }),
       });
       state.token = auth.access_token;
       state.bootstrap = await api('/bootstrap');
-    } catch (error) {
-      renderFatal(error);
-      return;
+    } else {
+      state.demo = true;
+      state.bootstrap = structuredClone(DEMO);
     }
-  } else {
-    state.demo = true;
-    state.bootstrap = structuredClone(DEMO);
+    state.gallery = [...(state.bootstrap.recent ?? [])];
+    state.ledger = [...(state.bootstrap.ledger ?? [])];
+    ensureDraft(firstModel()?.slug);
+    render();
+  } catch (error) {
+    renderFatal(error);
   }
-  render();
 }
 
-async function rawApi(path, options = {}) {
+async function rawApi(path, options={}) {
   const response = await fetch(`/v1/miniapp${path}`, options);
   if (response.status === 204) return null;
   const contentType = response.headers.get('content-type') ?? '';
   const data = contentType.includes('application/json') ? await response.json() : await response.text();
   if (!response.ok) {
-    const message = typeof data === 'object' && data?.detail
-      ? (typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail))
-      : `HTTP ${response.status}`;
-    throw new Error(message);
+    const detail = typeof data === 'object' ? (data?.detail ?? data?.message ?? data?.error) : data;
+    const error = new Error(formatApiDetail(detail) || `HTTP ${response.status}`);
+    error.status = response.status;
+    error.payload = data;
+    error.retryable = Boolean(data?.retryable) || response.status >= 500 || response.status === 429;
+    throw error;
   }
   return data;
 }
 
-async function api(path, options = {}) {
+async function api(path, options={}) {
   if (!state.token) throw new Error('Откройте Happy Fox внутри Telegram.');
   const headers = new Headers(options.headers ?? {});
   headers.set('Authorization', `Bearer ${state.token}`);
   return rawApi(path, { ...options, headers });
 }
 
+function formatApiDetail(detail) {
+  if (!detail) return '';
+  if (typeof detail === 'string') return detail;
+  if (Array.isArray(detail)) {
+    return detail.map(row => row?.msg || row?.message || JSON.stringify(row)).join(' · ');
+  }
+  return detail.message || JSON.stringify(detail);
+}
+
 function renderFatal(error) {
-  root.innerHTML = `<main class="page"><div class="brand-lockup" style="margin-top:22px">${brandMark()}</div><div class="notice error-card" style="margin-top:28px"><strong>Не удалось открыть Happy Fox</strong><br>${esc(error?.message ?? error)}</div><button class="primary-button" data-action="reload">Повторить</button></main>`;
+  root.innerHTML = `<main class="page fatal-page">
+    <div class="brand-lockup" style="margin-top:24px">${brandMark()}</div>
+    <section class="notice error-card grunge-card" style="margin-top:28px">
+      <span class="stamp stamp--danger">OFFLINE</span>
+      <strong>Не удалось открыть Happy Fox</strong>
+      <p>${esc(error?.message ?? error)}</p>
+    </section>
+    <button class="primary-button" data-action="reload">Повторить</button>
+  </main>`;
 }
 
 function brandMark() {
   return `<div class="fox-mark" aria-hidden="true"><svg viewBox="0 0 64 64"><path d="M8 10 23 18 32 12l9 6 15-8-4 27-20 17L12 37 8 10Z" fill="currentColor"/><path d="m19 27 9 5-6 4-3-9Zm26 0-9 5 6 4 3-9Z" fill="#090909"/><path d="m25 40 7 4 7-4-7 10-7-10Z" fill="#090909"/></svg></div><div><strong>Happy <span>Fox</span></strong><small>AI-студия в Telegram</small></div>`;
 }
 
-function topbar(action = '') {
-  return `<header class="topbar"><button class="topbar__close" data-action="close">Закрыть</button><div class="topbar__brand"><strong>Happy <span style="color:var(--orange)">Fox</span></strong><small>мини-приложение</small></div><div class="topbar__action">${action}</div></header>`;
+function icon(name) {
+  const paths = {
+    home:'<path d="M3 11.5 12 4l9 7.5v8a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1v-8Z"/>',
+    spark:'<path d="m12 2 1.5 5.5L19 9l-5.5 1.5L12 16l-1.5-5.5L5 9l5.5-1.5L12 2Z"/>',
+    grid:'<rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><rect x="14" y="14" width="6" height="6" rx="1"/>',
+    wallet:'<path d="M4 7.5h14a2 2 0 0 1 2 2V18H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h12"/><path d="M16 11h5v4h-5a2 2 0 1 1 0-4Z"/>',
+    image:'<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m5 18 5-5 3.5 3.5L16 14l3 4"/>',
+    video:'<rect x="3" y="5" width="14" height="14" rx="2"/><path d="m17 10 4-2v8l-4-2v-4Z"/>',
+    upload:'<path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5"/><path d="M5 14v5h14v-5"/>',
+    trash:'<path d="M4 7h16M9 7V4h6v3m-9 0 1 14h10l1-14M10 11v6m4-6v6"/>',
+    clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+    refresh:'<path d="M20 7v5h-5"/><path d="M19 12a7 7 0 1 0-2 5"/>',
+    check:'<path d="m5 12 4 4L19 6"/>',
+    close:'<path d="M6 6l12 12M18 6 6 18"/>',
+    search:'<circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/>',
+    download:'<path d="M12 3v12m0 0-4-4m4 4 4-4"/><path d="M5 19h14"/>',
+    remix:'<path d="M7 7h8a4 4 0 0 1 4 4v1"/><path d="m16 9 3 3 3-3"/><path d="M17 17H9a4 4 0 0 1-4-4v-1"/><path d="m8 15-3-3-3 3"/>',
+    info:'<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7h.01"/>',
+  };
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths[name] ?? paths.spark}</svg>`;
+}
+
+function topbar(action='') {
+  return `<header class="topbar"><button class="topbar__close" data-action="close">Закрыть</button><div class="topbar__brand"><strong>Happy <span>Fox</span></strong><small>AI STUDIO</small></div><div class="topbar__action">${action}</div></header>`;
 }
 
 function bottomNav() {
-  const active = state.screen.startsWith('create') ? 'create' : state.screen === 'generation' ? 'gallery' : state.screen;
-  return `<nav class="bottom-nav" aria-label="Основная навигация"><div class="bottom-nav__inner">
-    ${navButton('home', 'Главная', icon('home'), active === 'home')}
-    ${navButton('gallery', 'Галерея', icon('grid'), active === 'gallery')}
-    <button class="nav-button nav-button--create ${active === 'create' ? 'active' : ''}" data-action="open-create"><span class="nav-icon-wrap">${icon('plus')}</span><span>Создать</span></button>
-    ${navButton('profile', 'Профиль', icon('user'), active === 'profile')}
+  const active = state.screen === 'generation' ? 'gallery' : state.screen;
+  const item = (screen,label,svg) => `<button class="nav-button ${active===screen?'active':''}" data-nav="${screen}"><span class="nav-icon-wrap">${svg}</span><span>${label}</span></button>`;
+  return `<nav class="bottom-nav"><div class="bottom-nav__inner">
+    ${item('home','Главная',icon('home'))}
+    ${item('models','Модели',icon('spark'))}
+    ${item('studio','Создать',icon('image'))}
+    ${item('gallery','Работы',icon('grid'))}
+    ${item('wallet','Баланс',icon('wallet'))}
   </div></nav>`;
 }
 
-function navButton(screen, label, svg, active) {
-  return `<button class="nav-button ${active ? 'active' : ''}" data-nav="${screen}">${svg}<span>${label}</span></button>`;
-}
-
 function render() {
-  if (!state.bootstrap) return;
   updateBackButton();
-  const screen = {
-    home: renderHome,
-    'create-image': renderImageCreate,
-    'create-video': renderVideoCreate,
-    gallery: renderGallery,
-    profile: renderProfile,
-    generation: renderGeneration,
+  const renderer = {
+    home:renderHome, models:renderModels, studio:renderStudio,
+    gallery:renderGallery, wallet:renderWallet, generation:renderGeneration,
   }[state.screen] ?? renderHome;
-  root.innerHTML = `<div class="toast-stack" id="toast-stack"></div>${screen()}${bottomNav()}`;
+  root.innerHTML = `<div class="toast-stack" id="toast-stack"></div>${renderer()}${bottomNav()}`;
 }
 
 function updateBackButton() {
-  const visible = state.screen !== 'home';
   try {
-    if (visible) tg?.BackButton?.show(); else tg?.BackButton?.hide();
-    const dirty = (state.screen === 'create-image' && (state.imageDraft.prompt || state.imageDraft.media.length)) ||
-      (state.screen === 'create-video' && (state.videoDraft.prompt || state.videoDraft.media.length));
+    if (state.screen !== 'home') tg?.BackButton?.show(); else tg?.BackButton?.hide();
+    const dirty = state.screen === 'studio' && draftHasChanges();
     if (dirty) tg?.enableClosingConfirmation?.(); else tg?.disableClosingConfirmation?.();
   } catch (_) {}
 }
 
 function user() { return state.bootstrap?.user ?? DEMO.user; }
 function balance() { return state.bootstrap?.balance ?? DEMO.balance; }
-function recent() { return state.bootstrap?.recent ?? []; }
 function models() { return state.bootstrap?.models ?? []; }
 function prices() { return state.bootstrap?.prices ?? []; }
+function limits() { return state.bootstrap?.limits ?? DEMO.limits; }
+function features() { return state.bootstrap?.features ?? DEMO.features; }
+function firstModel() { return [...models()].sort((a,b)=>(a.rank??99)-(b.rank??99))[0] ?? null; }
+function modelBySlug(slug) { return models().find(item => item.slug === slug) ?? null; }
+function priceFor(slug) { return Number(prices().find(row => row.model_slug === slug)?.amount_units ?? 0); }
 
-function displayName() {
-  return user().display_name || user().username || 'друг';
-}
-
+function displayName() { return user().display_name || user().username || 'друг'; }
 function avatarHtml() {
-  const url = user().photo_url;
-  return url ? `<img class="avatar" src="${esc(url)}" alt="Аватар">` : '<div class="avatar" aria-hidden="true"></div>';
-}
-
-function balanceCompact() {
-  return `<div class="balance-card"><div class="balance-card__copy"><small>Баланс</small><strong>${formatCredits(balance().available_units)} <span class="coin">●</span></strong></div><button class="balance-plus" data-action="topup" aria-label="Пополнить">+</button></div>`;
+  return user().photo_url ? `<img class="avatar" src="${esc(user().photo_url)}" alt="Аватар">` : '<div class="avatar" aria-hidden="true"></div>';
 }
 
 function renderHome() {
-  const works = recent().slice(0, 6);
-  return `<main class="page">${topbar('•••')}
-    ${state.demo ? '<div class="notice">Демо-режим интерфейса. Для запуска генераций откройте Happy Fox внутри Telegram.</div>' : ''}
-    <section class="hero-user"><div class="user-chip">${avatarHtml()}<div class="user-copy"><strong>${esc(displayName())}${user().is_premium ? '<span class="badge-pro">PRO</span>' : ''}</strong><small>${user().username ? '@' + esc(user().username) : 'Happy Fox'}</small></div></div>${balanceCompact()}</section>
-    <section class="section"><div class="section-head"><h1>Что создаём сегодня?</h1></div><div class="create-grid">
-      <button class="create-card create-card--image" data-action="open-image"><span class="sparkles">✦ ·</span><span class="create-card__title">Создать изображение</span><span class="create-card__icon">${icon('image')}</span></button>
-      <button class="create-card create-card--video" data-action="open-video"><span class="sparkles">· ✦</span><span class="create-card__title">Создать видео</span><span class="create-card__icon">${icon('video')}</span></button>
-    </div></section>
-    <section class="section"><div class="section-head"><h2>Быстрый доступ</h2></div><div class="quick-grid">
-      <button class="quick-card" data-nav="gallery">${icon('grid')}<span>Мои работы</span></button>
-      <button class="quick-card" data-action="open-image">${icon('spark')}<span>Новая идея</span></button>
-      <button class="quick-card" data-nav="profile">${icon('wallet')}<span>Баланс</span></button>
-    </div></section>
-    <section class="section"><div class="section-head"><h2>Популярные модели</h2><button class="section-link" data-action="open-create">Все модели ›</button></div>${renderPopularModels()}</section>
-    <section class="section"><div class="section-head"><h2>Недавние работы</h2><button class="section-link" data-nav="gallery">Смотреть все ›</button></div>${works.length ? `<div class="media-grid">${works.map(renderMediaTile).join('')}</div>` : emptyState('grid','Пока пусто','Первая генерация появится здесь сразу после запуска.')}</section>
-  </main>`;
-}
-
-function renderPopularModels() {
-  const wanted = ['seedream-5-pro', 'seedance-2', 'nano-banana-2'];
-  return `<div class="model-strip">${wanted.map(key => {
-    const item = models().find(m => m.ui_key === key && m.variant !== 'edit') || { ui_key:key, title:modelTitle(key), media_kind:key.startsWith('seedance')?'video':'image' };
-    const action = item.media_kind === 'video' ? 'open-video' : 'open-image';
-    const iconClass = key.includes('banana') ? 'banana' : item.media_kind === 'video' ? 'video' : '';
-    return `<button class="model-tile" data-action="${action}" data-prefill-model="${esc(key)}"><span class="model-icon ${iconClass}">${key.includes('banana') ? '🍌' : '◉'}</span><span class="model-copy"><strong>${esc(item.title)}</strong><small>${item.media_kind === 'video' ? 'Видео' : 'Изображения'}</small></span></button>`;
-  }).join('')}</div>`;
-}
-
-function renderMediaTile(item) {
-  const media = item.media?.[0];
-  const isVideo = item.media_kind === 'video';
-  const preview = media?.url
-    ? (isVideo ? `<video src="${esc(media.url)}" muted playsinline preload="metadata"></video>` : `<img src="${esc(media.url)}" alt="${esc(item.prompt || 'Результат')}">`)
-    : '<div class="media-card__fallback"></div>';
-  return `<button class="media-card" data-action="open-generation" data-generation-id="${esc(item.id)}">${preview}<span class="media-card__status ${item.status === 'succeeded' ? 'ok' : ''}">${statusLabel(item.status)}</span><span class="media-card__meta"><span>${isVideo ? 'Видео' : 'Изображение'}</span><span>${relativeTime(item.created_at)}</span></span></button>`;
-}
-
-function renderImageCreate() {
-  const d = state.imageDraft;
-  const imageModels = ['seedream-5-pro', 'nano-banana-2', 'nano-banana-pro'];
-  const cost = currentImagePrice();
-  return `<main class="page">${topbar('<button class="topbar__action" data-action="reset-image">Сбросить</button>')}
-    <div class="section-head"><div><h1 class="screen-title">Создание изображения</h1><p class="screen-subtitle">Модель, референс и точные настройки в одном экране</p></div><span class="step-label">Шаг 1 из 3</span></div>
-    <div class="stepper"><span class="stepper__dot active"></span><span class="stepper__dot"></span><span class="stepper__dot"></span></div>
-    <section class="section"><div class="section-head"><h2>Выберите модель</h2><span class="section-link">Лучшие для фото</span></div><div class="model-strip">${imageModels.map(key => renderModelSelector(key, d.model === key, 'image')).join('')}</div></section>
-    <section class="section"><div class="form-label"><strong>Референс <span class="subtle">(необязательно)</span></strong><small>${d.media.length}/6</small></div>${renderUploadZone('image')}${renderReferences(d.media)}</section>
-    <section class="section"><div class="form-label"><strong>Промпт</strong><small>${d.prompt.length} / 3500</small></div><textarea class="prompt-box" data-input="image-prompt" maxlength="3500" placeholder="Опишите изображение: сюжет, свет, стиль, детали…">${esc(d.prompt)}</textarea></section>
-    <section class="section"><div class="form-label"><strong>Настройки</strong><small>Под вашу задачу</small></div><div class="field-row field-row--3">
-      ${selectField('Соотношение','image-aspect',['1:1','16:9','9:16','4:3','3:4','3:2','2:3','21:9'],d.aspectRatio)}
-      ${selectField('Качество','image-quality',['basic','high'],d.quality,{basic:'Стандарт',high:'Высокое'})}
-      ${selectField('Стиль','image-style',['Фотореализм','Кино','Арт','3D','Аниме'],d.style)}
-    </div>${d.model.includes('banana') ? `<div class="field-row" style="margin-top:8px">${selectField('Разрешение','image-resolution',['1K','2K','4K'],d.resolution)}${selectField('Формат','image-format',['png','jpg'],d.outputFormat,{png:'PNG',jpg:'JPG'})}</div>` : ''}</section>
-    <div class="sticky-cta"><button class="primary-button" data-action="submit-image" ${state.busy ? 'disabled' : ''}>${state.busy ? 'Запускаем…' : `Создать изображение · ${cost} ●`}</button><div class="cost-line">Баланс: <strong>${formatCredits(balance().available_units)} ●</strong></div></div>
-  </main>`;
-}
-
-function renderVideoCreate() {
-  const d = state.videoDraft;
-  const cost = priceFor(d.model);
-  return `<main class="page">${topbar('<button class="topbar__action" data-action="reset-video">Сбросить</button>')}
-    <div class="section-head"><div><h1 class="screen-title">Создание видео</h1><p class="screen-subtitle">Выберите сценарий — настройки меняются под него</p></div><span class="step-label">Шаг 1 из 3</span></div>
-    <div class="stepper"><span class="stepper__dot active"></span><span class="stepper__dot"></span><span class="stepper__dot"></span></div>
-    <section class="section"><div class="section-head"><h2>Выберите модель</h2></div><div class="model-strip">${['seedance-2','seedance-2-mini'].map(key => renderModelSelector(key,d.model===key,'video')).join('')}</div></section>
-    <section class="section"><div class="form-label"><strong>Тип генерации</strong><small>4 сценария</small></div><div class="type-grid">
-      ${videoTypeCard('text','Текст','Только описание',icon('text'))}
-      ${videoTypeCard('first_frame','Первый кадр','Старт из изображения',icon('image'))}
-      ${videoTypeCard('first_last','Первый + последний','Контроль начала и финала',icon('frames'))}
-      ${videoTypeCard('references','Референсы','Фото, видео или аудио',icon('folder'))}
-    </div></section>
-    ${d.type !== 'text' ? `<section class="section"><div class="form-label"><strong>${d.type === 'references' ? 'Референсы' : 'Кадры'}</strong><small>${d.media.length}/${d.type === 'first_frame' ? 1 : d.type === 'first_last' ? 2 : 6}</small></div>${renderUploadZone('video')}${renderReferences(d.media)}</section>` : ''}
-    <section class="section"><div class="form-label"><strong>Промпт</strong><small>${d.prompt.length} / 3500</small></div><textarea class="prompt-box" data-input="video-prompt" maxlength="3500" placeholder="Опишите сцену, движение камеры, атмосферу…">${esc(d.prompt)}</textarea></section>
-    <section class="section"><div class="form-label"><strong>Настройки</strong><small>Seedance</small></div><div class="field-row">${selectField('Длительность','video-duration',[5,10,15],d.duration,Object.fromEntries([5,10,15].map(v=>[v,`${v} сек`])))}${selectField('Соотношение','video-aspect',['16:9','9:16','1:1'],d.aspectRatio)}</div>
-      <div class="toggle-list">${toggleRow('video-audio','Аудио','Сгенерировать звук',d.generateAudio)}${toggleRow('video-last','Последний кадр','Вернуть финальный кадр',d.returnLastFrame)}${toggleRow('video-web','Веб-поиск','Использовать актуальные данные',d.webSearch)}</div>
+  const recent = (state.bootstrap?.recent ?? []).slice(0,6);
+  const active = recent.filter(item => ACTIVE.has(item.status));
+  const modelCount = models().length;
+  return `<main class="page">${topbar('<span class="micro-stamp">LIVE</span>')}
+    ${state.demo ? '<div class="notice grunge-note">Демо-режим: интерфейс интерактивен, реальные запросы отключены.</div>' : ''}
+    <section class="hero-user"><div class="user-chip">${avatarHtml()}<div class="user-copy"><strong>${esc(displayName())}${user().is_premium?'<span class="badge-pro">PRO</span>':''}</strong><small>${user().username?'@'+esc(user().username):'Happy Fox'}</small></div></div>${balanceCompact()}</section>
+    <section class="studio-hero grunge-card">
+      <span class="stamp">CREATE / 01</span>
+      <div class="studio-hero__copy"><small>ВСЕ МОДЕЛИ. ОДНА СТУДИЯ.</small><h1>Создавай без лишних экранов</h1><p>Параметры приходят прямо из backend-схем. Фронт показывает только то, что реально принимает выбранная модель.</p></div>
+      <button class="primary-button" data-action="open-studio">Открыть студию ${icon('spark')}</button>
+      <div class="scrape-line" aria-hidden="true"></div>
     </section>
-    <div class="sticky-cta"><button class="primary-button" data-action="submit-video" ${state.busy ? 'disabled' : ''}>${state.busy ? 'Запускаем…' : `Создать видео · ${cost} ●`}</button><div class="cost-line">Баланс: <strong>${formatCredits(balance().available_units)} ●</strong></div></div>
+    ${active.length ? `<section class="section"><div class="section-head"><h2>Сейчас в работе</h2><button class="section-link" data-nav="gallery">Все задачи</button></div><div class="active-strip">${active.map(renderActiveTask).join('')}</div></section>` : ''}
+    <section class="section"><div class="section-head"><h2>Быстрый старт</h2><button class="section-link" data-nav="models">${modelCount} моделей</button></div><div class="model-strip">${recommendedModels().map(renderCompactModel).join('')}</div></section>
+    <section class="section"><div class="section-head"><h2>Недавние работы</h2><button class="section-link" data-action="refresh-gallery">Обновить</button></div>${recent.length?`<div class="media-grid">${recent.map(renderMediaTile).join('')}</div>`:emptyState('grid','Пока пусто','Первая генерация появится здесь после запуска.')}</section>
   </main>`;
 }
 
-function renderModelSelector(key, selected, kind) {
-  const item = models().find(m => m.ui_key === key && m.variant !== 'edit') || { title:modelTitle(key) };
-  const summary = {
-    'seedream-5-pro':'Лучшее качество',
-    'nano-banana-2':'Быстро и точно',
-    'nano-banana-pro':'Максимальная детализация',
-    'seedance-2':'Максимальное качество',
-    'seedance-2-mini':'Быстрее генерация',
-  }[key] ?? 'AI-модель';
-  const cls = key.includes('banana') ? 'banana' : kind === 'video' ? 'video' : '';
-  return `<button class="model-tile ${selected ? 'selected' : ''}" data-action="select-${kind}-model" data-model="${esc(key)}"><span class="model-icon ${cls}">${key.includes('banana') ? '🍌' : '◉'}</span><span class="model-copy"><strong>${esc(item.title)}</strong><small>${summary}</small></span></button>`;
+function balanceCompact() {
+  return `<button class="balance-card" data-nav="wallet"><div class="balance-card__copy"><small>Доступно</small><strong>${formatCredits(balance().available_units)} <span class="coin">●</span></strong></div><span class="balance-arrow">›</span></button>`;
 }
 
-function videoTypeCard(type,title,summary,svg) {
-  return `<button class="type-card ${state.videoDraft.type === type ? 'active' : ''}" data-action="video-type" data-video-type="${type}">${svg}<strong>${title}</strong><small>${summary}</small></button>`;
+function recommendedModels() {
+  return [...models()].sort((a,b)=>(a.rank??99)-(b.rank??99)).slice(0,4);
 }
 
-function selectField(label,key,options,value,labels={}) {
-  return `<div class="field"><label>${label}</label><select data-select="${key}">${options.map(option => `<option value="${esc(option)}" ${String(option) === String(value) ? 'selected' : ''}>${esc(labels[option] ?? option)}</option>`).join('')}</select></div>`;
+function renderCompactModel(item) {
+  return `<button class="model-tile" data-action="choose-model" data-model="${esc(item.slug)}"><span class="model-icon ${item.media_kind==='video'?'video':item.family?.toLowerCase().includes('banana')?'banana':''}">${item.media_kind==='video'?'▶':item.family?.toLowerCase().includes('banana')?'🍌':'◉'}</span><span class="model-copy"><strong>${esc(item.title)}</strong><small>${formatCredits(priceFor(item.slug))} ● · ${item.media_kind==='video'?'Видео':'Изображение'}</small></span></button>`;
 }
 
-function toggleRow(action,title,summary,on) {
-  return `<div class="toggle-row"><div class="toggle-copy"><strong>${title}</strong><small>${summary}</small></div><button class="switch ${on ? 'on' : ''}" data-action="${action}" role="switch" aria-checked="${on}"></button></div>`;
+function renderActiveTask(item) {
+  return `<button class="active-task" data-action="open-generation" data-generation-id="${esc(item.id)}"><span class="pulse-dot"></span><div><strong>${esc(modelTitle(item.model_slug))}</strong><small>${statusLabel(item.status)}</small></div><span>›</span></button>`;
 }
 
-function renderUploadZone(kind) {
-  const d = kind === 'image' ? state.imageDraft : state.videoDraft;
-  let accept = 'PNG, JPG, WEBP';
-  if (kind === 'video') {
-    accept = d.type === 'references' ? 'Фото, MP4/WEBM или аудио' : 'PNG, JPG, WEBP';
+function renderModels() {
+  const query = state.modelSearch.trim().toLowerCase();
+  const rows = models().filter(item => {
+    if (state.modelKind !== 'all' && item.media_kind !== state.modelKind) return false;
+    if (!query) return true;
+    return [item.title,item.family,item.slug,...(item.recommended_for??[])].join(' ').toLowerCase().includes(query);
+  }).sort((a,b)=>(a.rank??99)-(b.rank??99));
+  return `<main class="page">${topbar()}
+    <div class="section-head"><div><h1 class="screen-title">Модели</h1><p class="screen-subtitle">Каталог формируется backend-реестром — только реально разрешённые для запуска модели.</p></div><span class="stamp">${models().length} LIVE</span></div>
+    <label class="search-box">${icon('search')}<input type="search" data-input="model-search" value="${esc(state.modelSearch)}" placeholder="Найти модель или задачу"></label>
+    <div class="tabs model-tabs"><button class="tab ${state.modelKind==='all'?'active':''}" data-action="model-kind" data-kind="all">Все</button><button class="tab ${state.modelKind==='image'?'active':''}" data-action="model-kind" data-kind="image">Изображения</button><button class="tab ${state.modelKind==='video'?'active':''}" data-action="model-kind" data-kind="video">Видео</button></div>
+    <div class="model-catalog">${rows.length?rows.map(renderModelCard).join(''):emptyState('search','Ничего не нашли','Сбросьте фильтр или поисковую строку.')}</div>
+  </main>`;
+}
+
+function renderModelCard(item) {
+  const caps = (item.capabilities??[]).slice(0,4).map(cap => `<span class="cap-chip">${esc(CAPABILITY_LABELS[cap]??humanize(cap))}</span>`).join('');
+  const recommended = (item.recommended_for??[]).slice(0,3).map(value => `<span>${esc(humanize(value))}</span>`).join('');
+  return `<article class="model-card grunge-card"><div class="model-card__top"><div class="model-card__identity"><span class="model-icon ${item.media_kind==='video'?'video':item.family?.toLowerCase().includes('banana')?'banana':''}">${item.media_kind==='video'?'▶':item.family?.toLowerCase().includes('banana')?'🍌':'◉'}</span><div><small>${esc(item.family||'AI')}</small><h3>${esc(item.title)}</h3></div></div><span class="tier-badge">${esc(item.tier||'standard')}</span></div>
+    <div class="cap-list">${caps}</div>
+    ${recommended?`<div class="recommended-line">${recommended}</div>`:''}
+    <div class="model-card__footer"><div><small>Цена запуска</small><strong>${formatCredits(priceFor(item.slug))} ●</strong></div><button class="small-orange-button" data-action="choose-model" data-model="${esc(item.slug)}">Создать</button></div></article>`;
+}
+
+function ensureDraft(slug) {
+  const item = modelBySlug(slug) ?? firstModel();
+  if (!item) return null;
+  if (state.draft?.modelSlug === item.slug) return state.draft;
+  state.draft = createDraft(item);
+  state.validationErrors = {};
+  return state.draft;
+}
+
+function createDraft(item) {
+  const properties = item.input_schema?.properties ?? {};
+  const values = {};
+  for (const [name,schema] of Object.entries(properties)) {
+    if (MEDIA_FIELDS.has(name)) continue;
+    if (schema.default !== undefined && schema.default !== null) values[name] = schema.default;
+    else if (item.defaults?.[name] !== undefined) values[name] = item.defaults[name];
+    else if (schema.type === 'boolean') values[name] = false;
+    else if (name === 'prompt') values[name] = '';
   }
-  return `<button class="upload-zone ${state.uploadBusy ? 'loading' : ''}" data-action="pick-media" data-upload-kind="${kind}" ${state.uploadBusy ? 'disabled' : ''}>${icon('upload')}<span><strong>${state.uploadBusy ? 'Загружаем…' : 'Загрузить файл'}</strong><small>${accept} · до 50 МБ</small></span></button>`;
+  for (const [name,value] of Object.entries(item.defaults??{})) {
+    if (!MEDIA_FIELDS.has(name) && values[name] === undefined) values[name] = value;
+  }
+  return {
+    modelSlug:item.slug,
+    values,
+    media:[],
+    mediaMode:hasFrameMode(item)?'text':'references',
+    idempotencyKey:randomId(),
+  };
+}
+
+function draftHasChanges() {
+  if (!state.draft) return false;
+  return Boolean(String(state.draft.values?.prompt??'').trim() || state.draft.media.length);
+}
+
+function hasFrameMode(item) {
+  const props = item?.input_schema?.properties ?? {};
+  return Boolean(props.first_frame_url || props.last_frame_url || props.reference_image_urls || props.reference_video_urls || props.reference_audio_urls);
+}
+
+function renderStudio() {
+  const draft = ensureDraft(state.draft?.modelSlug ?? firstModel()?.slug);
+  const item = modelBySlug(draft?.modelSlug);
+  if (!draft || !item) return `<main class="page">${topbar()}${emptyState('spark','Нет доступных моделей','Backend пока не разрешил ни одной модели для запуска.')}</main>`;
+  const schema = item.input_schema ?? { properties:{} };
+  const cost = priceFor(item.slug);
+  const canSubmit = features().task_submission !== false && !state.busy;
+  return `<main class="page studio-page">${topbar('<button class="topbar__action" data-action="reset-draft">Сбросить</button>')}
+    <section class="studio-title"><div><span class="stamp">SCHEMA DRIVEN</span><h1>${esc(item.title)}</h1><p>${esc(item.family||'AI')} · ${item.media_kind==='video'?'Видео':'Изображение'} · ${formatCredits(cost)} ●</p></div><button class="model-switch" data-nav="models">Сменить ›</button></section>
+    ${features().task_submission===false?'<div class="notice error-card">Запуск задач временно отключён на backend.</div>':''}
+    ${renderMediaControls(item,draft)}
+    ${renderSchemaForm(item,schema,draft)}
+    ${renderValidationSummary()}
+    <section class="submit-panel grunge-card"><div class="submit-panel__price"><small>Стоимость запуска</small><strong>${formatCredits(cost)} <span class="coin">●</span></strong><span>Баланс ${formatCredits(balance().available_units)} ●</span></div><button class="primary-button" data-action="submit-task" ${canSubmit?'':'disabled'}>${state.busy?'Проверяем и запускаем…':'Создать'}</button></section>
+    <p class="backend-trust">Перед запуском payload ещё раз валидируется сервером. Списание и idempotency выполняются backend-контуром.</p>
+  </main>`;
+}
+
+function renderMediaControls(item,draft) {
+  const props = item.input_schema?.properties ?? {};
+  const mediaFields = Object.keys(props).filter(name => MEDIA_FIELDS.has(name));
+  if (!mediaFields.length) return '';
+  if (hasFrameMode(item)) return renderSeedanceMedia(item,draft);
+
+  const target = mediaFields.includes('image_urls') ? 'image_urls' : mediaFields.includes('image_input') ? 'image_input' : mediaFields[0];
+  const schema = props[target] ?? {};
+  const required = (item.input_schema?.required??[]).includes(target);
+  const maxItems = Number(schema.maxItems ?? (target.endsWith('_url')?1:6));
+  return `<section class="section form-card media-form grunge-lite"><div class="form-label"><div><strong>${required?'Референс':'Референс, если нужен'}</strong><small>${esc(FIELD_LABELS[target]??humanize(target))}</small></div><span>${draft.media.length}/${maxItems}</span></div>${renderUploadZone({ kinds:['image'], maxItems, label:required?'Добавьте изображение':'Добавить изображение' })}${renderReferences(draft.media)}</section>`;
+}
+
+function renderSeedanceMedia(item,draft) {
+  const props = item.input_schema?.properties ?? {};
+  const modes = [
+    ['text','Текст','Без файлов'],
+    ['first_frame','Первый кадр','1 изображение'],
+    ['first_last','Первый + последний','2 изображения'],
+    ['references','Референсы','Фото / видео / аудио'],
+  ];
+  const showRefs = props.reference_image_urls || props.reference_video_urls || props.reference_audio_urls;
+  const available = modes.filter(([mode]) => mode!=='references' || showRefs);
+  let upload = '';
+  if (draft.mediaMode === 'first_frame') upload = renderUploadZone({ kinds:['image'],maxItems:1,label:'Загрузить первый кадр' });
+  if (draft.mediaMode === 'first_last') upload = renderUploadZone({ kinds:['image'],maxItems:2,label:draft.media.length?'Добавить второй кадр':'Загрузить первый кадр' });
+  if (draft.mediaMode === 'references') upload = renderUploadZone({ kinds:['image','video','audio'],maxItems:6,label:'Добавить референс' });
+  return `<section class="section form-card media-form grunge-lite"><div class="form-label"><div><strong>Режим генерации</strong><small>Backend-контракт не смешивает frame и reference mode</small></div></div><div class="mode-grid">${available.map(([mode,title,summary])=>`<button class="mode-card ${draft.mediaMode===mode?'active':''}" data-action="media-mode" data-mode="${mode}"><strong>${title}</strong><small>${summary}</small></button>`).join('')}</div>${upload}${renderReferences(draft.media)}</section>`;
+}
+
+function renderUploadZone(policy) {
+  if (features().input_media===false) return '<div class="notice">Загрузка файлов сейчас недоступна на backend.</div>';
+  const disabled = state.uploadBusy || state.draft.media.length >= policy.maxItems;
+  const maxMb = Math.max(1,Math.round(Number(limits().input_media_max_bytes??0)/1024/1024));
+  return `<button class="upload-zone ${state.uploadBusy?'loading':''}" data-action="pick-media" data-kinds="${esc(policy.kinds.join(','))}" data-max-items="${policy.maxItems}" ${disabled?'disabled':''}>${icon('upload')}<span><strong>${state.uploadBusy?'Загружаем…':esc(policy.label)}</strong><small>${policy.kinds.map(kind=>({image:'PNG/JPG/WEBP',video:'MP4/WEBM',audio:'MP3/M4A/WAV'}[kind])).join(' · ')} · до ${maxMb} МБ</small></span></button>`;
 }
 
 function renderReferences(items) {
   if (!items.length) return '';
-  return `<div class="reference-list">${items.map((item,index)=>`<div class="reference-item"><div class="reference-thumb">${item.url && item.kind === 'image' ? `<img src="${esc(item.url)}" alt="Референс">` : item.kind === 'video' && item.url ? `<video src="${esc(item.url)}" muted preload="metadata"></video>` : ''}</div><div class="reference-copy"><strong>${referenceLabel(item.kind,index)}</strong><small>${item.source === 'generation' ? 'Из вашей галереи' : 'Загружено приватно'}</small></div><button class="icon-button danger" data-action="remove-reference" data-reference-index="${index}">${icon('trash')}</button></div>`).join('')}</div>`;
+  return `<div class="reference-list">${items.map((item,index)=>`<div class="reference-item"><div class="reference-thumb">${mediaPreview(item,'reference')}</div><div class="reference-copy"><strong>${referenceLabel(item,index)}</strong><small>${item.source==='generation'?'Из готовой работы':'Приватная загрузка'} · ${formatBytes(item.size_bytes)}</small></div><button class="icon-button danger" data-action="remove-reference" data-reference-index="${index}">${icon('trash')}</button></div>`).join('')}</div>`;
 }
 
-function referenceLabel(kind,index) {
-  if (state.screen === 'create-video' && state.videoDraft.type === 'first_last') return index === 0 ? 'Первый кадр' : 'Последний кадр';
-  return kind === 'image' ? 'Изображение' : kind === 'video' ? 'Видео' : 'Аудио';
+function referenceLabel(item,index) {
+  if (state.draft?.mediaMode==='first_last') return index===0?'Первый кадр':'Последний кадр';
+  return item.kind==='video'?'Видео':item.kind==='audio'?'Аудио':'Изображение';
+}
+
+function renderSchemaForm(item,schema,draft) {
+  const properties = schema.properties ?? {};
+  const required = new Set(schema.required ?? []);
+  const entries = Object.entries(properties).filter(([name]) => !MEDIA_FIELDS.has(name));
+  const prompt = entries.find(([name]) => name==='prompt');
+  const rest = entries.filter(([name]) => name!=='prompt');
+  return `<section class="section form-card schema-card"><div class="form-label"><div><strong>Параметры модели</strong><small>${esc(item.contract||'validated contract')}</small></div><span class="micro-stamp">BACKEND</span></div>${prompt?renderSchemaField(prompt[0],prompt[1],draft,required.has(prompt[0]),true):''}<div class="schema-grid">${rest.map(([name,field])=>renderSchemaField(name,field,draft,required.has(name),false)).join('')}</div></section>`;
+}
+
+function renderSchemaField(name,field,draft,required,isPrompt) {
+  const value = draft.values[name];
+  const error = state.validationErrors[name];
+  const label = FIELD_LABELS[name] ?? humanize(name);
+  const requiredMark = required?'<span class="required-mark">*</span>':'';
+  const description = schemaHint(field);
+  if (field.type==='boolean') {
+    return `<div class="schema-field schema-field--toggle ${error?'invalid':''}"><div><label>${esc(label)} ${requiredMark}</label><small>${esc(description)}</small></div><button class="switch ${value?'on':''}" data-action="toggle-field" data-field="${esc(name)}" role="switch" aria-checked="${Boolean(value)}"></button>${fieldError(error)}</div>`;
+  }
+  const choices = schemaEnum(field);
+  if (choices?.length) {
+    if (choices.length <= 4) {
+      return `<div class="schema-field ${error?'invalid':''}"><label>${esc(label)} ${requiredMark}</label><div class="segmented">${choices.map(option=>`<button data-action="enum-field" data-field="${esc(name)}" data-value="${esc(String(option))}" class="${String(value)===String(option)?'active':''}">${esc(VALUE_LABELS[String(option)]??String(option))}</button>`).join('')}</div><small>${esc(description)}</small>${fieldError(error)}</div>`;
+    }
+    return `<div class="schema-field ${error?'invalid':''}"><label>${esc(label)} ${requiredMark}</label><select data-field-select="${esc(name)}">${choices.map(option=>`<option value="${esc(String(option))}" ${String(value)===String(option)?'selected':''}>${esc(VALUE_LABELS[String(option)]??String(option))}</option>`).join('')}</select><small>${esc(description)}</small>${fieldError(error)}</div>`;
+  }
+  if (isPrompt || (field.type==='string' && Number(field.maxLength??0)>300)) {
+    return `<div class="schema-field schema-field--wide ${error?'invalid':''}"><div class="field-counter"><label>${esc(label)} ${requiredMark}</label><span>${String(value??'').length}${field.maxLength?` / ${field.maxLength}`:''}</span></div><textarea data-field-input="${esc(name)}" maxlength="${Number(field.maxLength??10000)}" placeholder="${esc(promptPlaceholder(item))}">${esc(value??'')}</textarea><small>${esc(description)}</small>${fieldError(error)}</div>`;
+  }
+  const type = field.type==='integer'||field.type==='number'?'number':'text';
+  const step = field.type==='integer'?'1':'any';
+  return `<div class="schema-field ${error?'invalid':''}"><label>${esc(label)} ${requiredMark}</label><input type="${type}" step="${step}" data-field-input="${esc(name)}" value="${esc(value??'')}" ${field.minimum!==undefined?`min="${field.minimum}"`:''} ${field.maximum!==undefined?`max="${field.maximum}"`:''}><small>${esc(description)}</small>${fieldError(error)}</div>`;
+}
+
+function schemaEnum(field) {
+  if (Array.isArray(field.enum)) return field.enum;
+  for (const branch of field.anyOf??[]) if (Array.isArray(branch.enum)) return branch.enum.filter(value=>value!==null);
+  return null;
+}
+
+function schemaHint(field) {
+  const chunks=[];
+  if (field.minLength) chunks.push(`мин. ${field.minLength} симв.`);
+  if (field.maxLength) chunks.push(`до ${field.maxLength} симв.`);
+  if (field.minimum!==undefined) chunks.push(`от ${field.minimum}`);
+  if (field.maximum!==undefined) chunks.push(`до ${field.maximum}`);
+  if (field.default!==undefined && field.default!==null) chunks.push(`по умолчанию: ${VALUE_LABELS[String(field.default)]??field.default}`);
+  return chunks.join(' · ') || 'Параметр проверяется backend-контрактом';
+}
+
+function fieldError(error) { return error?`<em class="field-error">${esc(error)}</em>`:''; }
+function promptPlaceholder(item) { return item.media_kind==='video'?'Опишите сцену, движение, свет, камеру и атмосферу…':'Опишите сюжет, композицию, свет, стиль и детали…'; }
+
+function renderValidationSummary() {
+  const errors = Object.entries(state.validationErrors);
+  if (!errors.length) return '';
+  return `<div class="notice error-card validation-summary"><strong>Нужно поправить параметры</strong><p>${errors.map(([name,msg])=>`${esc(FIELD_LABELS[name]??humanize(name))}: ${esc(msg)}`).join('<br>')}</p></div>`;
 }
 
 function renderGallery() {
-  const all = recent();
-  const filtered = state.galleryFilter === 'all' ? all : all.filter(item => item.media_kind === state.galleryFilter);
-  return `<main class="page">${topbar('⌕')}<div class="section-head"><h1 class="screen-title">Галерея</h1><span class="section-link">${all.length} работ</span></div>
-    <div class="tabs"><button class="tab ${state.galleryFilter==='all'?'active':''}" data-action="gallery-filter" data-filter="all">Все</button><button class="tab ${state.galleryFilter==='image'?'active':''}" data-action="gallery-filter" data-filter="image">Изображения</button><button class="tab ${state.galleryFilter==='video'?'active':''}" data-action="gallery-filter" data-filter="video">Видео</button></div>
-    ${filtered.length ? `<div class="gallery-list">${filtered.map(renderGalleryCard).join('')}</div>` : emptyState('grid','Ничего не найдено','Попробуйте другой фильтр или создайте новую работу.')}
+  const rows = filteredGallery();
+  const modelsInGallery = [...new Set(state.gallery.map(item=>item.model_slug))];
+  return `<main class="page">${topbar('<button class="icon-top" data-action="refresh-gallery">'+icon('refresh')+'</button>')}
+    <div class="section-head"><div><h1 class="screen-title">Мои работы</h1><p class="screen-subtitle">До ${limits().generation_history_max??100} последних задач из backend.</p></div><span class="stamp">${state.gallery.length}</span></div>
+    <div class="gallery-filters"><select data-gallery-filter="kind"><option value="all">Все типы</option><option value="image" ${state.filters.kind==='image'?'selected':''}>Изображения</option><option value="video" ${state.filters.kind==='video'?'selected':''}>Видео</option></select><select data-gallery-filter="status"><option value="all">Все статусы</option><option value="active" ${state.filters.status==='active'?'selected':''}>В работе</option><option value="succeeded" ${state.filters.status==='succeeded'?'selected':''}>Готово</option><option value="failed" ${state.filters.status==='failed'?'selected':''}>Ошибки</option><option value="cancelled" ${state.filters.status==='cancelled'?'selected':''}>Отменено</option></select><select data-gallery-filter="model"><option value="all">Все модели</option>${modelsInGallery.map(slug=>`<option value="${esc(slug)}" ${state.filters.model===slug?'selected':''}>${esc(modelTitle(slug))}</option>`).join('')}</select></div>
+    ${state.galleryBusy?loadingState('Обновляем историю…'):rows.length?`<div class="gallery-list">${rows.map(renderGalleryCard).join('')}</div>`:emptyState('grid','Здесь пока пусто','Создайте первую работу или поменяйте фильтры.')}
   </main>`;
 }
 
-function renderGalleryCard(item) {
-  const media = item.media?.[0];
-  const isVideo = item.media_kind === 'video';
-  const preview = media?.url ? (isVideo ? `<video src="${esc(media.url)}" controls playsinline preload="metadata"></video>` : `<img src="${esc(media.url)}" alt="${esc(item.prompt || 'Результат')}">`) : '<div class="gallery-preview__fallback"></div>';
-  const actions = item.status === 'succeeded' ? `<div class="gallery-actions"><button class="gallery-action" data-action="remix" data-generation-id="${esc(item.id)}">Ремикс</button><button class="gallery-action accent" data-action="open-generation" data-generation-id="${esc(item.id)}">Открыть</button><button class="gallery-action" data-action="download" data-generation-id="${esc(item.id)}">Скачать</button></div>` : `<div class="gallery-actions"><button class="gallery-action accent" data-action="open-generation" data-generation-id="${esc(item.id)}">Статус</button></div>`;
-  return `<article class="gallery-card"><div class="gallery-preview">${preview}<span class="gallery-status">${statusLabel(item.status)}</span><span class="gallery-kind">${isVideo ? 'Видео' : 'Изображение'}</span></div><div class="gallery-body"><div class="gallery-title">${esc(item.prompt || modelTitle(item.model_slug))}</div><div class="gallery-meta">${esc(modelTitle(item.model_slug))} · ${relativeTime(item.created_at)}</div>${actions}</div></article>`;
+function filteredGallery() {
+  return state.gallery.filter(item => {
+    if (state.filters.kind!=='all' && item.media_kind!==state.filters.kind) return false;
+    if (state.filters.model!=='all' && item.model_slug!==state.filters.model) return false;
+    if (state.filters.status==='active' && !ACTIVE.has(item.status)) return false;
+    if (!['all','active'].includes(state.filters.status) && item.status!==state.filters.status) return false;
+    return true;
+  });
 }
 
-function renderProfile() {
-  const ledger = state.bootstrap?.ledger ?? [];
-  return `<main class="page">${topbar('✎')}<section class="profile-card"><div class="profile-header">${avatarHtml()}<div class="profile-header__copy"><strong>${esc(displayName())}${user().is_premium ? '<span class="badge-pro">PRO</span>' : ''}</strong><small>${user().username ? '@'+esc(user().username) : 'Пользователь Happy Fox'}</small></div></div></section>
-    <section class="wallet-panel"><div><small>Ваш баланс</small><strong>${formatCredits(balance().available_units)} <span class="coin">●</span></strong></div><button class="small-orange-button" data-action="topup">+ Пополнить</button></section>
-    <section class="section"><div class="section-head"><h2>История операций</h2><span class="section-link">Последние</span></div>${ledger.length ? `<div class="ledger">${ledger.map(renderLedger).join('')}</div>` : emptyState('wallet','Операций пока нет','Пополнения и списания появятся здесь.')}</section>
-    <section class="section"><div class="section-head"><h2>Настройки аккаунта</h2></div><div class="settings-list"><div class="settings-row"><span>Личные данные</span><span>›</span></div><div class="settings-row"><span>Безопасность</span><span>›</span></div><div class="settings-row"><span>Уведомления</span><span>›</span></div><div class="settings-row"><span>Язык</span><span>Русский</span></div></div></section>
+function renderGalleryCard(item) {
+  const done = item.status==='succeeded';
+  const preview = item.media?.[0] ? mediaPreview({kind:item.media_kind,url:item.media[0].url},'gallery') : '<div class="gallery-preview__fallback"></div>';
+  return `<article class="gallery-card"><button class="gallery-preview" data-action="open-generation" data-generation-id="${esc(item.id)}">${preview}<span class="gallery-status ${done?'ok':''}">${statusLabel(item.status)}</span><span class="gallery-kind">${item.media_kind==='video'?'Видео':'Изображение'}</span></button><div class="gallery-body"><div class="gallery-title">${esc(item.prompt||modelTitle(item.model_slug))}</div><div class="gallery-meta">${esc(modelTitle(item.model_slug))} · ${relativeTime(item.created_at)}</div><div class="gallery-actions">${done?`<button class="gallery-action" data-action="remix" data-generation-id="${esc(item.id)}">${icon('remix')} Ремикс</button><button class="gallery-action" data-action="download" data-generation-id="${esc(item.id)}">${icon('download')} Скачать</button>`:''}<button class="gallery-action accent" data-action="open-generation" data-generation-id="${esc(item.id)}">Открыть</button></div></div></article>`;
+}
+
+function renderMediaTile(item) {
+  const media=item.media?.[0];
+  return `<button class="media-card" data-action="open-generation" data-generation-id="${esc(item.id)}">${media?mediaPreview({kind:item.media_kind,url:media.url},'tile'):'<div class="media-card__fallback"></div>'}<span class="media-card__status ${item.status==='succeeded'?'ok':''}">${statusLabel(item.status)}</span><span class="media-card__meta"><span>${item.media_kind==='video'?'Видео':'Фото'}</span><span>${relativeTime(item.created_at)}</span></span></button>`;
+}
+
+function mediaPreview(item,context) {
+  if (!item?.url) return '';
+  if (item.kind==='video') return `<video src="${esc(item.url)}" ${context==='gallery'?'controls':''} muted playsinline preload="metadata"></video>`;
+  if (item.kind==='audio') return `<div class="audio-preview">♫</div>`;
+  return `<img src="${esc(item.url)}" alt="Референс" loading="lazy">`;
+}
+
+function renderWallet() {
+  const rows = state.ledger;
+  return `<main class="page">${topbar('<button class="icon-top" data-action="refresh-wallet">'+icon('refresh')+'</button>')}
+    <div class="section-head"><div><h1 class="screen-title">Баланс</h1><p class="screen-subtitle">Реальные доступные, зарезервированные и списанные кредиты.</p></div><span class="micro-stamp">LEDGER</span></div>
+    <section class="wallet-hero grunge-card"><small>Доступно</small><strong>${formatCredits(balance().available_units)} <span class="coin">●</span></strong><div class="wallet-stats"><span><small>В резерве</small><b>${formatCredits(balance().reserved_units)} ●</b></span><span><small>Всего</small><b>${formatCredits(balance().total_units)} ●</b></span></div></section>
+    <section class="section"><div class="section-head"><h2>Цены моделей</h2><span class="section-link">за запуск</span></div><div class="price-list">${models().map(item=>`<button data-action="choose-model" data-model="${esc(item.slug)}"><span>${esc(item.title)}</span><strong>${formatCredits(priceFor(item.slug))} ●</strong></button>`).join('')}</div></section>
+    <section class="section"><div class="section-head"><h2>История операций</h2><span class="section-link">до ${limits().ledger_history_max??200}</span></div>${state.walletBusy?loadingState('Получаем ledger…'):rows.length?`<div class="ledger">${rows.map(renderLedger).join('')}</div>`:emptyState('wallet','Операций пока нет','Резервы, списания и возвраты появятся здесь автоматически.')}</section>
+    <div class="notice grunge-note"><strong>Пополнение</strong><br>В Mini App backend сейчас нет пользовательского payment endpoint, поэтому интерфейс не показывает фальшивую кнопку оплаты. Баланс, резервы, списания и возвраты — реальные.</div>
   </main>`;
 }
 
 function renderLedger(item) {
-  const delta = Number(item.available_delta ?? 0);
-  const captured = item.entry_type === 'capture' ? Number(item.reserved_delta ?? 0) : 0;
-  const amount = delta || captured;
-  const positive = amount > 0;
-  const label = {
-    credit:'Пополнение', debit:'Списание', reserve:'Резерв генерации', capture:'Генерация оплачена', release:'Возврат резерва', refund:'Возврат средств', adjustment:'Корректировка'
-  }[item.entry_type] ?? 'Операция';
-  return `<div class="ledger-row"><span class="ledger-icon">${positive ? '+' : '●'}</span><span class="ledger-copy"><strong>${label}</strong><small>${relativeTime(item.created_at)}</small></span><span class="ledger-amount ${positive ? 'plus':'minus'}">${amount > 0 ? '+' : ''}${formatCredits(amount)} ●</span></div>`;
+  const available=Number(item.available_delta??0);
+  const reserved=Number(item.reserved_delta??0);
+  const amount=available!==0?available:reserved;
+  const positive=amount>0;
+  const label={credit:'Пополнение',debit:'Списание',reserve:'Резерв',capture:'Оплата генерации',release:'Снятие резерва',refund:'Возврат',adjustment:'Корректировка'}[item.entry_type]??humanize(item.entry_type);
+  return `<button class="ledger-row" ${item.generation_id?`data-action="open-generation" data-generation-id="${esc(item.generation_id)}"`:''}><span class="ledger-icon ${positive?'plus':''}">${positive?'+':'●'}</span><span class="ledger-copy"><strong>${esc(label)}</strong><small>${esc(item.reason||'')} · ${relativeTime(item.created_at)}</small></span><span class="ledger-amount ${positive?'plus':'minus'}">${amount>0?'+':''}${formatCredits(amount)} ●</span></button>`;
 }
 
 function renderGeneration() {
-  const item = state.activeGeneration;
-  if (!item) return `<main class="page">${topbar()}${emptyState('clock','Загрузка статуса','Получаем данные генерации…')}</main>`;
-  const media = item.media?.[0];
-  const done = item.status === 'succeeded';
-  const failed = item.status === 'failed' || item.status === 'cancelled';
-  return `<main class="page">${topbar()}<div class="section-head"><div><h1 class="screen-title">${done ? 'Готово!' : failed ? 'Генерация остановлена' : 'Создаём…'}</h1><p class="screen-subtitle">${statusDescription(item.status)}</p></div><span class="media-card__status ${done ? 'ok':''}">${statusLabel(item.status)}</span></div>
-    <section class="gallery-card" style="margin-top:18px"><div class="gallery-preview">${media?.url ? (item.media_kind === 'video' ? `<video src="${esc(media.url)}" controls playsinline></video>` : `<img src="${esc(media.url)}" alt="Результат">`) : '<div class="gallery-preview__fallback"></div>'}</div><div class="gallery-body"><div class="gallery-title">${esc(item.prompt || modelTitle(item.model_slug))}</div><div class="gallery-meta">${esc(modelTitle(item.model_slug))}</div></div></section>
-    ${done ? `<div class="button-row"><button class="secondary-button" data-action="remix" data-generation-id="${esc(item.id)}">Ремикс</button><button class="primary-button" data-action="download" data-generation-id="${esc(item.id)}">Скачать</button></div><button class="secondary-button" style="margin-top:8px" data-action="open-create">Создать ещё</button>` : failed ? `<button class="primary-button" style="margin-top:16px" data-action="open-create">Создать заново</button>` : `<div class="form-card" style="margin-top:14px"><div class="form-label"><strong>Задача в обработке</strong><small>${statusLabel(item.status)}</small></div><div class="stepper"><span class="stepper__dot active"></span><span class="stepper__dot active"></span><span class="stepper__dot"></span></div></div><button class="secondary-button" style="margin-top:12px" data-action="cancel-generation">Отменить, если ещё можно</button>`}
+  const item=state.activeGeneration;
+  if (!item) return `<main class="page">${topbar()}${loadingState('Получаем статус…')}</main>`;
+  const media=item.media?.[0];
+  const done=item.status==='succeeded';
+  const failed=item.status==='failed'||item.status==='cancelled';
+  const canCancel=ACTIVE.has(item.status) && !state.demo;
+  return `<main class="page">${topbar('<span class="micro-stamp">'+esc(statusLabel(item.status))+'</span>')}
+    <section class="generation-head ${failed?'generation-head--failed':''}"><span class="stamp ${failed?'stamp--danger':''}">${done?'DONE':failed?'STOP':'PROCESS'}</span><h1>${done?'Готово':failed?'Задача остановлена':'Создаём результат'}</h1><p>${esc(statusDescription(item.status))}</p></section>
+    <section class="gallery-card generation-card">${media?`<div class="gallery-preview">${mediaPreview({kind:item.media_kind,url:media.url},'gallery')}</div>`:'<div class="generation-placeholder"><div class="generating-orbit"></div>'+icon('clock')+'</div>'}<div class="gallery-body"><div class="gallery-title">${esc(item.prompt||modelTitle(item.model_slug))}</div><div class="gallery-meta">${esc(modelTitle(item.model_slug))} · ${relativeTime(item.created_at)}</div>${item.error_code?`<div class="notice error-card generation-error"><strong>${esc(ERROR_LABELS[item.error_code]??humanize(item.error_code))}</strong><small>Код: ${esc(item.error_code)}</small></div>`:''}</div></section>
+    ${renderProgress(item.status)}
+    <div class="button-row generation-actions">${done?`<button class="secondary-button" data-action="remix" data-generation-id="${esc(item.id)}">${icon('remix')} Ремикс</button><button class="primary-button" data-action="download" data-generation-id="${esc(item.id)}">${icon('download')} Скачать</button>`:failed?`<button class="primary-button" data-action="retry-generation" data-generation-id="${esc(item.id)}">Создать заново</button>`:canCancel?'<button class="secondary-button danger-outline" data-action="cancel-generation">Отменить задачу</button>':''}</div>
   </main>`;
 }
 
-function emptyState(iconName,title,text) {
-  return `<div class="empty-state">${icon(iconName)}<strong>${title}</strong><p>${text}</p></div>`;
+function renderProgress(status) {
+  if (TERMINAL.has(status)) return '';
+  const order=['queued','submitting','submitted','processing','submission_unknown','result_ready','storing_media','delivery_pending'];
+  const index=Math.max(0,order.indexOf(status));
+  const percent=Math.min(92,12+index*11);
+  return `<section class="progress-card grunge-lite"><div class="progress-copy"><strong>${statusLabel(status)}</strong><span>${percent}%</span></div><div class="progress-track"><i style="width:${percent}%"></i></div><small>Статус обновляется автоматически. Повторная отправка задачи не выполняется.</small></section>`;
 }
 
-function currentImagePrice() {
-  const refs = state.imageDraft.media.length > 0;
-  const slug = state.imageDraft.model === 'seedream-5-pro' && refs ? 'seedream-5-pro-edit' : state.imageDraft.model;
-  return priceFor(slug);
+function renderActiveGenerationFromReceipt(receipt,item,draft) {
+  return { id:receipt.generation_id, model_slug:receipt.model||item.slug, media_kind:item.media_kind, status:receipt.status, prompt:draft.values.prompt??'', created_at:new Date().toISOString(), completed_at:null, error_code:null, media:[] };
 }
 
-function priceFor(slug) {
-  return Number(prices().find(p => p.model_slug === slug)?.amount_units ?? 0);
-}
+function emptyState(iconName,title,text) { return `<div class="empty-state">${icon(iconName)}<strong>${title}</strong><p>${text}</p></div>`; }
+function loadingState(text) { return `<div class="empty-state loading-state"><span class="boot-spinner"></span><strong>${esc(text)}</strong></div>`; }
 
-function formatCredits(value) {
-  return new Intl.NumberFormat('ru-RU').format(Number(value ?? 0));
-}
-
-function relativeTime(value) {
-  if (!value) return '';
-  const delta = Math.max(0, Date.now() - new Date(value).getTime());
-  const mins = Math.floor(delta / 60000);
-  if (mins < 1) return 'только что';
-  if (mins < 60) return `${mins} мин назад`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours} ч назад`;
-  return `${Math.floor(hours / 24)} дн назад`;
-}
-
-function modelTitle(slug) {
-  const key = slug === 'seedream-5-pro-edit' ? 'seedream-5-pro' : slug;
-  return models().find(m => m.ui_key === key && m.variant !== 'edit')?.title || {
-    'seedream-5-pro':'Seedream 5 Pro','nano-banana-2':'Nano Banana 2','nano-banana-pro':'Nano Banana Pro','seedance-2':'Seedance 2','seedance-2-mini':'Seedance 2 Mini'
-  }[key] || key;
-}
-
-function statusLabel(status) {
-  return {
-    draft:'Черновик',queued:'В очереди',submitting:'Запускаем',submitted:'Отправлено',processing:'Генерация',submission_unknown:'Проверяем',result_ready:'Результат',storing_media:'Сохраняем',delivery_pending:'Доставляем',succeeded:'Готово',failed:'Ошибка',cancelled:'Отменено'
-  }[status] ?? status;
-}
-
-function statusDescription(status) {
-  return {
-    queued:'Задача принята и ждёт запуска.',submitting:'Передаём задачу модели.',submitted:'Модель приняла задачу.',processing:'Нейросеть создаёт результат.',submission_unknown:'Уточняем статус без повторного списания.',result_ready:'Получили результат, готовим медиа.',storing_media:'Сохраняем результат приватно.',delivery_pending:'Финализируем задачу.',succeeded:'Результат сохранён в вашей галерее.',failed:'Задача завершилась ошибкой.',cancelled:'Задача отменена до безопасной границы.'
-  }[status] ?? 'Обновляем состояние задачи.';
-}
-
-function setScreen(screen, { replace = false } = {}) {
-  if (screen === state.screen) return;
+function setScreen(screen,{replace=false}={}) {
+  if (screen===state.screen) return;
   if (!replace) state.stack.push(state.screen);
-  state.screen = screen;
-  window.scrollTo({ top: 0, behavior: 'instant' });
+  state.screen=screen;
+  window.scrollTo({top:0,behavior:'instant'});
   haptic('light');
   render();
+  if (screen==='gallery') void loadGallery();
+  if (screen==='wallet') void loadWallet();
 }
 
 function goBack() {
   if (state.stack.length) {
-    state.screen = state.stack.pop();
-    window.scrollTo({ top: 0, behavior: 'instant' });
+    state.screen=state.stack.pop();
+    window.scrollTo({top:0,behavior:'instant'});
     render();
     return;
   }
-  if (state.screen !== 'home') {
-    state.screen = 'home';
-    render();
-  }
-}
-
-function showToast(message, type = '') {
-  const stack = document.getElementById('toast-stack');
-  if (!stack) return;
-  const node = document.createElement('div');
-  node.className = `toast ${type}`;
-  node.textContent = message;
-  stack.append(node);
-  setTimeout(() => node.remove(), 3200);
-}
-
-function showPopup(title, message) {
-  if (tg?.showPopup) {
-    tg.showPopup({ title, message, buttons: [{ type: 'ok' }] });
-  } else {
-    showToast(`${title}: ${message}`);
-  }
+  if (state.screen!=='home') { state.screen='home'; render(); }
 }
 
 async function refreshBootstrap() {
   if (state.demo) return;
-  state.bootstrap = await api('/bootstrap');
+  state.bootstrap=await api('/bootstrap');
 }
 
-async function uploadFile(file, kind) {
-  if (state.demo) {
-    showPopup('Откройте в Telegram', 'Загрузка и генерация доступны только после безопасной авторизации Telegram.');
-    return;
-  }
-  if (!file?.type) return;
-  state.uploadBusy = true;
+async function loadGallery(force=false) {
+  if (state.demo) { state.gallery=[...(state.bootstrap.recent??[])]; render(); return; }
+  if (state.galleryBusy && !force) return;
+  state.galleryBusy=true;
   render();
   try {
-    const result = await api('/input-media', { method:'POST', headers:{'Content-Type':file.type}, body:file });
-    result.source = 'upload';
-    if (kind === 'image') {
-      if (result.kind !== 'image') throw new Error('Для изображения нужен графический файл.');
-      if (state.imageDraft.media.length >= 6) throw new Error('Можно добавить не больше 6 референсов в этом интерфейсе.');
-      state.imageDraft.media.push(result);
-    } else {
-      validateVideoUploadKind(result.kind);
-      const limit = state.videoDraft.type === 'first_frame' ? 1 : state.videoDraft.type === 'first_last' ? 2 : 6;
-      if (state.videoDraft.media.length >= limit) throw new Error(`Лимит файлов для этого сценария: ${limit}.`);
-      state.videoDraft.media.push(result);
-    }
-    notify('success');
-  } catch (error) {
-    notify('error');
-    showToast(error.message, 'error');
-  } finally {
-    state.uploadBusy = false;
-    render();
-  }
+    const max=Math.min(100,Number(limits().generation_history_max??100));
+    state.gallery=await api(`/generations?limit=${max}`);
+    state.bootstrap.recent=state.gallery.slice(0,12);
+  } catch (error) { showToast(error.message,'error'); }
+  finally { state.galleryBusy=false; render(); }
 }
 
-function validateVideoUploadKind(kind) {
-  const type = state.videoDraft.type;
-  if ((type === 'first_frame' || type === 'first_last') && kind !== 'image') {
-    throw new Error('Для первого/последнего кадра выберите изображение.');
-  }
-  if (type === 'text') throw new Error('Текстовому сценарию референсы не нужны.');
+async function loadWallet() {
+  if (state.demo) { state.ledger=[...(state.bootstrap.ledger??[])]; render(); return; }
+  if (state.walletBusy) return;
+  state.walletBusy=true;
+  render();
+  try {
+    const max=Math.min(200,Number(limits().ledger_history_max??200));
+    const [freshBalance,freshPrices,ledger]=await Promise.all([api('/balance'),api('/prices'),api(`/ledger?limit=${max}`)]);
+    state.bootstrap.balance=freshBalance;
+    state.bootstrap.prices=freshPrices;
+    state.bootstrap.ledger=ledger.slice(0,8);
+    state.ledger=ledger;
+  } catch (error) { showToast(error.message,'error'); }
+  finally { state.walletBusy=false; render(); }
+}
+
+function openStudio(slug) {
+  const model=modelBySlug(slug)??firstModel();
+  if (!model) return;
+  if (state.draft?.modelSlug!==model.slug) state.draft=createDraft(model);
+  state.validationErrors={};
+  setScreen('studio');
+}
+
+async function switchModel(slug) {
+  const model=modelBySlug(slug);
+  if (!model || state.draft?.modelSlug===slug) return;
+  if (draftHasChanges()) await clearDraftMedia();
+  state.draft=createDraft(model);
+  state.validationErrors={};
+  setScreen('studio');
+}
+
+function mediaPolicyFromButton(target) {
+  const kinds=(target.dataset.kinds??'image').split(',').filter(Boolean);
+  const maxItems=Number(target.dataset.maxItems??1);
+  return { kinds,maxItems };
+}
+
+function configurePicker(policy) {
+  const map={ image:['image/jpeg','image/png','image/webp'], video:['video/mp4','video/webm'], audio:['audio/mpeg','audio/mp4','audio/wav','audio/x-wav'] };
+  picker.accept=policy.kinds.flatMap(kind=>map[kind]??[]).join(',');
+  picker.multiple=policy.maxItems-state.draft.media.length>1;
+  picker.value='';
+  state.pickerPolicy=policy;
+}
+
+async function uploadFiles(files) {
+  const policy=state.pickerPolicy;
+  if (!policy || !files.length) return;
+  if (state.demo) { showPopup('Демо-режим','Загрузка доступна после Telegram-авторизации.'); return; }
+  const slots=Math.max(0,policy.maxItems-state.draft.media.length);
+  const selected=[...files].slice(0,slots);
+  if (!selected.length) return;
+  state.uploadBusy=true; render();
+  try {
+    for (const file of selected) {
+      if (file.size>Number(limits().input_media_max_bytes??Infinity)) throw new Error(`Файл ${file.name} превышает лимит backend.`);
+      const result=await api('/input-media',{method:'POST',headers:{'Content-Type':file.type},body:file});
+      if (!policy.kinds.includes(result.kind)) {
+        await api(`/input-media/${encodePath(result.storage_key)}`,{method:'DELETE'}).catch(()=>{});
+        throw new Error(`Тип ${result.kind} не подходит для выбранного режима.`);
+      }
+      state.draft.media.push({...result,source:'upload'});
+    }
+    notify('success');
+  } catch (error) { notify('error'); showToast(error.message,'error'); }
+  finally { state.uploadBusy=false; render(); }
 }
 
 async function removeReference(index) {
-  const draft = state.screen === 'create-video' ? state.videoDraft : state.imageDraft;
-  const [item] = draft.media.splice(index, 1);
+  const [item]=state.draft.media.splice(index,1);
   render();
-  if (!item?.storage_key || item.source === 'generation' || state.demo) return;
-  try { await api(`/input-media/${encodePath(item.storage_key)}`, { method:'DELETE' }); } catch (_) {}
+  if (!item?.storage_key || item.source==='generation' || state.demo) return;
+  await api(`/input-media/${encodePath(item.storage_key)}`,{method:'DELETE'}).catch(()=>{});
 }
 
-function encodePath(path) {
-  return path.split('/').map(encodeURIComponent).join('/');
-}
-
-async function clearDraftMedia(draft) {
-  const items = [...draft.media];
-  draft.media = [];
+async function clearDraftMedia() {
+  if (!state.draft) return;
+  const items=[...state.draft.media];
+  state.draft.media=[];
   if (state.demo) return;
-  await Promise.allSettled(items.filter(i => i.storage_key && i.source !== 'generation').map(i => api(`/input-media/${encodePath(i.storage_key)}`, {method:'DELETE'})));
+  await Promise.allSettled(items.filter(item=>item.storage_key&&item.source!=='generation').map(item=>api(`/input-media/${encodePath(item.storage_key)}`,{method:'DELETE'})));
 }
 
-function decoratedPrompt(prompt, style) {
-  const clean = prompt.trim();
-  if (!clean || !style) return clean;
-  return `${clean}\nСтиль: ${style}.`;
-}
+function encodePath(path) { return path.split('/').map(encodeURIComponent).join('/'); }
 
-function buildImageTask() {
-  const d = state.imageDraft;
-  if (d.prompt.trim().length < 3) throw new Error('Добавьте промпт — минимум 3 символа.');
-  const refs = d.media.filter(item => item.kind === 'image');
-  if (refs.length !== d.media.length) throw new Error('В фото-референсах допустимы только изображения.');
-  let slug = d.model;
-  const prompt = decoratedPrompt(d.prompt, d.style);
-  if (d.model === 'seedream-5-pro' && refs.length) slug = 'seedream-5-pro-edit';
-  if (slug.startsWith('seedream-5-pro')) {
-    const input = { prompt, aspect_ratio:d.aspectRatio, quality:d.quality, output_format:d.outputFormat, nsfw_checker:false };
-    if (refs.length) input.image_urls = refs.map(item => item.url);
-    return { model_slug:slug, input };
+function buildPayload(item,draft) {
+  const props=item.input_schema?.properties??{};
+  const payload={};
+  for (const [name,value] of Object.entries(draft.values)) {
+    if (MEDIA_FIELDS.has(name)) continue;
+    if (value===undefined || value===null || value==='') {
+      if ((item.input_schema?.required??[]).includes(name)) payload[name]=value;
+      continue;
+    }
+    payload[name]=value;
   }
-  return { model_slug:slug, input:{ prompt, image_input:refs.map(item=>item.url), aspect_ratio:d.aspectRatio, resolution:d.resolution, output_format:d.outputFormat } };
+  const urls=kind => draft.media.filter(row=>row.kind===kind).map(row=>row.url);
+  if (hasFrameMode(item)) {
+    if (draft.mediaMode==='first_frame' && draft.media[0]) payload.first_frame_url=draft.media[0].url;
+    if (draft.mediaMode==='first_last') {
+      if (draft.media[0]) payload.first_frame_url=draft.media[0].url;
+      if (draft.media[1]) payload.last_frame_url=draft.media[1].url;
+    }
+    if (draft.mediaMode==='references') {
+      if (props.reference_image_urls) payload.reference_image_urls=urls('image');
+      if (props.reference_video_urls) payload.reference_video_urls=urls('video');
+      if (props.reference_audio_urls) payload.reference_audio_urls=urls('audio');
+    }
+  } else {
+    if (props.image_urls) payload.image_urls=urls('image');
+    if (props.image_input) payload.image_input=urls('image');
+    if (props.input_urls) payload.input_urls=urls('image');
+    if (props.image_url && draft.media[0]) payload.image_url=draft.media[0].url;
+    if (props.video_url && draft.media[0]) payload.video_url=draft.media[0].url;
+    if (props.audio_url && draft.media[0]) payload.audio_url=draft.media[0].url;
+  }
+  return payload;
 }
 
-function buildVideoTask() {
-  const d = state.videoDraft;
-  if (d.prompt.trim().length < 3) throw new Error('Добавьте промпт — минимум 3 символа.');
-  if (d.type === 'first_frame' && (d.media.length !== 1 || d.media[0].kind !== 'image')) throw new Error('Нужен ровно один первый кадр.');
-  if (d.type === 'first_last' && (d.media.length !== 2 || d.media.some(item => item.kind !== 'image'))) throw new Error('Нужны два изображения: первый и последний кадр.');
-  if (d.type === 'references' && !d.media.length) throw new Error('Добавьте хотя бы один референс.');
-  const input = {
-    prompt:d.prompt.trim(),
-    return_last_frame:d.returnLastFrame,
-    generate_audio:d.generateAudio,
-    resolution:d.resolution,
-    aspect_ratio:d.aspectRatio,
-    duration:Number(d.duration),
-    web_search:d.webSearch,
-  };
-  if (d.type === 'first_frame') input.first_frame_url = d.media[0].url;
-  if (d.type === 'first_last') { input.first_frame_url=d.media[0].url; input.last_frame_url=d.media[1].url; }
-  if (d.type === 'references') {
-    input.reference_image_urls=d.media.filter(i=>i.kind==='image').map(i=>i.url);
-    input.reference_video_urls=d.media.filter(i=>i.kind==='video').map(i=>i.url);
-    input.reference_audio_urls=d.media.filter(i=>i.kind==='audio').map(i=>i.url);
-  }
-  return { model_slug:d.model, input };
-}
-
-async function submit(kind) {
-  if (state.demo) {
-    showPopup('Откройте в Telegram', 'В демо можно пройти весь интерфейс, но списание и реальная генерация отключены.');
-    return;
-  }
-  if (state.busy) return;
+async function validatePayload(item,payload) {
+  if (state.demo) return payload;
   try {
-    const body = kind === 'image' ? buildImageTask() : buildVideoTask();
-    const draft = kind === 'image' ? state.imageDraft : state.videoDraft;
-    const cost = priceFor(body.model_slug);
-    if (cost > Number(balance().available_units ?? 0)) throw new Error(`Недостаточно кредитов: нужно ${cost}.`);
-    state.busy = true;
+    const response=await api(`/models/${encodeURIComponent(item.slug)}/validate`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({input:payload})});
+    state.validationErrors={};
+    return response.input;
+  } catch (error) {
+    state.validationErrors=validationErrorsFrom(error);
     render();
-    const result = await api('/tasks', {
-      method:'POST',
-      headers:{'Content-Type':'application/json','Idempotency-Key':draft.idempotencyKey},
-      body:JSON.stringify(body),
-    });
+    throw error;
+  }
+}
+
+function validationErrorsFrom(error) {
+  const detail=error?.payload?.detail;
+  if (!Array.isArray(detail)) return { _form:error.message };
+  const result={};
+  for (const row of detail) {
+    const path=(row.loc??[]).filter(part=>part!=='body'&&part!=='input');
+    const name=String(path[0]??'_form');
+    result[name]=row.msg??'Некорректное значение';
+  }
+  return result;
+}
+
+async function submitTask() {
+  if (state.demo) { showPopup('Демо-режим','Реальная генерация доступна после Telegram-авторизации.'); return; }
+  if (state.busy || !state.draft) return;
+  const item=modelBySlug(state.draft.modelSlug);
+  if (!item) return;
+  const cost=priceFor(item.slug);
+  if (cost>Number(balance().available_units??0)) { showToast(`Недостаточно кредитов: нужно ${formatCredits(cost)} ●`,'error'); setScreen('wallet'); return; }
+  state.busy=true; state.validationErrors={}; render();
+  const draft=state.draft;
+  try {
+    const payload=buildPayload(item,draft);
+    const normalized=await validatePayload(item,payload);
+    const receipt=await api('/tasks',{method:'POST',headers:{'Content-Type':'application/json','Idempotency-Key':draft.idempotencyKey},body:JSON.stringify({model_slug:item.slug,input:normalized})});
     notify('success');
-    state.activeGeneration = {
-      id:result.generation_id,
-      model_slug:result.model,
-      media_kind:kind,
-      status:result.status,
-      prompt:draft.prompt,
-      media:[],
-      created_at:new Date().toISOString(),
-    };
-    if (kind === 'image') state.imageDraft = freshImageDraft(); else state.videoDraft = freshVideoDraft();
+    state.activeGeneration=renderActiveGenerationFromReceipt(receipt,item,draft);
+    state.gallery=[state.activeGeneration,...state.gallery.filter(row=>row.id!==state.activeGeneration.id)];
+    state.bootstrap.recent=[state.activeGeneration,...(state.bootstrap.recent??[]).filter(row=>row.id!==state.activeGeneration.id)].slice(0,12);
+    state.draft=createDraft(item);
+    await refreshBalanceOnly();
     setScreen('generation');
-    pollGeneration(result.generation_id);
+    void pollGeneration(receipt.generation_id);
   } catch (error) {
     notify('error');
-    showToast(error.message, 'error');
-  } finally {
-    state.busy = false;
-    render();
+    if (!Object.keys(state.validationErrors).length) showToast(error.message,'error');
+  } finally { state.busy=false; render(); }
+}
+
+async function refreshBalanceOnly() {
+  if (state.demo) return;
+  try { state.bootstrap.balance=await api('/balance'); } catch (_) {}
+}
+
+async function openGeneration(id) {
+  let item=state.gallery.find(row=>row.id===id)??state.bootstrap.recent?.find(row=>row.id===id);
+  if (!state.demo) {
+    try { item=await api(`/generations/${encodeURIComponent(id)}`); }
+    catch (error) { showToast(error.message,'error'); return; }
   }
+  state.activeGeneration=item;
+  setScreen('generation');
+  if (item && !TERMINAL.has(item.status)) void pollGeneration(id);
 }
 
 async function pollGeneration(id) {
   if (state.demo) return;
-  for (let attempt=0; attempt<180; attempt += 1) {
+  for (let attempt=0;attempt<180;attempt+=1) {
     try {
-      const item = await api(`/generations/${encodeURIComponent(id)}`);
-      if (state.activeGeneration?.id === id) state.activeGeneration = item;
-      const index = state.bootstrap.recent.findIndex(row => row.id === id);
-      if (index >= 0) state.bootstrap.recent[index] = item; else state.bootstrap.recent.unshift(item);
-      if (state.screen === 'generation') render();
+      const item=await api(`/generations/${encodeURIComponent(id)}`);
+      upsertGeneration(item);
+      if (state.activeGeneration?.id===id) state.activeGeneration=item;
+      if (state.screen==='generation') render();
       if (TERMINAL.has(item.status)) {
-        await refreshBootstrap();
-        if (state.screen === 'generation') {
-          state.activeGeneration = state.bootstrap.recent.find(row => row.id === id) ?? item;
-          render();
-        }
-        if (item.status === 'succeeded') notify('success');
+        await refreshBalanceOnly();
+        if (item.status==='succeeded') notify('success');
         return;
       }
-    } catch (_) {}
-    await new Promise(resolve => setTimeout(resolve, 3500));
+    } catch (error) {
+      if (error.status===404) return;
+    }
+    await sleep(3500);
   }
 }
 
-async function openGeneration(id) {
-  let item = recent().find(row => row.id === id);
-  if (!state.demo) {
-    try { item = await api(`/generations/${encodeURIComponent(id)}`); } catch (error) { showToast(error.message,'error'); return; }
-  }
-  state.activeGeneration = item;
-  setScreen('generation');
-  if (item && !TERMINAL.has(item.status)) pollGeneration(id);
-}
-
-function generationById(id) {
-  if (state.activeGeneration?.id === id) return state.activeGeneration;
-  return recent().find(row => row.id === id);
-}
-
-function remix(id) {
-  const item = generationById(id);
-  const media = item?.media?.[0];
-  if (!item || !media?.url || item.status !== 'succeeded') {
-    showToast('Для ремикса нужен готовый сохранённый результат.', 'error');
-    return;
-  }
-  if (item.media_kind === 'image') {
-    state.imageDraft = freshImageDraft();
-    state.imageDraft.media = [{ kind:'image', url:media.url, source:'generation', storage_key:null }];
-    state.imageDraft.prompt = item.prompt ?? '';
-    setScreen('create-image');
-  } else {
-    state.videoDraft = freshVideoDraft();
-    state.videoDraft.type = 'references';
-    state.videoDraft.media = [{ kind:'video', url:media.url, source:'generation', storage_key:null }];
-    state.videoDraft.prompt = item.prompt ?? '';
-    setScreen('create-video');
-  }
-}
-
-async function downloadGeneration(id) {
-  const item = generationById(id);
-  const media = item?.media?.[0];
-  if (!media?.url) { showToast('Файл ещё недоступен.', 'error'); return; }
-  const ext = item.media_kind === 'video' ? 'mp4' : 'png';
-  const filename = `happy-fox-${id.slice(0,8)}.${ext}`;
-  try {
-    if (tg?.downloadFile) tg.downloadFile({ url:media.url, file_name:filename });
-    else window.open(media.url, '_blank', 'noopener,noreferrer');
-  } catch (_) {
-    window.open(media.url, '_blank', 'noopener,noreferrer');
-  }
+function upsertGeneration(item) {
+  const replace=list => {
+    const index=list.findIndex(row=>row.id===item.id);
+    if (index>=0) list[index]=item; else list.unshift(item);
+  };
+  replace(state.gallery);
+  state.bootstrap.recent=state.bootstrap.recent??[];
+  replace(state.bootstrap.recent);
+  state.bootstrap.recent=state.bootstrap.recent.slice(0,12);
 }
 
 async function cancelActive() {
-  const id = state.activeGeneration?.id;
-  if (!id || state.demo) return;
+  const id=state.activeGeneration?.id;
+  if (!id || state.demo || state.busy) return;
+  state.busy=true; render();
   try {
-    const item = await api(`/generations/${encodeURIComponent(id)}/cancel`, {method:'POST'});
-    state.activeGeneration = item;
-    await refreshBootstrap();
-    render();
+    const item=await api(`/generations/${encodeURIComponent(id)}/cancel`,{method:'POST'});
+    state.activeGeneration=item; upsertGeneration(item); await refreshBalanceOnly(); notify('success');
   } catch (error) { showToast(error.message,'error'); }
+  finally { state.busy=false; render(); }
 }
 
-root.addEventListener('click', async event => {
-  const nav = event.target.closest('[data-nav]');
-  if (nav) { setScreen(nav.dataset.nav); return; }
-  const target = event.target.closest('[data-action]');
-  if (!target) return;
-  const action = target.dataset.action;
-  haptic('light');
-  if (action === 'reload') { location.reload(); return; }
-  if (action === 'close') { if (tg?.close) tg.close(); else goBack(); return; }
-  if (action === 'open-create') { setScreen('create-image'); return; }
-  if (action === 'open-image') { if (target.dataset.prefillModel) state.imageDraft.model=target.dataset.prefillModel; setScreen('create-image'); return; }
-  if (action === 'open-video') { if (target.dataset.prefillModel) state.videoDraft.model=target.dataset.prefillModel; setScreen('create-video'); return; }
-  if (action === 'select-image-model') { state.imageDraft.model=target.dataset.model; render(); return; }
-  if (action === 'select-video-model') { state.videoDraft.model=target.dataset.model; render(); return; }
-  if (action === 'video-type') { await clearDraftMedia(state.videoDraft); state.videoDraft.type=target.dataset.videoType; render(); return; }
-  if (action === 'video-audio') { state.videoDraft.generateAudio=!state.videoDraft.generateAudio; render(); return; }
-  if (action === 'video-last') { state.videoDraft.returnLastFrame=!state.videoDraft.returnLastFrame; render(); return; }
-  if (action === 'video-web') { state.videoDraft.webSearch=!state.videoDraft.webSearch; render(); return; }
-  if (action === 'pick-media') {
-    picker.dataset.uploadKind=target.dataset.uploadKind;
-    if (target.dataset.uploadKind === 'image' || state.videoDraft.type !== 'references') picker.accept='image/jpeg,image/png,image/webp';
-    else picker.accept='image/jpeg,image/png,image/webp,video/mp4,video/webm,audio/mpeg,audio/mp4,audio/wav';
-    picker.value=''; picker.click(); return;
+function remix(id) {
+  const item=state.gallery.find(row=>row.id===id)??state.activeGeneration;
+  const model=modelBySlug(item?.model_slug)??models().find(row=>row.media_kind===item?.media_kind)??firstModel();
+  const media=item?.media?.[0];
+  if (!item || !model || item.status!=='succeeded') { showToast('Для ремикса нужен готовый результат.','error'); return; }
+  state.draft=createDraft(model);
+  state.draft.values.prompt=item.prompt??'';
+  if (media?.url) {
+    const kind=item.media_kind==='video'?'video':'image';
+    state.draft.media=[{kind,url:media.url,source:'generation',storage_key:null,size_bytes:media.size_bytes??0}];
+    if (hasFrameMode(model)) state.draft.mediaMode=kind==='image'?'first_frame':'references';
   }
-  if (action === 'remove-reference') { await removeReference(Number(target.dataset.referenceIndex)); return; }
-  if (action === 'submit-image') { await submit('image'); return; }
-  if (action === 'submit-video') { await submit('video'); return; }
-  if (action === 'reset-image') { await clearDraftMedia(state.imageDraft); state.imageDraft=freshImageDraft(); render(); return; }
-  if (action === 'reset-video') { await clearDraftMedia(state.videoDraft); state.videoDraft=freshVideoDraft(); render(); return; }
-  if (action === 'gallery-filter') { state.galleryFilter=target.dataset.filter; render(); return; }
-  if (action === 'open-generation') { await openGeneration(target.dataset.generationId); return; }
-  if (action === 'remix') { remix(target.dataset.generationId); return; }
-  if (action === 'download') { await downloadGeneration(target.dataset.generationId); return; }
-  if (action === 'cancel-generation') { await cancelActive(); return; }
-  if (action === 'topup') { showPopup('Пополнение баланса', 'Способ оплаты появится здесь после подключения пользовательского payment-flow. Текущий баланс и списания уже реальные.'); return; }
+  setScreen('studio');
+}
+
+function retryGeneration(id) {
+  const item=state.gallery.find(row=>row.id===id)??state.activeGeneration;
+  const model=modelBySlug(item?.model_slug)??firstModel();
+  if (!model) return;
+  state.draft=createDraft(model);
+  state.draft.values.prompt=item?.prompt??'';
+  setScreen('studio');
+}
+
+async function downloadGeneration(id) {
+  const item=state.gallery.find(row=>row.id===id)??state.activeGeneration;
+  const media=item?.media?.[0];
+  if (!media?.url) { showToast('Файл ещё недоступен.','error'); return; }
+  const ext=item.media_kind==='video'?'mp4':'png';
+  const filename=`happy-fox-${id.slice(0,8)}.${ext}`;
+  try { if (tg?.downloadFile) tg.downloadFile({url:media.url,file_name:filename}); else window.open(media.url,'_blank','noopener,noreferrer'); }
+  catch (_) { window.open(media.url,'_blank','noopener,noreferrer'); }
+}
+
+function setMediaMode(mode) {
+  if (state.draft.mediaMode===mode) return;
+  void clearDraftMedia().then(()=>{ state.draft.mediaMode=mode; render(); });
+}
+
+function setDraftField(name,value) {
+  if (!state.draft) return;
+  const field=modelBySlug(state.draft.modelSlug)?.input_schema?.properties?.[name]??{};
+  if (field.type==='integer') value=value===''?'':Number.parseInt(value,10);
+  if (field.type==='number') value=value===''?'':Number(value);
+  state.draft.values[name]=value;
+  delete state.validationErrors[name];
+}
+
+function resetDraft() {
+  const item=modelBySlug(state.draft?.modelSlug);
+  if (!item) return;
+  void clearDraftMedia().then(()=>{ state.draft=createDraft(item); state.validationErrors={}; render(); });
+}
+
+function showToast(message,type='') {
+  const stack=document.getElementById('toast-stack');
+  if (!stack) return;
+  const node=document.createElement('div'); node.className=`toast ${type}`; node.textContent=message; stack.append(node);
+  setTimeout(()=>node.remove(),3400);
+}
+
+function showPopup(title,message) {
+  if (tg?.showPopup) tg.showPopup({title,message,buttons:[{type:'ok'}]}); else showToast(`${title}: ${message}`);
+}
+
+function modelTitle(slug) { return modelBySlug(slug)?.title || slug || 'AI-модель'; }
+function humanize(value) { return String(value??'').replaceAll('_',' ').replaceAll('-',' ').replace(/\b\w/g,ch=>ch.toUpperCase()); }
+function formatCredits(value) { return new Intl.NumberFormat('ru-RU').format(Number(value??0)); }
+function formatBytes(value) { const bytes=Number(value??0); if (!bytes) return 'файл'; if (bytes<1024*1024) return `${Math.max(1,Math.round(bytes/1024))} КБ`; return `${(bytes/1024/1024).toFixed(1)} МБ`; }
+function relativeTime(value) { if (!value) return ''; const delta=Math.max(0,Date.now()-new Date(value).getTime()); const mins=Math.floor(delta/60000); if (mins<1) return 'только что'; if (mins<60) return `${mins} мин назад`; const hours=Math.floor(mins/60); if (hours<24) return `${hours} ч назад`; return `${Math.floor(hours/24)} дн назад`; }
+function sleep(ms) { return new Promise(resolve=>setTimeout(resolve,ms)); }
+
+function statusLabel(status) {
+  return {draft:'Черновик',queued:'В очереди',submitting:'Запускаем',submitted:'Отправлено',processing:'Генерация',submission_unknown:'Проверяем',result_ready:'Результат готов',storing_media:'Сохраняем',delivery_pending:'Финализируем',succeeded:'Готово',failed:'Ошибка',cancelled:'Отменено'}[status]??humanize(status);
+}
+function statusDescription(status) {
+  return {queued:'Задача принята и ждёт запуска.',submitting:'Безопасно передаём задачу провайдеру.',submitted:'Провайдер принял задачу.',processing:'Нейросеть создаёт результат.',submission_unknown:'Уточняем состояние без повторной отправки и списания.',result_ready:'Результат получен, готовим медиа.',storing_media:'Сохраняем файл в приватное хранилище.',delivery_pending:'Финализируем результат.',succeeded:'Результат сохранён и доступен в галерее.',failed:'Генерация завершилась ошибкой.',cancelled:'Задача отменена в безопасной точке.'}[status]??'Состояние задачи обновляется.';
+}
+
+root.addEventListener('click',async event=>{
+  const nav=event.target.closest('[data-nav]');
+  if (nav) { setScreen(nav.dataset.nav); return; }
+  const target=event.target.closest('[data-action]');
+  if (!target) return;
+  const action=target.dataset.action; haptic('light');
+  if (action==='reload') { location.reload(); return; }
+  if (action==='close') { if (tg?.close) tg.close(); else goBack(); return; }
+  if (action==='open-studio') { openStudio(state.draft?.modelSlug??firstModel()?.slug); return; }
+  if (action==='choose-model') { await switchModel(target.dataset.model); return; }
+  if (action==='model-kind') { state.modelKind=target.dataset.kind; render(); return; }
+  if (action==='toggle-field') { const name=target.dataset.field; setDraftField(name,!Boolean(state.draft.values[name])); render(); return; }
+  if (action==='enum-field') { const name=target.dataset.field; const field=modelBySlug(state.draft.modelSlug)?.input_schema?.properties?.[name]??{}; const choices=schemaEnum(field)??[]; const raw=target.dataset.value; const typed=choices.find(option=>String(option)===raw)??raw; setDraftField(name,typed); render(); return; }
+  if (action==='media-mode') { setMediaMode(target.dataset.mode); return; }
+  if (action==='pick-media') { const policy=mediaPolicyFromButton(target); configurePicker(policy); picker.click(); return; }
+  if (action==='remove-reference') { await removeReference(Number(target.dataset.referenceIndex)); return; }
+  if (action==='reset-draft') { resetDraft(); return; }
+  if (action==='submit-task') { await submitTask(); return; }
+  if (action==='refresh-gallery') { await loadGallery(true); return; }
+  if (action==='refresh-wallet') { await loadWallet(); return; }
+  if (action==='open-generation') { await openGeneration(target.dataset.generationId); return; }
+  if (action==='cancel-generation') { await cancelActive(); return; }
+  if (action==='remix') { remix(target.dataset.generationId); return; }
+  if (action==='retry-generation') { retryGeneration(target.dataset.generationId); return; }
+  if (action==='download') { await downloadGeneration(target.dataset.generationId); return; }
 });
 
-root.addEventListener('input', event => {
-  if (event.target.matches('[data-input="image-prompt"]')) state.imageDraft.prompt=event.target.value;
-  if (event.target.matches('[data-input="video-prompt"]')) state.videoDraft.prompt=event.target.value;
+root.addEventListener('input',event=>{
+  if (event.target.matches('[data-input="model-search"]')) { state.modelSearch=event.target.value; render(); return; }
+  const name=event.target.dataset.fieldInput;
+  if (name) setDraftField(name,event.target.value);
 });
 
-root.addEventListener('change', event => {
-  const key = event.target.dataset.select;
-  if (!key) return;
-  const value = event.target.value;
-  if (key === 'image-aspect') state.imageDraft.aspectRatio=value;
-  if (key === 'image-quality') state.imageDraft.quality=value;
-  if (key === 'image-style') state.imageDraft.style=value;
-  if (key === 'image-resolution') state.imageDraft.resolution=value;
-  if (key === 'image-format') state.imageDraft.outputFormat=value;
-  if (key === 'video-duration') state.videoDraft.duration=Number(value);
-  if (key === 'video-aspect') state.videoDraft.aspectRatio=value;
+root.addEventListener('change',event=>{
+  const name=event.target.dataset.fieldSelect;
+  if (name) {
+    const field=modelBySlug(state.draft.modelSlug)?.input_schema?.properties?.[name]??{};
+    const choices=schemaEnum(field)??[];
+    const typed=choices.find(option=>String(option)===event.target.value)??event.target.value;
+    setDraftField(name,typed); render(); return;
+  }
+  const filter=event.target.dataset.galleryFilter;
+  if (filter) { state.filters[filter]=event.target.value; render(); }
 });
 
-picker.addEventListener('change', async () => {
-  const file = picker.files?.[0];
-  if (file) await uploadFile(file, picker.dataset.uploadKind || 'image');
+picker.addEventListener('change',async()=>{
+  const files=picker.files ? [...picker.files] : [];
+  if (files.length) await uploadFiles(files);
 });
 
 init();
