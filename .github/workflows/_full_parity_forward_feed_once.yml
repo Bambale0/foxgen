@@ -1,0 +1,65 @@
+name: Full parity forward-port feed once
+
+on:
+  push:
+    branches:
+      - agent/full-miniapp-parity
+
+permissions:
+  contents: write
+
+jobs:
+  forward-port-feed:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+      - name: Fetch source branch
+        run: git fetch origin agent/feed-profile-remix-current-main
+      - name: Apply feed domain delta onto current main
+        shell: bash
+        run: |
+          set -euo pipefail
+          files=(
+            migrations/env.py
+            migrations/versions/20260814_0009_publication_feed.py
+            src/foxgen/api/app.py
+            src/foxgen/api/publication_media.py
+            src/foxgen/api/publications.py
+            src/foxgen/application/submissions.py
+            src/foxgen/bot/api_client.py
+            src/foxgen/bot/app.py
+            src/foxgen/bot/feed.py
+            src/foxgen/bot/feed_publish.py
+            src/foxgen/bot/feed_remix.py
+            src/foxgen/bot/keyboards.py
+            src/foxgen/bot/states.py
+            src/foxgen/domain/publications.py
+            src/foxgen/infra/publication_models.py
+            src/foxgen/infra/publications.py
+            src/foxgen/infra/repositories.py
+            tests/integration/test_publications.py
+            tests/test_admin_extension_wiring.py
+            tests/test_app_recovery.py
+            tests/test_feed_contract.py
+            tests/test_submission_security.py
+            tests/test_submission_service.py
+          )
+          git diff --binary 24e6ac7c036133ec9e0078c907c18d00b036e7c3..origin/agent/feed-profile-remix-current-main -- "${files[@]}" > /tmp/feed.patch
+          if ! git apply --3way --index /tmp/feed.patch; then
+            echo 'THREE_WAY_APPLY_FAILED'
+            git status --short
+            git diff --name-only --diff-filter=U
+            exit 1
+          fi
+          git status --short
+      - name: Commit forward-port
+        run: |
+          git commit -m "feat(feed): forward-port publication profile remix domain" || exit 0
+          git push origin HEAD:agent/full-miniapp-parity
