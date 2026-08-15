@@ -100,9 +100,7 @@ class FakePortalService:
         self.user_ids.append(user_id)
         return self.ticket
 
-    async def close_support_ticket(
-        self, *, user_id: int, ticket_id: UUID
-    ) -> SupportTicketSnapshot:
+    async def close_support_ticket(self, *, user_id: int, ticket_id: UUID) -> SupportTicketSnapshot:
         del ticket_id
         self.user_ids.append(user_id)
         return SupportTicketSnapshot(

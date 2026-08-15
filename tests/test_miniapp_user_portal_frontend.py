@@ -15,9 +15,9 @@ def test_user_portal_screens_are_real_miniapp_routes() -> None:
         "api('/tariff')",
         "api('/support')",
         "api('/partner')",
-        "data-nav=\"tariff\"",
-        "data-nav=\"partner\"",
-        "data-nav=\"support\"",
+        'data-nav="tariff"',
+        'data-nav="partner"',
+        'data-nav="support"',
     ):
         assert marker in text
 

@@ -59,10 +59,7 @@ async def test_user_portal_support_tariff_and_partner_invariants() -> None:
         assert len(ticket.messages) == 1
         assert ticket.messages[0].sender_kind == "user"
 
-        assert (
-            await service.get_support_ticket(user_id=other_user_id, ticket_id=ticket.id)
-            is None
-        )
+        assert await service.get_support_ticket(user_id=other_user_id, ticket_id=ticket.id) is None
 
         replied = await service.reply_support_ticket(
             user_id=user_id,
@@ -130,13 +127,11 @@ async def test_user_portal_support_tariff_and_partner_invariants() -> None:
                 await session.execute(
                     delete(PartnerWithdrawal).where(PartnerWithdrawal.user_id == user_id)
                 )
+                await session.execute(delete(SupportTicket).where(SupportTicket.user_id == user_id))
                 await session.execute(
-                    delete(SupportTicket).where(SupportTicket.user_id == user_id)
+                    delete(PartnerProfile).where(PartnerProfile.user_id == user_id)
                 )
-                await session.execute(delete(PartnerProfile).where(PartnerProfile.user_id == user_id))
-                await session.execute(
-                    delete(User).where(User.id.in_((user_id, other_user_id)))
-                )
+                await session.execute(delete(User).where(User.id.in_((user_id, other_user_id))))
                 await session.execute(
                     delete(TariffVersion).where(TariffVersion.version == tariff_version)
                 )
