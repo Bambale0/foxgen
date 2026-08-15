@@ -42,10 +42,11 @@ def image_reference_keyboard(*, count: int, max_count: int) -> InlineKeyboardMar
             InlineKeyboardButton(text="✅ Продолжить", callback_data="gw:i:refs:done"),
         ],
         [
+            InlineKeyboardButton(text="📚 Память реф", callback_data="gw:i:refs:memory"),
             InlineKeyboardButton(
                 text="🔄 Перезагрузить",
                 callback_data="gw:i:refs:clear",
-            )
+            ),
         ],
     ]
     rows.extend(_back_rows())
@@ -160,13 +161,19 @@ def video_media_keyboard(
             )
         ],
         [InlineKeyboardButton(text="✅ Продолжить", callback_data="gw:v:media:done")],
-        [
-            InlineKeyboardButton(
-                text="🔄 Перезагрузить",
-                callback_data="gw:v:media:clear",
-            )
-        ],
     ]
+    utility_row: list[InlineKeyboardButton] = []
+    if generation_type != VideoGenerationType.TEXT:
+        utility_row.append(
+            InlineKeyboardButton(text="📚 Память реф", callback_data="gw:v:media:memory")
+        )
+    utility_row.append(
+        InlineKeyboardButton(
+            text="🔄 Перезагрузить",
+            callback_data="gw:v:media:clear",
+        )
+    )
+    rows.append(utility_row)
     if generation_type == VideoGenerationType.TEXT:
         rows.insert(
             1,

@@ -47,6 +47,40 @@ class User(Base):
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
     generations: Mapped[list["Generation"]] = relationship(back_populates="user")
+    reference_assets: Mapped[list["ReferenceAsset"]] = relationship(back_populates="user")
+
+
+class ReferenceAsset(Base):
+    __tablename__ = "reference_assets"
+    __table_args__ = (
+        UniqueConstraint("storage_key", name="uq_reference_assets_storage_key"),
+        CheckConstraint("size_bytes > 0", name="ck_reference_assets_size_positive"),
+        CheckConstraint(
+            "status IN ('uploading', 'active', 'delete_pending', 'deleted', 'failed')",
+            name="ck_reference_assets_status",
+        ),
+    )
+
+    id: Mapped[UUIDValue] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid()
+    )
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    storage_key: Mapped[str] = mapped_column(String(512))
+    content_type: Mapped[str] = mapped_column(String(255))
+    size_bytes: Mapped[int] = mapped_column(BigInteger)
+    checksum_sha256: Mapped[str] = mapped_column(String(64))
+    status: Mapped[str] = mapped_column(
+        String(24), default="uploading", server_default="uploading", index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+    activated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    user: Mapped[User] = relationship(back_populates="reference_assets")
 
 
 class Generation(Base):
@@ -151,9 +185,7 @@ class OutboxEvent(Base):
 
 class ProviderEvent(Base):
     __tablename__ = "provider_events"
-    __table_args__ = (
-        UniqueConstraint("event_hash", name="uq_provider_events_event_hash"),
-    )
+    __table_args__ = (UniqueConstraint("event_hash", name="uq_provider_events_event_hash"),)
 
     id: Mapped[UUIDValue] = mapped_column(
         UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid()
@@ -218,8 +250,7 @@ class GenerationDelivery(Base):
     __table_args__ = (
         UniqueConstraint("generation_id", name="uq_generation_deliveries_generation_id"),
         CheckConstraint(
-            "status IN ('pending', 'retry_wait', 'sending', 'sent', "
-            "'delivery_unknown', 'failed')",
+            "status IN ('pending', 'retry_wait', 'sending', 'sent', 'delivery_unknown', 'failed')",
             name="ck_generation_deliveries_status",
         ),
     )

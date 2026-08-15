@@ -26,6 +26,20 @@ REQUIRED_COLUMNS: dict[str, frozenset[str]] = {
     "media_assets": frozenset(
         {"id", "generation_id", "status", "attempts", "next_retry_at", "storage_key"}
     ),
+    "reference_assets": frozenset(
+        {
+            "id",
+            "user_id",
+            "storage_key",
+            "content_type",
+            "size_bytes",
+            "checksum_sha256",
+            "status",
+            "created_at",
+            "activated_at",
+            "deleted_at",
+        }
+    ),
     "generation_deliveries": frozenset(
         {
             "id",

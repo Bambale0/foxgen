@@ -38,6 +38,19 @@ class Settings(BaseSettings):
         le=2_592_000,
     )
 
+    # Durable, user-owned reference memory. Bytes live outside the short-retention inputs/ prefix.
+    reference_memory_max_items: int = Field(default=50, ge=1, le=500)
+    reference_memory_max_total_bytes: int = Field(
+        default=524_288_000,
+        ge=1_048_576,
+        le=10_737_418_240,
+    )
+    reference_memory_presigned_url_ttl_seconds: int = Field(
+        default=21_600,
+        ge=300,
+        le=604_800,
+    )
+
     # Public Telegram Mini App. Static UI is safe to serve without secrets; every
     # user-scoped API operation remains fail-closed until auth is configured.
     miniapp_enabled: bool = True

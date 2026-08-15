@@ -11,10 +11,12 @@ from foxgen.admin.rate_limit import RateLimitedAdminSender
 from foxgen.admin.worker import AdminWorker, TelegramAdminDeliverySender
 from foxgen.application.delivery import MediaPipeline
 from foxgen.application.lifecycle import GenerationWorker
+from foxgen.application.reference_memory import ReferenceDeleteProcessor
 from foxgen.core.config import Settings, get_settings
 from foxgen.infra.billing_lifecycle_repository import BillingAwareLifecycleRepository
 from foxgen.infra.database import Database
 from foxgen.infra.media import SecureMediaDownloader, S3MediaStorage, TelegramMediaSender
+from foxgen.infra.reference_memory import SqlAlchemyReferenceMemoryRepository
 from foxgen.providers.kie.client import KieClient
 from foxgen.providers.kie.registry import ModelRegistry
 
@@ -55,6 +57,23 @@ async def run(settings: Settings | None = None) -> None:
         force_path_style=resolved.s3_force_path_style,
         presigned_url_ttl_seconds=resolved.media_presigned_url_ttl_seconds,
     )
+    reference_storage = S3MediaStorage(
+        bucket=resolved.s3_bucket,
+        region=resolved.s3_region,
+        endpoint_url=str(resolved.s3_endpoint_url) if resolved.s3_endpoint_url else None,
+        access_key_id=(
+            resolved.s3_access_key_id.get_secret_value()
+            if resolved.s3_access_key_id is not None
+            else None
+        ),
+        secret_access_key=(
+            resolved.s3_secret_access_key.get_secret_value()
+            if resolved.s3_secret_access_key is not None
+            else None
+        ),
+        force_path_style=resolved.s3_force_path_style,
+        presigned_url_ttl_seconds=resolved.reference_memory_presigned_url_ttl_seconds,
+    )
     bot = Bot(
         token=telegram_token.get_secret_value(),
         default=DefaultBotProperties(parse_mode=ParseMode.HTML),
@@ -65,6 +84,10 @@ async def run(settings: Settings | None = None) -> None:
         storage=storage,
         sender=TelegramMediaSender(bot),
     )
+    reference_delete_processor = ReferenceDeleteProcessor(
+        repository=SqlAlchemyReferenceMemoryRepository(database),
+        storage=reference_storage,
+    )
 
     worker_id = f"{socket.gethostname()}:{os.getpid()}"
     worker = GenerationWorker(
@@ -73,6 +96,7 @@ async def run(settings: Settings | None = None) -> None:
         registry=ModelRegistry(),
         callback_url=resolved.kie_callback_url,
         media_pipeline=media_pipeline,
+        reference_delete_processor=reference_delete_processor,
         worker_id=worker_id,
         batch_size=resolved.worker_outbox_batch_size,
         lease_seconds=resolved.worker_outbox_lease_seconds,
