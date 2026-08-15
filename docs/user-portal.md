@@ -23,7 +23,15 @@ Mini App surface:
 
 The partner page exposes the authenticated user's partner profile, referral count, earned/pending/available units and withdrawal history. A user can join the partner program and create a withdrawal request against their own available partner balance.
 
+Withdrawal creation requires an `Idempotency-Key`. The key is persisted with a canonical request hash, so an ambiguous retry replays the same withdrawal while reuse with different amount/destination fails closed. The Happy Fox form keeps one key until the request succeeds.
+
 The ordinary browser never receives admin approval/rejection actions. Review remains in the privileged admin contour.
+
+## Safety boundaries
+
+Trusted user-portal reads/writes authenticate user context independently of `FOXGEN_TASK_SUBMISSION_ENABLED`; disabling paid provider submission must not disable tariff/support/partner access. Browser Mini App routes continue to use the Telegram-derived JWT.
+
+Partner withdrawal idempotency is a PostgreSQL uniqueness boundary, not a frontend-only debounce. Admin/operator approval remains a separate privileged action.
 
 ## UI contract
 
