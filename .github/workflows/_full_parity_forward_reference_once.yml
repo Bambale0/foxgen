@@ -1,0 +1,88 @@
+name: Full parity forward-port reference memory once
+
+on:
+  push:
+    branches:
+      - agent/full-miniapp-parity-reference
+
+permissions:
+  contents: write
+
+jobs:
+  forward-port-reference:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+      - name: Configure git
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+      - name: Fetch source branch
+        run: git fetch origin agent/reference-memory
+      - name: Apply executable reference-memory delta
+        shell: bash
+        run: |
+          set -euo pipefail
+          files=(
+            .env.example
+            deploy/production.env.example
+            migrations/env.py
+            migrations/versions/20260815_0009_reference_memory.py
+            scripts/check_schema.py
+            src/foxgen/api/app.py
+            src/foxgen/api/reference_memory.py
+            src/foxgen/application/lifecycle.py
+            src/foxgen/application/reference_memory.py
+            src/foxgen/bot/api_client.py
+            src/foxgen/bot/app.py
+            src/foxgen/bot/fsm_contract.py
+            src/foxgen/bot/generation_draft.py
+            src/foxgen/bot/generation_keyboards.py
+            src/foxgen/bot/reference_memory.py
+            src/foxgen/bot/states.py
+            src/foxgen/core/config.py
+            src/foxgen/infra/database.py
+            src/foxgen/infra/input_media.py
+            src/foxgen/infra/reference_media.py
+            src/foxgen/infra/reference_memory.py
+            src/foxgen/worker.py
+            tests/integration/test_reference_memory.py
+            tests/test_admin_extension_wiring.py
+            tests/test_app_recovery.py
+            tests/test_generation_draft.py
+            tests/test_generation_screen_contract.py
+            tests/test_reference_media_api.py
+            tests/test_reference_memory.py
+            tests/test_reference_memory_api.py
+            tests/test_reference_memory_worker.py
+            tests/test_submission_security.py
+            tests/test_submission_service.py
+          )
+          git diff --binary b5d0f395d07a3c2fad4e8b3238a6e3b7c1fb9cac..origin/agent/reference-memory -- "${files[@]}" > /tmp/reference.patch
+          if ! git apply --3way --index /tmp/reference.patch; then
+            echo 'THREE_WAY_APPLY_FAILED'
+            echo 'CONFLICTS:'
+            git diff --name-only --diff-filter=U
+            exit 1
+          fi
+
+          git mv migrations/versions/20260815_0009_reference_memory.py migrations/versions/20260815_0010_reference_memory.py
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('migrations/versions/20260815_0010_reference_memory.py')
+          text = p.read_text(encoding='utf-8')
+          text = text.replace('Revision ID: 20260815_0009', 'Revision ID: 20260815_0010')
+          text = text.replace('Revises: 20260813_0008', 'Revises: 20260814_0009')
+          text = text.replace('revision: str = "20260815_0009"', 'revision: str = "20260815_0010"')
+          text = text.replace('down_revision: str | None = "20260813_0008"', 'down_revision: str | None = "20260814_0009"')
+          p.write_text(text, encoding='utf-8')
+          PY
+          git add .env.example deploy migrations scripts src tests
+          git status --short
+      - name: Commit
+        run: |
+          git commit -m 'feat(reference-memory): forward-port durable reusable references'
+          git push origin HEAD:agent/full-miniapp-parity-reference
