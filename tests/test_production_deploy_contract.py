@@ -13,7 +13,7 @@ def test_deploy_force_recreates_app_services_from_tested_sha() -> None:
     assert 'EXPECTED_IMAGE="foxgen:$DEPLOYED_SHA"' in script
     assert "compose up -d --force-recreate --no-deps api worker bot" in script
     assert 'assert_service_image "$service"' in script
-    assert 'docker inspect --format \'{{.Config.Image}}\'' in script
+    assert "docker inspect --format '{{.Config.Image}}'" in script
 
 
 def test_deploy_reloads_local_https_ingress_after_api_recreation() -> None:
