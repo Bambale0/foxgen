@@ -32,7 +32,10 @@ STATE_CONTRACTS: Mapping[str, StateContract] = MappingProxyType(
             stale_callback=_STALE,
         ),
         GenerationStates.image_uploading_references.state: StateContract(
-            success=(GenerationStates.image_configuring.state,),
+            success=(
+                GenerationStates.image_configuring.state,
+                GenerationStates.reference_memory_browsing.state,
+            ),
             back=GenerationStates.image_selecting_model.state,
             cancel=_TO_MENU,
             timeout=_EXPIRED,
@@ -75,7 +78,10 @@ STATE_CONTRACTS: Mapping[str, StateContract] = MappingProxyType(
             stale_callback=_STALE,
         ),
         GenerationStates.video_uploading_media.state: StateContract(
-            success=(GenerationStates.video_configuring.state,),
+            success=(
+                GenerationStates.video_configuring.state,
+                GenerationStates.reference_memory_browsing.state,
+            ),
             back=GenerationStates.video_selecting_type.state,
             cancel=_TO_MENU,
             timeout=_EXPIRED,
@@ -96,6 +102,26 @@ STATE_CONTRACTS: Mapping[str, StateContract] = MappingProxyType(
             cancel=_TO_MENU,
             timeout=_EXPIRED,
             invalid_input="keep state and request video prompt text",
+            stale_callback=_STALE,
+        ),
+        GenerationStates.reference_memory_browsing.state: StateContract(
+            success=(
+                GenerationStates.reference_memory_adding.state,
+                GenerationStates.image_uploading_references.state,
+                GenerationStates.video_uploading_media.state,
+            ),
+            back="return to the origin generation reference screen without applying selection",
+            cancel=_TO_MENU,
+            timeout=_EXPIRED,
+            invalid_input="keep state and use memory browser buttons",
+            stale_callback=_STALE,
+        ),
+        GenerationStates.reference_memory_adding.state: StateContract(
+            success=(GenerationStates.reference_memory_browsing.state,),
+            back=GenerationStates.reference_memory_browsing.state,
+            cancel=_TO_MENU,
+            timeout=_EXPIRED,
+            invalid_input="keep state and request one image to save",
             stale_callback=_STALE,
         ),
         GenerationStates.quick_start_waiting_media.state: StateContract(

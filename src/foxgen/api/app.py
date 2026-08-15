@@ -28,9 +28,16 @@ from foxgen.api.generations import (
 from foxgen.api.miniapp import MiniAppRepositoryProtocol, create_miniapp_router
 from foxgen.api.publication_media import create_publication_media_router
 from foxgen.api.publications import PublicationServiceProtocol, create_publication_router
+from foxgen.api.reference_memory import (
+    ReferenceMediaDeliveryProtocol,
+    ReferenceMemoryServiceProtocol,
+    create_reference_media_router,
+    create_reference_memory_router,
+)
 from foxgen.api.security import authenticate_submission, validate_idempotency_key
 from foxgen.application.generation_ops import GenerationOperationsService
 from foxgen.application.reconciliation import ReconciliationService
+from foxgen.application.reference_memory import ReferenceMemoryService
 from foxgen.application.submissions import SubmissionReceipt, SubmissionService
 from foxgen.core.config import Settings, get_settings
 from foxgen.core.errors import ErrorCode, FoxGenError, WebhookVerificationError
@@ -41,6 +48,12 @@ from foxgen.infra.input_media import LocalInputMediaStorage, input_media_content
 from foxgen.infra.media import S3MediaStorage
 from foxgen.infra.miniapp import SqlAlchemyMiniAppRepository
 from foxgen.infra.publications import SqlAlchemyPublicationRepository
+from foxgen.infra.reference_media import (
+    ReferenceMediaDelivery,
+    ReferenceMediaUrlSigner,
+    S3ReferenceMediaReader,
+)
+from foxgen.infra.reference_memory import SqlAlchemyReferenceMemoryRepository
 from foxgen.infra.rate_limit import RedisSubmissionRateLimiter
 from foxgen.infra.redis import RedisPool
 from foxgen.infra.repositories import SqlAlchemyGenerationRepository
@@ -159,6 +172,8 @@ def _error_status(code: ErrorCode) -> int:
         ErrorCode.RATE_LIMITED: 429,
         ErrorCode.CONCURRENCY_LIMITED: 429,
         ErrorCode.SUBMISSION_DISABLED: 503,
+        ErrorCode.INPUT_DOWNLOAD_FAILED: 503,
+        ErrorCode.INPUT_STORAGE_FAILED: 503,
         ErrorCode.PROVIDER_UNAVAILABLE: 503,
         ErrorCode.PROVIDER_PROTOCOL: 502,
         ErrorCode.PROVIDER_REJECTED: 422,
@@ -195,19 +210,77 @@ def _secret_value(value: SecretStr | None) -> str | None:
     return value.get_secret_value()
 
 
-def _miniapp_repository(settings: Settings, database: Database) -> SqlAlchemyMiniAppRepository:
-    media_signer = S3MediaStorage(
+def _s3_storage(settings: Settings, *, ttl_seconds: int) -> S3MediaStorage:
+    return S3MediaStorage(
         bucket=settings.s3_bucket,
         region=settings.s3_region,
-        endpoint_url=str(settings.s3_endpoint_url)
-        if settings.s3_endpoint_url is not None
-        else None,
+        endpoint_url=(
+            str(settings.s3_endpoint_url) if settings.s3_endpoint_url is not None else None
+        ),
         access_key_id=_secret_value(settings.s3_access_key_id),
         secret_access_key=_secret_value(settings.s3_secret_access_key),
         force_path_style=settings.s3_force_path_style,
-        presigned_url_ttl_seconds=settings.miniapp_media_url_ttl_seconds,
+        presigned_url_ttl_seconds=ttl_seconds,
     )
-    return SqlAlchemyMiniAppRepository(database, media_signer)
+
+
+def _miniapp_repository(settings: Settings, database: Database) -> SqlAlchemyMiniAppRepository:
+    return SqlAlchemyMiniAppRepository(
+        database,
+        _s3_storage(settings, ttl_seconds=settings.miniapp_media_url_ttl_seconds),
+    )
+
+
+def _reference_memory_components(
+    settings: Settings,
+    database: Database,
+) -> tuple[ReferenceMemoryService | None, ReferenceMediaDelivery | None]:
+    internal_token = settings.internal_api_token
+    if internal_token is None:
+        return None, None
+
+    secret = internal_token.get_secret_value()
+    repository = SqlAlchemyReferenceMemoryRepository(database)
+    signer = ReferenceMediaUrlSigner(
+        public_base_url=settings.telegram_input_public_base_url,
+        secret=secret,
+        ttl_seconds=settings.reference_memory_presigned_url_ttl_seconds,
+    )
+    input_source = LocalInputMediaStorage(
+        root=settings.telegram_input_storage_root,
+        public_base_url=settings.telegram_input_public_base_url,
+        signing_secret=secret,
+        presigned_url_ttl_seconds=settings.telegram_input_presigned_url_ttl_seconds,
+        retention_seconds=settings.telegram_input_retention_seconds,
+    )
+    storage = _s3_storage(
+        settings,
+        ttl_seconds=settings.reference_memory_presigned_url_ttl_seconds,
+    )
+    service = ReferenceMemoryService(
+        repository=repository,
+        input_source=input_source,
+        storage=storage,
+        url_signer=signer,
+        max_items=settings.reference_memory_max_items,
+        max_bytes=settings.reference_memory_max_total_bytes,
+    )
+    reader = S3ReferenceMediaReader(
+        bucket=settings.s3_bucket,
+        region=settings.s3_region,
+        endpoint_url=(
+            str(settings.s3_endpoint_url) if settings.s3_endpoint_url is not None else None
+        ),
+        access_key_id=_secret_value(settings.s3_access_key_id),
+        secret_access_key=_secret_value(settings.s3_secret_access_key),
+        force_path_style=settings.s3_force_path_style,
+    )
+    delivery = ReferenceMediaDelivery(
+        repository=repository,
+        reader=reader,
+        signer=signer,
+    )
+    return service, delivery
 
 
 def create_app(
@@ -221,6 +294,8 @@ def create_app(
     reconciliation_service: ReconciliationProtocol | None = None,
     miniapp_repository: MiniAppRepositoryProtocol | None = None,
     publication_service: PublicationServiceProtocol | None = None,
+    reference_memory_service: ReferenceMemoryServiceProtocol | None = None,
+    reference_media_delivery: ReferenceMediaDeliveryProtocol | None = None,
     admin_services: AdminServices | None = None,
 ) -> FastAPI:
     resolved_settings = settings or get_settings()
@@ -270,6 +345,12 @@ def create_app(
             app.state.miniapp_repository = _miniapp_repository(resolved_settings, database)
         if app.state.publication_service is None:
             app.state.publication_service = SqlAlchemyPublicationRepository(database)
+        if app.state.reference_memory_service is None or app.state.reference_media_delivery is None:
+            memory_service, media_delivery = _reference_memory_components(resolved_settings, database)
+            if app.state.reference_memory_service is None:
+                app.state.reference_memory_service = memory_service
+            if app.state.reference_media_delivery is None:
+                app.state.reference_media_delivery = media_delivery
 
         try:
             yield
@@ -291,11 +372,15 @@ def create_app(
     app.state.reconciliation_service = reconciliation_service
     app.state.miniapp_repository = miniapp_repository
     app.state.publication_service = publication_service
+    app.state.reference_memory_service = reference_memory_service
+    app.state.reference_media_delivery = reference_media_delivery
     app.state.admin_services = admin_services
     app.include_router(create_billing_router(resolved_settings))
     app.include_router(create_generation_router(resolved_settings))
     app.include_router(create_publication_router(resolved_settings))
     app.include_router(create_publication_media_router(resolved_settings))
+    app.include_router(create_reference_memory_router(resolved_settings))
+    app.include_router(create_reference_media_router())
     if resolved_settings.miniapp_enabled:
         app.include_router(create_miniapp_router(resolved_settings))
     app.include_router(create_admin_router(resolved_settings))

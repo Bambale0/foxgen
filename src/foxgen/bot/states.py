@@ -14,6 +14,11 @@ class GenerationStates(StatesGroup):
     video_configuring = State()
     video_waiting_prompt = State()
 
+    # Durable reference-memory browser. Selection/navigation is ephemeral Redis
+    # FSM state; the image bytes and ownership metadata are durable S3/PostgreSQL state.
+    reference_memory_browsing = State()
+    reference_memory_adding = State()
+
     # Quick Start/reference entrypoints keep their dedicated states so stored
     # Telegram inputs remain recoverable across navigation.
     quick_start_waiting_media = State()

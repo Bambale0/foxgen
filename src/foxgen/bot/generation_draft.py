@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, TypedDict
+from typing import Any, NotRequired, TypedDict
 from uuid import uuid4
 
 from foxgen.bot.generation_capabilities import (
@@ -21,7 +21,8 @@ MAX_VIDEO_REFERENCE_TOTAL = 6
 
 class StoredInput(TypedDict):
     kind: str
-    storage_key: str
+    storage_key: NotRequired[str]
+    reference_id: NotRequired[str]
 
 
 class ResolvedInput(TypedDict):
@@ -88,9 +89,28 @@ def stored_media(data: dict[str, Any] | dict[str, object]) -> list[StoredInput]:
             continue
         kind = item.get("kind")
         storage_key = item.get("storage_key")
-        if isinstance(kind, str) and isinstance(storage_key, str):
-            result.append({"kind": kind, "storage_key": storage_key})
+        reference_id = item.get("reference_id")
+        if not isinstance(kind, str):
+            continue
+        has_storage_key = isinstance(storage_key, str) and bool(storage_key)
+        has_reference_id = isinstance(reference_id, str) and bool(reference_id)
+        if has_storage_key == has_reference_id:
+            continue
+        if has_storage_key:
+            result.append({"kind": kind, "storage_key": str(storage_key)})
+        else:
+            result.append({"kind": kind, "reference_id": str(reference_id)})
     return result
+
+
+def temporary_storage_keys(media: list[StoredInput]) -> tuple[str, ...]:
+    return tuple(item["storage_key"] for item in media if isinstance(item.get("storage_key"), str))
+
+
+def saved_reference_ids(media: list[StoredInput]) -> tuple[str, ...]:
+    return tuple(
+        item["reference_id"] for item in media if isinstance(item.get("reference_id"), str)
+    )
 
 
 def image_capability(data: dict[str, Any] | dict[str, object]) -> ImageModelCapability:

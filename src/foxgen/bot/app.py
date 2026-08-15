@@ -25,6 +25,7 @@ from foxgen.bot.generation_wizard import router as generation_wizard_router
 from foxgen.bot.keyboards import main_menu, resolve_miniapp_url
 from foxgen.bot.quick_start import router as quick_start_router
 from foxgen.bot.quick_start_wizard import router as quick_start_wizard_router
+from foxgen.bot.reference_memory import router as reference_memory_router
 from foxgen.bot.uploads import TelegramInputMediaStorage, stored_input_keys
 from foxgen.core.config import Settings, get_settings
 from foxgen.infra.input_media import LocalInputMediaStorage
@@ -203,6 +204,9 @@ def register_runtime_routers(dispatcher: Dispatcher) -> None:
     # post-upload product/model/settings branch with the same screen wizard used
     # by ordinary Create Image / Create Video entrypoints.
     dispatcher.include_router(quick_start_wizard_router)
+    # Reference memory owns its browser states and reference-aware cleanup/final
+    # admission before the generic generation wizard sees the same callbacks.
+    dispatcher.include_router(reference_memory_router)
     dispatcher.include_router(generation_wizard_router)
     # Keep old routers after the wizard for deployed Redis draft compatibility.
     dispatcher.include_router(quick_start_router)
