@@ -35,3 +35,12 @@ class GenerationStates(StatesGroup):
 
     confirming = State()
     submitting = State()
+
+
+class FeedStates(StatesGroup):
+    waiting_comment = State()
+    editing_profile_slug = State()
+    editing_profile_name = State()
+    editing_profile_bio = State()
+    waiting_publish_generation = State()
+    choosing_publish_scope = State()

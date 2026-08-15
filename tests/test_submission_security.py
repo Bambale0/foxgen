@@ -20,6 +20,7 @@ class FakeSubmissionService:
         model_slug: str,
         input_data: dict[str, object],
         idempotency_key: str,
+        source_publication_id: UUID | None = None,
     ) -> SubmissionReceipt:
         self.calls.append(
             {
@@ -28,6 +29,7 @@ class FakeSubmissionService:
                 "model_slug": model_slug,
                 "input_data": input_data,
                 "idempotency_key": idempotency_key,
+                "source_publication_id": source_publication_id,
             }
         )
         return SubmissionReceipt(
@@ -116,5 +118,33 @@ def test_valid_internal_request_requires_user_and_idempotency_identity() -> None
             "model_slug": "seedream-5-pro",
             "input_data": {"prompt": "A premium fox portrait"},
             "idempotency_key": "request-0001",
+            "source_publication_id": None,
         }
     ]
+
+
+def test_remix_source_header_reaches_submission_service() -> None:
+    service = FakeSubmissionService()
+    settings = Settings(
+        env="test",
+        task_submission_enabled=True,
+        internal_api_token="correct-token",
+        kie_api_key="test-kie-key",
+    )
+    app = create_app(settings, manage_resources=False, submission_service=service)
+    source = UUID("99999999-9999-9999-9999-999999999999")
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/v1/models/seedream-5-pro/tasks",
+            headers={
+                "Authorization": "Bearer correct-token",
+                "Idempotency-Key": "request-remix-0001",
+                "X-FoxGen-User-Id": "42",
+                "X-FoxGen-Source-Publication-Id": str(source),
+            },
+            json={"input": {"prompt": "A remix fox portrait"}},
+        )
+
+    assert response.status_code == 202
+    assert service.calls[0]["source_publication_id"] == source

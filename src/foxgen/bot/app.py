@@ -15,6 +15,10 @@ from foxgen.bot.admin_api_client import AdminApiClient
 from foxgen.bot.admin_extras import router as admin_extras_router
 from foxgen.bot.api_client import FoxGenApiClient
 from foxgen.bot.callbacks import safe_edit_callback_message
+from foxgen.bot.feed import handle_start_payload
+from foxgen.bot.feed import router as feed_router
+from foxgen.bot.feed_publish import router as feed_publish_router
+from foxgen.bot.feed_remix import router as feed_remix_router
 from foxgen.bot.flows import router as generation_router
 from foxgen.bot.fsm_contract import contract_for
 from foxgen.bot.generation_wizard import router as generation_wizard_router
@@ -51,10 +55,16 @@ async def show_menu(
     message: Message,
     state: FSMContext,
     input_media: TelegramInputMediaStorage,
+    api_client: FoxGenApiClient | None = None,
 ) -> None:
-    """Interrupt any active FSM draft and return to the canonical entrypoint."""
+    """Interrupt any active FSM draft, then dispatch a safe deep link or main menu."""
 
     await clear_state_with_inputs(state, input_media)
+    text = message.text or ""
+    payload = text.partition(" ")[2].strip() if text.startswith("/start") else ""
+    if payload and api_client is not None:
+        if await handle_start_payload(message, state, api_client, payload):
+            return
     await message.answer(
         "<b>FoxGen</b>\n\nВыберите раздел.",
         reply_markup=main_menu(),
@@ -186,6 +196,9 @@ def register_runtime_routers(dispatcher: Dispatcher) -> None:
     dispatcher.include_router(global_commands_router)
     dispatcher.include_router(admin_extras_router)
     dispatcher.include_router(admin_router)
+    dispatcher.include_router(feed_router)
+    dispatcher.include_router(feed_publish_router)
+    dispatcher.include_router(feed_remix_router)
     # Quick Start already owns reference upload. This bridge only replaces its
     # post-upload product/model/settings branch with the same screen wizard used
     # by ordinary Create Image / Create Video entrypoints.
