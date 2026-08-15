@@ -1,0 +1,135 @@
+name: User portal runtime wiring once
+
+on:
+  push:
+    branches:
+      - agent/user-portal-parity
+
+permissions:
+  contents: write
+
+jobs:
+  wire:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+      - name: Wire owner portal into FastAPI and Happy Fox
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path: str, old: str, new: str) -> None:
+              p = Path(path)
+              text = p.read_text(encoding='utf-8')
+              if new in text:
+                  return
+              if old not in text:
+                  raise SystemExit(f'expected block not found in {path}: {old[:120]!r}')
+              p.write_text(text.replace(old, new, 1), encoding='utf-8')
+
+          replace_once(
+              'src/foxgen/api/app.py',
+              'from foxgen.api.security import authenticate_submission, validate_idempotency_key\n',
+              'from foxgen.api.security import authenticate_submission, validate_idempotency_key\n'
+              'from foxgen.api.user_portal import create_user_portal_router\n',
+          )
+          replace_once(
+              'src/foxgen/api/app.py',
+              'from foxgen.application.submissions import SubmissionReceipt, SubmissionService\n',
+              'from foxgen.application.submissions import SubmissionReceipt, SubmissionService\n'
+              'from foxgen.application.user_portal import UserPortalServiceProtocol\n',
+          )
+          replace_once(
+              'src/foxgen/api/app.py',
+              'from foxgen.infra.redis import RedisPool\n',
+              'from foxgen.infra.redis import RedisPool\n'
+              'from foxgen.infra.user_portal import SqlAlchemyUserPortalService\n',
+          )
+          replace_once(
+              'src/foxgen/api/app.py',
+              '    reference_media_delivery: ReferenceMediaDeliveryProtocol | None = None,\n    admin_services: AdminServices | None = None,',
+              '    reference_media_delivery: ReferenceMediaDeliveryProtocol | None = None,\n'
+              '    user_portal_service: UserPortalServiceProtocol | None = None,\n'
+              '    admin_services: AdminServices | None = None,',
+          )
+          replace_once(
+              'src/foxgen/api/app.py',
+              '        if app.state.publication_service is None:\n            app.state.publication_service = SqlAlchemyPublicationRepository(database)\n',
+              '        if app.state.publication_service is None:\n'
+              '            app.state.publication_service = SqlAlchemyPublicationRepository(database)\n'
+              '        if app.state.user_portal_service is None:\n'
+              '            app.state.user_portal_service = SqlAlchemyUserPortalService(database)\n',
+          )
+          replace_once(
+              'src/foxgen/api/app.py',
+              '    app.state.reference_media_delivery = reference_media_delivery\n    app.state.admin_services = admin_services',
+              '    app.state.reference_media_delivery = reference_media_delivery\n'
+              '    app.state.user_portal_service = user_portal_service\n'
+              '    app.state.admin_services = admin_services',
+          )
+          replace_once(
+              'src/foxgen/api/app.py',
+              '    app.include_router(create_reference_media_router())\n    if resolved_settings.miniapp_enabled:',
+              '    app.include_router(create_reference_media_router())\n'
+              '    app.include_router(create_user_portal_router(resolved_settings))\n'
+              '    if resolved_settings.miniapp_enabled:',
+          )
+
+          replace_once(
+              'src/foxgen/api/miniapp.py',
+              'from foxgen.api.miniapp_security import (\n',
+              'from foxgen.api.miniapp_security import (\n',
+          )
+          p = Path('src/foxgen/api/miniapp.py')
+          text = p.read_text(encoding='utf-8')
+          import_line = 'from foxgen.api.user_portal import create_miniapp_user_portal_router\n'
+          if import_line not in text:
+              marker = 'from foxgen.application.media import DownloadedMedia\n'
+              if marker not in text:
+                  raise SystemExit('miniapp import marker not found')
+              text = text.replace(marker, import_line + marker, 1)
+          include = '    router.include_router(create_miniapp_user_portal_router(settings))\n'
+          if include not in text:
+              marker = '    router.include_router(create_miniapp_parity_router(settings))\n    return router\n'
+              if marker not in text:
+                  raise SystemExit('miniapp child router marker not found')
+              text = text.replace(
+                  marker,
+                  '    router.include_router(create_miniapp_parity_router(settings))\n'
+                  + include
+                  + '    return router\n',
+                  1,
+              )
+          p.write_text(text, encoding='utf-8')
+
+          # Keep schema import type-safe in infra implementation.
+          p = Path('src/foxgen/infra/user_portal.py')
+          text = p.read_text(encoding='utf-8')
+          if 'from sqlalchemy.ext.asyncio import AsyncSession\n' not in text:
+              text = text.replace(
+                  'from sqlalchemy.dialects.postgresql import insert as pg_insert\n',
+                  'from sqlalchemy.dialects.postgresql import insert as pg_insert\n'
+                  'from sqlalchemy.ext.asyncio import AsyncSession\n',
+              )
+          text = text.replace(
+              'async def _ensure_user(session: object, *, user_id: int, username: str | None)',
+              'async def _ensure_user(session: AsyncSession, *, user_id: int, username: str | None)',
+          )
+          text = text.replace(
+              'async def _pending_withdrawal_units(session: object, *, user_id: int)',
+              'async def _pending_withdrawal_units(session: AsyncSession, *, user_id: int)',
+          )
+          p.write_text(text, encoding='utf-8')
+          PY
+          git diff --check
+      - name: Commit
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/foxgen/api/app.py src/foxgen/api/miniapp.py src/foxgen/infra/user_portal.py
+          git commit -m 'feat(portal): wire user support tariffs and partners'
+          git push origin HEAD:agent/user-portal-parity
