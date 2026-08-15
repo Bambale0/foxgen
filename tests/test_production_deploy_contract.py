@@ -39,8 +39,8 @@ def test_deploy_smokes_public_happy_fox_and_telegram_menu() -> None:
 def test_streamed_deploy_disables_stdin_for_one_shot_compose_runs() -> None:
     script = _deploy_script()
 
-    assert "compose run -T --rm minio-init" in script
-    assert "compose run -T --rm migrate" in script
+    assert "compose run -T --rm minio-init </dev/null" in script
+    assert "compose run -T --rm migrate </dev/null" in script
     assert "compose run --rm minio-init" not in script
     assert "compose run --rm migrate" not in script
 
