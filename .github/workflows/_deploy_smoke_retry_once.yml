@@ -1,0 +1,51 @@
+name: Deploy smoke retry patch once
+
+on:
+  push:
+    branches:
+      - agent/deploy-smoke-retry
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+      - name: Patch bounded public/Telegram smoke retries
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('scripts/deploy-production.sh')
+          text = path.read_text(encoding='utf-8')
+
+          old = '''verify_telegram_menu() {\n  local miniapp_url bot_token menu_json\n  miniapp_url="$1"\n  bot_token="$(read_env_value FOXGEN_TELEGRAM_BOT_TOKEN)"\n  sleep 2\n  menu_json="$(\n    curl --fail --silent --show-error --max-time 15 \\\n      "https://api.telegram.org/bot${bot_token}/getChatMenuButton"\n  )"\n  MINIAPP_URL="$miniapp_url" MENU_JSON="$menu_json" python3 - <<'PY'\nimport json\nimport os\n\nexpected = os.environ["MINIAPP_URL"].rstrip("/") + "/"\npayload = json.loads(os.environ["MENU_JSON"])\nif payload.get("ok") is not True:\n    raise SystemExit("Telegram getChatMenuButton returned ok=false")\nresult = payload.get("result") or {}\nif result.get("type") != "web_app":\n    raise SystemExit("Telegram default chat menu is not web_app")\nif result.get("text") != "Happy Fox":\n    raise SystemExit("Telegram default chat menu text is not Happy Fox")\nactual = ((result.get("web_app") or {}).get("url") or "").rstrip("/") + "/"\nif actual != expected:\n    raise SystemExit("Telegram default chat menu URL does not match Happy Fox")\nPY\n}\n'''
+          new = '''verify_public_miniapp() {\n  local miniapp_url attempt\n  miniapp_url="$1"\n  for attempt in $(seq 1 15); do\n    if curl --fail --silent --show-error --location --max-time 15 "$miniapp_url" | \\\n      grep -q 'Happy Fox'; then\n      return 0\n    fi\n    log "public Happy Fox smoke attempt ${attempt}/15 not ready; retrying in 2s"\n    sleep 2\n  done\n  return 1\n}\n\nverify_telegram_menu() {\n  local miniapp_url bot_token menu_json attempt\n  miniapp_url="$1"\n  bot_token="$(read_env_value FOXGEN_TELEGRAM_BOT_TOKEN)"\n  for attempt in $(seq 1 15); do\n    if menu_json="$(\n      curl --fail --silent --show-error --max-time 15 \\\n        "https://api.telegram.org/bot${bot_token}/getChatMenuButton"\n    )" && MINIAPP_URL="$miniapp_url" MENU_JSON="$menu_json" python3 - <<'PY'\nimport json\nimport os\n\nexpected = os.environ["MINIAPP_URL"].rstrip("/") + "/"\npayload = json.loads(os.environ["MENU_JSON"])\nif payload.get("ok") is not True:\n    raise SystemExit(1)\nresult = payload.get("result") or {}\nif result.get("type") != "web_app":\n    raise SystemExit(1)\nif result.get("text") != "Happy Fox":\n    raise SystemExit(1)\nactual = ((result.get("web_app") or {}).get("url") or "").rstrip("/") + "/"\nif actual != expected:\n    raise SystemExit(1)\nPY\n    then\n      return 0\n    fi\n    log "Telegram Happy Fox menu attempt ${attempt}/15 not ready; retrying in 2s"\n    sleep 2\n  done\n  return 1\n}\n'''
+          if old not in text:
+              raise SystemExit('verify_telegram_menu block changed unexpectedly')
+          text = text.replace(old, new, 1)
+
+          old_smoke = '''  log "checking public Happy Fox Mini App"\n  curl --fail --silent --show-error --location --max-time 15 "$MINIAPP_URL" | \\\n    grep -q 'Happy Fox' || fail "public Happy Fox Mini App smoke failed"\n  verify_telegram_menu "$MINIAPP_URL" || fail "Telegram Happy Fox menu verification failed"\n'''
+          new_smoke = '''  log "checking public Happy Fox Mini App with bounded post-reload retry"\n  verify_public_miniapp "$MINIAPP_URL" || \\\n    fail "public Happy Fox Mini App did not become ready within 30s"\n  verify_telegram_menu "$MINIAPP_URL" || \\\n    fail "Telegram Happy Fox menu did not converge within 30s"\n'''
+          if old_smoke not in text:
+              raise SystemExit('public smoke block changed unexpectedly')
+          text = text.replace(old_smoke, new_smoke, 1)
+          path.write_text(text, encoding='utf-8')
+
+          Path('tests/test_deploy_smoke_contract.py').write_text('''from pathlib import Path\n\n\ndef test_deploy_retries_happy_fox_smokes_after_nginx_reload() -> None:\n    script = Path("scripts/deploy-production.sh").read_text(encoding="utf-8")\n    assert "verify_public_miniapp()" in script\n    assert "for attempt in $(seq 1 15)" in script\n    assert "public Happy Fox Mini App did not become ready within 30s" in script\n    assert "Telegram Happy Fox menu did not converge within 30s" in script\n    assert "assert_service_image" in script\n    assert "verify_live_bot_webapp_code" in script\n    assert "curl --fail" in script\n''', encoding='utf-8')
+          PY
+          bash -n scripts/deploy-production.sh
+          git diff --check
+      - name: Commit
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add scripts/deploy-production.sh tests/test_deploy_smoke_contract.py
+          git commit -m 'fix(deploy): retry Happy Fox smoke after nginx reload'
+          git push origin HEAD:agent/deploy-smoke-retry
