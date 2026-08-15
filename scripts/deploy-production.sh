@@ -360,10 +360,10 @@ wait_for_container redis healthy 120
 wait_for_container minio none 120
 
 log "ensuring the private media bucket exists"
-compose run --rm minio-init
+compose run -T --rm minio-init
 
 log "applying database migrations"
-compose run --rm migrate
+compose run -T --rm migrate
 
 log "force-recreating API, worker and Telegram bot from $EXPECTED_IMAGE"
 compose up -d --force-recreate --no-deps api worker bot
