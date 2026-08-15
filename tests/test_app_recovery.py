@@ -5,7 +5,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
 from foxgen.bot.app import fallback_message, show_menu, stale_callback
-from foxgen.bot.states import GenerationStates
+from foxgen.bot.states import FeedStates, GenerationStates
 from foxgen.bot.uploads import InputCleanupResult, TelegramInputMediaStorage
 
 
@@ -53,8 +53,14 @@ class StubMessage:
         self.answers.append((text, kwargs))
 
 
-@pytest.mark.parametrize("current", [state.state for state in GenerationStates.__all_states__])
-async def test_start_interrupts_every_generation_state_and_cleans_inputs(current: str) -> None:
+ALL_FSM_STATES = [
+    *(state.state for state in GenerationStates.__all_states__),
+    *(state.state for state in FeedStates.__all_states__),
+]
+
+
+@pytest.mark.parametrize("current", ALL_FSM_STATES)
+async def test_start_interrupts_every_fsm_state_and_cleans_inputs(current: str) -> None:
     state = StubState(
         current,
         data={"media": [{"kind": "image", "storage_key": "inputs/7/file.jpg"}]},

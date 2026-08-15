@@ -42,6 +42,15 @@ def main_menu(*, miniapp_url: str | None = None) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [miniapp_button],
+            [
+                InlineKeyboardButton(text="🌐 Лента", callback_data="feed:open"),
+                InlineKeyboardButton(text="👤 Профиль", callback_data="feed:profile:me"),
+            ],
+            [
+                InlineKeyboardButton(
+                    text="📣 Опубликовать генерацию", callback_data="feed:publish:start"
+                )
+            ],
             [InlineKeyboardButton(text="Быстрый запуск", callback_data="quick:start")],
             [
                 InlineKeyboardButton(text="Создать видео", callback_data="create:video"),
@@ -236,10 +245,28 @@ def confirmation_keyboard(*, can_submit: bool = True) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def after_submit_keyboard() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
+def after_submit_keyboard(generation_id: str | None = None) -> InlineKeyboardMarkup:
+    rows: list[list[InlineKeyboardButton]] = []
+    if generation_id:
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text="🌐 В ленту",
+                    callback_data=f"feed:publish:feed:{generation_id}",
+                ),
+                InlineKeyboardButton(
+                    text="👤 В профиль",
+                    callback_data=f"feed:publish:profile:{generation_id}",
+                ),
+            ]
+        )
+    rows.extend(
+        [
             [InlineKeyboardButton(text="➕ Создать ещё", callback_data="nav:menu")],
-            [InlineKeyboardButton(text="💳 Баланс", callback_data="account:balance")],
+            [
+                InlineKeyboardButton(text="🌐 Лента", callback_data="feed:open"),
+                InlineKeyboardButton(text="💳 Баланс", callback_data="account:balance"),
+            ],
         ]
     )
+    return InlineKeyboardMarkup(inline_keyboard=rows)

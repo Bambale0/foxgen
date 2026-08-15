@@ -26,6 +26,8 @@ from foxgen.api.generations import (
     create_generation_router,
 )
 from foxgen.api.miniapp import MiniAppRepositoryProtocol, create_miniapp_router
+from foxgen.api.publication_media import create_publication_media_router
+from foxgen.api.publications import PublicationServiceProtocol, create_publication_router
 from foxgen.api.security import authenticate_submission, validate_idempotency_key
 from foxgen.application.generation_ops import GenerationOperationsService
 from foxgen.application.reconciliation import ReconciliationService
@@ -38,6 +40,7 @@ from foxgen.infra.database import Database
 from foxgen.infra.input_media import LocalInputMediaStorage, input_media_content_type
 from foxgen.infra.media import S3MediaStorage
 from foxgen.infra.miniapp import SqlAlchemyMiniAppRepository
+from foxgen.infra.publications import SqlAlchemyPublicationRepository
 from foxgen.infra.rate_limit import RedisSubmissionRateLimiter
 from foxgen.infra.redis import RedisPool
 from foxgen.infra.repositories import SqlAlchemyGenerationRepository
@@ -65,6 +68,7 @@ class SubmissionServiceProtocol(Protocol):
         model_slug: str,
         input_data: dict[str, object],
         idempotency_key: str,
+        source_publication_id: UUID | None = None,
     ) -> SubmissionReceipt: ...
 
 
@@ -216,6 +220,7 @@ def create_app(
     generation_operations: GenerationOperationsProtocol | None = None,
     reconciliation_service: ReconciliationProtocol | None = None,
     miniapp_repository: MiniAppRepositoryProtocol | None = None,
+    publication_service: PublicationServiceProtocol | None = None,
     admin_services: AdminServices | None = None,
 ) -> FastAPI:
     resolved_settings = settings or get_settings()
@@ -263,6 +268,8 @@ def create_app(
             app.state.reconciliation_service = ReconciliationService(lifecycle_repository)
         if app.state.miniapp_repository is None:
             app.state.miniapp_repository = _miniapp_repository(resolved_settings, database)
+        if app.state.publication_service is None:
+            app.state.publication_service = SqlAlchemyPublicationRepository(database)
 
         try:
             yield
@@ -283,9 +290,12 @@ def create_app(
     app.state.generation_operations = generation_operations
     app.state.reconciliation_service = reconciliation_service
     app.state.miniapp_repository = miniapp_repository
+    app.state.publication_service = publication_service
     app.state.admin_services = admin_services
     app.include_router(create_billing_router(resolved_settings))
     app.include_router(create_generation_router(resolved_settings))
+    app.include_router(create_publication_router(resolved_settings))
+    app.include_router(create_publication_media_router(resolved_settings))
     if resolved_settings.miniapp_enabled:
         app.include_router(create_miniapp_router(resolved_settings))
     app.include_router(create_admin_router(resolved_settings))
@@ -389,6 +399,9 @@ def create_app(
         idempotency_key_header: str | None = Header(default=None, alias="Idempotency-Key"),
         user_id_header: str | None = Header(default=None, alias="X-FoxGen-User-Id"),
         username: str | None = Header(default=None, alias="X-FoxGen-Username"),
+        source_publication_id: UUID | None = Header(
+            default=None, alias="X-FoxGen-Source-Publication-Id"
+        ),
     ) -> dict[str, Any]:
         principal = authenticate_submission(
             settings=resolved_settings,
@@ -413,6 +426,7 @@ def create_app(
             model_slug=slug,
             input_data=body.input,
             idempotency_key=idempotency_key,
+            source_publication_id=source_publication_id,
         )
         return receipt_payload(receipt)
 

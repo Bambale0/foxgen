@@ -11,6 +11,7 @@ class FakeRepository:
     def __init__(self) -> None:
         self.items: dict[tuple[int, str], GenerationSnapshot] = {}
         self.admissions = 0
+        self.source_publication_ids: list[UUID | None] = []
 
     async def find_by_idempotency(
         self,
@@ -31,11 +32,13 @@ class FakeRepository:
         media_kind: MediaKind,
         prompt: str | None,
         input_payload: dict[str, object],
+        source_publication_id: UUID | None,
         user_concurrency_limit: int,
         global_concurrency_limit: int,
     ) -> tuple[GenerationSnapshot, bool]:
         del username, media_kind, prompt, input_payload, user_concurrency_limit
         del global_concurrency_limit
+        self.source_publication_ids.append(source_publication_id)
         key = (user_id, idempotency_key)
         existing = self.items.get(key)
         if existing is not None:
@@ -116,3 +119,33 @@ async def test_same_idempotency_key_rejects_different_request() -> None:
         )
 
     assert error.value.code == ErrorCode.IDEMPOTENCY_CONFLICT
+
+
+@pytest.mark.asyncio
+async def test_same_idempotency_key_rejects_changed_remix_source() -> None:
+    repository = FakeRepository()
+    service = SubmissionService(repository=repository, rate_limiter=FakeRateLimiter())
+    first_source = UUID("11111111-1111-1111-1111-111111111111")
+    second_source = UUID("33333333-3333-3333-3333-333333333333")
+
+    await service.submit(
+        user_id=42,
+        username=None,
+        model_slug="seedream-5-pro",
+        input_data={"prompt": "Remix prompt"},
+        idempotency_key="request-remix-0001",
+        source_publication_id=first_source,
+    )
+
+    with pytest.raises(SubmissionError) as error:
+        await service.submit(
+            user_id=42,
+            username=None,
+            model_slug="seedream-5-pro",
+            input_data={"prompt": "Remix prompt"},
+            idempotency_key="request-remix-0001",
+            source_publication_id=second_source,
+        )
+
+    assert error.value.code == ErrorCode.IDEMPOTENCY_CONFLICT
+    assert repository.source_publication_ids == [first_source]
