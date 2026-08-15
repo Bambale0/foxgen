@@ -1,0 +1,31 @@
+name: Synchronize Happy Fox API docs once
+
+on:
+  push:
+    branches: [agent/miniapp-full-backend-frontend]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: agent/miniapp-full-backend-frontend
+          fetch-depth: 0
+      - name: Synchronize README and API reference
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python -c 'from pathlib import Path; p=Path("docs/api-reference.md"); s=p.read_text(encoding="utf-8"); old="This reference describes routes actually registered by the current FastAPI application. The public Mini App is outside scope; `/internal/admin/ui` is a backend-only operator surface."; new="This reference describes routes actually registered by the current FastAPI application, including the public Happy Fox Mini App. `/internal/admin/ui` remains a backend-only operator surface."; assert s.count(old)==1; s=s.replace(old,new); marker="# Registered signed internal admin API"; section="""# Happy Fox public Mini App API\n\nHappy Fox uses a short-lived Telegram-derived JWT. These routes are owner-scoped/read-only except for paid task admission, safe cancellation and private input-media lifecycle. Internal/admin credentials are never accepted by or exposed to the browser.\n\n| Method | Path | Purpose |\n|---|---|---|\n| POST | `/v1/miniapp/auth` | Validate Telegram `initData` and issue Mini App JWT |\n| GET | `/v1/miniapp/bootstrap` | Initial user, wallet, prices, compact ledger, model schemas, recent jobs, feature flags and limits |\n| GET | `/v1/miniapp/models` | Submission-enabled model catalog + JSON schemas |\n| GET | `/v1/miniapp/models/{model_slug}` | Submission-enabled model detail |\n| POST | `/v1/miniapp/models/{model_slug}/validate` | Free model-contract validation and normalization |\n| GET | `/v1/miniapp/balance` | Current authenticated owner wallet projection |\n| GET | `/v1/miniapp/prices` | Current active prices |\n| GET | `/v1/miniapp/ledger` | Authenticated owner immutable ledger projection, max 200 |\n| GET | `/v1/miniapp/generations` | Authenticated owner history, max 100 |\n| GET | `/v1/miniapp/generations/{generation_id}` | Owner detail + short-lived stored-media URLs |\n| POST | `/v1/miniapp/generations/{generation_id}/cancel` | Existing safe pre-provider cancellation boundary |\n| POST | `/v1/miniapp/tasks` | Paid admission through shared `SubmissionService` + `Idempotency-Key` |\n| POST | `/v1/miniapp/input-media` | Authenticated private image/video/audio upload |\n| DELETE | `/v1/miniapp/input-media/{storage_key}` | Owner-scoped temporary input cleanup |\n\nThe frontend renders enabled model controls from the backend `input_schema` and calls the Mini App validation route before paid admission. The paid route validates again; browser validation is never a trust boundary. Wallet routes are projections only and cannot mutate balances.\n\n"""; assert s.count(marker)==1; p.write_text(s.replace(marker,section+marker),encoding="utf-8")'
+          python -c 'from pathlib import Path; p=Path("README.md"); s=p.read_text(encoding="utf-8"); old="- image creation for Seedream 5 Pro, Nano Banana 2 and Nano Banana Pro with optional private references and model-specific settings;\n- video creation for Seedance 2 / Mini with text, first-frame, first+last and multimodal-reference scenarios;"; new="- schema-driven creation studio for every submission-enabled backend model; controls, defaults, enums and media limits come from the reviewed backend `input_schema`;\n- image/video/audio input modes are wired to authenticated private uploads, including Seedance text, first-frame, first+last and multimodal-reference scenarios;"; assert s.count(old)==1; s=s.replace(old,new); old2="""POST   /v1/miniapp/auth\nGET    /v1/miniapp/bootstrap\nGET    /v1/miniapp/generations\nGET    /v1/miniapp/generations/{id}\nPOST   /v1/miniapp/generations/{id}/cancel\nPOST   /v1/miniapp/tasks\nPOST   /v1/miniapp/input-media\nDELETE /v1/miniapp/input-media/{storage_key}\n"""; new2="""POST   /v1/miniapp/auth\nGET    /v1/miniapp/bootstrap\nGET    /v1/miniapp/models\nGET    /v1/miniapp/models/{slug}\nPOST   /v1/miniapp/models/{slug}/validate\nGET    /v1/miniapp/balance\nGET    /v1/miniapp/prices\nGET    /v1/miniapp/ledger\nGET    /v1/miniapp/generations\nGET    /v1/miniapp/generations/{id}\nPOST   /v1/miniapp/generations/{id}/cancel\nPOST   /v1/miniapp/tasks\nPOST   /v1/miniapp/input-media\nDELETE /v1/miniapp/input-media/{storage_key}\n"""; assert s.count(old2)==1; p.write_text(s.replace(old2,new2),encoding="utf-8")'
+          git rm .github/workflows/_miniapp_docs_patch_once.yml
+          git diff --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add README.md docs/api-reference.md
+          git commit -m 'docs(miniapp): synchronize public frontend API surface'
+          git push origin HEAD:agent/miniapp-full-backend-frontend
