@@ -20,7 +20,6 @@ from foxgen.bot.keyboards import (
 from foxgen.bot.states import GenerationStates
 from foxgen.core.errors import ErrorCode, SubmissionError
 
-
 router = Router(name="foxgen-feed-remix")
 
 

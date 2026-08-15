@@ -11,7 +11,6 @@ from foxgen.bot.api_client import FoxGenApiClient, FoxGenApiError
 from foxgen.bot.callbacks import safe_edit_callback_message
 from foxgen.bot.states import FeedStates
 
-
 router = Router(name="foxgen-feed-publish")
 
 

@@ -10,7 +10,6 @@ from foxgen.infra.database import Database, Generation, MediaAsset, User
 from foxgen.infra.publication_models import GenerationLineage
 from foxgen.infra.publications import SqlAlchemyPublicationRepository
 
-
 pytestmark = pytest.mark.skipif(
     os.getenv("FOXGEN_RUN_INTEGRATION") != "1",
     reason="real infrastructure tests are enabled only in the CI infrastructure job",

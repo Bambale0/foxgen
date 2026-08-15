@@ -15,7 +15,8 @@ from foxgen.bot.admin_api_client import AdminApiClient
 from foxgen.bot.admin_extras import router as admin_extras_router
 from foxgen.bot.api_client import FoxGenApiClient
 from foxgen.bot.callbacks import safe_edit_callback_message
-from foxgen.bot.feed import handle_start_payload, router as feed_router
+from foxgen.bot.feed import handle_start_payload
+from foxgen.bot.feed import router as feed_router
 from foxgen.bot.feed_publish import router as feed_publish_router
 from foxgen.bot.feed_remix import router as feed_remix_router
 from foxgen.bot.flows import router as generation_router

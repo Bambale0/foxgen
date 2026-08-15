@@ -29,7 +29,6 @@ from foxgen.infra.publication_models import (
     PublicProfile,
 )
 
-
 _SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{2,55}$")
 
 
@@ -82,7 +81,9 @@ class SqlAlchemyPublicationRepository:
     async def get_profile(self, *, slug: str) -> PublicProfileView | None:
         normalized = slug.strip().lower()
         async with self._database.session() as session:
-            profile = await session.scalar(select(PublicProfile).where(PublicProfile.slug == normalized))
+            profile = await session.scalar(
+                select(PublicProfile).where(PublicProfile.slug == normalized)
+            )
             return _profile_view(profile) if profile is not None else None
 
     async def get_own_profile(
@@ -513,7 +514,9 @@ class SqlAlchemyPublicationRepository:
         base = _default_slug(user_id, username)
         candidate = base
         suffix = 0
-        while await session.scalar(select(PublicProfile.user_id).where(PublicProfile.slug == candidate)):
+        while await session.scalar(
+            select(PublicProfile.user_id).where(PublicProfile.slug == candidate)
+        ):
             suffix += 1
             tail = f"-{suffix}"
             candidate = f"{base[: 56 - len(tail)]}{tail}"
@@ -629,9 +632,7 @@ class SqlAlchemyPublicationRepository:
         lineages = {
             row.generation_id: row
             for row in await session.scalars(
-                select(GenerationLineage).where(
-                    GenerationLineage.generation_id.in_(generation_ids)
-                )
+                select(GenerationLineage).where(GenerationLineage.generation_id.in_(generation_ids))
             )
         }
         like_counts = dict(

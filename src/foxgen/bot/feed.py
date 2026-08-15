@@ -15,7 +15,6 @@ from foxgen.bot.catalog import GenerationMode, product_for_mode
 from foxgen.bot.keyboards import main_menu, model_keyboard
 from foxgen.bot.states import FeedStates, GenerationStates
 
-
 router = Router(name="foxgen-feed")
 _PROFILE_SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{2,55}$")
 _FEED_SORTS = {"recent", "top_day", "top"}
@@ -718,11 +717,7 @@ def _profile_text(profile: dict[str, object]) -> str:
 
 def _profile_keyboard(slug: str, *, own: bool) -> InlineKeyboardMarkup:
     rows: list[list[InlineKeyboardButton]] = [
-        [
-            InlineKeyboardButton(
-                text="🖼 Публикации", callback_data="feed:profile:page:0"
-            )
-        ],
+        [InlineKeyboardButton(text="🖼 Публикации", callback_data="feed:profile:page:0")],
     ]
     if own:
         rows.extend(
@@ -753,14 +748,10 @@ def _publication_text(item: dict[str, object], media_url: str | None) -> str:
         author_name = str(author.get("display_name") or author.get("slug") or author_name)
     prompt = item.get("prompt")
     prompt_line = (
-        f"\n\n<b>Промпт</b>\n{escape(str(prompt))}"
-        if isinstance(prompt, str) and prompt
-        else ""
+        f"\n\n<b>Промпт</b>\n{escape(str(prompt))}" if isinstance(prompt, str) and prompt else ""
     )
     media_line = (
-        f'\n\n<a href="{escape(media_url, quote=True)}">Открыть результат</a>'
-        if media_url
-        else ""
+        f'\n\n<a href="{escape(media_url, quote=True)}">Открыть результат</a>' if media_url else ""
     )
     return (
         f"<b>{escape(author_name)}</b> · {escape(str(item.get('model_slug') or 'model'))}\n"
@@ -828,12 +819,8 @@ def _publication_keyboard(
         if mode in _FEED_SORTS:
             rows.append(
                 [
-                    InlineKeyboardButton(
-                        text="⬅️", callback_data=f"feed:page:{mode}:{previous}"
-                    ),
-                    InlineKeyboardButton(
-                        text="➡️", callback_data=f"feed:page:{mode}:{next_offset}"
-                    ),
+                    InlineKeyboardButton(text="⬅️", callback_data=f"feed:page:{mode}:{previous}"),
+                    InlineKeyboardButton(text="➡️", callback_data=f"feed:page:{mode}:{next_offset}"),
                 ]
             )
             rows.append(

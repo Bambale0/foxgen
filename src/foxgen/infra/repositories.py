@@ -11,7 +11,6 @@ from foxgen.infra.billing import reserve_generation_charge
 from foxgen.infra.database import Database, Generation, OutboxEvent, User
 from foxgen.infra.publication_models import GenerationLineage, Publication
 
-
 _ACTIVE_STATUS_VALUES = tuple(status.value for status in ACTIVE_GENERATION_STATUSES)
 
 
