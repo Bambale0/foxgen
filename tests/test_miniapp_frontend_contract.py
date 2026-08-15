@@ -40,7 +40,7 @@ def test_frontend_does_not_fake_unimplemented_payment_flow() -> None:
 
     assert "payment endpoint" in script
     assert "Пополнение" in script
-    assert "data-action=\"topup\"" not in script
+    assert 'data-action="topup"' not in script
     assert "invoice" not in script.lower()
 
 
