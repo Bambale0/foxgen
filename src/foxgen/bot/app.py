@@ -28,6 +28,7 @@ from foxgen.bot.quick_start import router as quick_start_router
 from foxgen.bot.quick_start_wizard import router as quick_start_wizard_router
 from foxgen.bot.reference_memory import router as reference_memory_router
 from foxgen.bot.uploads import TelegramInputMediaStorage, stored_input_keys
+from foxgen.bot.voice import router as voice_router
 from foxgen.core.config import Settings, get_settings
 from foxgen.infra.input_media import LocalInputMediaStorage
 
@@ -204,6 +205,9 @@ def register_runtime_routers(dispatcher: Dispatcher) -> None:
     dispatcher.include_router(feed_router)
     dispatcher.include_router(feed_publish_router)
     dispatcher.include_router(feed_remix_router)
+    # Voice/TTS owns its dedicated FSM and must consume create:voice before the
+    # broad generation/shell fallbacks.
+    dispatcher.include_router(voice_router)
     # Quick Start already owns reference upload. This bridge only replaces its
     # post-upload product/model/settings branch with the same screen wizard used
     # by ordinary Create Image / Create Video entrypoints.

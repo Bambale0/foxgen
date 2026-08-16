@@ -83,6 +83,7 @@ def test_registry_separates_catalog_models_from_submission_models() -> None:
         "nano-banana-pro",
         "seedance-2",
         "seedance-2-mini",
+        "elevenlabs-turbo-2-5",
     }
     assert all(item.provider_id_verified for item in enabled)
     assert all(item.schema_verified for item in enabled)
@@ -95,6 +96,83 @@ def test_registry_separates_catalog_models_from_submission_models() -> None:
     assert catalog_only.schema_verified is False
     assert catalog_only.enabled_for_submission is False
     assert catalog_only.production_ready is False
+
+
+def test_elevenlabs_turbo_2_5_registry_contract_is_exact_and_reviewed() -> None:
+    item = ModelRegistry().get("elevenlabs-turbo-2-5")
+
+    assert item.provider_model == "elevenlabs/text-to-speech-turbo-2-5"
+    assert item.media_kind == MediaKind.AUDIO
+    assert item.contract == InputContract.ELEVENLABS_TTS_TURBO_2_5
+    assert item.provider_id_verified is True
+    assert item.schema_verified is True
+    assert item.enabled_for_submission is True
+    assert item.production_ready is True
+    assert item.contract_reviewed_at == "2026-08-16"
+    assert item.tested_live is False
+
+
+def test_elevenlabs_turbo_2_5_normalizes_safe_provider_payload() -> None:
+    payload = validate_input(
+        InputContract.ELEVENLABS_TTS_TURBO_2_5,
+        {
+            "text": "FoxGen can now create a production voiceover.",
+            "voice": "Rachel",
+            "stability": 0.6,
+            "similarity_boost": 0.8,
+            "style": 0.1,
+            "speed": 1.0,
+            "timestamps": False,
+            "previous_text": "",
+            "next_text": "",
+            "language_code": "ru",
+        },
+    )
+
+    assert payload == {
+        "text": "FoxGen can now create a production voiceover.",
+        "voice": "Rachel",
+        "stability": 0.6,
+        "similarity_boost": 0.8,
+        "style": 0.1,
+        "speed": 1.0,
+        "timestamps": False,
+        "previous_text": "",
+        "next_text": "",
+        "language_code": "ru",
+    }
+
+
+def test_elevenlabs_turbo_2_5_minimal_payload_receives_server_defaults() -> None:
+    payload = validate_input(
+        InputContract.ELEVENLABS_TTS_TURBO_2_5,
+        {"text": "Hello", "voice": "Rachel"},
+    )
+
+    assert payload["stability"] == 0.5
+    assert payload["similarity_boost"] == 0.75
+    assert payload["style"] == 0.0
+    assert payload["speed"] == 1.0
+    assert payload["timestamps"] is False
+    assert payload["previous_text"] == ""
+    assert payload["next_text"] == ""
+    assert payload["language_code"] == ""
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"text": "Hello"},
+        {"voice": "Rachel"},
+        {"text": "Hello", "voice": "Rachel", "speed": 1.5},
+        {"text": "Hello", "voice": "Rachel", "stability": -0.1},
+        {"text": "Hello", "voice": "Rachel", "similarity_boost": 1.1},
+        {"text": "Hello", "voice": "Rachel", "unexpected": True},
+    ],
+)
+def test_elevenlabs_turbo_2_5_rejects_invalid_payload(payload: dict[str, object]) -> None:
+    with pytest.raises(ValidationError):
+        validate_input(InputContract.ELEVENLABS_TTS_TURBO_2_5, payload)
 
 
 def test_registry_rejects_passthrough_model_marked_for_submission() -> None:
@@ -142,6 +220,7 @@ def test_model_api_exposes_independent_readiness_statuses() -> None:
 
     with TestClient(app) as client:
         enabled = client.get("/v1/models/seedream-5-pro")
+        tts = client.get("/v1/models/elevenlabs-turbo-2-5")
         catalog_only = client.get("/v1/models/gpt-image-2")
 
     assert enabled.status_code == 200
@@ -151,6 +230,13 @@ def test_model_api_exposes_independent_readiness_statuses() -> None:
     assert enabled.json()["production_ready"] is True
     assert enabled.json()["tested_live"] is False
     assert enabled.json()["contract_reviewed_at"] == "2026-07-23"
+
+    assert tts.status_code == 200
+    assert tts.json()["provider_model"] == "elevenlabs/text-to-speech-turbo-2-5"
+    assert tts.json()["schema_verified"] is True
+    assert tts.json()["enabled_for_submission"] is True
+    assert tts.json()["production_ready"] is True
+    assert tts.json()["contract_reviewed_at"] == "2026-08-16"
 
     assert catalog_only.status_code == 200
     assert catalog_only.json()["provider_id_verified"] is True
@@ -282,7 +368,13 @@ def test_priority_contract_examples_normalize_to_provider_payloads() -> None:
             "duration": 15,
         },
     )
+    tts = validate_input(
+        InputContract.ELEVENLABS_TTS_TURBO_2_5,
+        {"text": "Hello from FoxGen", "voice": "Rachel", "speed": 1.2},
+    )
 
     assert seedream["quality"] == "high"
     assert nano["resolution"] == "2K"
     assert seedance["duration"] == 15
+    assert tts["voice"] == "Rachel"
+    assert tts["speed"] == 1.2

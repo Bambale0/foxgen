@@ -42,6 +42,14 @@ class GenerationStates(StatesGroup):
     submitting = State()
 
 
+class VoiceStates(StatesGroup):
+    waiting_text = State()
+    waiting_voice = State()
+    choosing_speed = State()
+    confirming = State()
+    submitting = State()
+
+
 class FeedStates(StatesGroup):
     waiting_comment = State()
     editing_profile_slug = State()

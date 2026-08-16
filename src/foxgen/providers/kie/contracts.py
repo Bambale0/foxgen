@@ -13,6 +13,7 @@ class InputContract(StrEnum):
     AUDIO = "audio"
     TEXT_TO_SPEECH = "text_to_speech"
     DIALOGUE = "dialogue"
+    ELEVENLABS_TTS_TURBO_2_5 = "elevenlabs_tts_turbo_2_5"
     SEEDREAM_45_TEXT = "seedream_45_text"
     SEEDREAM_45_EDIT = "seedream_45_edit"
     SEEDREAM_5_TEXT = "seedream_5_text"
@@ -114,6 +115,26 @@ class AudioInput(OpenInput):
 class TextToSpeechInput(OpenInput):
     text: str = Field(min_length=1, max_length=50_000)
     voice: str = Field(min_length=1)
+
+
+class ElevenLabsTurbo25Input(StrictInput):
+    """Reviewed safe KIE request subset for ElevenLabs Turbo 2.5 TTS.
+
+    KIE's current Market example exposes all fields below. Numeric bounds are a
+    conservative FoxGen input policy; the provider remains authoritative and can
+    reject values if its upstream contract becomes stricter.
+    """
+
+    text: str = Field(min_length=1, max_length=50_000)
+    voice: str = Field(min_length=1, max_length=128)
+    stability: float = Field(default=0.5, ge=0.0, le=1.0)
+    similarity_boost: float = Field(default=0.75, ge=0.0, le=1.0)
+    style: float = Field(default=0.0, ge=0.0, le=1.0)
+    speed: float = Field(default=1.0, ge=0.7, le=1.2)
+    timestamps: bool = False
+    previous_text: str = Field(default="", max_length=50_000)
+    next_text: str = Field(default="", max_length=50_000)
+    language_code: str = Field(default="", max_length=16, pattern=r"^[A-Za-z0-9_-]*$")
 
 
 class DialogueLine(StrictInput):
@@ -239,6 +260,7 @@ CONTRACT_MODELS: dict[InputContract, type[BaseModel]] = {
     InputContract.AUDIO: AudioInput,
     InputContract.TEXT_TO_SPEECH: TextToSpeechInput,
     InputContract.DIALOGUE: DialogueInput,
+    InputContract.ELEVENLABS_TTS_TURBO_2_5: ElevenLabsTurbo25Input,
     InputContract.SEEDREAM_45_TEXT: Seedream45TextInput,
     InputContract.SEEDREAM_45_EDIT: Seedream45EditInput,
     InputContract.SEEDREAM_5_TEXT: Seedream5TextInput,
@@ -251,6 +273,7 @@ CONTRACT_MODELS: dict[InputContract, type[BaseModel]] = {
 
 SCHEMA_VERIFIED_CONTRACTS: frozenset[InputContract] = frozenset(
     {
+        InputContract.ELEVENLABS_TTS_TURBO_2_5,
         InputContract.SEEDREAM_5_TEXT,
         InputContract.SEEDREAM_5_IMAGE,
         InputContract.NANO_BANANA,

@@ -55,6 +55,7 @@ class FakeBillingService:
         )
 
     async def list_active_prices(self) -> tuple[PriceSnapshot, ...]:
+        now = datetime.now(timezone.utc)
         return (
             PriceSnapshot(
                 id=uuid4(),
@@ -63,7 +64,17 @@ class FakeBillingService:
                 amount_units=10,
                 currency="CREDIT",
                 enabled=True,
-                active_from=datetime.now(timezone.utc),
+                active_from=now,
+                active_until=None,
+            ),
+            PriceSnapshot(
+                id=uuid4(),
+                model_slug="elevenlabs-turbo-2-5",
+                version=1,
+                amount_units=42,
+                currency="CREDIT",
+                enabled=True,
+                active_from=now,
                 active_until=None,
             ),
         )
@@ -193,6 +204,7 @@ def test_happy_fox_static_shell_is_packaged_and_public() -> None:
     assert "Happy Fox" in response.text
     assert "<title>Happy Fox</title>" in response.text
     assert "FOXGEN" not in response.text
+    assert "/mini-app/tts-parity.js" in response.text
 
 
 def test_bootstrap_requires_jwt_and_is_bound_to_telegram_user() -> None:
@@ -212,6 +224,29 @@ def test_bootstrap_requires_jwt_and_is_bound_to_telegram_user() -> None:
     assert body["user"]["id"] == USER_ID
     assert body["balance"]["available_units"] == 2450
     assert repository.requested_user_ids == [USER_ID]
+
+
+def test_bootstrap_exposes_tts_as_schema_driven_audio_product() -> None:
+    client, token, _submission, _repository = authenticated_client()
+
+    with client:
+        response = client.get(
+            "/v1/miniapp/bootstrap",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    tts = next(item for item in body["models"] if item["slug"] == "elevenlabs-turbo-2-5")
+    assert tts["media_kind"] == "audio"
+    assert tts["capabilities"] == ["text_to_speech"]
+    assert tts["price"] == {"amount_units": 42, "currency": "CREDIT", "version": 1}
+    schema = tts["input_schema"]
+    assert schema["additionalProperties"] is False
+    assert set(schema["required"]) == {"text", "voice"}
+    assert schema["properties"]["speed"]["minimum"] == 0.7
+    assert schema["properties"]["speed"]["maximum"] == 1.2
+    assert schema["properties"]["stability"]["default"] == 0.5
 
 
 def test_paid_miniapp_task_reuses_submission_service_and_user_identity() -> None:
@@ -253,6 +288,48 @@ def test_paid_miniapp_task_reuses_submission_service_and_user_identity() -> None
             "idempotency_key": f"miniapp:{IDEMPOTENCY_KEY}",
         }
     ]
+
+
+def test_paid_miniapp_tts_reuses_same_submission_service() -> None:
+    client, token, submission, _repository = authenticated_client()
+
+    payload = {
+        "text": "Привет из Happy Fox",
+        "voice": "Rachel",
+        "stability": 0.5,
+        "similarity_boost": 0.75,
+        "style": 0.0,
+        "speed": 1.0,
+        "timestamps": False,
+        "previous_text": "",
+        "next_text": "",
+        "language_code": "ru",
+    }
+    with client:
+        validation = client.post(
+            "/v1/miniapp/models/elevenlabs-turbo-2-5/validate",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"input": payload},
+        )
+        response = client.post(
+            "/v1/miniapp/tasks",
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Idempotency-Key": "tts-miniapp-001",
+            },
+            json={"model_slug": "elevenlabs-turbo-2-5", "input": payload},
+        )
+
+    assert validation.status_code == 200
+    assert validation.json()["input"] == payload
+    assert response.status_code == 202
+    assert submission.calls[-1] == {
+        "user_id": USER_ID,
+        "username": "alex_fox",
+        "model_slug": "elevenlabs-turbo-2-5",
+        "input_data": payload,
+        "idempotency_key": "miniapp:tts-miniapp-001",
+    }
 
 
 def test_generation_detail_never_crosses_owner_boundary() -> None:

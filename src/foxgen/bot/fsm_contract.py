@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Mapping
 
-from foxgen.bot.states import GenerationStates
+from foxgen.bot.states import GenerationStates, VoiceStates
 
 
 @dataclass(frozen=True, slots=True)
@@ -248,6 +248,46 @@ STATE_CONTRACTS: Mapping[str, StateContract] = MappingProxyType(
             cancel="blocked while atomic admission is in progress",
             timeout="recover from durable generation/idempotency state",
             invalid_input="report that generation is already launching",
+            stale_callback="resolve through durable generation/idempotency state",
+        ),
+        VoiceStates.waiting_text.state: StateContract(
+            success=(VoiceStates.waiting_voice.state,),
+            back=_TO_MENU,
+            cancel=_TO_MENU,
+            timeout=_EXPIRED,
+            invalid_input="keep state and request TTS text",
+            stale_callback=_STALE,
+        ),
+        VoiceStates.waiting_voice.state: StateContract(
+            success=(VoiceStates.choosing_speed.state,),
+            back=VoiceStates.waiting_text.state,
+            cancel=_TO_MENU,
+            timeout=_EXPIRED,
+            invalid_input="keep state and request voice name/id or default voice button",
+            stale_callback=_STALE,
+        ),
+        VoiceStates.choosing_speed.state: StateContract(
+            success=(VoiceStates.confirming.state,),
+            back=VoiceStates.waiting_voice.state,
+            cancel=_TO_MENU,
+            timeout=_EXPIRED,
+            invalid_input="keep state and repeat verified speed presets",
+            stale_callback=_STALE,
+        ),
+        VoiceStates.confirming.state: StateContract(
+            success=(VoiceStates.submitting.state,),
+            back=VoiceStates.choosing_speed.state,
+            cancel=_TO_MENU,
+            timeout=_EXPIRED,
+            invalid_input="keep state and repeat TTS confirmation actions",
+            stale_callback=_STALE,
+        ),
+        VoiceStates.submitting.state: StateContract(
+            success=(_TO_MENU,),
+            back="blocked while atomic TTS admission is in progress",
+            cancel="blocked while atomic TTS admission is in progress",
+            timeout="recover from durable generation/idempotency state",
+            invalid_input="report that TTS generation is already launching",
             stale_callback="resolve through durable generation/idempotency state",
         ),
     }

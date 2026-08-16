@@ -56,7 +56,7 @@ def main_menu(*, miniapp_url: str | None = None) -> InlineKeyboardMarkup:
                 InlineKeyboardButton(text="Создать видео", callback_data="create:video"),
                 InlineKeyboardButton(
                     text="Создать озвучку (голос)",
-                    callback_data="planned:voice",
+                    callback_data="create:voice",
                 ),
             ],
             [
