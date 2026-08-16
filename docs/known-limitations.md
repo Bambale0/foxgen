@@ -31,11 +31,21 @@ The current TTS slice does **not** claim voice cloning, speech-to-speech, dialog
 
 ### Suno/music
 
-Suno V5 core text-to-song is an executable product slice after #109 lands. It supports simple and custom generation, vocal/instrumental modes, dedicated KIE Suno API-family routing, polling through Suno record-info, and preservation/archive/delivery of multiple canonical audio tracks through the shared paid lifecycle. No commercial price is hardcoded.
+Suno V5 core text-to-song and owner-bound V5 Extend are executable product slices. Core generation supports simple/custom and vocal/instrumental modes. Extend lets a user choose only their own `SUCCEEDED` + STORED Suno result, then either inherit source parameters or submit a custom V5 continuation with bounded prompt/style/title/continue-at fields.
 
-The Suno core slice deliberately does **not** claim the rest of issue #15:
+Both products use dedicated KIE Suno API-family routing and the shared paid reservation/capture, immutable ledger, multi-track archive and Telegram delivery lifecycle. No commercial price is hardcoded; each model slug remains fail-closed until an active price is published.
 
-- extend / upload-extend;
+Extend deliberately adds stronger source ownership than ordinary text generation:
+
+- user surfaces list only owner-scoped durable Suno source tracks;
+- previews use short-lived stored-media URLs rather than provider URLs;
+- the application re-verifies `(user_id, source_generation_id, audio_id)` before paid submission;
+- PostgreSQL revision `20260816_0016` rejects forged `suno-v5-extend` generation rows even if a future caller tries to bypass the owner service through generic task admission;
+- a rejected/foreign source therefore cannot successfully commit a generation, reservation, ledger movement or provider-submit outbox.
+
+The Suno implementation still does **not** claim the rest of issue #15:
+
+- upload-extend flows for arbitrary uploaded source audio;
 - upload cover / cover;
 - add vocals / add instrumental / replace section;
 - lyrics-only workflows;
@@ -43,7 +53,7 @@ The Suno core slice deliberately does **not** claim the rest of issue #15:
 - vocal/instrument separation / stems;
 - MIDI;
 - mashup / persona / music video / Suno voice features;
-- dedicated Suno callback ingestion. Core generation is intentionally polling-driven until that callback contract is reviewed separately.
+- dedicated Suno callback ingestion. Core/Extend generation remain polling-driven until that callback contract is reviewed separately.
 
 ### Remaining planned generation products
 
