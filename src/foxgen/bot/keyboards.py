@@ -63,7 +63,7 @@ def main_menu(*, miniapp_url: str | None = None) -> InlineKeyboardMarkup:
                 InlineKeyboardButton(text="Создать фото", callback_data="create:image"),
                 InlineKeyboardButton(
                     text="Создать музыку (песню)",
-                    callback_data="planned:music",
+                    callback_data="create:music",
                 ),
             ],
             [

@@ -15,6 +15,7 @@ SUBMISSION_MODEL_SLUGS: frozenset[str] = frozenset(
         "seedance-2",
         "seedance-2-mini",
         "elevenlabs-turbo-2-5",
+        "suno-v5",
     }
 )
 
@@ -78,11 +79,41 @@ ELEVENLABS_TTS_MODEL = replace(
 )
 
 
+SUNO_V5_MODEL = ModelSpec(
+    slug="suno-v5",
+    provider_model="V5",
+    title="Suno V5",
+    family="Suno",
+    media_kind=MediaKind.AUDIO,
+    capabilities=frozenset({Capability.MUSIC_GENERATION}),
+    verified=True,
+    defaults={
+        "custom_mode": False,
+        "instrumental": False,
+        "prompt": "",
+        "style": "",
+        "title": "",
+        "negative_tags": "",
+    },
+    contract=InputContract.SUNO_V5_GENERATE,
+    tier="standard",
+    rank=1,
+    docs_url="https://docs.kie.ai/suno-api/generate-music/",
+    recommended_for=("full songs", "instrumentals", "lyrics-driven music"),
+    api_family="suno",
+    provider_id_verified=True,
+    schema_verified=True,
+    enabled_for_submission=True,
+    tested_live=False,
+    contract_reviewed_at="2026-08-16",
+)
+
+
 def _active_models() -> tuple[ModelSpec, ...]:
     """Build the reviewed catalog and apply the explicit paid-submission allowlist."""
 
     models: list[ModelSpec] = list(SEEDREAM_45_MODELS)
-    models.append(ELEVENLABS_TTS_MODEL)
+    models.extend((ELEVENLABS_TTS_MODEL, SUNO_V5_MODEL))
     for item in MODEL_SPECS:
         if item.slug in {"seedance-2-fast", "elevenlabs-turbo-2-5"}:
             continue

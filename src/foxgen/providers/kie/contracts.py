@@ -14,6 +14,7 @@ class InputContract(StrEnum):
     TEXT_TO_SPEECH = "text_to_speech"
     DIALOGUE = "dialogue"
     ELEVENLABS_TTS_TURBO_2_5 = "elevenlabs_tts_turbo_2_5"
+    SUNO_V5_GENERATE = "suno_v5_generate"
     SEEDREAM_45_TEXT = "seedream_45_text"
     SEEDREAM_45_EDIT = "seedream_45_edit"
     SEEDREAM_5_TEXT = "seedream_5_text"
@@ -118,12 +119,7 @@ class TextToSpeechInput(OpenInput):
 
 
 class ElevenLabsTurbo25Input(StrictInput):
-    """Reviewed safe KIE request subset for ElevenLabs Turbo 2.5 TTS.
-
-    KIE's current Market example exposes all fields below. Numeric bounds are a
-    conservative FoxGen input policy; the provider remains authoritative and can
-    reject values if its upstream contract becomes stricter.
-    """
+    """Reviewed safe KIE request subset for ElevenLabs Turbo 2.5 TTS."""
 
     text: str = Field(min_length=1, max_length=50_000)
     voice: str = Field(min_length=1, max_length=128)
@@ -135,6 +131,53 @@ class ElevenLabsTurbo25Input(StrictInput):
     previous_text: str = Field(default="", max_length=50_000)
     next_text: str = Field(default="", max_length=50_000)
     language_code: str = Field(default="", max_length=16, pattern=r"^[A-Za-z0-9_-]*$")
+
+
+class SunoV5GenerateInput(StrictInput):
+    """Reviewed KIE Suno V5 core text-to-song request contract."""
+
+    custom_mode: bool = False
+    instrumental: bool = False
+    prompt: str = Field(default="", max_length=5_000)
+    style: str = Field(default="", max_length=1_000)
+    title: str = Field(default="", max_length=80)
+    negative_tags: str = Field(default="", max_length=1_000)
+    vocal_gender: Literal["m", "f"] | None = None
+    style_weight: float | None = Field(default=None, ge=0.0, le=1.0)
+    weirdness_constraint: float | None = Field(default=None, ge=0.0, le=1.0)
+    audio_weight: float | None = Field(default=None, ge=0.0, le=1.0)
+
+    @model_validator(mode="after")
+    def validate_mode_contract(self) -> "SunoV5GenerateInput":
+        prompt = self.prompt.strip()
+        style = self.style.strip()
+        title = self.title.strip()
+        advanced_present = bool(
+            style
+            or title
+            or self.negative_tags.strip()
+            or self.vocal_gender is not None
+            or self.style_weight is not None
+            or self.weirdness_constraint is not None
+            or self.audio_weight is not None
+        )
+
+        if not self.custom_mode:
+            if not prompt:
+                raise ValueError("prompt is required in simple mode")
+            if len(prompt) > 500:
+                raise ValueError("simple-mode prompt must be at most 500 characters")
+            if advanced_present:
+                raise ValueError("advanced Suno fields require custom_mode=true")
+            return self
+
+        if not style:
+            raise ValueError("style is required in custom mode")
+        if not title:
+            raise ValueError("title is required in custom mode")
+        if not self.instrumental and not prompt:
+            raise ValueError("prompt is required for custom vocal music")
+        return self
 
 
 class DialogueLine(StrictInput):
@@ -261,6 +304,7 @@ CONTRACT_MODELS: dict[InputContract, type[BaseModel]] = {
     InputContract.TEXT_TO_SPEECH: TextToSpeechInput,
     InputContract.DIALOGUE: DialogueInput,
     InputContract.ELEVENLABS_TTS_TURBO_2_5: ElevenLabsTurbo25Input,
+    InputContract.SUNO_V5_GENERATE: SunoV5GenerateInput,
     InputContract.SEEDREAM_45_TEXT: Seedream45TextInput,
     InputContract.SEEDREAM_45_EDIT: Seedream45EditInput,
     InputContract.SEEDREAM_5_TEXT: Seedream5TextInput,
@@ -274,6 +318,7 @@ CONTRACT_MODELS: dict[InputContract, type[BaseModel]] = {
 SCHEMA_VERIFIED_CONTRACTS: frozenset[InputContract] = frozenset(
     {
         InputContract.ELEVENLABS_TTS_TURBO_2_5,
+        InputContract.SUNO_V5_GENERATE,
         InputContract.SEEDREAM_5_TEXT,
         InputContract.SEEDREAM_5_IMAGE,
         InputContract.NANO_BANANA,
