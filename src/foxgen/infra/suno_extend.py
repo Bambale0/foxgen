@@ -98,7 +98,11 @@ async def _records_for_generation(session: Any, generation: Generation) -> list[
         if asset is None:
             continue
         title_value = raw_track.get("title")
-        title = title_value.strip() if isinstance(title_value, str) and title_value.strip() else "Suno track"
+        title = (
+            title_value.strip()
+            if isinstance(title_value, str) and title_value.strip()
+            else "Suno track"
+        )
         duration_value = raw_track.get("duration")
         duration: float | None = None
         if isinstance(duration_value, (int, float)) and not isinstance(duration_value, bool):
