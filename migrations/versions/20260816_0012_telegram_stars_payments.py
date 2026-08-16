@@ -57,7 +57,7 @@ def upgrade() -> None:
         sa.CheckConstraint("credits_units > 0", name="ck_user_payment_orders_credits_positive"),
         sa.CheckConstraint("provider_amount > 0", name="ck_user_payment_orders_amount_positive"),
         sa.CheckConstraint(
-            "status IN ('created', 'invoice_ready', 'credited', 'failed', 'refunded')",
+            "status IN ('created', 'invoice_ready', 'paid', 'credited', 'failed', 'refunded')",
             name="ck_user_payment_orders_status",
         ),
         sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
