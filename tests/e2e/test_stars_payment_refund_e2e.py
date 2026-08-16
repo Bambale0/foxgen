@@ -184,8 +184,7 @@ async def test_happy_fox_stars_payment_to_admin_refund_e2e() -> None:
 
             invoice = await client.post(
                 "/v1/miniapp/payments/stars/invoices",
-                headers=_miniapp_headers(user_id)
-                | {"Idempotency-Key": f"e2e-invoice-{uuid4()}"},
+                headers=_miniapp_headers(user_id) | {"Idempotency-Key": f"e2e-invoice-{uuid4()}"},
                 json={"package_code": "e2e_starter"},
             )
             assert invoice.status_code == 201
