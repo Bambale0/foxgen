@@ -2,11 +2,13 @@ from datetime import datetime, timezone
 from typing import Any, Protocol
 
 from fastapi import APIRouter, Header, HTTPException, Query, Request
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
+from foxgen.api.miniapp_security import MiniAppPrincipal, decode_miniapp_token
 from foxgen.api.security import (
     authenticate_billing_admin,
     authenticate_internal_service,
+    authenticate_user_context,
     validate_idempotency_key,
 )
 from foxgen.application.billing import (
@@ -14,7 +16,9 @@ from foxgen.application.billing import (
     LedgerSnapshot,
     PriceSnapshot,
 )
+from foxgen.application.promos import PromoRedemptionResult, PromoRedemptionServiceProtocol
 from foxgen.core.config import Settings
+from foxgen.infra.promos import SqlAlchemyPromoRedemptionService
 from foxgen.providers.kie.registry import ModelRegistry
 
 
@@ -67,6 +71,12 @@ class ModelPriceRequest(BaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
+class PromoRedeemRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    code: str = Field(min_length=1, max_length=64)
+
+
 def _service(request: Request) -> BillingServiceProtocol:
     service: BillingServiceProtocol | None = getattr(
         request.app.state,
@@ -76,6 +86,36 @@ def _service(request: Request) -> BillingServiceProtocol:
     if service is None:
         raise HTTPException(status_code=503, detail="Billing service is not configured")
     return service
+
+
+def _promo_service(request: Request) -> PromoRedemptionServiceProtocol:
+    value: PromoRedemptionServiceProtocol | None = getattr(
+        request.app.state,
+        "promo_redemption_service",
+        None,
+    )
+    if value is not None:
+        return value
+    database = getattr(request.app.state, "database", None)
+    if database is None:
+        raise HTTPException(status_code=503, detail="Promo redemption service is not configured")
+    value = SqlAlchemyPromoRedemptionService(database)
+    request.app.state.promo_redemption_service = value
+    return value
+
+
+def _miniapp_principal(settings: Settings, authorization: str | None) -> MiniAppPrincipal:
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Mini App bearer token is required")
+    if settings.miniapp_jwt_secret is None:
+        raise HTTPException(status_code=503, detail="Mini App authentication is not configured")
+    try:
+        return decode_miniapp_token(
+            authorization.removeprefix("Bearer ").strip(),
+            secret=settings.miniapp_jwt_secret.get_secret_value(),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
 
 
 def balance_payload(balance: BalanceSnapshot) -> dict[str, object]:
@@ -116,6 +156,16 @@ def ledger_payload(entry: LedgerSnapshot) -> dict[str, object]:
     }
 
 
+def promo_payload(item: PromoRedemptionResult) -> dict[str, object]:
+    return {
+        "code": item.code,
+        "reward_units": item.reward_units,
+        "available_units": item.available_units,
+        "currency": "CREDIT",
+        "replayed": item.replayed,
+    }
+
+
 def create_billing_router(settings: Settings) -> APIRouter:
     router = APIRouter(tags=["billing"])
     registry = ModelRegistry()
@@ -148,6 +198,40 @@ def create_billing_router(settings: Settings) -> APIRouter:
             raise HTTPException(status_code=400, detail="user_id must be positive")
         entries = await _service(request).list_ledger(user_id=user_id, limit=limit)
         return [ledger_payload(entry) for entry in entries]
+
+    @router.post("/v1/user-portal/promos/redeem")
+    async def redeem_user_promo(
+        body: PromoRedeemRequest,
+        request: Request,
+        authorization: str | None = Header(default=None),
+        user_id_header: str | None = Header(default=None, alias="X-FoxGen-User-Id"),
+        username: str | None = Header(default=None, alias="X-FoxGen-Username"),
+    ) -> dict[str, object]:
+        principal = authenticate_user_context(
+            settings=settings,
+            authorization=authorization,
+            user_id_header=user_id_header,
+        )
+        result = await _promo_service(request).redeem(
+            user_id=principal.user_id,
+            username=username,
+            code=body.code,
+        )
+        return promo_payload(result)
+
+    @router.post("/v1/miniapp/promos/redeem")
+    async def redeem_miniapp_promo(
+        body: PromoRedeemRequest,
+        request: Request,
+        authorization: str | None = Header(default=None),
+    ) -> dict[str, object]:
+        principal = _miniapp_principal(settings, authorization)
+        result = await _promo_service(request).redeem(
+            user_id=principal.user_id,
+            username=principal.username,
+            code=body.code,
+        )
+        return promo_payload(result)
 
     @router.post("/v1/admin/users/{user_id}/balance-adjustments")
     async def adjust_user_balance(
