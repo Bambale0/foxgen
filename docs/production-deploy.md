@@ -23,8 +23,12 @@ The workflow/deploy script is designed around these invariants:
 - Compose-managed MinIO must complete bucket/lifecycle bootstrap and read-back verification before API/worker/bot startup;
 - Alembic upgrades run before the new API/worker/bot stack is considered ready;
 - API readiness must pass after startup;
+- when Happy Fox is enabled, the public Mini App must become reachable after ingress reload within a bounded 30-second wall-clock window;
+- when Happy Fox is enabled, Telegram `getChatMenuButton` must converge to the configured Happy Fox WebApp URL within its own bounded 30-second wall-clock window;
 - PostgreSQL, Redis and MinIO are not publicly published by production Compose;
 - API host binding is loopback-only for the reverse proxy.
+
+The two Happy Fox convergence gates are intentionally retried because a graceful shared-nginx reload or bot recreation can briefly expose old state. Each gate uses one elapsed-time deadline and short per-attempt timeouts; it does not multiply a long `curl` timeout by a fixed retry count. Failure after the deadline is a deployment failure, not a warning.
 
 ## GitHub Environment
 
@@ -176,10 +180,16 @@ push/merge main
   -> start/verify PostgreSQL, Redis, MinIO
   -> minio-init creates bucket if needed, applies inputs/ lifecycle and verifies read-back
   -> alembic upgrade head
-  -> start API, worker, bot only after lifecycle gate succeeds
-  -> wait for API/container readiness
-  -> HTTP /health/ready smoke check
+  -> force-recreate API, worker and bot from foxgen:<commit-sha>
+  -> verify every running app container uses that exact immutable image
+  -> validate/reload the shared nginx ingress when present
+  -> HTTP /health/ready loopback smoke check
+  -> Happy Fox public HTML convergence gate (enabled deployments, <=30s wall-clock)
+  -> Telegram default WebApp menu convergence gate (enabled deployments, <=30s wall-clock)
+  -> deployment completed marker
 ```
+
+A transient 502 immediately after graceful nginx reload can be normal while an old worker drains. The public Happy Fox gate tolerates only that short convergence interval; persistent 4xx/5xx, DNS/TLS failure, wrong HTML, or a Telegram menu that does not converge before the deadline fails the rollout with an explicit diagnostic.
 
 ## Migration-bearing releases
 
@@ -237,6 +247,15 @@ curl --fail --silent http://127.0.0.1:${FOXGEN_PUBLIC_API_PORT:-8080}/health/rea
 ```
 
 Confirm `minio-init` reports the intended bucket, `inputs/` prefix and retention values before considering the storage preflight complete. On bundled MinIO a compatibility notice about omitted multipart-abort read-back is expected.
+
+For an enabled Happy Fox deployment, the deploy log must also contain:
+
+```text
+Happy Fox public WebApp and Telegram menu verified
+deployment completed:
+```
+
+If the log stops at a public Mini App or Telegram menu deadline, treat it as a failed rollout and diagnose ingress/DNS/TLS or Telegram menu configuration rather than rerunning indefinitely.
 
 Also smoke test according to enabled features:
 
