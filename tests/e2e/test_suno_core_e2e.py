@@ -172,9 +172,7 @@ class FakeTelegramSender:
         urls: list[str],
         caption: str,
     ) -> list[int]:
-        self.calls.append(
-            {"recipient_id": recipient_id, "urls": list(urls), "caption": caption}
-        )
+        self.calls.append({"recipient_id": recipient_id, "urls": list(urls), "caption": caption})
         return [8101, 8102]
 
 
@@ -283,10 +281,7 @@ async def test_happy_fox_suno_generates_archives_and_delivers_two_tracks() -> No
             {
                 "model": "V5",
                 "input_data": payload,
-                "callback_url": (
-                    "https://foxgen.example.test/webhooks/kie?generation_id="
-                    f"{generation_id}"
-                ),
+                "callback_url": f"https://foxgen.example.test/webhooks/kie?generation_id={generation_id}",
             }
         ]
         assert provider_router.families == ["suno"]
@@ -316,9 +311,7 @@ async def test_happy_fox_suno_generates_archives_and_delivers_two_tracks() -> No
             generation = await session.get(Generation, generation_id)
             wallet = await session.get(WalletAccount, user_id)
             reservation = await session.scalar(
-                select(BalanceReservation).where(
-                    BalanceReservation.generation_id == generation_id
-                )
+                select(BalanceReservation).where(BalanceReservation.generation_id == generation_id)
             )
             assets = (
                 await session.scalars(
@@ -328,9 +321,7 @@ async def test_happy_fox_suno_generates_archives_and_delivers_two_tracks() -> No
                 )
             ).all()
             delivery = await session.scalar(
-                select(GenerationDelivery).where(
-                    GenerationDelivery.generation_id == generation_id
-                )
+                select(GenerationDelivery).where(GenerationDelivery.generation_id == generation_id)
             )
             ledger = (
                 await session.scalars(
