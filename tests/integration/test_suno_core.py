@@ -42,6 +42,9 @@ async def test_suno_without_active_price_rolls_back_generation_and_outbox() -> N
     )
 
     try:
+        async with database.session() as session:
+            outbox_before = int(await session.scalar(select(func.count(OutboxEvent.id))) or 0)
+
         with pytest.raises(SubmissionError) as error:
             await service.submit(
                 user_id=user_id,
@@ -59,16 +62,10 @@ async def test_suno_without_active_price_rolls_back_generation_and_outbox() -> N
                     Generation.idempotency_key == idempotency_key,
                 )
             )
+            outbox_after = int(await session.scalar(select(func.count(OutboxEvent.id))) or 0)
             assert generation is None
             assert await session.get(User, user_id) is None
-            assert int(
-                await session.scalar(
-                    select(func.count(OutboxEvent.id)).where(
-                        OutboxEvent.aggregate_id == uuid4()
-                    )
-                )
-                or 0
-            ) == 0
+            assert outbox_after == outbox_before
     finally:
         await database.close()
 
