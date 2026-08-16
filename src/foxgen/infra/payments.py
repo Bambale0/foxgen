@@ -284,7 +284,9 @@ class SqlAlchemyTelegramStarsPaymentService:
 
                 charge_owner = await session.scalar(
                     select(UserPaymentOrder)
-                    .where(UserPaymentOrder.telegram_payment_charge_id == telegram_payment_charge_id)
+                    .where(
+                        UserPaymentOrder.telegram_payment_charge_id == telegram_payment_charge_id
+                    )
                     .with_for_update()
                 )
                 if charge_owner is not None and charge_owner.id != order.id:
