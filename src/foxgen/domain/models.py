@@ -157,8 +157,4 @@ class ModelSpec:
 
     @property
     def production_ready(self) -> bool:
-        return (
-            self.provider_id_verified
-            and self.schema_verified
-            and self.enabled_for_submission
-        )
+        return self.provider_id_verified and self.schema_verified and self.enabled_for_submission
