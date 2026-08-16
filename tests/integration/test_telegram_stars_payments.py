@@ -189,9 +189,18 @@ async def test_telegram_stars_invoice_and_credit_are_durably_idempotent(
             assert evidence_payment.status == "completed"
             assert evidence_payment.credited_ledger_key is None
             assert evidence_order is not None
+            assert evidence_order.status == "paid"
             assert evidence_order.telegram_payment_charge_id == failed_charge_id
             assert evidence_order.paid_at is not None
             assert evidence_order.credited_at is None
+
+        paid_pre_checkout = await service.validate_pre_checkout(
+            user_id=user_id,
+            invoice_payload=evidence_invoice.invoice_payload,
+            currency="XTR",
+            total_amount=50,
+        )
+        assert paid_pre_checkout.ok is False
 
         with pytest.raises(SubmissionError) as unavailable:
             await service.create_invoice(
