@@ -179,9 +179,7 @@ async def test_admin_created_promo_redeems_once_in_happy_fox_and_hits_max_uses()
             second_wallet = await session.get(WalletAccount, second_user)
             redemptions = int(
                 await session.scalar(
-                    select(func.count(PromoRedemption.id)).where(
-                        PromoRedemption.promo_code == code
-                    )
+                    select(func.count(PromoRedemption.id)).where(PromoRedemption.promo_code == code)
                 )
                 or 0
             )
@@ -212,8 +210,6 @@ async def test_admin_created_promo_redeems_once_in_happy_fox_and_hits_max_uses()
                         WalletAccount.user_id.in_([first_user, second_user])
                     )
                 )
-                await session.execute(
-                    delete(User).where(User.id.in_([first_user, second_user]))
-                )
+                await session.execute(delete(User).where(User.id.in_([first_user, second_user])))
                 await session.execute(delete(PromoCode).where(PromoCode.code == code))
         await database.close()
