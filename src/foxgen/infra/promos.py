@@ -34,9 +34,7 @@ class SqlAlchemyPromoRedemptionService:
         async with self._database.session() as session:
             async with session.begin():
                 promo = await session.scalar(
-                    select(PromoCode)
-                    .where(PromoCode.code == normalized)
-                    .with_for_update()
+                    select(PromoCode).where(PromoCode.code == normalized).with_for_update()
                 )
                 if promo is None:
                     raise SubmissionError(
