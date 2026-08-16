@@ -16,6 +16,7 @@ This directory documents the executable state of FoxGen on `main`. Source code, 
 | [`telegram-flows.md`](telegram-flows.md) | User Telegram flows, Quick Start, FSM and `/admin` shell |
 | [`model-matrix.md`](model-matrix.md) | KIE model readiness and contract policy |
 | [`suno-core.md`](suno-core.md) | Suno V5 dedicated API routing, simple/custom contract, multi-track archive and E2E |
+| [`suno-extend.md`](suno-extend.md) | Owner-bound Suno V5 Extend source/API/DB guard, UX and E2E runbook |
 | [`billing.md`](billing.md) | Pricing, wallet, immutable ledger and settlement |
 | [`telegram-stars-payments.md`](telegram-stars-payments.md) | User `XTR` top-up/refund, durable payment evidence and CREDIT settlement |
 | [`user-promos.md`](user-promos.md) | Owner-scoped promo redemption, max-use concurrency and immutable bonus CREDIT |
@@ -88,6 +89,7 @@ Storage provisioning is infrastructure-owned: repository Compose provisions bund
 15. Application media execution must not opportunistically provision S3 infrastructure.
 16. Dedicated provider API families are selected from reviewed `ModelSpec.api_family`; worker code must not infer provider routing from arbitrary model-name strings.
 17. Multi-result providers must preserve every canonical billable result while filtering non-result artwork/stream helper URLs before generic media archival.
+18. Source-bound generation such as Suno Extend must re-verify owner/source identity before paid admission and retain a durable database guard against generic-transport bypass.
 
 ## Known limitations are first-class documentation
 
@@ -95,6 +97,6 @@ Storage provisioning is infrastructure-owned: repository Compose provisions bund
 
 ## How to update documentation
 
-When code changes, update documentation by behavior area rather than adding an isolated note. Remove obsolete roadmap language. For schema/financial changes, update architecture/schema/billing/API/testing docs and rollback notes. For user promo changes, keep `user-promos.md`, `billing.md`, `api-reference.md`, `database-schema.md`, `miniapp.md`, `testing-ci.md` and limitation status synchronized. For new provider API families, document the routing boundary, exact model/input contract, result normalization and E2E in a focused runbook. For new admin capability, update capability matrix/API/runbook. For new configuration, update `configuration.md` plus env examples. For Happy Fox changes, keep Mini App/security/user-facing behavior synchronized.
+When code changes, update documentation by behavior area rather than adding an isolated note. Remove obsolete roadmap language. For schema/financial changes, update architecture/schema/billing/API/testing docs and rollback notes. For user promo changes, keep `user-promos.md`, `billing.md`, `api-reference.md`, `database-schema.md`, `miniapp.md`, `testing-ci.md` and limitation status synchronized. For new provider API families or source-bound provider operations, document the routing boundary, ownership checks, exact model/input contract, result normalization and E2E in a focused runbook. For new admin capability, update capability matrix/API/runbook. For new configuration, update `configuration.md` plus env examples. For Happy Fox changes, keep Mini App/security/user-facing behavior synchronized.
 
 Review [`documentation-policy.md`](documentation-policy.md) and [`../AGENTS.md`](../AGENTS.md) for maintenance rules.
