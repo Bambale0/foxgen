@@ -53,7 +53,7 @@ class KieClient:
         input_data: Mapping[str, object],
         callback_url: str | None = None,
     ) -> TaskCreated:
-        """Submit once.
+        """Submit one Market task.
 
         A timeout after provider acceptance is ambiguous. Retrying this POST can create a
         second billable task, so orchestration persists `submission_unknown` instead.
@@ -62,7 +62,7 @@ class KieClient:
         payload: dict[str, object] = {"model": model, "input": dict(input_data)}
         if callback_url:
             payload["callBackUrl"] = callback_url
-        data = await self._request("POST", "/api/v1/jobs/createTask", json=payload)
+        data = await self.request_data("POST", "/api/v1/jobs/createTask", json=payload)
         task_id = data.get("taskId")
         if not isinstance(task_id, str) or not task_id:
             raise ProviderError(
@@ -80,7 +80,7 @@ class KieClient:
         reraise=True,
     )
     async def get_task(self, task_id: str) -> TaskRecord:
-        data = await self._request(
+        data = await self.request_data(
             "GET", "/api/v1/jobs/recordInfo", params={"taskId": task_id}
         )
         normalized_id = data.get("taskId", task_id)
@@ -99,7 +99,7 @@ class KieClient:
         )
 
     async def get_credits(self) -> int:
-        data = await self._request("GET", "/api/v1/chat/credit")
+        data = await self.request_data("GET", "/api/v1/chat/credit")
         value: object = data
         if isinstance(data, dict) and "credits" in data:
             value = data["credits"]
@@ -111,7 +111,13 @@ class KieClient:
             )
         return value
 
-    async def _request(self, method: str, path: str, **kwargs: Any) -> dict[str, Any]:
+    async def request_data(self, method: str, path: str, **kwargs: Any) -> dict[str, Any]:
+        """Execute an authenticated KIE request and return its validated `data` object.
+
+        Dedicated KIE API-family adapters reuse this transport so authentication,
+        network ambiguity and provider error classification stay consistent.
+        """
+
         supplied_headers = kwargs.pop("headers", None)
         headers = dict(supplied_headers or {})
         headers["Authorization"] = self._authorization
