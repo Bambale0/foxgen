@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Mapping
 
-from foxgen.bot.states import GenerationStates, VoiceStates
+from foxgen.bot.states import GenerationStates, MusicStates, VoiceStates
 
 
 @dataclass(frozen=True, slots=True)
@@ -17,7 +17,6 @@ class StateContract:
 
 _TO_MENU = "clear state and show main menu"
 _EXPIRED = "clear state and explain that the draft expired"
-_KEEP = "keep state and repeat the expected input"
 _STALE = "keep state for an invalid current callback; clear only when state is absent"
 
 
@@ -288,6 +287,62 @@ STATE_CONTRACTS: Mapping[str, StateContract] = MappingProxyType(
             cancel="blocked while atomic TTS admission is in progress",
             timeout="recover from durable generation/idempotency state",
             invalid_input="report that TTS generation is already launching",
+            stale_callback="resolve through durable generation/idempotency state",
+        ),
+        MusicStates.choosing_mode.state: StateContract(
+            success=(MusicStates.choosing_vocal_mode.state,),
+            back=_TO_MENU,
+            cancel=_TO_MENU,
+            timeout=_EXPIRED,
+            invalid_input="keep state and repeat simple/custom Suno mode buttons",
+            stale_callback=_STALE,
+        ),
+        MusicStates.choosing_vocal_mode.state: StateContract(
+            success=(MusicStates.waiting_prompt.state, MusicStates.waiting_style.state),
+            back=MusicStates.choosing_mode.state,
+            cancel=_TO_MENU,
+            timeout=_EXPIRED,
+            invalid_input="keep state and repeat vocal/instrumental choices",
+            stale_callback=_STALE,
+        ),
+        MusicStates.waiting_prompt.state: StateContract(
+            success=(MusicStates.waiting_style.state, MusicStates.confirming.state),
+            back=MusicStates.choosing_vocal_mode.state,
+            cancel=_TO_MENU,
+            timeout=_EXPIRED,
+            invalid_input="keep state and request bounded Suno prompt text",
+            stale_callback=_STALE,
+        ),
+        MusicStates.waiting_style.state: StateContract(
+            success=(MusicStates.waiting_title.state,),
+            back="prompt for vocal custom mode, otherwise vocal-mode chooser",
+            cancel=_TO_MENU,
+            timeout=_EXPIRED,
+            invalid_input="keep state and request custom Suno style",
+            stale_callback=_STALE,
+        ),
+        MusicStates.waiting_title.state: StateContract(
+            success=(MusicStates.confirming.state,),
+            back=MusicStates.waiting_style.state,
+            cancel=_TO_MENU,
+            timeout=_EXPIRED,
+            invalid_input="keep state and request custom Suno title",
+            stale_callback=_STALE,
+        ),
+        MusicStates.confirming.state: StateContract(
+            success=(MusicStates.submitting.state,),
+            back="last Suno text/settings screen",
+            cancel=_TO_MENU,
+            timeout=_EXPIRED,
+            invalid_input="keep state and repeat Suno confirmation actions",
+            stale_callback=_STALE,
+        ),
+        MusicStates.submitting.state: StateContract(
+            success=(_TO_MENU,),
+            back="blocked while atomic Suno admission is in progress",
+            cancel="blocked while atomic Suno admission is in progress",
+            timeout="recover from durable generation/idempotency state",
+            invalid_input="report that Suno generation is already launching",
             stale_callback="resolve through durable generation/idempotency state",
         ),
     }
