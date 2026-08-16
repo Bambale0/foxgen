@@ -142,13 +142,14 @@ jobs:
             });
 
   infrastructure:
-    name: PostgreSQL Redis migrations and lifecycle
+    name: PostgreSQL Redis migrations lifecycle and E2E
     runs-on: ubuntu-24.04
     env:
       FOXGEN_ENV: test
       FOXGEN_DATABASE_URL: postgresql+asyncpg://foxgen:foxgen@localhost:5432/foxgen_ci
       FOXGEN_REDIS_URL: redis://localhost:6379/15
       FOXGEN_RUN_INTEGRATION: "1"
+      FOXGEN_RUN_E2E: "1"
       FOXGEN_API_HOST: 127.0.0.1
       FOXGEN_API_PORT: "8080"
     services:
@@ -206,6 +207,13 @@ jobs:
             --junitxml=/tmp/foxgen-integration.xml \
             tests/integration \
             2>&1 | tee /tmp/foxgen-integration.log
+      - name: Cross-layer payment E2E tests
+        id: e2e_tests
+        run: |
+          pytest -vv --maxfail=1 \
+            --junitxml=/tmp/foxgen-e2e.xml \
+            tests/e2e \
+            2>&1 | tee /tmp/foxgen-e2e.log
       - name: API readiness smoke test
         id: api_smoke
         run: |
@@ -235,6 +243,8 @@ jobs:
           path: |
             /tmp/foxgen-integration.log
             /tmp/foxgen-integration.xml
+            /tmp/foxgen-e2e.log
+            /tmp/foxgen-e2e.xml
             /tmp/foxgen-api.log
           if-no-files-found: warn
 
