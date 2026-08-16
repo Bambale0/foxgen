@@ -60,6 +60,18 @@ class MusicStates(StatesGroup):
     submitting = State()
 
 
+class MusicExtendStates(StatesGroup):
+    choosing_action = State()
+    choosing_source = State()
+    choosing_mode = State()
+    waiting_prompt = State()
+    waiting_style = State()
+    waiting_title = State()
+    waiting_continue_at = State()
+    confirming = State()
+    submitting = State()
+
+
 class FeedStates(StatesGroup):
     waiting_comment = State()
     editing_profile_slug = State()

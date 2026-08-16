@@ -8,15 +8,11 @@ from foxgen.providers.kie.client import KieClient, TaskCreated, TaskRecord
 
 
 SUNO_API_FAMILY = "suno"
+SUNO_EXTEND_API_FAMILY = "suno_extend"
 
 
 class SunoClient:
-    """Typed adapter for KIE's dedicated Suno API family.
-
-    The first production slice intentionally covers only `/api/v1/generate` and
-    `/api/v1/generate/record-info`. Callback handling remains polling-only until
-    the dedicated Suno callback contract is reviewed in a later #15 slice.
-    """
+    """Typed adapter for KIE's dedicated Suno generation API family."""
 
     def __init__(self, transport: KieClient) -> None:
         self._transport = transport
@@ -31,35 +27,72 @@ class SunoClient:
         del callback_url
         payload = _generate_payload(model=model, input_data=input_data)
         data = await self._transport.request_data("POST", "/api/v1/generate", json=payload)
-        task_id = data.get("taskId")
-        if not isinstance(task_id, str) or not task_id:
-            raise ProviderError(
-                ErrorCode.PROVIDER_PROTOCOL,
-                "Suno вернул некорректный идентификатор задачи.",
-                retryable=False,
-                details={"data": data},
-            )
-        return TaskCreated(task_id=task_id)
+        return _task_created(data)
 
     async def get_task(self, task_id: str) -> TaskRecord:
+        return await _get_suno_task(self._transport, task_id)
+
+
+class SunoExtendClient:
+    """Typed adapter for extending an existing generated Suno track."""
+
+    def __init__(self, transport: KieClient) -> None:
+        self._transport = transport
+
+    async def create_task(
+        self,
+        *,
+        model: str,
+        input_data: Mapping[str, object],
+        callback_url: str | None = None,
+    ) -> TaskCreated:
+        # The reviewed core/extend slices are polling-driven. `callback_url` is
+        # deliberately ignored until the dedicated Suno callback signature is
+        # integrated as a separate #15 slice.
+        del callback_url
+        payload = _extend_payload(model=model, input_data=input_data)
         data = await self._transport.request_data(
-            "GET",
-            "/api/v1/generate/record-info",
-            params={"taskId": task_id},
+            "POST",
+            "/api/v1/generate/extend",
+            json=payload,
         )
-        normalized_id = data.get("taskId", task_id)
-        if not isinstance(normalized_id, str) or not normalized_id:
-            normalized_id = task_id
-        status = data.get("status")
-        result = _normalize_suno_result(data)
-        return TaskRecord(
-            task_id=normalized_id,
-            state=status if isinstance(status, str) else None,
-            result=result,
-            errorCode=data.get("errorCode"),
-            errorMessage=data.get("errorMessage"),
-            type=data.get("type"),
+        return _task_created(data)
+
+    async def get_task(self, task_id: str) -> TaskRecord:
+        return await _get_suno_task(self._transport, task_id)
+
+
+def _task_created(data: Mapping[str, Any]) -> TaskCreated:
+    task_id = data.get("taskId")
+    if not isinstance(task_id, str) or not task_id:
+        raise ProviderError(
+            ErrorCode.PROVIDER_PROTOCOL,
+            "Suno вернул некорректный идентификатор задачи.",
+            retryable=False,
+            details={"data": dict(data)},
         )
+    return TaskCreated(task_id=task_id)
+
+
+async def _get_suno_task(transport: KieClient, task_id: str) -> TaskRecord:
+    data = await transport.request_data(
+        "GET",
+        "/api/v1/generate/record-info",
+        params={"taskId": task_id},
+    )
+    normalized_id = data.get("taskId", task_id)
+    if not isinstance(normalized_id, str) or not normalized_id:
+        normalized_id = task_id
+    status = data.get("status")
+    result = _normalize_suno_result(data)
+    return TaskRecord(
+        task_id=normalized_id,
+        state=status if isinstance(status, str) else None,
+        result=result,
+        errorCode=data.get("errorCode"),
+        errorMessage=data.get("errorMessage"),
+        type=data.get("type"),
+    )
 
 
 def _generate_payload(*, model: str, input_data: Mapping[str, object]) -> dict[str, object]:
@@ -71,20 +104,65 @@ def _generate_payload(*, model: str, input_data: Mapping[str, object]) -> dict[s
         "model": model,
     }
 
-    for source, target in (
-        ("prompt", "prompt"),
-        ("style", "style"),
-        ("title", "title"),
-        ("negative_tags", "negativeTags"),
-        ("vocal_gender", "vocalGender"),
-        ("style_weight", "styleWeight"),
-        ("weirdness_constraint", "weirdnessConstraint"),
-        ("audio_weight", "audioWeight"),
-    ):
-        value = input_data.get(source)
-        if value is not None and value != "":
-            payload[target] = value
+    _copy_optional_fields(
+        payload,
+        input_data,
+        (
+            ("prompt", "prompt"),
+            ("style", "style"),
+            ("title", "title"),
+            ("negative_tags", "negativeTags"),
+            ("vocal_gender", "vocalGender"),
+            ("style_weight", "styleWeight"),
+            ("weirdness_constraint", "weirdnessConstraint"),
+            ("audio_weight", "audioWeight"),
+        ),
+    )
     return payload
+
+
+def _extend_payload(*, model: str, input_data: Mapping[str, object]) -> dict[str, object]:
+    audio_id = input_data.get("audio_id")
+    if not isinstance(audio_id, str) or not audio_id:
+        raise ProviderError(
+            ErrorCode.PROVIDER_PROTOCOL,
+            "Suno Extend не получил проверенный audioId.",
+            retryable=False,
+        )
+    default_param_flag = bool(input_data.get("default_param_flag", False))
+    payload: dict[str, object] = {
+        "defaultParamFlag": default_param_flag,
+        "audioId": audio_id,
+        "model": model,
+    }
+    if default_param_flag:
+        _copy_optional_fields(
+            payload,
+            input_data,
+            (
+                ("prompt", "prompt"),
+                ("style", "style"),
+                ("title", "title"),
+                ("continue_at", "continueAt"),
+                ("negative_tags", "negativeTags"),
+                ("vocal_gender", "vocalGender"),
+                ("style_weight", "styleWeight"),
+                ("weirdness_constraint", "weirdnessConstraint"),
+                ("audio_weight", "audioWeight"),
+            ),
+        )
+    return payload
+
+
+def _copy_optional_fields(
+    target: dict[str, object],
+    source: Mapping[str, object],
+    fields: tuple[tuple[str, str], ...],
+) -> None:
+    for source_key, target_key in fields:
+        value = source.get(source_key)
+        if value is not None and value != "":
+            target[target_key] = value
 
 
 def _normalize_suno_result(data: Mapping[str, Any]) -> dict[str, object]:

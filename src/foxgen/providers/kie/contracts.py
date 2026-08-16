@@ -1,5 +1,6 @@
 from enum import StrEnum
 from typing import Any, Literal
+from uuid import UUID
 
 from pydantic import AnyHttpUrl, BaseModel, ConfigDict, Field, model_validator
 
@@ -15,6 +16,7 @@ class InputContract(StrEnum):
     DIALOGUE = "dialogue"
     ELEVENLABS_TTS_TURBO_2_5 = "elevenlabs_tts_turbo_2_5"
     SUNO_V5_GENERATE = "suno_v5_generate"
+    SUNO_V5_EXTEND = "suno_v5_extend"
     SEEDREAM_45_TEXT = "seedream_45_text"
     SEEDREAM_45_EDIT = "seedream_45_edit"
     SEEDREAM_5_TEXT = "seedream_5_text"
@@ -180,6 +182,51 @@ class SunoV5GenerateInput(StrictInput):
         return self
 
 
+class SunoV5ExtendInput(StrictInput):
+    """Reviewed KIE V5 music-extension request plus owner-audit source identity."""
+
+    source_generation_id: UUID
+    audio_id: str = Field(min_length=1, max_length=128)
+    default_param_flag: bool = False
+    prompt: str = Field(default="", max_length=5_000)
+    style: str = Field(default="", max_length=1_000)
+    title: str = Field(default="", max_length=100)
+    continue_at: float | None = Field(default=None, gt=0)
+    negative_tags: str = Field(default="", max_length=1_000)
+    vocal_gender: Literal["m", "f"] | None = None
+    style_weight: float | None = Field(default=None, ge=0.0, le=1.0)
+    weirdness_constraint: float | None = Field(default=None, ge=0.0, le=1.0)
+    audio_weight: float | None = Field(default=None, ge=0.0, le=1.0)
+
+    @model_validator(mode="after")
+    def validate_extend_mode(self) -> "SunoV5ExtendInput":
+        advanced_present = bool(
+            self.prompt.strip()
+            or self.style.strip()
+            or self.title.strip()
+            or self.continue_at is not None
+            or self.negative_tags.strip()
+            or self.vocal_gender is not None
+            or self.style_weight is not None
+            or self.weirdness_constraint is not None
+            or self.audio_weight is not None
+        )
+        if not self.default_param_flag:
+            if advanced_present:
+                raise ValueError("custom extend fields require default_param_flag=true")
+            return self
+
+        if not self.prompt.strip():
+            raise ValueError("prompt is required for custom V5 extension")
+        if not self.style.strip():
+            raise ValueError("style is required for custom V5 extension")
+        if not self.title.strip():
+            raise ValueError("title is required for custom V5 extension")
+        if self.continue_at is None:
+            raise ValueError("continue_at is required for custom V5 extension")
+        return self
+
+
 class DialogueLine(StrictInput):
     text: str = Field(min_length=1)
     voice: str = Field(min_length=1)
@@ -305,6 +352,7 @@ CONTRACT_MODELS: dict[InputContract, type[BaseModel]] = {
     InputContract.DIALOGUE: DialogueInput,
     InputContract.ELEVENLABS_TTS_TURBO_2_5: ElevenLabsTurbo25Input,
     InputContract.SUNO_V5_GENERATE: SunoV5GenerateInput,
+    InputContract.SUNO_V5_EXTEND: SunoV5ExtendInput,
     InputContract.SEEDREAM_45_TEXT: Seedream45TextInput,
     InputContract.SEEDREAM_45_EDIT: Seedream45EditInput,
     InputContract.SEEDREAM_5_TEXT: Seedream5TextInput,
@@ -319,6 +367,7 @@ SCHEMA_VERIFIED_CONTRACTS: frozenset[InputContract] = frozenset(
     {
         InputContract.ELEVENLABS_TTS_TURBO_2_5,
         InputContract.SUNO_V5_GENERATE,
+        InputContract.SUNO_V5_EXTEND,
         InputContract.SEEDREAM_5_TEXT,
         InputContract.SEEDREAM_5_IMAGE,
         InputContract.NANO_BANANA,

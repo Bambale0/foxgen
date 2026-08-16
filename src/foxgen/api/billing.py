@@ -11,6 +11,7 @@ from foxgen.api.security import (
     authenticate_user_context,
     validate_idempotency_key,
 )
+from foxgen.api.suno_extend import create_suno_extend_router
 from foxgen.application.billing import (
     BalanceSnapshot,
     LedgerSnapshot,
@@ -283,4 +284,5 @@ def create_billing_router(settings: Settings) -> APIRouter:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         return price_payload(price)
 
+    router.include_router(create_suno_extend_router(settings))
     return router
