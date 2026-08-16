@@ -65,9 +65,15 @@ class LifecycleTaskClient(Protocol):
         model: str,
         input_data: dict[str, object],
         callback_url: str | None = None,
+        api_family: str = "market",
     ) -> TaskCreated: ...
 
-    async def get_task(self, task_id: str) -> TaskRecord: ...
+    async def get_task(
+        self,
+        task_id: str,
+        *,
+        api_family: str = "market",
+    ) -> TaskRecord: ...
 
 
 class OutboxProcessor(Protocol):
@@ -275,6 +281,7 @@ class GenerationWorker:
                 model=model.provider_model,
                 input_data=generation.input_payload,
                 callback_url=callback_url,
+                api_family=model.api_family,
             )
         except ProviderError as exc:
             target = (
@@ -374,8 +381,9 @@ class GenerationWorker:
         task_id = generation.provider_task_id
         if task_id is None:
             return
+        model = self._registry.get(generation.model_slug)
         try:
-            task = await self._client.get_task(task_id)
+            task = await self._client.get_task(task_id, api_family=model.api_family)
         except ProviderError:
             await self._repository.schedule_next_poll(
                 generation_id=generation.id,
@@ -438,19 +446,38 @@ def normalize_provider_payload(payload: dict[str, object]) -> NormalizedProvider
             error_code=None,
             status_reason="provider_result_ready",
         )
-    if state in {"processing", "running", "in_progress", "in-progress", "queued"}:
+    if state in {
+        "processing",
+        "running",
+        "in_progress",
+        "in-progress",
+        "queued",
+        "pending",
+        "text_success",
+        "first_success",
+    }:
         return NormalizedProviderState(
             status=GenerationStatus.PROCESSING,
             result_payload=None,
             error_code=None,
             status_reason="provider_processing",
         )
-    if state in {"failed", "failure", "error", "cancelled", "canceled"}:
+    if state in {
+        "failed",
+        "failure",
+        "error",
+        "cancelled",
+        "canceled",
+        "create_task_failed",
+        "generate_audio_failed",
+        "callback_exception",
+        "sensitive_word_error",
+    }:
         raw_error = source.get("failCode") or source.get("errorCode") or source.get("code")
         return NormalizedProviderState(
             status=GenerationStatus.FAILED,
             result_payload=None,
-            error_code=str(raw_error or ErrorCode.PROVIDER_REJECTED),
+            error_code=str(raw_error or state or ErrorCode.PROVIDER_REJECTED),
             status_reason="provider_terminal_failure",
         )
     return NormalizedProviderState(status=None, result_payload=None, error_code=None)
