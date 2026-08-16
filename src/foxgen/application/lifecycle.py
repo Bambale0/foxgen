@@ -65,15 +65,13 @@ class LifecycleTaskClient(Protocol):
         model: str,
         input_data: dict[str, object],
         callback_url: str | None = None,
-        api_family: str = "market",
     ) -> TaskCreated: ...
 
-    async def get_task(
-        self,
-        task_id: str,
-        *,
-        api_family: str = "market",
-    ) -> TaskRecord: ...
+    async def get_task(self, task_id: str) -> TaskRecord: ...
+
+
+class LifecycleClientRouter(Protocol):
+    def for_family(self, api_family: str) -> LifecycleTaskClient: ...
 
 
 class OutboxProcessor(Protocol):
@@ -152,7 +150,7 @@ class GenerationWorker:
         self,
         *,
         repository: LifecycleRepository,
-        client: LifecycleTaskClient,
+        client: LifecycleTaskClient | LifecycleClientRouter,
         registry: ModelRegistry | None = None,
         callback_url: str | None = None,
         media_pipeline: OutboxProcessor | None = None,
@@ -277,11 +275,11 @@ class GenerationWorker:
 
         callback_url = _callback_url_for_generation(self._callback_url, generation.id)
         try:
-            task = await self._client.create_task(
+            provider_client = _client_for_family(self._client, model.api_family)
+            task = await provider_client.create_task(
                 model=model.provider_model,
                 input_data=generation.input_payload,
                 callback_url=callback_url,
-                api_family=model.api_family,
             )
         except ProviderError as exc:
             target = (
@@ -383,7 +381,8 @@ class GenerationWorker:
             return
         model = self._registry.get(generation.model_slug)
         try:
-            task = await self._client.get_task(task_id, api_family=model.api_family)
+            provider_client = _client_for_family(self._client, model.api_family)
+            task = await provider_client.get_task(task_id)
         except ProviderError:
             await self._repository.schedule_next_poll(
                 generation_id=generation.id,
@@ -407,6 +406,23 @@ class GenerationWorker:
             failure_stage=("provider" if state.status == GenerationStatus.FAILED else None),
             status_reason=state.status_reason,
         )
+
+
+def _client_for_family(
+    client: LifecycleTaskClient | LifecycleClientRouter,
+    api_family: str,
+) -> LifecycleTaskClient:
+    selector = getattr(client, "for_family", None)
+    if callable(selector):
+        routed = selector(api_family)
+        return routed
+    if api_family != "market":
+        raise ProviderError(
+            ErrorCode.PROVIDER_PROTOCOL,
+            f"Provider client is not configured for API family: {api_family}",
+            retryable=False,
+        )
+    return client  # type: ignore[return-value]
 
 
 def _callback_url_for_generation(base_url: str | None, generation_id: UUID) -> str | None:
