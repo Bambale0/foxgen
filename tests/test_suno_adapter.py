@@ -6,6 +6,7 @@ from pydantic import ValidationError
 
 from foxgen.application.lifecycle import normalize_provider_payload
 from foxgen.application.media import extract_result_urls
+from foxgen.core.errors import ProviderError
 from foxgen.domain.models import GenerationStatus, MediaKind
 from foxgen.providers.kie.client import KieClient
 from foxgen.providers.kie.contracts import InputContract, validate_input
@@ -213,23 +214,20 @@ def test_suno_intermediate_and_failure_statuses_map_into_shared_lifecycle() -> N
     assert failed.status_reason == "provider_terminal_failure"
 
 
-def test_routed_client_selects_market_and_suno_without_guessing_model_name() -> None:
-    market = KieClient(
-        api_key="test-key",
-        client=httpx.AsyncClient(
-            base_url="https://api.kie.ai",
-            transport=httpx.MockTransport(
-                lambda request: httpx.Response(200, json={"code": 200, "data": {}})
-            ),
+@pytest.mark.asyncio
+async def test_routed_client_selects_market_and_suno_without_guessing_model_name() -> None:
+    http = httpx.AsyncClient(
+        base_url="https://api.kie.ai",
+        transport=httpx.MockTransport(
+            lambda request: httpx.Response(200, json={"code": 200, "data": {}})
         ),
     )
+    market = KieClient(api_key="test-key", client=http)
     router = RoutedKieClient(market)
     try:
         assert router.for_family("market") is market
         assert isinstance(router.for_family("suno"), SunoClient)
-        with pytest.raises(Exception, match="Неподдерживаемое семейство"):
+        with pytest.raises(ProviderError, match="Неподдерживаемое семейство"):
             router.for_family("unknown")
     finally:
-        # This test does not enter the async context; the underlying client is closed
-        # by the event loop cleanup in the async transport tests.
-        pass
+        await http.aclose()
