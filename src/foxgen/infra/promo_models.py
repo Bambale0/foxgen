@@ -36,9 +36,7 @@ class PromoRedemption(Base):
     promo_code: Mapped[str] = mapped_column(
         ForeignKey("promo_codes.code", ondelete="CASCADE"), index=True
     )
-    user_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"), index=True
-    )
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     reward_units: Mapped[int] = mapped_column(BigInteger)
     ledger_key: Mapped[str] = mapped_column(String(255))
     redeemed_at: Mapped[datetime] = mapped_column(
