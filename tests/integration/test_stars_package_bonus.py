@@ -174,8 +174,7 @@ async def test_stars_package_bonus_is_snapshotted_and_settled_exactly_once() -> 
             order = await session.get(UserPaymentOrder, invoice.order_id)
             ledger = await session.scalar(
                 select(LedgerEntry).where(
-                    LedgerEntry.idempotency_key
-                    == f"payment-credit:telegram_stars:{charge_id}"
+                    LedgerEntry.idempotency_key == f"payment-credit:telegram_stars:{charge_id}"
                 )
             )
             assert wallet is not None and wallet.available_units == 1250
@@ -186,7 +185,9 @@ async def test_stars_package_bonus_is_snapshotted_and_settled_exactly_once() -> 
     finally:
         async with database.session() as session:
             async with session.begin():
-                await session.execute(delete(UserPaymentOrder).where(UserPaymentOrder.user_id == user_id))
+                await session.execute(
+                    delete(UserPaymentOrder).where(UserPaymentOrder.user_id == user_id)
+                )
                 await session.execute(delete(PaymentEvent).where(PaymentEvent.user_id == user_id))
                 await session.execute(delete(LedgerEntry).where(LedgerEntry.user_id == user_id))
                 await session.execute(delete(WalletAccount).where(WalletAccount.user_id == user_id))
