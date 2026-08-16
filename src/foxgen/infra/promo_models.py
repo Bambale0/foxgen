@@ -34,7 +34,7 @@ class PromoRedemption(Base):
         UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid()
     )
     promo_code: Mapped[str] = mapped_column(
-        ForeignKey("promo_codes.code", ondelete="CASCADE"), index=True
+        ForeignKey("promo_codes.code", ondelete="RESTRICT"), index=True
     )
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     reward_units: Mapped[int] = mapped_column(BigInteger)
