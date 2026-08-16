@@ -112,7 +112,7 @@ _REVIEWED_SUBMISSION_CONTRACTS = frozenset(
         "seedance_2",
     }
 )
-_REVIEW_DATE = "2026-08-16"
+_REVIEW_DATE = "2026-07-23"
 
 
 @dataclass(frozen=True, slots=True)
