@@ -3,12 +3,14 @@ from __future__ import annotations
 from uuid import UUID
 
 from fastapi import APIRouter, Header, HTTPException, Request, status
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, SecretStr
 
 from foxgen.api.miniapp_security import MiniAppPrincipal, decode_miniapp_token
 from foxgen.api.security import authenticate_user_context, validate_idempotency_key
 from foxgen.application.suno_extend import SunoExtendService, SunoTrackSource
 from foxgen.core.config import Settings
+from foxgen.infra.media import S3MediaStorage
+from foxgen.infra.suno_extend import SqlAlchemySunoSourceRepository
 
 
 class SunoExtendRequest(BaseModel):
@@ -28,14 +30,35 @@ class SunoExtendRequest(BaseModel):
     audio_weight: float | None = Field(default=None, ge=0, le=1)
 
 
-class SunoSourceQuery(BaseModel):
-    limit: int = Field(default=40, ge=1, le=100)
+def _secret_value(value: SecretStr | None) -> str | None:
+    return value.get_secret_value() if value is not None else None
 
 
-def _service(request: Request) -> SunoExtendService:
+def _service(request: Request, settings: Settings) -> SunoExtendService:
     service: SunoExtendService | None = getattr(request.app.state, "suno_extend_service", None)
-    if service is None:
+    if service is not None:
+        return service
+
+    database = getattr(request.app.state, "database", None)
+    submission = getattr(request.app.state, "submission_service", None)
+    if database is None or submission is None:
         raise HTTPException(status_code=503, detail="Suno Extend service is not configured")
+
+    storage = S3MediaStorage(
+        bucket=settings.s3_bucket,
+        region=settings.s3_region,
+        endpoint_url=str(settings.s3_endpoint_url) if settings.s3_endpoint_url is not None else None,
+        access_key_id=_secret_value(settings.s3_access_key_id),
+        secret_access_key=_secret_value(settings.s3_secret_access_key),
+        force_path_style=settings.s3_force_path_style,
+        presigned_url_ttl_seconds=settings.miniapp_media_url_ttl_seconds,
+    )
+    service = SunoExtendService(
+        sources=SqlAlchemySunoSourceRepository(database),
+        submission=submission,
+        media_signer=storage,
+    )
+    request.app.state.suno_extend_service = service
     return service
 
 
@@ -87,7 +110,10 @@ def create_suno_extend_router(settings: Settings) -> APIRouter:
             authorization=authorization,
             user_id_header=user_id_header,
         ).user_id
-        items = await _service(request).list_sources(user_id=user_id, limit=max(1, min(limit, 100)))
+        items = await _service(request, settings).list_sources(
+            user_id=user_id,
+            limit=max(1, min(limit, 100)),
+        )
         return {"items": [_source_payload(item) for item in items]}
 
     @router.post(
@@ -107,7 +133,7 @@ def create_suno_extend_router(settings: Settings) -> APIRouter:
             authorization=authorization,
             user_id_header=user_id_header,
         ).user_id
-        receipt = await _service(request).extend(
+        receipt = await _service(request, settings).extend(
             user_id=user_id,
             username=username,
             source_generation_id=body.source_generation_id,
@@ -132,7 +158,7 @@ def create_suno_extend_router(settings: Settings) -> APIRouter:
             authorization: str | None = Header(default=None),
         ) -> dict[str, object]:
             principal = _miniapp_principal(settings, authorization)
-            items = await _service(request).list_sources(
+            items = await _service(request, settings).list_sources(
                 user_id=principal.user_id,
                 limit=max(1, min(limit, 100)),
             )
@@ -149,7 +175,7 @@ def create_suno_extend_router(settings: Settings) -> APIRouter:
             idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
         ) -> dict[str, object]:
             principal = _miniapp_principal(settings, authorization)
-            receipt = await _service(request).extend(
+            receipt = await _service(request, settings).extend(
                 user_id=principal.user_id,
                 username=principal.username,
                 source_generation_id=body.source_generation_id,
