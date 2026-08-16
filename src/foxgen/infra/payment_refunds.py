@@ -32,9 +32,7 @@ async def restore_refund_hold(
         charge_id=attempt.external_charge_id,
         attempt_id=attempt.id,
     )
-    existing = await session.scalar(
-        select(LedgerEntry).where(LedgerEntry.idempotency_key == key)
-    )
+    existing = await session.scalar(select(LedgerEntry).where(LedgerEntry.idempotency_key == key))
     if existing is None:
         account = await ensure_wallet_locked(
             session,
