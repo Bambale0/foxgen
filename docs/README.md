@@ -16,6 +16,7 @@ This directory documents the executable state of FoxGen on `main`. Source code, 
 | [`telegram-flows.md`](telegram-flows.md) | User Telegram flows, Quick Start, FSM and `/admin` shell |
 | [`model-matrix.md`](model-matrix.md) | KIE model readiness and contract policy |
 | [`billing.md`](billing.md) | Pricing, wallet, immutable ledger and settlement |
+| [`telegram-stars-payments.md`](telegram-stars-payments.md) | User `XTR` top-up, durable payment evidence and exactly-once CREDIT settlement |
 | [`generation-operations.md`](generation-operations.md) | Status/cancel/operator resolution for durable generations |
 | [`postprocessing-reconciliation.md`](postprocessing-reconciliation.md) | Retry/dead-letter/media/delivery reconciliation |
 | [`input-media-lifecycle.md`](input-media-lifecycle.md) | Telegram/Mini App input object lifecycle and cleanup requirements |
@@ -60,7 +61,7 @@ Trusted services -------+    |  |   +--> signed internal admin control plane
 
 ## Durable state ownership
 
-PostgreSQL is the source of truth for generations, billing, outbox/inbox events, media metadata, delivery, administrative commands/audit, support, campaigns, tariffs and runtime admin data. Redis is intentionally non-authoritative for business state: it stores Telegram FSM data, per-key event isolation and rate/lock data. S3-compatible storage stores private input/result bytes.
+PostgreSQL is the source of truth for generations, billing, user payment orders/events, outbox/inbox events, media metadata, delivery, administrative commands/audit, support, campaigns, tariffs and runtime admin data. Telegram Stars payment orders snapshot package terms before invoice creation; a verified `successful_payment` charge is persisted durably before wallet settlement so a failed settlement remains recoverable. Redis is intentionally non-authoritative for business state: it stores Telegram FSM data, per-key event isolation and rate/lock data. S3-compatible storage stores private input/result bytes.
 
 The Happy Fox browser holds only a short-lived Telegram-derived JWT and short-lived media capabilities. It does not become a business-state source of truth and never receives internal API, KIE, admin or S3 credentials.
 
@@ -71,16 +72,17 @@ Storage provisioning is infrastructure-owned: repository Compose provisions bund
 1. Billable provider submission is never blindly retried after an ambiguous external response.
 2. Telegram send is not replayed automatically after an ambiguous transport result.
 3. Money changes use integer units, an immutable ledger and transactional idempotency.
-4. Paid admission fails closed when authentication, price, balance, model readiness or runtime availability is invalid.
-5. Administrative writes are server-authorized, audited and idempotent; destructive/expensive operations require confirmation.
-6. Admin HTTP is backend-only, network allowlisted and signed over exact raw request bytes.
-7. User/provider media remains private; public clients never receive storage credentials.
-8. Happy Fox validates Telegram `initData` server-side and uses owner-scoped APIs with short-lived JWT/media URLs.
-9. Production deployment is gated by CI and deploys an exact tested `main` SHA.
-10. An existing source module/branch is not documented as active until it is wired/merged and covered by runtime tests.
-11. Specific privileged routes must stay ahead of generic route/callback fallbacks when matching order affects reachability.
-12. Compose-managed MinIO must verify the prefix-scoped temporary `inputs/` lifecycle and bundled stale-multipart cleanup prerequisites before API, worker and bot startup.
-13. Application media execution must not opportunistically provision S3 infrastructure.
+4. A Telegram Stars `successful_payment` is recorded by charge ID before CREDIT settlement; duplicate charge/update processing cannot create a second credit.
+5. Paid admission fails closed when authentication, price, balance, model readiness or runtime availability is invalid.
+6. Administrative writes are server-authorized, audited and idempotent; destructive/expensive operations require confirmation.
+7. Admin HTTP is backend-only, network allowlisted and signed over exact raw request bytes.
+8. User/provider media remains private; public clients never receive storage credentials.
+9. Happy Fox validates Telegram `initData` server-side and uses owner-scoped APIs with short-lived JWT/media URLs.
+10. Production deployment is gated by CI and deploys an exact tested `main` SHA.
+11. An existing source module/branch is not documented as active until it is wired/merged and covered by runtime tests.
+12. Specific privileged/financial routes must stay ahead of generic route/callback fallbacks when matching order affects reachability.
+13. Compose-managed MinIO must verify the prefix-scoped temporary `inputs/` lifecycle and bundled stale-multipart cleanup prerequisites before API, worker and bot startup.
+14. Application media execution must not opportunistically provision S3 infrastructure.
 
 ## Known limitations are first-class documentation
 
@@ -88,6 +90,6 @@ Storage provisioning is infrastructure-owned: repository Compose provisions bund
 
 ## How to update documentation
 
-When code changes, update documentation by behavior area rather than adding an isolated note. Remove obsolete roadmap language. For a schema change, update architecture/schema/state docs and operational rollback notes. For a new admin capability, update capability matrix, API/runbook and limitation status. For new configuration, update `configuration.md`, `.env.example` and `deploy/production.env.example` together. For Happy Fox changes, keep `miniapp.md`, API/security/configuration docs and user-facing branding synchronized.
+When code changes, update documentation by behavior area rather than adding an isolated note. Remove obsolete roadmap language. For a schema change, update architecture/schema/state docs and operational rollback notes. For a new payment capability, update `billing.md`, `telegram-stars-payments.md`, API/Telegram/Mini App docs and the schema map together. For a new admin capability, update capability matrix, API/runbook and limitation status. For new configuration, update `configuration.md`, `.env.example` and `deploy/production.env.example` together. For Happy Fox changes, keep `miniapp.md`, API/security/configuration docs and user-facing branding synchronized.
 
 Review [`documentation-policy.md`](documentation-policy.md) and [`../AGENTS.md`](../AGENTS.md) for maintenance rules.

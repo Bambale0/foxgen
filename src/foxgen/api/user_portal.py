@@ -7,6 +7,13 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from foxgen.api.miniapp_security import MiniAppPrincipal, decode_miniapp_token
 from foxgen.api.security import authenticate_user_context, validate_idempotency_key
+from foxgen.application.payments import (
+    PreCheckoutDecision,
+    StarInvoice,
+    StarPackage,
+    StarPaymentResult,
+    TelegramStarsPaymentServiceProtocol,
+)
 from foxgen.application.user_portal import (
     PartnerProfileSnapshot,
     PartnerWithdrawalSnapshot,
@@ -16,6 +23,7 @@ from foxgen.application.user_portal import (
     UserPortalServiceProtocol,
 )
 from foxgen.core.config import Settings
+from foxgen.infra.payments import SqlAlchemyTelegramStarsPaymentService
 
 
 class SupportCreateRequest(BaseModel):
@@ -38,6 +46,25 @@ class PartnerWithdrawalRequest(BaseModel):
     destination: str = Field(min_length=3, max_length=255)
 
 
+class StarInvoiceRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    package_code: str = Field(min_length=1, max_length=128)
+
+
+class StarPreCheckoutRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    invoice_payload: str = Field(min_length=1, max_length=128)
+    currency: str = Field(min_length=1, max_length=16)
+    total_amount: int = Field(gt=0)
+
+
+class StarSuccessfulPaymentRequest(StarPreCheckoutRequest):
+    telegram_payment_charge_id: str = Field(min_length=1, max_length=255)
+    provider_payment_charge_id: str = Field(default="", max_length=255)
+
+
 def _service(request: Request) -> UserPortalServiceProtocol:
     value: UserPortalServiceProtocol | None = getattr(
         request.app.state,
@@ -46,6 +73,31 @@ def _service(request: Request) -> UserPortalServiceProtocol:
     )
     if value is None:
         raise HTTPException(status_code=503, detail="User portal service is not configured")
+    return value
+
+
+def _payment_service(
+    request: Request,
+    settings: Settings,
+) -> TelegramStarsPaymentServiceProtocol:
+    value: TelegramStarsPaymentServiceProtocol | None = getattr(
+        request.app.state,
+        "telegram_stars_payment_service",
+        None,
+    )
+    if value is not None:
+        return value
+    database = getattr(request.app.state, "database", None)
+    if database is None:
+        raise HTTPException(status_code=503, detail="Payment service is not configured")
+    token = settings.telegram_bot_token
+    if token is None:
+        raise HTTPException(status_code=503, detail="Telegram Stars payments are not configured")
+    value = SqlAlchemyTelegramStarsPaymentService(
+        database,
+        bot_token=token.get_secret_value(),
+    )
+    request.app.state.telegram_stars_payment_service = value
     return value
 
 
@@ -117,6 +169,41 @@ def _withdrawal_payload(item: PartnerWithdrawalSnapshot) -> dict[str, object]:
     }
 
 
+def _star_package_payload(item: StarPackage) -> dict[str, object]:
+    return {
+        "code": item.code,
+        "title": item.title,
+        "description": item.description,
+        "credits_units": item.credits_units,
+        "stars_amount": item.stars_amount,
+        "currency": "XTR",
+    }
+
+
+def _star_invoice_payload(item: StarInvoice) -> dict[str, object]:
+    return {
+        "order_id": str(item.order_id),
+        "package": _star_package_payload(item.package),
+        "invoice_payload": item.invoice_payload,
+        "invoice_url": item.invoice_url,
+        "replayed": item.replayed,
+    }
+
+
+def _pre_checkout_payload(item: PreCheckoutDecision) -> dict[str, object]:
+    return {"ok": item.ok, "error_message": item.error_message}
+
+
+def _star_payment_payload(item: StarPaymentResult) -> dict[str, object]:
+    return {
+        "order_id": str(item.order_id),
+        "available_units": item.available_units,
+        "credited_units": item.credited_units,
+        "currency": "CREDIT",
+        "replayed": item.replayed,
+    }
+
+
 def create_user_portal_router(settings: Settings) -> APIRouter:
     router = APIRouter(prefix="/v1/user-portal", tags=["user-portal"])
 
@@ -138,6 +225,71 @@ def create_user_portal_router(settings: Settings) -> APIRouter:
     ) -> dict[str, object] | None:
         principal(authorization, user_id_header)
         return _tariff_payload(await _service(request).current_tariff())
+
+    @router.get("/payments/stars/packages")
+    async def stars_packages(
+        request: Request,
+        authorization: str | None = Header(default=None),
+        user_id_header: str | None = Header(default=None, alias="X-FoxGen-User-Id"),
+    ) -> dict[str, object]:
+        principal(authorization, user_id_header)
+        items = await _payment_service(request, settings).list_packages()
+        return {"items": [_star_package_payload(item) for item in items]}
+
+    @router.post("/payments/stars/invoices", status_code=status.HTTP_201_CREATED)
+    async def stars_invoice(
+        body: StarInvoiceRequest,
+        request: Request,
+        authorization: str | None = Header(default=None),
+        user_id_header: str | None = Header(default=None, alias="X-FoxGen-User-Id"),
+        username: str | None = Header(default=None, alias="X-FoxGen-Username"),
+        idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    ) -> dict[str, object]:
+        user_id = principal(authorization, user_id_header)
+        item = await _payment_service(request, settings).create_invoice(
+            user_id=user_id,
+            username=username,
+            package_code=body.package_code,
+            idempotency_key=validate_idempotency_key(idempotency_key),
+        )
+        return _star_invoice_payload(item)
+
+    @router.post("/payments/stars/pre-checkout")
+    async def stars_pre_checkout(
+        body: StarPreCheckoutRequest,
+        request: Request,
+        authorization: str | None = Header(default=None),
+        user_id_header: str | None = Header(default=None, alias="X-FoxGen-User-Id"),
+    ) -> dict[str, object]:
+        user_id = principal(authorization, user_id_header)
+        decision = await _payment_service(request, settings).validate_pre_checkout(
+            user_id=user_id,
+            invoice_payload=body.invoice_payload,
+            currency=body.currency,
+            total_amount=body.total_amount,
+        )
+        return _pre_checkout_payload(decision)
+
+    @router.post("/payments/stars/success")
+    async def stars_success(
+        body: StarSuccessfulPaymentRequest,
+        request: Request,
+        authorization: str | None = Header(default=None),
+        user_id_header: str | None = Header(default=None, alias="X-FoxGen-User-Id"),
+        username: str | None = Header(default=None, alias="X-FoxGen-Username"),
+    ) -> dict[str, object]:
+        user_id = principal(authorization, user_id_header)
+        result = await _payment_service(request, settings).credit_successful_payment(
+            user_id=user_id,
+            username=username,
+            invoice_payload=body.invoice_payload,
+            currency=body.currency,
+            total_amount=body.total_amount,
+            telegram_payment_charge_id=body.telegram_payment_charge_id,
+            provider_payment_charge_id=body.provider_payment_charge_id,
+            raw_payload=body.model_dump(mode="json"),
+        )
+        return _star_payment_payload(result)
 
     @router.get("/support")
     async def support_list(
@@ -266,6 +418,31 @@ def create_miniapp_user_portal_router(settings: Settings) -> APIRouter:
     ) -> dict[str, object] | None:
         _miniapp_principal(settings, authorization)
         return _tariff_payload(await _service(request).current_tariff())
+
+    @router.get("/payments/stars/packages")
+    async def stars_packages(
+        request: Request,
+        authorization: str | None = Header(default=None),
+    ) -> dict[str, object]:
+        _miniapp_principal(settings, authorization)
+        items = await _payment_service(request, settings).list_packages()
+        return {"items": [_star_package_payload(item) for item in items]}
+
+    @router.post("/payments/stars/invoices", status_code=status.HTTP_201_CREATED)
+    async def stars_invoice(
+        body: StarInvoiceRequest,
+        request: Request,
+        authorization: str | None = Header(default=None),
+        idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    ) -> dict[str, object]:
+        principal = _miniapp_principal(settings, authorization)
+        item = await _payment_service(request, settings).create_invoice(
+            user_id=principal.user_id,
+            username=principal.username,
+            package_code=body.package_code,
+            idempotency_key=validate_idempotency_key(idempotency_key),
+        )
+        return _star_invoice_payload(item)
 
     @router.get("/support")
     async def support_list(

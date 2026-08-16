@@ -1,6 +1,6 @@
 # Telegram flows and FSM
 
-FoxGen uses aiogram 3 with Redis-backed FSM. Telegram handlers own only conversational drafts and screen navigation; durable admission, billing, provider execution and delivery remain in the internal API/worker lifecycle.
+FoxGen uses aiogram 3 with Redis-backed FSM. Telegram handlers own conversational drafts, native Telegram update transport and screen navigation; durable admission, billing, payment evidence, provider execution and delivery remain in backend application services/PostgreSQL.
 
 ## Global `/start` and `/menu`
 
@@ -17,13 +17,13 @@ Regression tests enumerate every declared `GenerationStates` value, so adding a 
 
 ## Screen-FSM design
 
-The normal image/video UX follows a compact screen contract derived from the proven `banano_kling` `v7_kate` interaction pattern:
+The normal image/video UX follows a compact screen contract:
 
 ```text
 screen = renderer + keyboard + state + transitions
 ```
 
-User-facing generation screens are single-purpose and are not numbered `1/4`, `2/4`, `1/5`, and so on. Titles describe the current action directly, for example:
+User-facing generation screens are single-purpose and are not numbered `1/4`, `2/4`, and so on. Typical titles are:
 
 ```text
 🖼 Создание фото
@@ -34,103 +34,50 @@ User-facing generation screens are single-purpose and are not numbered `1/4`, `2
 ✅ Проверьте генерацию
 ```
 
-All temporary choices live in `FSMContext`. There are no process-global per-user draft dictionaries. A draft stores a stable `wizard_version`, a visible `*_flow_step`, selected UI model, model-specific settings, temporary media keys, prompt, idempotency key, the latest price/balance result and, while useful, the Telegram chat/message id of the current control screen.
-
-The remembered control-message id is presentation state only. It does not own media and is never durable business state. If Telegram can no longer edit that message, the bot creates one replacement control message and remembers the new id.
+All temporary choices live in `FSMContext`. There are no process-global per-user draft dictionaries. A draft stores a stable wizard version, visible flow step, model-specific settings, temporary media keys, prompt, idempotency key, price/balance projection and presentation-only control-message metadata.
 
 Capabilities and provider payload construction are separate from Telegram rendering:
 
 ```text
-generation_capabilities.py  -> which screens/options a model supports
+generation_capabilities.py  -> supported screens/options
 generation_draft.py         -> stable draft + validation + provider payload
-generation_screens.py       -> text/keyboards for each user-visible screen
-generation_wizard.py        -> transitions only
+generation_screens.py       -> text/keyboards
+generation_wizard.py        -> transitions
 ```
 
-## Compact reference-screen contract
+## Reference/media screen contract
 
-Image and video reference/media screens use the same visual hierarchy:
-
-```text
-📎 Референсы
-
-Загружено: X/Y
-<short instruction for the selected model/scenario>
-
-[        Загружено: X/Y        ]
-[ ⏭ Пропустить ] [ ✅ Продолжить ]   # when skipping is valid
-[       🔄 Перезагрузить       ]
-[          ⬅️ Назад            ]
-```
+Image/video reference screens display live `Загружено: X/Y`, where `Y` comes from capability/contract data rather than a global hard-coded value.
 
 Important behavior:
 
-- `X/Y` is live and re-rendered after accepted uploads;
-- `Y` comes from FoxGen capability/contract data, not from a global hard-coded value;
-- `🔄 Перезагрузить` deletes all current temporary inputs for that screen and redraws it at zero;
-- image `⏭ Пропустить` means continue **without** references; if the user already uploaded temporary references, they are deleted first;
-- required video scenarios keep `✅ Продолжить` visible for a stable layout, but pressing it before the required media is complete returns the exact requirement as a Telegram alert and does not advance state;
-- `⬅️ Назад` is the only persistent bottom navigation button on generation sub-screens;
-- `/start` and `/menu` remain the global safe reset/exit paths, so a duplicate `❌ Отмена` row is not required on every sub-screen.
+- upload refreshes the remembered control message when Telegram permits editing;
+- `🔄 Перезагрузить` deletes current temporary inputs and redraws the same screen;
+- image `⏭ Пропустить` means continue without references and deletes already uploaded temporary references first;
+- required video scenarios keep a stable Continue control but validate completeness before advancing;
+- `⬅️ Назад` is the persistent sub-screen navigation action;
+- `/start` and `/menu` remain global reset paths;
+- editing/replacing a Telegram control message never changes media ownership.
 
-After an upload, FoxGen tries to edit the remembered control message instead of sending another keyboard block. This prevents a long stack of stale controls in chat. A Telegram edit failure falls back to a new control message without changing media ownership or provider state.
-
-The screenshot-inspired `📚 Память реф` affordance is **not** presented until FoxGen has a real persistent saved-reference domain. Current temporary generation inputs are not silently promoted to durable user assets.
+Durable `📚 Память реф` is now backed by the separate owner-scoped reference-memory domain; temporary inputs are never silently promoted without an explicit save action.
 
 ## Create image
-
-Image flow:
 
 ```text
 main menu -> Создать фото
   -> model
-  -> optional references with live X/Y
+  -> optional references
   -> dynamic model settings
   -> prompt
   -> live price + balance confirmation
   -> authenticated paid admission
 ```
 
-### Image UI models
+One UI choice may resolve to different provider slugs based on media. Example: Seedream 5 Pro resolves to text or edit provider contract depending on reference presence.
 
-The UI model is intentionally separate from the provider slug. For example, the user sees one `Seedream 5 Pro` choice:
-
-- no references -> `seedream-5-pro`;
-- one or more references -> `seedream-5-pro-edit`.
-
-This removes a redundant text/edit mode screen while preserving the provider's distinct validated contracts.
-
-Current reference limits are capability-driven. Examples from the current production wizard contract:
-
-- Seedream 5 Pro: up to 10 image references;
-- Nano Banana 2: up to 14 image references;
-- Nano Banana Pro: up to 14 image references.
-
-Current production wizard coverage is required by test to equal the production-enabled KIE submission allowlist. The wizard currently covers:
-
-```text
-seedream-5-pro
-seedream-5-pro-edit
-nano-banana-2
-nano-banana-pro
-seedance-2
-seedance-2-mini
-```
-
-### Dynamic image settings
-
-Settings are capability-driven and update on the same control message.
-
-Examples:
-
-- Seedream 5 Pro: supported aspect ratios, Basic/High quality, PNG/JPG;
-- Nano Banana 2/Pro: supported aspect ratios including auto, 1K/2K/4K, PNG/JPG.
-
-A model never receives a UI option that is absent from its verified local provider contract.
+Current production wizard coverage is test-locked to the production-enabled submission registry and includes the current Seedream/Nano Banana/Seedance production set. Model-specific settings remain capability-driven and are validated again by the backend before paid admission.
 
 ## Create video
-
-Video flow:
 
 ```text
 main menu -> Создать видео
@@ -143,43 +90,9 @@ main menu -> Создать видео
   -> authenticated paid admission
 ```
 
-### Video input types
-
-For Seedance 2 / Seedance 2 Mini the wizard exposes the verified input modes:
-
-```text
-text
-first_frame
-first_last
-references
-```
-
-The live media limit follows the scenario:
-
-- `first_frame`: 1 image;
-- `first_last`: 2 ordered images;
-- `references`: up to the local total multimodal reference limit (currently 6), additionally constrained by per-type model limits.
-
-`first_last` preserves upload order: the first uploaded image becomes `first_frame_url`, the second becomes `last_frame_url`.
-
-Multimodal references are separated before provider admission into image/video/audio URL lists. The local contract enforces per-type and total limits before a billable provider request exists.
-
-### Dynamic video settings
-
-The Seedance screen exposes only verified options:
-
-- aspect ratio;
-- duration 5/10/15 seconds;
-- resolution supported by the contract;
-- generated audio;
-- return last frame;
-- web search.
-
-A setting toggle updates FSM data and re-renders the same screen rather than creating another one-off state.
+For current Seedance flows the verified input families include text, first frame, first+last frames and multimodal references. Upload order is preserved for first/last frame. Multimodal references are split into image/video/audio lists before strict provider validation.
 
 ## Quick Start convergence
-
-Quick Start still owns the fastest reference ingestion path:
 
 ```text
 main menu -> Быстрый запуск
@@ -188,22 +101,54 @@ main menu -> Быстрый запуск
   -> same generation screen wizard as ordinary creation
 ```
 
-The uploaded local input is not downloaded again or copied. It becomes prefilled `media` in the wizard draft.
+The uploaded local input is reused by object key; it is not downloaded/copied again. Compatible reference metadata survives navigation, while incompatible replacements are cleaned before transition.
 
-Default video interpretation:
+## Durable reference memory
 
-- image reference -> `first_frame`;
-- video reference -> multimodal `references`.
+Compatible image/video reference screens can open `📚 Память реф`. PostgreSQL owns reference metadata/ownership and persistent S3-compatible storage owns bytes under the durable reference prefix. Telegram memory-browser selection/navigation is ephemeral Redis state only.
 
-If the user switches to a compatible video input type, the prefilled reference survives. If the new type cannot accept the stored media, the old temporary file is deleted before the state changes.
+Selected references are owner-revalidated and capability-checked, then resolved to fresh short-lived provider URLs only near final paid admission. Delete is owner-scoped. Saved references survive `/menu`, FSM expiry and redeploys.
 
-Quick Start also preserves its original reference metadata so Back from the first wizard model screen can return to the image/video product choice while the source is still valid. Abandoning an invalid/cleared Quick Start draft cleans all known reference keys.
+## Telegram Stars top-up
 
-Legacy `reference_choosing_model` / generic generation states remain temporarily declared and routed **after** the new wizard so Redis drafts created by an older deployed release can still recover instead of becoming unknown state names.
+Stars checkout is a **native Telegram payment flow**, not a Redis generation FSM. It has its own router (`foxgen-payments`) before broad product/shell fallbacks.
+
+User path from Happy Fox:
+
+```text
+wallet -> Пополнить баланс
+  -> owner-authenticated Stars packages
+  -> durable local payment order
+  -> Telegram XTR invoice link
+  -> Telegram.WebApp.openInvoice(...)
+```
+
+Telegram update path:
+
+```text
+pre_checkout_query
+  -> trusted /v1/user-portal/payments/stars/pre-checkout
+  -> owner/payload/currency/amount validation
+  -> query.answer(ok=true|false)
+
+successful_payment
+  -> trusted /v1/user-portal/payments/stars/success
+  -> commit PaymentEvent + charge ID + paid_at
+  -> exactly-once CREDIT settlement
+  -> user sees credited/current balance projection
+```
+
+The bot never modifies wallet rows directly. The browser never declares payment success. `successful_payment` settlement is keyed by the Telegram charge ID and uses the immutable ledger key `payment-credit:telegram_stars:<charge-id>`.
+
+A crucial recovery boundary exists between evidence and settlement: the backend commits Telegram charge evidence **before** attempting the wallet credit. If the second transaction fails, the user is told not to pay again; the durable `PaymentEvent` can be recovered by the existing admin payment reprocess path without a second credit.
+
+The pre-checkout handler fails closed on backend/validation errors. It does not approve an order merely because Telegram sent a query.
+
+See `telegram-stars-payments.md` and `billing.md`.
 
 ## Declared generation FSM states
 
-Current screen states:
+Current screen states include:
 
 ```text
 image_selecting_model
@@ -217,7 +162,7 @@ video_configuring
 video_waiting_prompt
 ```
 
-Quick Start/reference compatibility states:
+Quick Start/reference compatibility states include:
 
 ```text
 quick_start_waiting_media
@@ -226,54 +171,21 @@ reference_choosing_model
 reference_waiting_prompt
 ```
 
-Migration-compatibility generic states:
-
-```text
-choosing_mode
-choosing_model
-waiting_prompt
-waiting_media
-choosing_aspect_ratio
-choosing_quality
-choosing_duration
-choosing_audio
-```
-
-Shared terminal conversational states:
-
-```text
-confirming
-submitting
-```
+Migration-compatibility generic states remain declared so older deployed Redis drafts recover safely. Shared terminal conversational states include `confirming` and `submitting`.
 
 `fsm_contract.py` defines success/back/cancel/timeout/invalid/stale behavior for every declared state.
 
 ## Back / invalid input / stale callback
 
-Each new screen has an explicit backwards edge:
+Each generation screen has an explicit backwards edge. Invalid messages do not destroy a valid draft. Button-only screens tell the user to use the current controls; media screens restate requirements; prompt screens request text. An unrelated stale callback keeps a known active state and points to the latest controls.
 
-```text
-image model <- references <- settings <- prompt <- confirmation
-video model <- type <- media/settings <- settings <- prompt <- confirmation
-```
-
-For text-only video, Back from settings returns to input type because there is no media screen.
-
-Invalid messages do not destroy a valid draft. Button-only screens tell the user to use the current buttons; media screens restate their exact media requirement and refresh the current controls; prompt screens request text. An unrelated stale callback keeps a known active state and points the user to the latest controls.
+Unknown/expired old state names fail closed and return safely to the menu rather than submitting stale work.
 
 ## Confirmation and billing
 
-Confirmation does not synthesize a provider payload just to calculate price. It resolves the final provider model slug from the current draft, then reads current price and wallet balance through the trusted internal API.
+Confirmation resolves the final provider model slug, then reads the current price and wallet balance through the trusted internal API. Launch is enabled only when price, balance and draft validation pass.
 
-Launch is enabled only when:
-
-- the current model has an active price;
-- the wallet has enough available units;
-- the draft remains valid.
-
-At final launch, private local storage keys are converted to fresh signed URLs and only then is the strict provider payload constructed.
-
-Paid admission remains unchanged:
+At final launch, private input/reference storage keys are converted to fresh short-lived URLs and the strict provider payload is constructed.
 
 ```text
 authenticated internal request
@@ -288,30 +200,37 @@ The Telegram wizard never calls KIE directly and never performs its own wallet m
 
 ## Duplicate confirmation
 
-Each draft owns one stable `idempotency_key`. During `submitting`, repeated launch presses are rejected conversationally; the internal API/PostgreSQL idempotency boundary remains the durable final guard if transport ambiguity occurs.
+Each draft owns one stable `idempotency_key`. During `submitting`, repeated launch presses are rejected conversationally; internal API/PostgreSQL idempotency remains the durable final guard.
+
+Payment invoice creation follows the same principle independently: one `(user, Idempotency-Key)` maps to one durable payment order and conflicting reuse is rejected.
 
 ## Media safety
 
 - one Telegram message equals one upload operation;
 - albums/media groups are rejected before download;
 - unsupported documents fail as user validation errors;
-- input size is bounded by `FOXGEN_TELEGRAM_INPUT_MAX_BYTES`;
-- upload/storage failures do not advance the screen;
-- temporary files stay private and are cleaned on `/start`, `/menu`, cancel/reset, explicit reload, reference replacement and skip-without-reference paths;
+- upload size is bounded;
+- storage failures do not advance the screen;
+- temporary files are cleaned on explicit exits/reloads/replacement paths;
 - signed provider-readable URLs are generated only near final admission;
-- editing/replacing a Telegram control message never changes temporary-file ownership.
+- persistent reference memory uses its own durable prefix/ownership rules.
 
 See `input-media-lifecycle.md`.
 
 ## Runtime router order
 
-Router order is a correctness contract:
+Router order is a correctness contract and is protected by regression tests:
 
 ```text
 foxgen-global-commands
 foxgen-admin-extras
 foxgen-admin
+foxgen-payments
+foxgen-feed
+foxgen-feed-publish
+foxgen-feed-remix
 foxgen-quick-start-wizard
+foxgen-reference-memory
 foxgen-generation-wizard
 foxgen-quick-start
 foxgen-generation
@@ -321,31 +240,33 @@ foxgen-shell
 Reasons:
 
 - global commands must preempt every FSM;
-- Quick Start bridge must intercept post-upload product/back actions before legacy Quick Start handlers;
-- the generation wizard must own ordinary `create:image`, `create:video`, its settings/back/confirmation callbacks before the generic legacy generation router;
-- legacy routers remain reachable only for older Redis drafts and unchanged reference ingestion paths;
+- admin extension callbacks must precede broad product/shell fallbacks;
+- payment transport must consume `pre_checkout_query` and `successful_payment` before generic message handling;
+- feed/publish/remix routers own their social/deep-link callbacks;
+- Quick Start bridge owns post-upload convergence before legacy Quick Start handlers;
+- reference memory owns its browser callbacks before the generic generation wizard;
+- the generation wizard owns current image/video model/settings/back/confirmation callbacks;
+- legacy routers remain after current routers for older Redis drafts;
 - shell catch-all remains last.
 
-`register_runtime_routers()` and its regression test protect this ordering.
+`register_runtime_routers()` and `tests/test_admin_extension_wiring.py` lock this ordering.
 
 ## `/admin`
 
-`/admin` remains a separate privileged Telegram shell. Every privileged callback/FSM continuation re-authorizes through the signed server-side admin API; screen-wizard work does not bypass or alter that boundary.
+`/admin` remains a separate privileged Telegram shell. Every privileged callback/FSM continuation re-authorizes through the signed server-side admin API. Payment reprocess/refund/operator actions stay behind this privileged boundary and are never exposed through the ordinary Mini App identity.
 
 ## Testing expectations
 
-The generation screen change is incomplete unless tests preserve:
+A Telegram/product change is incomplete unless tests preserve the relevant contracts:
 
-- `STATE_CONTRACTS == all declared GenerationStates`;
-- `/start` interruption for every declared state;
+- every declared generation state has a state contract;
+- `/start` interrupts every generation state;
 - exact runtime router order;
-- compact reference keyboard layout and live model/scenario counters;
-- no numbered wizard titles on the new screen flow;
-- wizard provider-slug coverage equals all production-enabled KIE submission models;
-- Seedream text/edit slug selection by reference presence;
-- per-model dynamic settings visibility;
-- first/last frame order;
-- multimodal reference separation;
-- media-completion rules;
-- Quick Start reference preservation into the same wizard;
-- price/balance gating and existing submission idempotency tests.
+- stale/invalid/back behavior;
+- wizard production-model coverage and strict payload validation;
+- media cleanup/ownership boundaries;
+- price/balance admission idempotency;
+- Stars pre-checkout accepts only backend-validated orders;
+- Stars pre-checkout fails closed on backend error;
+- duplicate `successful_payment` cannot double-credit;
+- a settlement failure after charge evidence leaves durable recoverable payment state.

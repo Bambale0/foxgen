@@ -23,6 +23,7 @@ from foxgen.bot.flows import router as generation_router
 from foxgen.bot.fsm_contract import contract_for
 from foxgen.bot.generation_wizard import router as generation_wizard_router
 from foxgen.bot.keyboards import main_menu, resolve_miniapp_url
+from foxgen.bot.payments import router as payments_router
 from foxgen.bot.quick_start import router as quick_start_router
 from foxgen.bot.quick_start_wizard import router as quick_start_wizard_router
 from foxgen.bot.reference_memory import router as reference_memory_router
@@ -197,6 +198,9 @@ def register_runtime_routers(dispatcher: Dispatcher) -> None:
     dispatcher.include_router(global_commands_router)
     dispatcher.include_router(admin_extras_router)
     dispatcher.include_router(admin_router)
+    # Telegram payment updates are transport-level financial events and must be
+    # consumed before broad product/shell message fallbacks.
+    dispatcher.include_router(payments_router)
     dispatcher.include_router(feed_router)
     dispatcher.include_router(feed_publish_router)
     dispatcher.include_router(feed_remix_router)

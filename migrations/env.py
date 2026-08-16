@@ -10,6 +10,7 @@ from foxgen.core.config import get_settings
 from foxgen.infra import admin_models as _admin_models  # noqa: F401
 from foxgen.infra import admin_user_models as _admin_user_models  # noqa: F401
 from foxgen.infra import billing_models as _billing_models  # noqa: F401
+from foxgen.infra import payment_models as _payment_models  # noqa: F401
 from foxgen.infra import publication_models as _publication_models  # noqa: F401
 from foxgen.infra.database import Base
 

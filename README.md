@@ -9,34 +9,39 @@ The public user-facing Mini App is branded **Happy Fox**. Internal repository/pa
 ### Happy Fox public Mini App
 
 - packaged public mobile surface at `/mini-app/` with dark graphite/orange UI;
-- user-facing brand is `Happy Fox` only;
 - Telegram `initData` is verified server-side before a short-lived Mini App JWT is issued;
 - owner-scoped `/v1/miniapp/*` APIs expose real balance, immutable ledger history, active prices, model catalog and recent generations;
 - schema-driven creation studio for every submission-enabled backend model; controls, defaults, enums and media limits come from the reviewed backend `input_schema`;
 - image/video/audio input modes are wired to authenticated private uploads, including Seedance text, first-frame, first+last and multimodal-reference scenarios;
 - paid launches reuse the same `SubmissionService`, model contracts, rate/concurrency gates, atomic reservation and durable outbox as Telegram;
-- private authenticated input upload under a user namespace and short-lived result-media URLs;
+- private authenticated input upload and short-lived result-media URLs;
 - gallery/history, lifecycle polling, safe cancellation boundary, remix into a new draft and download;
-- profile/wallet screen with real balance and ledger projection;
+- feed/profile/publication/remix, likes/comments and durable reference memory;
+- tariffs, support and partner user portal;
+- wallet with real balance, immutable ledger and **Telegram Stars (`XTR`) top-up**;
 - Telegram viewport/content-safe-area and BackButton integration;
 - browser-only demo mode for visual review; demo cannot perform authenticated balance/upload/paid operations.
 
-The public payment-provider invoice flow remains owned by EPIC #7. Happy Fox does not fake a top-up or mutate balances from the browser when that flow is not configured.
+Happy Fox Stars checkout creates a durable owner-scoped payment order before asking Telegram for an invoice link. Telegram's native `successful_payment` update is recorded server-side as durable charge evidence before CREDIT settlement. The browser cannot declare payment success or mutate the wallet.
 
-See [`docs/miniapp.md`](docs/miniapp.md).
+See [`docs/miniapp.md`](docs/miniapp.md) and [`docs/telegram-stars-payments.md`](docs/telegram-stars-payments.md).
 
 ### Telegram product shell
 
-- main menu for image/video creation and planned product sections;
+- real Happy Fox WebApp entrypoint;
+- feed/profile/publication actions;
+- main menu for image/video creation and explicitly planned product sections;
 - Quick Start from the main menu;
 - photo/video sent with no active FSM is accepted as a reference entrypoint;
 - user chooses whether to create an image or a video from the received reference;
 - user-friendly image/video screen FSM with model-specific dynamic settings;
+- durable reusable reference memory with owner-scoped multi-select/delete/reuse;
 - Redis-backed FSM with back/cancel/menu, invalid-input handling, stale callback recovery and TTL expiry;
 - `/start` and `/menu` are global first-priority interrupts and clear every active generation screen plus known temporary inputs;
 - Redis event isolation serializes concurrent updates for one FSM key;
 - Telegram albums are rejected before upload;
 - private local storage for Telegram reference files;
+- native Telegram Stars `pre_checkout_query` / `successful_payment` transport before generic message fallbacks;
 - server-authorized `/admin` panel with privileged extension callbacks registered ahead of broad fallbacks.
 
 ### Generation and provider lifecycle
@@ -56,14 +61,21 @@ See [`docs/miniapp.md`](docs/miniapp.md).
 - SSRF-resistant result download and private S3-compatible archive;
 - duplicate-safe Telegram delivery with explicit `delivery_unknown` state.
 
-### Billing
+### Billing and user payments
 
 - integer internal credits; no floating-point wallet arithmetic;
 - versioned model prices;
 - materialized wallet accounts backed by an append-only ledger;
 - atomic reserve/capture/release/refund lifecycle;
 - deterministic idempotency for balance adjustments and settlement;
-- reconciliation across generation, reservation, media, outbox and delivery state.
+- reconciliation across generation, reservation, media, outbox and delivery state;
+- versioned tariff packages;
+- Telegram Stars package/invoice flow for digital CREDIT top-up;
+- durable `user_payment_orders` with `created -> invoice_ready -> paid -> credited` recovery boundary;
+- unique Telegram charge and deterministic `payment-credit:telegram_stars:<charge-id>` ledger key;
+- paid-but-uncredited evidence survives settlement failure for safe admin reprocessing.
+
+Telegram Stars refund execution, promo/bonus coupling and any external web checkout provider remain separate reviewed follow-up slices; see [`docs/known-limitations.md`](docs/known-limitations.md).
 
 ### Administrative control plane
 
@@ -91,7 +103,7 @@ Registered/current capabilities include:
 - audit browsing and read-only AI diagnostics;
 - append-only admin command ledger with request/result snapshots and idempotent replay.
 
-Every admin write is server-authorized. Signed HTTP admin requests are network allowlisted and use HMAC-SHA256 over the exact raw body. Destructive or expensive actions require explicit confirmation. The operator-web extension router is registered before the generic `/api/{section}` route so dedicated analytics/admin endpoints cannot be shadowed.
+Every admin write is server-authorized. Signed HTTP admin requests are network allowlisted and use HMAC-SHA256 over the exact raw body. Destructive or expensive actions require explicit confirmation. The operator-web extension router is registered before generic routes so dedicated endpoints cannot be shadowed.
 
 ## Architecture at a glance
 
@@ -99,14 +111,15 @@ Every admin write is server-authorized. Signed HTTP admin requests are network a
 Telegram bot ────────────────┐
 Happy Fox Mini App ──────────┼──> FastAPI
 Trusted internal clients ────┤      ├── shared paid generation admission
-Telegram /admin ─────────────┤      ├── registered signed internal admin API
+Telegram /admin ─────────────┤      ├── user payment/order settlement
+                             │      ├── registered signed internal admin API
                              │      └── provider callbacks
                              │
                              v
                       Application services
                       ├── submissions
                       ├── generation lifecycle
-                      ├── billing
+                      ├── billing / payments
                       ├── reconciliation
                       └── admin services
                              │
@@ -123,7 +136,7 @@ Telegram /admin ─────────────┤      ├── regist
           └── admin/support/campaign work
 ```
 
-Happy Fox is transport only: Telegram identity validation and owner-scoped projection happen at the API edge, while paid work continues through existing application/domain services.
+Happy Fox is transport only: Telegram identity validation and owner-scoped projection happen at the API edge, while paid work and payment settlement continue through server-side application/domain services.
 
 See [`docs/architecture.md`](docs/architecture.md) for boundaries and invariants.
 
@@ -147,6 +160,18 @@ Recovery/terminal branches include `submission_unknown`, `failed` and `cancelled
 
 The billable provider POST is never automatically replayed. A lost provider response moves the local task into an ambiguity state that must converge through callback, polling or evidence-based operator reconciliation.
 
+## Telegram Stars lifecycle
+
+```text
+payment order created
+  -> invoice_ready
+  -> Telegram confirms unique charge
+  -> paid              # durable external evidence committed
+  -> credited          # wallet + immutable ledger settled
+```
+
+`paid` blocks another pre-checkout for the same order. If settlement fails after Telegram charged the user, the committed `PaymentEvent` remains available for the idempotent admin payment reprocess path. Users should not be asked to pay again merely because CREDIT settlement failed.
+
 ## Local development
 
 ```bash
@@ -155,7 +180,7 @@ cp .env.example .env
 docker compose up --build
 ```
 
-Local Compose provides PostgreSQL, Redis, MinIO, migrations, API, worker and bot. Telegram/Mini App temporary input files are stored in a private shared volume mounted into `bot` and `api`; generated result archives remain in MinIO. MinIO bootstrap creates the private results bucket when needed, installs the short-retention `inputs/` lifecycle rule for S3-backed deployments, verifies it, configures bundled MinIO stale multipart cleanup explicitly and gates API/worker/bot startup. MinIO ports are exposed for development only.
+Local Compose provides PostgreSQL, Redis, MinIO, migrations, API, worker and bot. Temporary inputs remain private; generated result archives remain in MinIO. MinIO bootstrap creates the private bucket when needed, installs the short-retention `inputs/` lifecycle rule, verifies it, configures bundled MinIO stale multipart cleanup and gates API/worker/bot startup.
 
 The visual Happy Fox shell is available at:
 
@@ -179,9 +204,9 @@ FOXGEN_INTERNAL_API_TOKEN=<dedicated-internal-secret>
 FOXGEN_KIE_API_KEY=<kie-key>
 ```
 
-A test wallet also needs an active model price and enough credits before Telegram or Happy Fox can launch a paid task.
+A test wallet also needs an active model price and enough credits before Telegram or Happy Fox can launch a paid generation. Stars top-up additionally needs an admin-published tariff package containing a positive CREDIT amount and explicit positive `stars`/`stars_amount` value.
 
-See [`docs/development.md`](docs/development.md) and [`docs/miniapp.md`](docs/miniapp.md).
+See [`docs/development.md`](docs/development.md), [`docs/miniapp.md`](docs/miniapp.md) and [`docs/telegram-stars-payments.md`](docs/telegram-stars-payments.md).
 
 ## Administrative bootstrap
 
@@ -210,28 +235,38 @@ POST /v1/models/{slug}/tasks
 POST /webhooks/kie
 ```
 
-Happy Fox adds:
+Happy Fox adds owner-scoped routes such as:
 
 ```text
 POST   /v1/miniapp/auth
 GET    /v1/miniapp/bootstrap
 GET    /v1/miniapp/models
-GET    /v1/miniapp/models/{slug}
 POST   /v1/miniapp/models/{slug}/validate
 GET    /v1/miniapp/balance
 GET    /v1/miniapp/prices
 GET    /v1/miniapp/ledger
 GET    /v1/miniapp/generations
-GET    /v1/miniapp/generations/{id}
-POST   /v1/miniapp/generations/{id}/cancel
 POST   /v1/miniapp/tasks
 POST   /v1/miniapp/input-media
-DELETE /v1/miniapp/input-media/{storage_key}
+GET    /v1/miniapp/feed
+GET    /v1/miniapp/reference-memory
+GET    /v1/miniapp/tariff
+GET    /v1/miniapp/support
+GET    /v1/miniapp/partner
+GET    /v1/miniapp/payments/stars/packages
+POST   /v1/miniapp/payments/stars/invoices
 ```
 
-Billing/generation operator routes and the **registered** signed `/internal/admin/*` surface are documented in [`docs/api-reference.md`](docs/api-reference.md). Happy Fox security/transport details are in [`docs/miniapp.md`](docs/miniapp.md).
+Trusted Telegram payment completion uses:
 
-Never place internal API tokens, admin HMAC keys, billing credentials or object-storage credentials in Telegram clients, browsers or a public Mini App.
+```text
+POST /v1/user-portal/payments/stars/pre-checkout
+POST /v1/user-portal/payments/stars/success
+```
+
+Billing/generation operator routes and the registered signed `/internal/admin/*` surface are documented in [`docs/api-reference.md`](docs/api-reference.md). Happy Fox security/transport details are in [`docs/miniapp.md`](docs/miniapp.md).
+
+Never place internal API tokens, admin HMAC keys, billing credentials, Telegram bot tokens or object-storage credentials in Telegram clients, browsers or a public Mini App.
 
 ## Quality and CI
 
@@ -250,6 +285,8 @@ The reproducible CI pipeline uses the exact dependency lock and checks:
 - Docker Compose validation;
 - deterministic production image build/import smoke test.
 
+Payment changes additionally require owner/auth transport tests and real PostgreSQL evidence/idempotency tests. The Stars suite forces a settlement failure after charge evidence and verifies the `paid` order/payment remain durable without a CREDIT ledger entry.
+
 Local commands:
 
 ```bash
@@ -266,30 +303,31 @@ A successful CI run on `main` can trigger the protected production deployment wo
 
 The server keeps its own `.env`; GitHub Actions does not upload application secrets. Deployment is exact-SHA, fast-forward only, serialized with `flock`, runs migrations before application replacement and requires `/health/ready` to pass.
 
-Production Compose runs a fail-closed `minio-init` bootstrap before API/worker/bot startup. It preserves unrelated bucket rules, installs and reads back the short-retention `inputs/` rule, and never targets durable `generations/` results. External S3-compatible topologies must provide equivalent lifecycle enforcement themselves.
+Production Compose runs a fail-closed `minio-init` bootstrap before API/worker/bot startup. It preserves unrelated bucket rules, installs and reads back the short-retention `inputs/` rule, and never targets durable generation/reference results. External S3-compatible topologies must provide equivalent lifecycle enforcement themselves.
 
-For Happy Fox, the public reverse proxy serves `/mini-app/` and `/v1/miniapp/*`; `/internal/admin/*` remains private. Configure the Telegram Main Mini App URL to the public HTTPS `/mini-app/` URL after deploying the tested SHA.
+For Happy Fox, the public reverse proxy serves `/mini-app/` and `/v1/miniapp/*`; `/internal/admin/*` remains private. The deploy gate also verifies public Happy Fox and Telegram default WebApp menu convergence after exact-image recreation/reload.
 
 See:
 
 - [`docs/production-deploy.md`](docs/production-deploy.md)
 - [`docs/miniapp.md`](docs/miniapp.md)
+- [`docs/telegram-stars-payments.md`](docs/telegram-stars-payments.md)
 - [`docs/minio-lifecycle-runbook.md`](docs/minio-lifecycle-runbook.md)
 - [`docs/github-environment-setup.md`](docs/github-environment-setup.md)
 - [`docs/operations-runbook.md`](docs/operations-runbook.md)
-- [`docs/known-limitations.md`](docs/known-limitations.md)
 
 ## Documentation index
 
-Start with [`docs/README.md`](docs/README.md). It maps architecture, schema, configuration, API, Happy Fox, Telegram FSM, model contracts, billing, admin, security, CI, deployment, reconciliation and operations.
+Start with [`docs/README.md`](docs/README.md). It maps architecture, schema, configuration, API, Happy Fox, Telegram FSM, model contracts, billing/payments, admin, security, CI, deployment, reconciliation and operations.
 
 ## Source-of-truth rules
 
 - runtime behavior/reachability: registered code paths + tests;
 - database schema: Alembic migrations + SQLAlchemy models;
 - model provider IDs/payload contracts: reviewed provider registry/contracts + tests;
+- payment evidence/settlement: durable order/payment rows + immutable ledger + integration tests;
 - application environment variables: `foxgen.core.config.Settings`, `.env.example`, `deploy/production.env.example`;
-- infrastructure bootstrap variables: Compose/scripts plus the same env examples and `docs/configuration.md`;
+- infrastructure bootstrap variables: Compose/scripts plus env examples and `docs/configuration.md`;
 - deploy behavior: `.github/workflows/`, `docker-compose.prod.yml`, `scripts/deploy-production.sh`;
 - current limitations: `docs/known-limitations.md` plus open tracked issue/PR state.
 
@@ -297,4 +335,4 @@ If documentation disagrees with executable code or migrations, treat executable 
 
 ## Repository workflow
 
-Read [`AGENTS.md`](AGENTS.md) before automated changes. Changes to behavior, APIs, schema, provider contracts, security or deployment must update relevant documentation and tests in the same PR.
+Read [`AGENTS.md`](AGENTS.md) before automated changes. Changes to behavior, APIs, schema, provider contracts, security, payments or deployment must update relevant documentation and tests in the same PR.

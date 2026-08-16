@@ -34,9 +34,9 @@ The canonical parity runtime is `miniapp_static/parity-app.js` with:
 - **Работы** — owner generation history/detail/status polling/cancel/repeat/publish;
 - **Профиль** — public profile, own publications, wallet/ledger and reference memory.
 
-Secondary screens include generation detail, publication detail, public profile, wallet and durable reference memory.
+Secondary screens include generation detail, publication detail, public profile, wallet, durable reference memory, support, partner portal, published tariffs and Telegram Stars top-up.
 
-The previous `app.js` remains packaged only as a rollback artifact; `index.html` loads `parity-app.js`.
+The previous `app.js` remains packaged only as a rollback artifact; `index.html` loads `parity-app.js`. `complete-menu.js` augments the current wallet/tool launcher and owns the Stars checkout interaction without duplicating backend financial logic.
 
 ## Visual contract
 
@@ -79,7 +79,7 @@ For a social remix, the request also includes `source_publication_id`. That valu
 
 ## Feed, profiles and publication
 
-The social domain from #58 is now merged and exposed to Happy Fox through Telegram-JWT-safe wrappers.
+The social domain from #58 is merged and exposed to Happy Fox through Telegram-JWT-safe wrappers.
 
 ### Feed/read routes
 
@@ -109,7 +109,7 @@ Likes are state-setting rather than browser-owned counters. Comments remain isol
 
 ## Durable reference memory
 
-The reference-memory domain from #69 is now merged and exposed in Happy Fox.
+The reference-memory domain from #69 is merged and exposed in Happy Fox.
 
 ### Browser routes
 
@@ -143,21 +143,42 @@ Immediately before paid generation the Mini App calls `/reference-memory/resolve
 
 Active detail screens poll until terminal state. Cancellation remains forbidden after the existing provider-side-effect safety boundary; the browser does not invent a blind retry. Repeat creates a new draft/idempotency key.
 
-## Wallet and pricing
+## Wallet, pricing and Telegram Stars
 
 | Method | Path | Purpose |
 |---|---|---|
 | `GET` | `/v1/miniapp/balance` | available/reserved/total materialized balance |
 | `GET` | `/v1/miniapp/prices` | active generation prices |
 | `GET` | `/v1/miniapp/ledger` | immutable owner ledger, bounded to 200 |
+| `GET` | `/v1/miniapp/payments/stars/packages` | current Stars-enabled top-up packages |
+| `POST` | `/v1/miniapp/payments/stars/invoices` | create/replay owner-scoped XTR invoice; requires `Idempotency-Key` |
 
-Paid generation remains responsible for atomic reserve/capture/release/refund. Happy Fox only reads wallet projections and submits through the shared paid boundary.
+Paid generation remains responsible for atomic reserve/capture/release/refund. Happy Fox only reads wallet projections and submits generation through the shared paid boundary.
 
-A user-safe payment-provider invoice API is not yet merged. Happy Fox therefore shows that boundary as unavailable instead of presenting a fake top-up button.
+For top-up, the browser authenticates with the same Telegram-derived JWT, obtains Stars-enabled packages, creates a durable invoice order and opens the returned URL through `Telegram.WebApp.openInvoice`. A session-scoped idempotency key is reused across network retries.
+
+The browser **cannot** declare checkout success. Telegram sends native `pre_checkout_query` and `successful_payment` updates to the bot; the trusted backend validates the order, persists charge evidence as `status=paid`, then settles CREDIT exactly once. If the second settlement boundary fails, the user must not pay again: durable payment evidence remains recoverable through the operator payment reprocess path.
+
+See `telegram-stars-payments.md` and `billing.md`.
+
+## Happy Fox user portal
+
+Owner-scoped routes authenticated by the Telegram-derived JWT include:
+
+- `GET /v1/miniapp/tariff` — current published tariff version;
+- `GET|POST /v1/miniapp/support` — list/create support tickets;
+- `GET /v1/miniapp/support/{ticket_id}` — ticket detail/history;
+- `POST /v1/miniapp/support/{ticket_id}/messages` — reply;
+- `POST /v1/miniapp/support/{ticket_id}/close` — close own ticket;
+- `GET /v1/miniapp/partner` — partner dashboard and withdrawals;
+- `POST /v1/miniapp/partner/join` — idempotent partner enrollment;
+- `POST /v1/miniapp/partner/withdrawals` — create withdrawal request; requires `Idempotency-Key`.
+
+The equivalent `/v1/user-portal/*` trusted-service routes authenticate user context independently of the paid-task submission kill switch. Admin review/approval actions remain under the privileged admin control plane.
 
 ## Full user-parity program
 
-Issue #89 is the master parity contract. Social and reference-memory parity are now part of the executable product. Remaining `planned:*` Telegram entries must **not** be represented as working browser features until their backend/product domains are implemented and tested.
+Issue #89 is the master parity contract. Social/reference memory, tariffs/support/partner portal and Stars top-up are executable product surfaces. Remaining planned Telegram entries must **not** be represented as working browser features until their backend/product domains are implemented and tested.
 
 Still tracked for backend + Telegram + Happy Fox delivery:
 
@@ -166,9 +187,8 @@ Still tracked for backend + Telegram + Happy Fox delivery:
 - motion control/talking avatar;
 - Prompt AI and conversational assistant;
 - dedicated Gemini Omni / Runway / Veo adapters where required;
-- payment/top-up flow;
-- referrals/partners;
-- user support and published tariff/product purchase surface;
+- promo/bonus coupling and Telegram Stars refund workflow;
+- remaining referral attribution/anti-fraud mechanics required by EPIC #8;
 - the currently undefined `boring_work` product requires an explicit product contract before implementation.
 
 Operator/admin APIs remain separate and are not ordinary Mini App parity.
@@ -184,6 +204,8 @@ FOXGEN_MINIAPP_JWT_TTL_SECONDS=3600
 FOXGEN_MINIAPP_MEDIA_URL_TTL_SECONDS=300
 ```
 
+Stars invoice creation uses the configured Telegram bot token server-side; no payment-provider or bot credential is added to browser configuration.
+
 The public reverse proxy must route `/mini-app/`, `/v1/miniapp/*` and the signed read-only reference-media route to FoxGen while keeping `/internal/admin/*` private.
 
 ## Tests and rollback
@@ -197,27 +219,14 @@ Required regression coverage includes:
 - owner generation history/detail/cancel;
 - feed/profile/publish/like/comment/remix JWT boundary;
 - reference-memory owner namespace, resolve/delete and foreign-key rejection;
+- user portal tariff/support/partner ownership;
+- Stars package/invoice JWT ownership and idempotency;
+- bot pre-checkout fail-closed behavior and successful-payment transport;
+- real PostgreSQL exactly-once Stars credit plus forced paid-but-uncredited recovery test;
 - parity runtime/index markers and four primary navigation surfaces;
 - restrained grunge token `<=0.30`;
-- Alembic upgrade/downgrade/re-upgrade, real PostgreSQL/Redis lifecycle tests;
+- Alembic upgrade/downgrade/re-upgrade and real PostgreSQL/Redis lifecycle tests;
 - production image build/security scans;
 - final Telegram WebView/public HTTPS smoke after deployment.
 
-`FOXGEN_MINIAPP_ENABLED=false` removes the public Mini App router/static mount and suppresses Telegram WebApp entrypoints without changing durable generation, billing, publication or reference-memory state.
-
-
-<!-- happy-fox-user-portal-routes -->
-## Happy Fox user portal routes
-
-Owner-scoped Mini App routes authenticated by the Telegram-derived JWT:
-
-- `GET /v1/miniapp/tariff` — current published tariff version;
-- `GET|POST /v1/miniapp/support` — list/create support tickets;
-- `GET /v1/miniapp/support/{ticket_id}` — ticket detail/history;
-- `POST /v1/miniapp/support/{ticket_id}/messages` — reply;
-- `POST /v1/miniapp/support/{ticket_id}/close` — close own ticket;
-- `GET /v1/miniapp/partner` — partner dashboard and withdrawals;
-- `POST /v1/miniapp/partner/join` — idempotent partner enrollment;
-- `POST /v1/miniapp/partner/withdrawals` — create a withdrawal request and requires `Idempotency-Key`.
-
-The equivalent `/v1/user-portal/*` trusted-service routes authenticate user context independently of the paid-task submission kill switch. Admin review/approval actions remain under the privileged admin control plane.
+`FOXGEN_MINIAPP_ENABLED=false` removes the public Mini App router/static mount and suppresses Telegram WebApp entrypoints without changing durable generation, billing, payment, publication or reference-memory state.

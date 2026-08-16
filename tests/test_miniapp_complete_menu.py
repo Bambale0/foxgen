@@ -39,6 +39,19 @@ def test_planned_tools_are_explicitly_non_interactive() -> None:
     assert "Незавершённые функции не запускаются и не списывают кредиты" in script
 
 
+def test_wallet_topup_uses_authenticated_stars_invoice_flow() -> None:
+    script = (MINIAPP / "complete-menu.js").read_text(encoding="utf-8")
+
+    assert "data-stars-topup" in script
+    assert "/payments/stars/packages" in script
+    assert "/payments/stars/invoices" in script
+    assert "Idempotency-Key" in script
+    assert "sessionStorage" in script
+    assert "tg.openInvoice" in script
+    assert "status === 'paid'" in script
+    assert "Telegram Stars" in script
+
+
 def test_ready_generation_gets_result_open_download_action() -> None:
     script = (MINIAPP / "complete-menu.js").read_text(encoding="utf-8")
 
