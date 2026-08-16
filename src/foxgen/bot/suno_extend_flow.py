@@ -23,20 +23,18 @@ from foxgen.bot.suno_extend_transport import (
 router = Router(name="music-suno-extend")
 
 SUNO_EXTEND_MODEL_SLUG = "suno-v5-extend"
-SUNO_EXTEND_MODEL_TITLE = "Suno V5 Extend"
+
+
+def _button(text: str, data: str) -> InlineKeyboardButton:
+    return InlineKeyboardButton(text=text, callback_data=data)
 
 
 def _hub_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="♫ Новый трек", callback_data="music:new")],
-            [
-                InlineKeyboardButton(
-                    text="↗ Продолжить свой трек",
-                    callback_data="music:extend:start",
-                )
-            ],
-            [InlineKeyboardButton(text="← Главное меню", callback_data="music:extend:menu")],
+            [_button("♫ Новый трек", "music:new")],
+            [_button("↗ Продолжить свой трек", "music:extend:start")],
+            [_button("← Главное меню", "music:extend:menu")],
         ]
     )
 
@@ -44,92 +42,58 @@ def _hub_keyboard() -> InlineKeyboardMarkup:
 def _source_keyboard(items: list[dict[str, object]]) -> InlineKeyboardMarkup:
     rows: list[list[InlineKeyboardButton]] = []
     for index, item in enumerate(items[:20]):
-        title = str(item.get("title") or "Suno track")
+        title = str(item.get("title") or "Suno track")[:38]
         duration_raw = item.get("duration_seconds")
-        duration = (
-            f" · {float(duration_raw):.1f} сек"
-            if isinstance(duration_raw, (int, float)) and not isinstance(duration_raw, bool)
-            else ""
-        )
-        rows.append(
-            [
-                InlineKeyboardButton(
-                    text=f"{title[:38]}{duration}",
-                    callback_data=f"music:extend:source:{index}",
-                )
-            ]
-        )
+        duration = ""
+        if isinstance(duration_raw, (int, float)) and not isinstance(duration_raw, bool):
+            duration = f" · {float(duration_raw):.1f} сек"
+        rows.append([_button(f"{title}{duration}", f"music:extend:source:{index}")])
     rows.extend(
         [
-            [InlineKeyboardButton(text="Обновить список", callback_data="music:extend:start")],
-            [InlineKeyboardButton(text="← Музыка", callback_data="music:extend:hub")],
-            [InlineKeyboardButton(text="Отмена", callback_data="nav:cancel")],
+            [_button("Обновить список", "music:extend:start")],
+            [_button("← Музыка", "music:extend:hub")],
+            [_button("Отмена", "nav:cancel")],
         ]
     )
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def _extend_mode_keyboard() -> InlineKeyboardMarkup:
+def _mode_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text="Продолжить как есть",
-                    callback_data="music:extend:mode:inherit",
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    text="Кастомное продолжение",
-                    callback_data="music:extend:mode:custom",
-                )
-            ],
-            [InlineKeyboardButton(text="← К трекам", callback_data="music:extend:back:sources")],
-            [InlineKeyboardButton(text="Отмена", callback_data="nav:cancel")],
+            [_button("Продолжить как есть", "music:extend:mode:inherit")],
+            [_button("Кастомное продолжение", "music:extend:mode:custom")],
+            [_button("← К трекам", "music:extend:back:sources")],
+            [_button("Отмена", "nav:cancel")],
         ]
     )
 
 
-def _nav_keyboard(back_callback: str) -> InlineKeyboardMarkup:
+def _nav(back: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="← Назад", callback_data=back_callback)],
-            [
-                InlineKeyboardButton(text="Отмена", callback_data="nav:cancel"),
-                InlineKeyboardButton(text="Меню", callback_data="nav:menu"),
-            ],
+            [_button("← Назад", back)],
+            [_button("Отмена", "nav:cancel"), _button("Меню", "nav:menu")],
         ]
     )
 
 
-def _confirmation_keyboard(*, can_submit: bool) -> InlineKeyboardMarkup:
-    rows: list[list[InlineKeyboardButton]] = []
-    if can_submit:
-        rows.append(
-            [InlineKeyboardButton(text="Запустить Extend", callback_data="music:extend:confirm")]
-        )
-    else:
-        rows.append(
-            [
-                InlineKeyboardButton(
-                    text="Обновить цену и баланс",
-                    callback_data="music:extend:refresh",
-                )
-            ]
-        )
-    rows.extend(
-        [
-            [InlineKeyboardButton(text="← Назад", callback_data="music:extend:back:confirm")],
-            [
-                InlineKeyboardButton(text="Отмена", callback_data="nav:cancel"),
-                InlineKeyboardButton(text="Меню", callback_data="nav:menu"),
-            ],
+def _confirm_keyboard(can_submit: bool) -> InlineKeyboardMarkup:
+    primary = (
+        [_button("Запустить Extend", "music:extend:confirm")]
+        if can_submit
+        else [_button("Обновить цену и баланс", "music:extend:refresh")]
+    )
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            primary,
+            [_button("← Назад", "music:extend:back:confirm")],
+            [_button("Отмена", "nav:cancel"), _button("Меню", "nav:menu")],
         ]
     )
-    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def _source_to_state(item: SunoSourceView) -> dict[str, object]:
+def _serialize_source(item: SunoSourceView) -> dict[str, object]:
     return {
         "generation_id": item.generation_id,
         "model_slug": item.model_slug,
@@ -148,9 +112,46 @@ async def _show_hub(callback: CallbackQuery, state: FSMContext, *, clear: bool) 
         callback,
         (
             "<b>Музыка · Suno V5</b>\n\n"
-            "Создайте новый трек или продолжите один из своих уже сохранённых вариантов."
+            "Создайте новый трек или продолжите один из своих сохранённых вариантов."
         ),
         _hub_keyboard(),
+    )
+
+
+async def _show_sources(callback: CallbackQuery, state: FSMContext) -> None:
+    data = await state.get_data()
+    raw = data.get("extend_sources")
+    items = raw if isinstance(raw, list) else []
+    await state.set_state(MusicExtendStates.choosing_source)
+    text = (
+        "<b>Выберите свой Suno-трек</b>\n\n"
+        "Показываются только ваши завершённые и сохранённые варианты."
+        if items
+        else (
+            "<b>Продолжить трек</b>\n\n"
+            "Пока нет подходящих сохранённых Suno-треков. "
+            "Сначала создайте новый трек и дождитесь его завершения."
+        )
+    )
+    await safe_edit_callback_message(callback, text, _source_keyboard(items))
+
+
+async def _show_mode(callback: CallbackQuery, state: FSMContext) -> None:
+    data = await state.get_data()
+    title = escape(str(data.get("extend_source_title") or "Suno track"))
+    duration_raw = data.get("extend_source_duration")
+    duration = ""
+    if isinstance(duration_raw, (int, float)) and not isinstance(duration_raw, bool):
+        duration = f" · {float(duration_raw):.1f} сек"
+    await state.set_state(MusicExtendStates.choosing_mode)
+    await safe_edit_callback_message(
+        callback,
+        (
+            f"<b>{title}</b>{duration}\n\n"
+            "Продолжить с исходными параметрами или задать новый prompt, "
+            "стиль, название и точку перехода?"
+        ),
+        _mode_keyboard(),
     )
 
 
@@ -181,27 +182,8 @@ async def begin_extend(callback: CallbackQuery, state: FSMContext) -> None:
     except SunoExtendTransportError as exc:
         await callback.answer(str(exc), show_alert=True)
         return
-
-    items = [_source_to_state(item) for item in sources]
-    await state.update_data(extend_sources=items)
-    await state.set_state(MusicExtendStates.choosing_source)
-    if not items:
-        await safe_edit_callback_message(
-            callback,
-            (
-                "<b>Продолжить трек</b>\n\n"
-                "Пока нет подходящих сохранённых Suno-треков. "
-                "Сначала создайте новый трек и дождитесь его завершения."
-            ),
-            _source_keyboard(items),
-        )
-        return
-
-    await safe_edit_callback_message(
-        callback,
-        "<b>Выберите свой Suno-трек</b>\n\nПоказываются только ваши завершённые и сохранённые варианты.",
-        _source_keyboard(items),
-    )
+    await state.update_data(extend_sources=[_serialize_source(item) for item in sources])
+    await _show_sources(callback, state)
 
 
 @router.callback_query(MusicExtendStates.choosing_source, F.data == "music:extend:hub")
@@ -214,26 +196,24 @@ async def back_to_hub(callback: CallbackQuery, state: FSMContext) -> None:
     F.data.startswith("music:extend:source:"),
 )
 async def choose_extend_source(callback: CallbackQuery, state: FSMContext) -> None:
-    raw = (callback.data or "").rsplit(":", 1)[-1]
+    raw_index = (callback.data or "").rsplit(":", 1)[-1]
     try:
-        index = int(raw)
+        index = int(raw_index)
     except ValueError:
         await callback.answer("Источник устарел. Обновите список.", show_alert=True)
         return
 
     data = await state.get_data()
     sources = data.get("extend_sources")
-    if not isinstance(sources, list) or index < 0 or index >= len(sources):
+    if not isinstance(sources, list) or not 0 <= index < len(sources):
         await callback.answer("Источник устарел. Обновите список.", show_alert=True)
         return
     source = sources[index]
     if not isinstance(source, dict):
         await callback.answer("Источник повреждён. Обновите список.", show_alert=True)
         return
-
     generation_id = source.get("generation_id")
     audio_id = source.get("audio_id")
-    title = source.get("title")
     if not isinstance(generation_id, str) or not isinstance(audio_id, str):
         await callback.answer("Источник повреждён. Обновите список.", show_alert=True)
         return
@@ -241,7 +221,7 @@ async def choose_extend_source(callback: CallbackQuery, state: FSMContext) -> No
     await state.update_data(
         extend_source_generation_id=generation_id,
         extend_audio_id=audio_id,
-        extend_source_title=str(title or "Suno track"),
+        extend_source_title=str(source.get("title") or "Suno track"),
         extend_source_duration=source.get("duration_seconds"),
         idempotency_key=f"suno-extend:{callback.from_user.id}:{uuid4().hex}",
         default_param_flag=False,
@@ -249,36 +229,10 @@ async def choose_extend_source(callback: CallbackQuery, state: FSMContext) -> No
         style="",
         title="",
         negative_tags="",
+        continue_at=None,
         can_submit=False,
     )
-    await state.set_state(MusicExtendStates.choosing_mode)
-    duration_raw = source.get("duration_seconds")
-    duration = (
-        f" · {float(duration_raw):.1f} сек"
-        if isinstance(duration_raw, (int, float)) and not isinstance(duration_raw, bool)
-        else ""
-    )
-    await safe_edit_callback_message(
-        callback,
-        (
-            f"<b>{escape(str(title or 'Suno track'))}</b>{duration}\n\n"
-            "Продолжить с исходными параметрами или задать новый prompt/style/title и точку перехода?"
-        ),
-        _extend_mode_keyboard(),
-    )
-
-
-@router.callback_query(MusicExtendStates.choosing_mode, F.data == "music:extend:back:sources")
-async def back_to_sources(callback: CallbackQuery, state: FSMContext) -> None:
-    data = await state.get_data()
-    items = data.get("extend_sources")
-    safe_items = items if isinstance(items, list) else []
-    await state.set_state(MusicExtendStates.choosing_source)
-    await safe_edit_callback_message(
-        callback,
-        "<b>Выберите свой Suno-трек</b>",
-        _source_keyboard(safe_items),
-    )
+    await _show_mode(callback, state)
 
 
 @router.callback_query(
@@ -304,12 +258,11 @@ async def choose_extend_mode(
         await state.set_state(MusicExtendStates.confirming)
         await _show_confirmation_callback(callback, state, api_client)
         return
-
     await state.set_state(MusicExtendStates.waiting_prompt)
     await safe_edit_callback_message(
         callback,
         "<b>Новый prompt / текст продолжения</b>\n\nДо 5000 символов.",
-        _nav_keyboard("music:extend:back:mode"),
+        _nav("music:extend:back:mode"),
     )
 
 
@@ -326,7 +279,7 @@ async def receive_extend_prompt(message: Message, state: FSMContext) -> None:
     await state.set_state(MusicExtendStates.waiting_style)
     await message.answer(
         "<b>Новый стиль</b>\n\nДо 1000 символов.",
-        reply_markup=_nav_keyboard("music:extend:back:prompt"),
+        reply_markup=_nav("music:extend:back:prompt"),
     )
 
 
@@ -343,7 +296,7 @@ async def receive_extend_style(message: Message, state: FSMContext) -> None:
     await state.set_state(MusicExtendStates.waiting_title)
     await message.answer(
         "<b>Название продолжения</b>\n\nДо 100 символов.",
-        reply_markup=_nav_keyboard("music:extend:back:style"),
+        reply_markup=_nav("music:extend:back:style"),
     )
 
 
@@ -360,14 +313,12 @@ async def receive_extend_title(message: Message, state: FSMContext) -> None:
     await state.set_state(MusicExtendStates.waiting_continue_at)
     data = await state.get_data()
     duration_raw = data.get("extend_source_duration")
-    hint = (
-        f"Трек длится {float(duration_raw):.1f} сек. Укажите точку раньше конца."
-        if isinstance(duration_raw, (int, float)) and not isinstance(duration_raw, bool)
-        else "Укажите положительное число секунд."
-    )
+    hint = "Укажите положительное число секунд."
+    if isinstance(duration_raw, (int, float)) and not isinstance(duration_raw, bool):
+        hint = f"Трек длится {float(duration_raw):.1f} сек. Укажите точку раньше конца."
     await message.answer(
         f"<b>С какой секунды продолжить?</b>\n\n{hint}",
-        reply_markup=_nav_keyboard("music:extend:back:title"),
+        reply_markup=_nav("music:extend:back:title"),
     )
 
 
@@ -388,13 +339,10 @@ async def receive_continue_at(
         return
     data = await state.get_data()
     duration_raw = data.get("extend_source_duration")
-    if (
-        isinstance(duration_raw, (int, float))
-        and not isinstance(duration_raw, bool)
-        and value >= float(duration_raw)
-    ):
-        await message.answer("Точка продолжения должна быть раньше конца исходного трека.")
-        return
+    if isinstance(duration_raw, (int, float)) and not isinstance(duration_raw, bool):
+        if value >= float(duration_raw):
+            await message.answer("Точка продолжения должна быть раньше конца исходного трека.")
+            return
     await state.update_data(continue_at=value, can_submit=False)
     await state.set_state(MusicExtendStates.confirming)
     await _show_confirmation_message(message, state, api_client)
@@ -466,7 +414,7 @@ async def _show_confirmation_message(
     api_client: FoxGenApiClient,
 ) -> None:
     text, can_submit = await _quote(state, api_client, message.from_user.id)
-    await message.answer(text, reply_markup=_confirmation_keyboard(can_submit=can_submit))
+    await message.answer(text, reply_markup=_confirm_keyboard(can_submit))
 
 
 async def _show_confirmation_callback(
@@ -475,11 +423,7 @@ async def _show_confirmation_callback(
     api_client: FoxGenApiClient,
 ) -> None:
     text, can_submit = await _quote(state, api_client, callback.from_user.id)
-    await safe_edit_callback_message(
-        callback,
-        text,
-        _confirmation_keyboard(can_submit=can_submit),
-    )
+    await safe_edit_callback_message(callback, text, _confirm_keyboard(can_submit))
 
 
 @router.callback_query(MusicExtendStates.confirming, F.data == "music:extend:refresh")
@@ -492,10 +436,7 @@ async def refresh_extend(
 
 
 @router.callback_query(MusicExtendStates.confirming, F.data == "music:extend:confirm")
-async def confirm_extend(
-    callback: CallbackQuery,
-    state: FSMContext,
-) -> None:
+async def confirm_extend(callback: CallbackQuery, state: FSMContext) -> None:
     data = await state.get_data()
     if not bool(data.get("can_submit")):
         await callback.answer(
@@ -509,16 +450,9 @@ async def confirm_extend(
         await callback.answer("Исходный трек устарел. Выберите его заново.", show_alert=True)
         return
 
-    await state.set_state(MusicExtendStates.submitting)
-    await safe_edit_callback_message(
-        callback,
-        "Ставлю продолжение в очередь…",
-        answer_callback=False,
-    )
-    input_data: dict[str, object] = {
-        "default_param_flag": bool(data.get("default_param_flag")),
-    }
-    if bool(data.get("default_param_flag")):
+    custom = bool(data.get("default_param_flag"))
+    input_data: dict[str, object] = {"default_param_flag": custom}
+    if custom:
         input_data.update(
             {
                 "prompt": str(data.get("prompt") or ""),
@@ -528,6 +462,13 @@ async def confirm_extend(
                 "negative_tags": str(data.get("negative_tags") or ""),
             }
         )
+
+    await state.set_state(MusicExtendStates.submitting)
+    await safe_edit_callback_message(
+        callback,
+        "Ставлю продолжение в очередь…",
+        answer_callback=False,
+    )
     try:
         result = await submit_suno_extend(
             user_id=callback.from_user.id,
@@ -543,7 +484,7 @@ async def confirm_extend(
         if callback.message:
             await callback.message.answer(
                 f"⚠️ {escape(str(exc))}\n\nОбновите цену/баланс и повторите.",
-                reply_markup=_confirmation_keyboard(can_submit=False),
+                reply_markup=_confirm_keyboard(False),
             )
         return
 
@@ -570,59 +511,53 @@ async def duplicate_extend_submit(callback: CallbackQuery) -> None:
     await callback.answer("Продолжение уже ставится в очередь.")
 
 
-@router.callback_query(MusicExtendStates.waiting_prompt, F.data == "music:extend:back:mode")
-async def back_prompt_to_mode(callback: CallbackQuery, state: FSMContext) -> None:
-    await state.set_state(MusicExtendStates.choosing_mode)
-    await safe_edit_callback_message(callback, "Выберите режим продолжения:", _extend_mode_keyboard())
-
-
-@router.callback_query(MusicExtendStates.waiting_style, F.data == "music:extend:back:prompt")
-async def back_style_to_prompt(callback: CallbackQuery, state: FSMContext) -> None:
-    await state.set_state(MusicExtendStates.waiting_prompt)
-    await safe_edit_callback_message(
-        callback,
-        "Отправьте новый prompt продолжения:",
-        _nav_keyboard("music:extend:back:mode"),
-    )
-
-
-@router.callback_query(MusicExtendStates.waiting_title, F.data == "music:extend:back:style")
-async def back_title_to_style(callback: CallbackQuery, state: FSMContext) -> None:
-    await state.set_state(MusicExtendStates.waiting_style)
-    await safe_edit_callback_message(
-        callback,
-        "Отправьте новый стиль:",
-        _nav_keyboard("music:extend:back:prompt"),
-    )
-
-
-@router.callback_query(
-    MusicExtendStates.waiting_continue_at,
-    F.data == "music:extend:back:title",
-)
-async def back_continue_to_title(callback: CallbackQuery, state: FSMContext) -> None:
-    await state.set_state(MusicExtendStates.waiting_title)
-    await safe_edit_callback_message(
-        callback,
-        "Отправьте новое название:",
-        _nav_keyboard("music:extend:back:style"),
-    )
-
-
-@router.callback_query(MusicExtendStates.confirming, F.data == "music:extend:back:confirm")
-async def back_from_extend_confirmation(callback: CallbackQuery, state: FSMContext) -> None:
-    data = await state.get_data()
-    await state.update_data(can_submit=False)
-    if bool(data.get("default_param_flag")):
-        await state.set_state(MusicExtendStates.waiting_continue_at)
+@router.callback_query(F.data.startswith("music:extend:back:"))
+async def back_extend(callback: CallbackQuery, state: FSMContext) -> None:
+    action = (callback.data or "").rsplit(":", 1)[-1]
+    if action == "sources":
+        await _show_sources(callback, state)
+        return
+    if action == "mode":
+        await _show_mode(callback, state)
+        return
+    if action == "prompt":
+        await state.set_state(MusicExtendStates.waiting_prompt)
         await safe_edit_callback_message(
             callback,
-            "Введите точку продолжения в секундах:",
-            _nav_keyboard("music:extend:back:title"),
+            "Отправьте новый prompt продолжения:",
+            _nav("music:extend:back:mode"),
         )
         return
-    await state.set_state(MusicExtendStates.choosing_mode)
-    await safe_edit_callback_message(callback, "Выберите режим продолжения:", _extend_mode_keyboard())
+    if action == "style":
+        await state.set_state(MusicExtendStates.waiting_style)
+        await safe_edit_callback_message(
+            callback,
+            "Отправьте новый стиль:",
+            _nav("music:extend:back:prompt"),
+        )
+        return
+    if action == "title":
+        await state.set_state(MusicExtendStates.waiting_title)
+        await safe_edit_callback_message(
+            callback,
+            "Отправьте новое название:",
+            _nav("music:extend:back:style"),
+        )
+        return
+    if action == "confirm":
+        data = await state.get_data()
+        await state.update_data(can_submit=False)
+        if bool(data.get("default_param_flag")):
+            await state.set_state(MusicExtendStates.waiting_continue_at)
+            await safe_edit_callback_message(
+                callback,
+                "Введите точку продолжения в секундах:",
+                _nav("music:extend:back:title"),
+            )
+        else:
+            await _show_mode(callback, state)
+        return
+    await callback.answer("Эта кнопка устарела.", show_alert=True)
 
 
 @router.message(MusicExtendStates.choosing_action)
