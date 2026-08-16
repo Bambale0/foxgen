@@ -110,10 +110,7 @@ class SqlAlchemyTelegramStarsPaymentService:
         async with self._database.session() as session:
             async with session.begin():
                 await session.execute(
-                    text(
-                        "SELECT pg_advisory_xact_lock("
-                        "hashtextextended(:lock_key, 0))"
-                    ),
+                    text("SELECT pg_advisory_xact_lock(hashtextextended(:lock_key, 0))"),
                     {"lock_key": f"stars:invoice:{user_id}:{idempotency_key}"},
                 )
                 order = await session.scalar(
@@ -227,9 +224,7 @@ class SqlAlchemyTelegramStarsPaymentService:
     ) -> PreCheckoutDecision:
         async with self._database.session() as session:
             order = await session.scalar(
-                select(UserPaymentOrder).where(
-                    UserPaymentOrder.invoice_payload == invoice_payload
-                )
+                select(UserPaymentOrder).where(UserPaymentOrder.invoice_payload == invoice_payload)
             )
         if order is None or order.user_id != user_id:
             return PreCheckoutDecision(False, "Заказ оплаты не найден. Создайте новую оплату.")
@@ -264,10 +259,7 @@ class SqlAlchemyTelegramStarsPaymentService:
         async with self._database.session() as session:
             async with session.begin():
                 await session.execute(
-                    text(
-                        "SELECT pg_advisory_xact_lock("
-                        "hashtextextended(:lock_key, 0))"
-                    ),
+                    text("SELECT pg_advisory_xact_lock(hashtextextended(:lock_key, 0))"),
                     {"lock_key": f"stars:charge:{telegram_payment_charge_id}"},
                 )
                 order = await session.scalar(
@@ -292,10 +284,7 @@ class SqlAlchemyTelegramStarsPaymentService:
 
                 charge_owner = await session.scalar(
                     select(UserPaymentOrder)
-                    .where(
-                        UserPaymentOrder.telegram_payment_charge_id
-                        == telegram_payment_charge_id
-                    )
+                    .where(UserPaymentOrder.telegram_payment_charge_id == telegram_payment_charge_id)
                     .with_for_update()
                 )
                 if charge_owner is not None and charge_owner.id != order.id:
@@ -382,10 +371,7 @@ class SqlAlchemyTelegramStarsPaymentService:
                             reserved_delta=0,
                             idempotency_key=ledger_key,
                             actor="system:telegram_stars",
-                            reason=(
-                                "Telegram Stars top-up package "
-                                f"{order.package_code}"
-                            ),
+                            reason=(f"Telegram Stars top-up package {order.package_code}"),
                             metadata_json={
                                 "payment_order_id": str(order.id),
                                 "package_code": order.package_code,
@@ -430,11 +416,7 @@ class SqlAlchemyTelegramStarsPaymentService:
             return ()
         packages: list[StarPackage] = []
         for raw_code, raw in raw_packages.items():
-            if (
-                not isinstance(raw_code, str)
-                or not raw_code.strip()
-                or not isinstance(raw, dict)
-            ):
+            if not isinstance(raw_code, str) or not raw_code.strip() or not isinstance(raw, dict):
                 continue
             credits = raw.get("credits_units", raw.get("credits"))
             stars = raw.get("stars_amount", raw.get("stars"))
