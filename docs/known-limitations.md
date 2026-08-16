@@ -12,14 +12,16 @@ Privileged native Stars refunds are implemented through the operator control pla
 
 Explicit promo-code bonuses are also implemented: admins define server-side reward/usage limits, Happy Fox users can redeem a code through the Telegram-JWT owner boundary, and one `(promo_code, user_id)` transaction atomically updates the wallet, immutable ledger, redemption audit row and usage counter. Concurrent duplicate redemption and `max_uses` are covered by real PostgreSQL tests and cross-layer E2E.
 
+Stars packages may now also publish an explicit non-negative purchase bonus (`bonus_units` or `bonus_credits`). Base CREDIT, bonus CREDIT and the XTR price are snapshotted into the durable payment order before invoice creation. Settlement, generic payment reprocess and native Stars refund operate on the full base+bonus CREDIT grant. Happy Fox can display the bonus, but the browser never supplies or computes the financial amount.
+
 The current production slice deliberately does **not** claim every possible commercial payment/bonus policy:
 
 - external web checkout/acquiring providers are not implemented;
-- automatic purchase-triggered bonus campaigns are not coupled to Stars top-up yet; explicit promo-code redemption is implemented, but a payment/package does not silently infer an extra bonus;
+- dynamic, segmented or rule-driven bonus campaigns are not implemented; purchase bonus is supported only when the published Stars package explicitly contains the bonus amount;
 - the current Stars refund policy requires the user to still have the full originally credited amount available; FoxGen does not create debt or partially reclaim credits already spent;
 - refund ambiguity resolution is evidence-based/manual after bounded retries; FoxGen does not guess an external financial outcome.
 
-Do not bypass Stars/promo services by mutating wallet rows from the browser/bot or direct SQL. Admin payment inspection/recheck/reprocess/refund/resolution and promo definition remain private operator capabilities; browsers can only submit a promo code, never a reward amount.
+Do not bypass Stars/promo services by mutating wallet rows from the browser/bot or direct SQL. Admin payment inspection/recheck/reprocess/refund/resolution and promo definition remain private operator capabilities; browsers can only choose a published Stars package or submit a promo code, never choose a bonus/reward amount.
 
 ### Planned generation products
 

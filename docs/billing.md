@@ -38,43 +38,57 @@ Price rows include amount in integer units, currency, enabled flag, activation w
 
 The full admin contour also maintains a versioned tariff payload for packages and broader product pricing. `model_prices` remains the runtime per-model price used by generation admission.
 
-## Telegram Stars top-up
+## Telegram Stars top-up and package bonus
 
-Digital-credit top-up inside Telegram uses Telegram Stars (`XTR`) and the latest published tariff package data. A package is purchasable only when it explicitly contains a positive integer CREDIT amount (`credits_units` or legacy `credits`) and positive integer Stars amount (`stars_amount` or `stars`).
+Digital-credit top-up inside Telegram uses Telegram Stars (`XTR`) and the latest published tariff package data. A package is purchasable only when it explicitly contains a positive integer base CREDIT amount (`credits_units` or legacy `credits`) and positive integer Stars amount (`stars_amount` or `stars`). A package may additionally contain a non-negative integer purchase bonus (`bonus_units` or `bonus_credits`); missing bonus means zero. Negative, boolean or non-integer bonus values make the package unavailable to the Stars checkout path.
 
-Before FoxGen calls Telegram to create an invoice link, it creates a durable `user_payment_orders` row and snapshots package terms. The order is idempotent on `(user_id, Idempotency-Key)`.
+Before FoxGen calls Telegram to create an invoice link, it creates a durable `user_payment_orders` row and snapshots the commercial terms. `credits_units` on the durable order stores the **total CREDIT grant** (`base + bonus`) so existing settlement, generic payment reprocess and native refund always use the complete amount. `bonus_units` stores the auditable bonus component. Base CREDIT is therefore `credits_units - bonus_units`.
+
+The order is idempotent on `(user_id, Idempotency-Key)`. A later tariff publication cannot change the base CREDIT, bonus CREDIT or XTR amount of an already-created order.
+
+User package projections expose:
+
+```text
+credits_units       = total CREDIT grant (backward-compatible field)
+base_credits_units  = base package CREDIT
+bonus_units         = explicit package bonus
+total_credits_units = base + bonus
+stars_amount        = XTR price
+```
+
+Happy Fox may display the bonus but never submits or computes it. Invoice creation accepts only `package_code` plus backend-controlled owner/idempotency context.
 
 Payment flow:
 
 ```text
 latest tariff package
-  -> durable payment order
+  -> durable payment order with base/bonus/XTR snapshot
   -> Telegram XTR invoice link
   -> pre_checkout_query validation
   -> successful_payment
-  -> durable payment evidence
-  -> exactly-once CREDIT ledger settlement
+  -> durable payment evidence for total CREDIT grant
+  -> exactly-once total CREDIT ledger settlement
 ```
 
 A verified Telegram `successful_payment` uses two durable boundaries:
 
-1. persist charge evidence (`PaymentEvent`, Telegram charge ID and `paid` order state);
+1. persist charge evidence (`PaymentEvent`, Telegram charge ID and `paid` order state), with `PaymentEvent.amount_units` equal to the total CREDIT grant;
 2. settle wallet and immutable ledger using:
 
 ```text
 payment-credit:telegram_stars:<telegram_payment_charge_id>
 ```
 
-If the second boundary fails, payment evidence survives and the admin payment reprocess worker can recover CREDIT exactly once.
+If the second boundary fails, payment evidence survives and the admin payment reprocess worker can recover the exact same total base+bonus CREDIT exactly once.
 
 ## Telegram Stars refund
 
 Native Stars refund is a privileged financial lifecycle. It is not a public browser/bot balance mutation.
 
-A refund can begin only for a credited Stars payment with no active refund attempt and enough currently available CREDIT to reverse the original grant. FoxGen commits the local CREDIT hold and immutable debit before the dedicated refund worker contacts Telegram:
+A refund can begin only for a credited Stars payment with no active refund attempt and enough currently available CREDIT to reverse the original total grant. Because payment evidence stores the total grant, an explicit package bonus is held/reversed together with the base CREDIT. FoxGen commits the local CREDIT hold and immutable debit before the dedicated refund worker contacts Telegram:
 
 ```text
-available_units -= original credited units
+available_units -= original total credited units
 ledger += payment-refund-debit:telegram_stars:<charge-id>:<attempt-id>
 payment_refund_attempts += pending attempt
 order/payment -> refund_pending
@@ -116,7 +130,7 @@ A replay remains valid even if the promo is disabled/exhausted after the origina
 
 `promo_redemptions` references the promo definition with restrictive deletion semantics so a definition cannot be removed while redemption audit rows exist. Normal retirement uses `active=false`.
 
-Explicit promo-code bonuses are distinct from automatic purchase-triggered bonus campaigns. A Stars payment does not implicitly grant an additional bonus unless a separately reviewed policy is implemented.
+Promo-code bonuses and Stars package bonuses are separate policies. Promo reward comes from `promo_codes`; purchase bonus comes only from the published Stars package and is snapshotted into its payment order. Neither amount is client-controlled.
 
 See `user-promos.md`.
 
@@ -187,7 +201,7 @@ New operator surfaces must use shared billing/admin services rather than direct 
 
 ## Payment events, reprocessing and refunds
 
-`payment_events` stores external payment evidence for operational inspection/recheck/reprocess and refund lifecycle status. Completed payment credit is deterministic; a charge with evidence but no credited ledger key can be recovered through generic payment reprocess.
+`payment_events` stores external payment evidence for operational inspection/recheck/reprocess and refund lifecycle status. Completed payment credit is deterministic; a charge with evidence but no credited ledger key can be recovered through generic payment reprocess. For Stars packages with a bonus, `PaymentEvent.amount_units` is the total base+bonus grant and therefore reprocess/refund cannot silently drop the bonus component.
 
 Native Stars refund uses:
 
@@ -248,7 +262,7 @@ GET  /v1/miniapp/payments/stars/packages
 POST /v1/miniapp/payments/stars/invoices
 ```
 
-The browser can request an invoice or redeem a code, but cannot post payment success, request privileged refunds, choose a reward amount or directly mutate a wallet.
+The browser can request an invoice or redeem a code, but cannot post payment success, request privileged refunds, choose a package bonus/reward amount or directly mutate a wallet.
 
 ## Financial read APIs
 
@@ -284,6 +298,7 @@ Cross-resource expectations include:
 - terminal generation settlement occurs exactly once;
 - a Stars `PaymentEvent` with no credited ledger key remains recoverable evidence;
 - duplicate successful-payment updates cannot append duplicate payment credits;
+- a Stars order with `bonus_units > 0` settles/reprocesses/refunds exactly `credits_units` total and preserves `credits_units - bonus_units > 0`;
 - `refund_pending` / `refund_unknown` retain the refund debit/hold;
 - `not_refunded` resolution appends at most one restore entry;
 - a refund provider call never occurs before the local CREDIT hold commits;
@@ -291,13 +306,13 @@ Cross-resource expectations include:
 - `(promo_code,user_id)` can consume at most one promo use;
 - `promo_codes.uses` cannot exceed `max_uses` through concurrent redemption.
 
-Automated reconciliation may apply only deterministic local fixes. It does not guess ambiguous external side effects or fabricate promo rewards.
+Automated reconciliation may apply only deterministic local fixes. It does not guess ambiguous external side effects or fabricate promo/package rewards.
 
 ## Security requirements
 
 Use separate credentials for ordinary internal generation API, legacy billing-admin API and full admin HMAC control plane. None belong in a public client or Mini App.
 
-Every manual money mutation/refund resolution must include attributable admin context. Promo reward/limits remain server-side admin policy; the public client sends only the code.
+Every manual money mutation/refund resolution must include attributable admin context. Promo and Stars package reward/bonus amounts remain server-side policy; the public client sends only the promo code or package code.
 
 ## Change checklist
 

@@ -83,13 +83,29 @@ Active detail screens poll until terminal state. Cancellation remains forbidden 
 | `GET` | `/v1/miniapp/balance` | available/reserved/total materialized balance |
 | `GET` | `/v1/miniapp/prices` | active generation prices |
 | `GET` | `/v1/miniapp/ledger` | immutable owner ledger, bounded to 200 |
-| `GET` | `/v1/miniapp/payments/stars/packages` | current Stars-enabled top-up packages |
+| `GET` | `/v1/miniapp/payments/stars/packages` | Stars packages with base/bonus/total CREDIT projection |
 | `POST` | `/v1/miniapp/payments/stars/invoices` | create/replay owner-scoped XTR invoice; requires `Idempotency-Key` |
 | `POST` | `/v1/miniapp/promos/redeem` | redeem one server-defined promo bonus for this owner |
 
-### Stars
+### Stars and package bonus
 
-The browser creates a durable invoice and opens it through `Telegram.WebApp.openInvoice`. It cannot declare checkout success or request privileged refund. Telegram native updates and the trusted backend own settlement; operator refund is server-side.
+The browser creates a durable invoice and opens it through `Telegram.WebApp.openInvoice`. A published Stars package may include an explicit server-owned non-negative purchase bonus. The package API exposes:
+
+```text
+credits_units       total CREDIT grant (backward-compatible)
+base_credits_units  base package CREDIT
+bonus_units         explicit package bonus
+total_credits_units base + bonus
+stars_amount        XTR price
+```
+
+`complete-menu.js` displays the total CREDIT and, when `bonus_units > 0`, an explicit `+N бонус CREDIT` line. Invoice creation still sends only:
+
+```json
+{"package_code": "<published-code>"}
+```
+
+The browser never computes/submits the bonus, cannot declare checkout success and cannot request privileged refund. Telegram native updates and the trusted backend own settlement. The durable payment order snapshots base/bonus/XTR values before invoice creation; operator refund reverses the same total CREDIT grant.
 
 ### Promo redemption
 
@@ -105,7 +121,7 @@ The browser never receives/submits `reward_units`, `max_uses` or `uses`. The ser
 
 Outside Telegram, promo redemption fails closed because no trusted `initData` exists.
 
-See `user-promos.md` and `billing.md`.
+See `telegram-stars-payments.md`, `user-promos.md` and `billing.md`.
 
 ## Happy Fox user portal
 
@@ -113,7 +129,7 @@ Owner-scoped routes authenticated by the Telegram-derived JWT include tariff, su
 
 ## Full user-parity program
 
-Issue #89 is the master parity contract. Social/reference memory, tariffs/support/partner portal, Stars top-up/refund and explicit promo redemption now have executable backend/user surfaces.
+Issue #89 is the master parity contract. Social/reference memory, tariffs/support/partner portal, Stars top-up/refund, explicit Stars package purchase bonuses and explicit promo redemption now have executable backend/user surfaces.
 
 Still tracked for backend + Telegram + Happy Fox delivery:
 
@@ -122,7 +138,7 @@ Still tracked for backend + Telegram + Happy Fox delivery:
 - motion control/talking avatar;
 - Prompt AI and conversational assistant;
 - dedicated Gemini Omni / Runway / Veo adapters where required;
-- automatic purchase-triggered bonus policy if required beyond explicit promo codes;
+- dynamic/segmented purchase-bonus campaign rules beyond explicit per-package bonus amounts;
 - remaining referral attribution/anti-fraud mechanics required by EPIC #8;
 - the undefined `boring_work` product requires an explicit product contract before implementation.
 
@@ -139,7 +155,7 @@ FOXGEN_MINIAPP_JWT_TTL_SECONDS=3600
 FOXGEN_MINIAPP_MEDIA_URL_TTL_SECONDS=300
 ```
 
-Stars invoice/refund uses the configured Telegram bot token server-side; promo redemption requires no additional browser secret/provider credential.
+Stars invoice/refund uses the configured Telegram bot token server-side; package bonus is part of published tariff policy and requires no browser secret. Promo redemption requires no additional browser secret/provider credential.
 
 The public reverse proxy routes `/mini-app/` and `/v1/miniapp/*` while `/internal/admin/*` remains private.
 
@@ -152,6 +168,9 @@ Required regression coverage includes:
 - schema-driven generation validation/admission;
 - feed/profile/publish/remix/reference-memory boundaries;
 - Stars package/invoice/payment/refund recovery;
+- Stars package-bonus static UI/API contract (`base`, `bonus`, `total`, package-code-only checkout);
+- real PostgreSQL immutable invoice-time package-bonus snapshot and exactly-once total settlement;
+- Stars E2E: `1000 CREDIT + 250 bonus` -> Happy Fox invoice -> successful payment `1250` -> signed admin refund hold `1250` -> refund worker -> final wallet `0`;
 - promo static UI contract and owner-scoped API auth;
 - real PostgreSQL concurrent duplicate promo redemption;
 - real PostgreSQL atomic `max_uses` enforcement;

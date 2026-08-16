@@ -50,6 +50,10 @@ def test_wallet_topup_uses_authenticated_stars_invoice_flow() -> None:
     assert "tg.openInvoice" in script
     assert "status === 'paid'" in script
     assert "Telegram Stars" in script
+    assert "total_credits_units" in script
+    assert "bonus_units" in script
+    assert "бонус CREDIT" in script
+    assert "JSON.stringify({ package_code: packageCode })" in script
 
 
 def test_ready_generation_gets_result_open_download_action() -> None:

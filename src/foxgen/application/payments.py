@@ -12,6 +12,18 @@ class StarPackage:
     description: str
     credits_units: int
     stars_amount: int
+    bonus_units: int = 0
+    base_credits_units: int | None = None
+
+    @property
+    def resolved_base_credits_units(self) -> int:
+        if self.base_credits_units is not None:
+            return self.base_credits_units
+        return self.credits_units - self.bonus_units
+
+    @property
+    def total_credits_units(self) -> int:
+        return self.credits_units
 
 
 @dataclass(frozen=True, slots=True)
