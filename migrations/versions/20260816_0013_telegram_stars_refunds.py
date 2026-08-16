@@ -94,7 +94,9 @@ def upgrade() -> None:
         sa.UniqueConstraint("debit_ledger_key", name="uq_payment_refunds_debit_ledger_key"),
         sa.UniqueConstraint("restore_ledger_key", name="uq_payment_refunds_restore_ledger_key"),
     )
-    op.create_index("ix_payment_refund_attempts_payment_id", "payment_refund_attempts", ["payment_id"])
+    op.create_index(
+        "ix_payment_refund_attempts_payment_id", "payment_refund_attempts", ["payment_id"]
+    )
     op.create_index("ix_payment_refund_attempts_order_id", "payment_refund_attempts", ["order_id"])
     op.create_index("ix_payment_refund_attempts_user_id", "payment_refund_attempts", ["user_id"])
     op.create_index("ix_payment_refund_attempts_provider", "payment_refund_attempts", ["provider"])
@@ -103,11 +105,19 @@ def upgrade() -> None:
         "payment_refund_attempts",
         ["external_charge_id"],
     )
-    op.create_index("ix_payment_refund_attempts_requested_by", "payment_refund_attempts", ["requested_by"])
+    op.create_index(
+        "ix_payment_refund_attempts_requested_by", "payment_refund_attempts", ["requested_by"]
+    )
     op.create_index("ix_payment_refund_attempts_status", "payment_refund_attempts", ["status"])
-    op.create_index("ix_payment_refund_attempts_available_at", "payment_refund_attempts", ["available_at"])
-    op.create_index("ix_payment_refund_attempts_locked_at", "payment_refund_attempts", ["locked_at"])
-    op.create_index("ix_payment_refund_attempts_created_at", "payment_refund_attempts", ["created_at"])
+    op.create_index(
+        "ix_payment_refund_attempts_available_at", "payment_refund_attempts", ["available_at"]
+    )
+    op.create_index(
+        "ix_payment_refund_attempts_locked_at", "payment_refund_attempts", ["locked_at"]
+    )
+    op.create_index(
+        "ix_payment_refund_attempts_created_at", "payment_refund_attempts", ["created_at"]
+    )
 
 
 def downgrade() -> None:
