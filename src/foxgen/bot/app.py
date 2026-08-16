@@ -29,6 +29,7 @@ from foxgen.bot.quick_start import router as quick_start_router
 from foxgen.bot.quick_start_wizard import router as quick_start_wizard_router
 from foxgen.bot.reference_memory import router as reference_memory_router
 from foxgen.bot.suno_extend_flow import router as suno_extend_router
+from foxgen.bot.suno_upload_cover_flow import router as suno_upload_cover_router
 from foxgen.bot.uploads import TelegramInputMediaStorage, stored_input_keys
 from foxgen.bot.voice import router as voice_router
 from foxgen.core.config import Settings, get_settings
@@ -197,31 +198,22 @@ def create_event_isolation(storage: RedisStorage) -> BaseEventIsolation:
 def register_runtime_routers(dispatcher: Dispatcher) -> None:
     """Register interrupt commands first, then privileged/product routers and fallbacks."""
 
-    # /start and /menu are hard interrupts and therefore stay ahead of every FSM.
     dispatcher.include_router(global_commands_router)
     dispatcher.include_router(admin_extras_router)
     dispatcher.include_router(admin_router)
-    # Telegram payment updates are transport-level financial events and must be
-    # consumed before broad product/shell message fallbacks.
     dispatcher.include_router(payments_router)
     dispatcher.include_router(feed_router)
     dispatcher.include_router(feed_publish_router)
     dispatcher.include_router(feed_remix_router)
-    # Dedicated paid media products must consume their entry callbacks/FSM states
-    # before the broad generation/shell fallbacks. Extend owns create:music first
-    # so it can expose the New / Continue hub; music_router still owns core Suno.
     dispatcher.include_router(voice_router)
+    # Cover must consume music:cover:* and its audio-upload FSM before the hub/core
+    # music routers and before the generic shell fallback.
+    dispatcher.include_router(suno_upload_cover_router)
     dispatcher.include_router(suno_extend_router)
     dispatcher.include_router(music_router)
-    # Quick Start already owns reference upload. This bridge only replaces its
-    # post-upload product/model/settings branch with the same screen wizard used
-    # by ordinary Create Image / Create Video entrypoints.
     dispatcher.include_router(quick_start_wizard_router)
-    # Reference memory owns its browser states and reference-aware cleanup/final
-    # admission before the generic generation wizard sees the same callbacks.
     dispatcher.include_router(reference_memory_router)
     dispatcher.include_router(generation_wizard_router)
-    # Keep old routers after the wizard for deployed Redis draft compatibility.
     dispatcher.include_router(quick_start_router)
     dispatcher.include_router(generation_router)
     dispatcher.include_router(router)
