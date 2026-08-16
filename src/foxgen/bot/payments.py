@@ -41,10 +41,7 @@ async def redeem_promo(
     text = message.text or ""
     code = text.partition(" ")[2].strip()
     if not code:
-        await message.answer(
-            "Введите промокод после команды:\n"
-            "<code>/promo FOX500</code>"
-        )
+        await message.answer("Введите промокод после команды:\n<code>/promo FOX500</code>")
         return
 
     try:
@@ -69,8 +66,7 @@ async def redeem_promo(
     replayed = payload.get("replayed") is True
     if replayed:
         await message.answer(
-            "ℹ️ Этот промокод уже был активирован.\n\n"
-            f"Баланс: <b>{available} CREDIT</b>"
+            f"ℹ️ Этот промокод уже был активирован.\n\nБаланс: <b>{available} CREDIT</b>"
         )
         return
     await message.answer(
