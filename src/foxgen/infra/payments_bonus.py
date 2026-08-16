@@ -155,19 +155,13 @@ class BonusAwareTelegramStarsPaymentService(SqlAlchemyTelegramStarsPaymentServic
         )
         if latest is None:
             return ()
-        raw_packages = (
-            latest.payload.get("packages") if isinstance(latest.payload, dict) else None
-        )
+        raw_packages = latest.payload.get("packages") if isinstance(latest.payload, dict) else None
         if not isinstance(raw_packages, dict):
             return ()
 
         packages: list[StarPackage] = []
         for raw_code, raw in raw_packages.items():
-            if (
-                not isinstance(raw_code, str)
-                or not raw_code.strip()
-                or not isinstance(raw, dict)
-            ):
+            if not isinstance(raw_code, str) or not raw_code.strip() or not isinstance(raw, dict):
                 continue
             base_credits = raw.get("credits_units", raw.get("credits"))
             bonus = raw.get("bonus_units", raw.get("bonus_credits", 0))
