@@ -35,21 +35,23 @@ Example:
 
 Accepted credit fields are `credits_units` or the legacy `credits`. Accepted Stars fields are `stars_amount` or `stars`. Both must be positive integers. A package without explicit Stars pricing is filtered out of the Stars catalog and cannot create an invoice.
 
-Commercial package terms are snapshotted into `user_payment_orders` before the external Telegram invoice-link call. Later tariff changes therefore cannot change the amount/credits of an already-created order.
+Commercial package terms are snapshotted into `user_payment_orders` before the external Telegram invoice-link call. Later tariff changes therefore cannot change the amount/credits of an already-created order. User-supplied titles/descriptions are normalized to Telegram invoice field limits before provider submission.
 
 ## Durable states
 
 `user_payment_orders.status`:
 
 ```text
-created -> invoice_ready -> credited
-                     \-> failed
-credited -> refunded   # reserved for the refund slice
+created -> invoice_ready -> paid -> credited
+                     \                \
+                      \-> failed       -> refunded   # refund execution is a follow-up slice
 ```
 
 `created` is durable before `createInvoiceLink`. Repeating invoice creation with the same `(user_id, Idempotency-Key)` returns the same order. A request using the same key with a different package fails with an idempotency conflict.
 
-Creating an invoice link is not a financial mutation. A network ambiguity may create more than one equivalent Telegram invoice link for the same local order, but only a verified `successful_payment` can credit the wallet.
+`paid` is the critical external-side-effect boundary: Telegram has confirmed a unique charge, its `PaymentEvent` and charge ID are durably committed, but CREDIT settlement may still be pending. `pre_checkout_query` rejects a `paid` order so an already charged invoice cannot be approved for payment again while recovery is in progress.
+
+Creating an invoice link is not a financial mutation. A network ambiguity may create more than one equivalent Telegram invoice link for the same local order, but only a verified `successful_payment` can advance the order to `paid` and later `credited`.
 
 ## Telegram flow
 
@@ -63,19 +65,38 @@ Creating an invoice link is not a financial mutation. A network ambiguity may cr
 4. The bot asks the trusted backend to verify owner, payload, XTR currency and snapshotted amount.
 5. Telegram sends a message containing `successful_payment` after payment.
 6. The bot forwards only the payment identifiers/amount/payload to the trusted backend.
-7. Backend atomically persists the payment and ledger credit.
+7. Backend commits charge evidence and moves the order to `paid`.
+8. Backend performs a separate idempotent CREDIT settlement and moves the order to `credited`.
 
 The pre-checkout route is validation-only. It cannot add credits.
 
-## Exactly-once credit
+## Exactly-once credit and durable recovery
 
-Successful payment settlement is serialized by the Telegram payment charge ID and commits these changes in one PostgreSQL transaction:
+Settlement is serialized by the Telegram payment charge ID and intentionally uses two PostgreSQL transactions.
+
+### Boundary 1 — external payment evidence
 
 ```text
-user_payment_orders
-  + payment_events(provider=telegram_stars, external_id=<charge id>)
-  + wallet_accounts.available_units
-  + ledger_entries(payment-credit:telegram_stars:<charge id>)
+successful_payment
+  -> user_payment_orders.telegram_payment_charge_id
+  -> user_payment_orders.status = paid
+  -> user_payment_orders.paid_at
+  -> payment_events(provider=telegram_stars, external_id=<charge id>)
+COMMIT
+```
+
+This commit happens before wallet mutation. If the process/database/application fails during the next boundary, FoxGen still knows Telegram charged the user and the user does not need to pay again.
+
+### Boundary 2 — CREDIT settlement
+
+```text
+payment event + paid order
+  -> wallet_accounts.available_units += credits
+  -> ledger_entries(payment-credit:telegram_stars:<charge id>)
+  -> payment_events.credited_ledger_key
+  -> user_payment_orders.status = credited
+  -> user_payment_orders.credited_at
+COMMIT
 ```
 
 Uniqueness exists at three levels:
@@ -84,7 +105,9 @@ Uniqueness exists at three levels:
 - one order per `telegram_payment_charge_id`;
 - one immutable ledger entry per deterministic payment-credit key.
 
-A duplicate Telegram update returns the already-credited balance and does not append another credit.
+A duplicate Telegram update with the same charge reuses the same durable evidence/ledger key and does not append another credit. A different charge cannot attach to an already `paid` or `credited` order.
+
+If Boundary 2 fails, the generic admin `payment.reprocess` path can recover CREDIT from the committed `PaymentEvent` exactly once. A later duplicate `successful_payment` update with the same charge can also complete the same deterministic settlement safely.
 
 The Telegram charge ID is retained because Telegram Stars refunds require it. Refund execution is intentionally a separate reviewed slice.
 
@@ -113,9 +136,10 @@ The Mini App receives an invoice URL, not a Telegram bot token or provider crede
 - missing/changed package price: fail before invoice creation;
 - Telegram invoice API timeout: local order stays durable and can retry;
 - missing/foreign order at pre-checkout: reject checkout;
+- `paid`/`credited`/failed/refunded order at pre-checkout: reject checkout;
 - amount/currency mismatch: reject checkout/settlement;
 - duplicate charge on another order: idempotency conflict;
-- backend failure after Telegram reports payment: user is told not to pay again; durable order/payment evidence is preserved for support/reconciliation;
+- backend failure after Telegram reports payment: user is told not to pay again; durable order/payment evidence is preserved before settlement and remains reprocessable;
 - `FOXGEN_TASK_SUBMISSION_ENABLED=false` does not disable top-up validation or settlement.
 
 ## Operations
@@ -123,9 +147,10 @@ The Mini App receives an invoice URL, not a Telegram bot token or provider crede
 For a user reporting paid Stars without CREDIT:
 
 1. do not ask them to pay again;
-2. locate the order by user/payment payload;
-3. inspect `telegram_payment_charge_id`, `payment_events` and deterministic ledger key;
-4. if Telegram delivered `successful_payment`, reconcile from that evidence;
-5. never create a manual duplicate payment credit when the deterministic ledger key already exists.
+2. locate the order by user/payment payload or Telegram charge ID;
+3. expect `user_payment_orders.status=paid` when external charge evidence committed but CREDIT did not;
+4. inspect `payment_events` and deterministic ledger key;
+5. use the existing payment reprocess worker when the completed event has no credited ledger key;
+6. never create a manual duplicate payment credit when the deterministic ledger key already exists.
 
 Admin payment inspection/reprocessing remains the operator plane. User Mini App credentials cannot access admin payment actions.
