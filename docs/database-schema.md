@@ -135,12 +135,12 @@ telegram_payment_charge_id   # nullable until Telegram confirms payment
 Current status constraint:
 
 ```text
-created, invoice_ready, credited, failed, refunded
+created, invoice_ready, paid, credited, failed, refunded
 ```
 
-`created` is committed before `createInvoiceLink`. A verified Telegram `successful_payment` records the charge ID and `paid_at` before wallet settlement. `credited_at` is populated only after the CREDIT settlement succeeds.
+`created` is committed before `createInvoiceLink`. A verified Telegram `successful_payment` commits the charge ID, `paid_at` and `status=paid` before wallet settlement. `credited_at` and `status=credited` are populated only after the CREDIT settlement succeeds.
 
-This distinction makes paid-but-uncredited recovery observable: an order/payment can prove Telegram charged the user even if the later wallet transaction failed.
+The `paid` state prevents another pre-checkout from being approved for an already charged order and makes paid-but-uncredited recovery observable: an order/payment can prove Telegram charged the user even if the later wallet transaction failed.
 
 ## Administrative control plane
 
