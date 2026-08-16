@@ -280,7 +280,10 @@ async function showStarPackages() {
         ${items.map((item) => `
           <button type="button" data-stars-package="${esc(item.code)}">
             <strong>${esc(item.title)}</strong>
-            <span>${Number(item.credits_units).toLocaleString('ru-RU')} CREDIT</span>
+            <span>${Number(item.total_credits_units ?? item.credits_units).toLocaleString('ru-RU')} CREDIT</span>
+            ${Number(item.bonus_units || 0) > 0
+              ? `<small>+${Number(item.bonus_units).toLocaleString('ru-RU')} бонус CREDIT</small>`
+              : ''}
             <small>⭐ ${Number(item.stars_amount).toLocaleString('ru-RU')}</small>
           </button>
         `).join('')}
