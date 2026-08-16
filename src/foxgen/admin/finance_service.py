@@ -244,19 +244,6 @@ class AdminPaymentService:
             session.add(attempt)
             order.status = "refund_pending"
             payment.status = "refund_pending"
-            await session.execute(
-                pg_insert(AdminOutbox)
-                .values(
-                    event_type="payment.refund",
-                    target_id=str(payment.id),
-                    deduplication_key=f"payment.refund:{attempt.id}",
-                    payload={
-                        "payment_id": str(payment.id),
-                        "refund_attempt_id": str(attempt.id),
-                    },
-                )
-                .on_conflict_do_nothing(index_elements=[AdminOutbox.deduplication_key])
-            )
             return {
                 "payment_id": str(payment.id),
                 "refund_attempt_id": str(attempt.id),
