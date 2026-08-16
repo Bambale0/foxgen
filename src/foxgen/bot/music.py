@@ -153,7 +153,11 @@ async def choose_vocal_mode(callback: CallbackQuery, state: FSMContext) -> None:
 
 
 @router.message(MusicStates.waiting_prompt, F.text)
-async def receive_prompt(message: Message, state: FSMContext) -> None:
+async def receive_prompt(
+    message: Message,
+    state: FSMContext,
+    api_client: FoxGenApiClient,
+) -> None:
     prompt = (message.text or "").strip()
     data = await state.get_data()
     limit = 5000 if bool(data.get("custom_mode")) else 500
@@ -172,7 +176,7 @@ async def receive_prompt(message: Message, state: FSMContext) -> None:
         )
         return
     await state.set_state(MusicStates.confirming)
-    await _show_confirmation_message(message, state)
+    await _show_confirmation_message(message, state, api_client)
 
 
 @router.message(MusicStates.waiting_style, F.text)
@@ -274,11 +278,8 @@ async def _quote(
 async def _show_confirmation_message(
     message: Message,
     state: FSMContext,
-    api_client: FoxGenApiClient | None = None,
+    api_client: FoxGenApiClient,
 ) -> None:
-    if api_client is None:
-        await message.answer("Проверяю цену… Откройте /menu и повторите шаг.")
-        return
     text, can_submit = await _quote(state, api_client, message.from_user.id)
     await message.answer(text, reply_markup=_confirmation_keyboard(can_submit=can_submit))
 
