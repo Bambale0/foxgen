@@ -35,7 +35,7 @@ class UserPaymentOrder(Base):
         CheckConstraint("credits_units > 0", name="ck_user_payment_orders_credits_positive"),
         CheckConstraint("provider_amount > 0", name="ck_user_payment_orders_amount_positive"),
         CheckConstraint(
-            "status IN ('created', 'invoice_ready', 'credited', 'failed', 'refunded')",
+            "status IN ('created', 'invoice_ready', 'paid', 'credited', 'failed', 'refunded')",
             name="ck_user_payment_orders_status",
         ),
     )
