@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from sqlalchemy import func, select, text, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -15,11 +15,19 @@ from foxgen.admin.policy import (
     AdminContext,
 )
 from foxgen.admin.repository import AdminCommandExecutor, CommandResult
+from foxgen.domain.models import GenerationStatus, LedgerEntryType
 from foxgen.infra.admin_models import AdminOutbox, OperationEvent, PaymentEvent, TariffVersion
-from foxgen.infra.billing import settle_generation_charge
-from foxgen.infra.billing_models import ModelPrice
+from foxgen.infra.billing import ensure_wallet_locked, settle_generation_charge
+from foxgen.infra.billing_models import LedgerEntry, ModelPrice
 from foxgen.infra.database import Database, Generation
-from foxgen.domain.models import GenerationStatus
+from foxgen.infra.payment_models import UserPaymentOrder
+from foxgen.infra.payment_refund_models import PaymentRefundAttempt
+from foxgen.infra.payment_refunds import (
+    ACTIVE_REFUND_STATUSES,
+    TELEGRAM_STARS_PROVIDER,
+    refund_debit_ledger_key,
+    restore_refund_hold,
+)
 
 
 class AdminPaymentService:
@@ -110,6 +118,236 @@ class AdminPaymentService:
             target_id=str(payment_id),
             idempotency_key=idempotency_key,
             request_payload={"payment_id": str(payment_id)},
+            operation=operation,
+        )
+
+    async def refund_payment(
+        self,
+        *,
+        context: AdminContext,
+        payment_id: UUID,
+        reason: str,
+        idempotency_key: str,
+    ) -> CommandResult:
+        context.require(PAYMENTS_WRITE)
+        normalized_reason = reason.strip()
+        if not normalized_reason:
+            raise AdminValidationError("Refund reason is required")
+
+        async def operation(session: AsyncSession) -> dict[str, object]:
+            payment = await session.scalar(
+                select(PaymentEvent).where(PaymentEvent.id == payment_id).with_for_update()
+            )
+            if payment is None:
+                raise AdminNotFoundError("payment", str(payment_id))
+            if payment.provider != TELEGRAM_STARS_PROVIDER:
+                raise AdminConflictError(
+                    "Only Telegram Stars payments can use native Stars refund",
+                    details={"provider": payment.provider},
+                )
+            if not payment.credited_ledger_key:
+                raise AdminConflictError("Payment has not been credited and cannot be refunded")
+
+            order = await session.scalar(
+                select(UserPaymentOrder)
+                .where(
+                    UserPaymentOrder.user_id == payment.user_id,
+                    UserPaymentOrder.provider == TELEGRAM_STARS_PROVIDER,
+                    UserPaymentOrder.telegram_payment_charge_id == payment.external_id,
+                )
+                .with_for_update()
+            )
+            if order is None:
+                raise AdminNotFoundError("payment_order", payment.external_id)
+            if order.status == "refunded" or payment.status == "refunded":
+                raise AdminConflictError("Payment is already refunded")
+            if order.status in {"refund_pending", "refund_unknown"}:
+                raise AdminConflictError(
+                    "A refund attempt is already active",
+                    details={"order_status": order.status},
+                )
+            if order.status != "credited":
+                raise AdminConflictError(
+                    "Only a credited Stars order can be refunded",
+                    details={"order_status": order.status},
+                )
+
+            active_attempt = await session.scalar(
+                select(PaymentRefundAttempt)
+                .where(
+                    PaymentRefundAttempt.payment_id == payment.id,
+                    PaymentRefundAttempt.status.in_(ACTIVE_REFUND_STATUSES),
+                )
+                .limit(1)
+                .with_for_update()
+            )
+            if active_attempt is not None:
+                raise AdminConflictError(
+                    "A refund attempt is already active",
+                    details={"refund_attempt_id": str(active_attempt.id)},
+                )
+
+            account = await ensure_wallet_locked(
+                session,
+                user_id=payment.user_id,
+                currency=payment.currency,
+            )
+            if account.available_units < payment.amount_units:
+                raise AdminConflictError(
+                    "User does not have enough available CREDIT to reverse this payment",
+                    details={
+                        "available_units": account.available_units,
+                        "required_units": payment.amount_units,
+                    },
+                )
+
+            attempt_id = uuid4()
+            debit_key = refund_debit_ledger_key(
+                charge_id=payment.external_id,
+                attempt_id=attempt_id,
+            )
+            account.available_units -= payment.amount_units
+            account.version += 1
+            session.add(
+                LedgerEntry(
+                    user_id=payment.user_id,
+                    generation_id=None,
+                    reservation_id=None,
+                    entry_type=LedgerEntryType.DEBIT,
+                    currency=payment.currency,
+                    available_delta=-payment.amount_units,
+                    reserved_delta=0,
+                    idempotency_key=debit_key,
+                    actor=f"admin:{context.user_id}",
+                    reason=f"Hold CREDIT for Telegram Stars refund: {normalized_reason}",
+                    metadata_json={
+                        "payment_id": str(payment.id),
+                        "refund_attempt_id": str(attempt_id),
+                        "telegram_payment_charge_id": payment.external_id,
+                    },
+                )
+            )
+            attempt = PaymentRefundAttempt(
+                id=attempt_id,
+                payment_id=payment.id,
+                order_id=order.id,
+                user_id=payment.user_id,
+                provider=payment.provider,
+                external_charge_id=payment.external_id,
+                amount_units=payment.amount_units,
+                currency=payment.currency,
+                reason=normalized_reason,
+                requested_by=context.user_id,
+                status="pending",
+                debit_ledger_key=debit_key,
+            )
+            session.add(attempt)
+            order.status = "refund_pending"
+            payment.status = "refund_pending"
+            return {
+                "payment_id": str(payment.id),
+                "refund_attempt_id": str(attempt.id),
+                "queued": True,
+                "held_units": payment.amount_units,
+                "status": "refund_pending",
+            }
+
+        return await self._executor.execute(
+            context=context,
+            action="payment.refund",
+            target_id=str(payment_id),
+            idempotency_key=idempotency_key,
+            request_payload={"payment_id": str(payment_id), "reason": normalized_reason},
+            operation=operation,
+        )
+
+    async def resolve_refund(
+        self,
+        *,
+        context: AdminContext,
+        payment_id: UUID,
+        outcome: str,
+        evidence: str,
+        idempotency_key: str,
+    ) -> CommandResult:
+        context.require(PAYMENTS_WRITE)
+        normalized_outcome = outcome.strip().lower()
+        normalized_evidence = evidence.strip()
+        if normalized_outcome not in {"refunded", "not_refunded"}:
+            raise AdminValidationError("Refund resolution outcome must be refunded or not_refunded")
+        if not normalized_evidence:
+            raise AdminValidationError("Refund resolution evidence is required")
+
+        async def operation(session: AsyncSession) -> dict[str, object]:
+            payment = await session.scalar(
+                select(PaymentEvent).where(PaymentEvent.id == payment_id).with_for_update()
+            )
+            if payment is None:
+                raise AdminNotFoundError("payment", str(payment_id))
+            order = await session.scalar(
+                select(UserPaymentOrder)
+                .where(
+                    UserPaymentOrder.user_id == payment.user_id,
+                    UserPaymentOrder.provider == TELEGRAM_STARS_PROVIDER,
+                    UserPaymentOrder.telegram_payment_charge_id == payment.external_id,
+                )
+                .with_for_update()
+            )
+            if order is None:
+                raise AdminNotFoundError("payment_order", payment.external_id)
+            attempt = await session.scalar(
+                select(PaymentRefundAttempt)
+                .where(
+                    PaymentRefundAttempt.payment_id == payment.id,
+                    PaymentRefundAttempt.status == "unknown",
+                )
+                .order_by(PaymentRefundAttempt.created_at.desc())
+                .limit(1)
+                .with_for_update()
+            )
+            if attempt is None or order.status != "refund_unknown":
+                raise AdminConflictError("Payment has no unresolved ambiguous refund")
+
+            now = datetime.now(timezone.utc)
+            if normalized_outcome == "refunded":
+                attempt.status = "resolved_refunded"
+                order.status = "refunded"
+                payment.status = "refunded"
+            else:
+                restore_key = await restore_refund_hold(
+                    session,
+                    attempt=attempt,
+                    actor=f"admin:{context.user_id}",
+                    reason=f"Restore CREDIT after refund evidence: {normalized_evidence}",
+                )
+                attempt.status = "resolved_not_refunded"
+                order.status = "credited"
+                payment.status = "completed"
+                attempt.provider_payload = {
+                    **attempt.provider_payload,
+                    "restore_ledger_key": restore_key,
+                }
+            attempt.resolution_note = normalized_evidence
+            attempt.resolved_at = now
+            attempt.last_error = None
+            return {
+                "payment_id": str(payment.id),
+                "refund_attempt_id": str(attempt.id),
+                "outcome": normalized_outcome,
+                "status": order.status,
+                "restore_ledger_key": attempt.restore_ledger_key,
+            }
+
+        return await self._executor.execute(
+            context=context,
+            action="payment.refund.resolve",
+            target_id=str(payment_id),
+            idempotency_key=idempotency_key,
+            request_payload={
+                "payment_id": str(payment_id),
+                "outcome": normalized_outcome,
+                "evidence": normalized_evidence,
+            },
             operation=operation,
         )
 

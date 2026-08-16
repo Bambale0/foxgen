@@ -1,12 +1,10 @@
 # Testing and CI
 
-FoxGen CI is designed to test executable production assumptions rather than only mocked Python units. Dependency versions are resolved into `requirements.lock`; the production image installs that exact lock without re-resolving broad dependency ranges.
+FoxGen CI tests executable production assumptions rather than only mocked Python units. Dependency versions are resolved into `requirements.lock`; the production image installs that exact lock without re-resolving broad dependency ranges.
 
 ## Local environment
 
 Recommended Python: 3.12.
-
-Install the exact lock and local package:
 
 ```bash
 python -m pip install --requirement requirements.lock
@@ -14,76 +12,86 @@ python -m pip install --no-deps --editable .
 python -m pip check
 ```
 
-`requirements.lock` contains runtime and development tooling used by CI. `scripts/check_lock.py` verifies that the lock still covers the dependency declarations expected by the project.
+`requirements.lock` contains runtime and development tooling used by CI. `scripts/check_lock.py` verifies lock coverage.
 
 ## Make targets
 
 ```bash
-make install      # exact lock + editable local package
-make lock         # regenerate requirements.lock with pinned pip-tools
-make lock-check   # validate lock coverage
-make lint         # ruff check + full local format check
-make format       # format and auto-fix lint where supported
-make typecheck    # strict mypy over src
-make test         # pytest
-make coverage     # pytest + coverage report
-make ci           # lock-check + lint + typecheck + coverage
-make up           # docker compose up --build
+make install
+make lock
+make lock-check
+make lint
+make format
+make typecheck
+make test
+make coverage
+make ci
+make up
 make down
-make migrate      # alembic upgrade head
+make migrate
 ```
 
-Local `make ci` is stricter about formatting the whole repository than the pull-request changed-file formatting gate. New/modified Python files should always be formatter-clean.
+Local `make ci` is stricter about formatting the whole repository than the pull-request changed-file gate.
 
 ## Coverage
 
-Coverage is configured in `pyproject.toml` with branch coverage and a repository threshold:
+Coverage is configured in `pyproject.toml` with branch coverage and repository floor `fail_under = 55`. High-risk financial/provider paths still require explicit behavior and cross-layer tests even when aggregate coverage passes.
 
-```text
-fail_under = 55
-```
+## Unit/contract expectations
 
-The threshold is a floor, not a target. High-risk paths need explicit behavior tests even when aggregate coverage already passes.
+Core regression areas include provider contracts, webhook normalization, submission/idempotency, Telegram FSM, billing/ledger, lifecycle transitions, retries/dead letters, media safety, admin HMAC/RBAC/confirmation and production deploy contracts.
 
-## Unit/contract coverage expectations
+For Telegram Stars specifically, unit/API coverage must keep:
 
-Core regression areas include:
-
-- provider model contract validation;
-- provider webhook verification/normalization;
-- submission/idempotency behavior;
-- Telegram FSM transitions/recovery/event isolation;
-- billing price/wallet/ledger behavior;
-- lifecycle transition graph;
-- retry/dead-letter/reconciliation behavior;
-- media storage/download safety;
-- admin HMAC/network/RBAC/confirmation/redaction;
-- admin validation/idempotency;
-- Telegram `/admin` authorization;
-- backend operator-web authorization;
-- production deploy exact-image/reload/smoke ordering and bounded Happy Fox convergence deadlines.
+- owner-bound package/invoice access;
+- pre-checkout fail-closed behavior;
+- duplicate successful-payment exactly-once settlement;
+- signed/confirmed admin refund route contracts;
+- refund sender classification for deterministic vs ambiguous provider outcomes.
 
 ## Real infrastructure integration tests
 
-The CI infrastructure job runs PostgreSQL 17 and Redis 7 service containers and sets:
+The infrastructure job runs PostgreSQL 17 and Redis 7 with:
 
 ```text
 FOXGEN_RUN_INTEGRATION=1
+FOXGEN_RUN_E2E=1
 ```
 
-It executes the integration suite against real services rather than replacing database/Redis behavior with mocks.
+Integration coverage includes atomic paid admission, Redis FSM/event behavior, provider lifecycle persistence, admin financial replay, support/campaign outboxes and payment/refund recovery.
 
-Covered integration classes include:
+Stars refund integration explicitly proves:
 
-- atomic generation admission/reservation;
-- Redis FSM/event behavior;
-- provider callback/lifecycle persistence;
-- admin balance adjustment replay without double credit;
-- support reply durable outbox;
-- campaign recipient materialization once;
-- payment reprocess double-credit prevention;
-- safe admin operation replay;
-- blocked-user rejection at transactional paid admission.
+- CREDIT is removed before the provider refund worker runs;
+- duplicate admin refund command does not append a second debit;
+- one refund attempt causes one provider call on the success path;
+- ambiguous provider outcome becomes `refund_unknown` with CREDIT still held;
+- evidence `not_refunded` restores CREDIT through one unique compensating ledger entry;
+- replaying the same resolution does not restore twice.
+
+## Cross-layer E2E
+
+`tests/e2e` is an explicit required layer in the same real-infrastructure CI job, after integration tests and before API readiness/container build.
+
+Current payment E2E executes:
+
+```text
+Happy Fox JWT
+  -> GET Stars packages over ASGI HTTP
+  -> POST durable invoice over ASGI HTTP
+  -> trusted pre_checkout HTTP
+  -> trusted successful_payment HTTP
+  -> real PostgreSQL CREDIT/ledger settlement
+  -> signed HMAC admin refund HTTP
+  -> real CREDIT hold + refund-attempt persistence
+  -> dedicated PaymentRefundWorker
+  -> fake external Telegram refund adapter only
+  -> refunded order/payment + immutable ledger assertions
+```
+
+The E2E deliberately fakes only the external Telegram network call. FoxGen HTTP routing/auth, application services, PostgreSQL transactions, idempotency, admin signature verification and worker state transitions are real.
+
+Normal CI must not call live Telegram payment/refund APIs because that would require production-like credentials and nondeterministic external financial state.
 
 ## Migration gate
 
@@ -98,134 +106,88 @@ alembic upgrade head
 head/schema verification again
 ```
 
-The purpose is to catch migration syntax/metadata drift and ensure the newest migration can participate in the expected rollback/re-upgrade test path.
-
-This does not guarantee every production downgrade is operationally safe. Data-retention decisions still belong in the release/rollback runbook.
+This catches migration syntax/metadata drift. It does not make every production downgrade operationally safe; refund-state rollback constraints remain a runbook concern.
 
 ## API readiness smoke
 
-After migrations/integration tests, CI starts the API against the real PostgreSQL/Redis services and polls:
+After migrations, integration and E2E, CI starts the API against real PostgreSQL/Redis and requires `GET /health/ready` to converge.
 
-```text
-GET /health/ready
-```
-
-An API process that exits early or never becomes ready fails the infrastructure job. Logs/integration diagnostics are uploaded as workflow artifacts.
+Infrastructure diagnostics upload integration logs/XML, E2E logs/XML and API logs.
 
 ## Standard CI jobs
 
-The main CI workflow includes these major gates.
-
 ### Quality
 
-- exact lock installation;
-- `pip check`;
-- lock validation;
+- exact lock + `pip check`;
 - Ruff lint;
-- changed-Python-file Ruff format gate on PR/push diff;
+- changed-file Ruff format gate;
 - strict mypy;
-- pytest with coverage and XML report.
+- pytest with coverage/XML.
 
 ### Real infrastructure
 
-- PostgreSQL/Redis service startup;
-- Alembic migration checks;
-- real integration tests;
-- API readiness smoke;
+- PostgreSQL/Redis services;
+- Alembic upgrade/schema/downgrade/re-upgrade;
+- integration tests;
+- required cross-layer E2E;
+- API readiness;
 - diagnostic artifacts.
 
-### Dependency review
+### Security/dependency
 
-Dependency review runs on pull requests as advisory review with configured severity policy.
-
-### Secret scanning
-
-Gitleaks scans repository history/content in CI. Never use this as permission to commit a secret temporarily; rotate any credential that ever reaches Git history.
-
-### Filesystem security scanning
-
-Trivy scans repository dependencies/configuration for configured HIGH/CRITICAL classes.
+Dependency review is advisory on pull requests. Gitleaks scans secrets. Trivy scans filesystem dependencies/configuration for configured HIGH/CRITICAL classes.
 
 ### Container/Compose gate
 
-After quality/infrastructure/security prerequisites:
+Container build depends on quality, infrastructure, security and secret-scan success. Therefore a failed E2E blocks production image build in the main CI workflow.
 
-- validate development Compose;
-- validate production Compose/deploy script assets;
-- run deploy contract tests that require non-interactive one-shot Compose commands, exact-image assertions and 30-second elapsed-time Happy Fox/Telegram convergence windows rather than unbounded fixed retry multiplication;
-- build deterministic production image;
-- load/import smoke test;
-- scan the built image with Trivy.
-
-The public Happy Fox and Telegram API checks themselves remain production deploy gates rather than CI network calls. CI verifies their shell contract and bounded timing semantics without depending on live production ingress or Telegram credentials.
-
-## Production image
-
-The Dockerfile pins the Python patch-level base image used by the current reproducible build baseline and installs `requirements.lock` before installing FoxGen without dependency resolution.
-
-The same application image is used with different commands for API, worker, bot and migration/admin-init style jobs. Do not add an image-level healthcheck that assumes every container runs the HTTP API.
-
-## Formatting policy
-
-CI must not silently mutate source and then call the run successful. Ruff checks are non-mutating gates. When formatting fails, fix the branch and rerun.
-
-A new Python file must be both lint-clean and `ruff format` clean before merge.
+The gate validates development/production Compose, deploy shell assets, deterministic production image import and image vulnerability scan.
 
 ## Test layering
 
-Use the smallest layer that proves the invariant:
+Use the smallest layer that proves an invariant:
 
-- pure unit test — deterministic validation/state helper;
-- service test — use-case policy/idempotency;
-- API test — authentication/transport contract;
-- FSM test — Telegram routing/state preservation;
-- integration test — PostgreSQL/Redis transaction/lock/uniqueness behavior;
-- Compose/image smoke — production wiring/import/startup;
-- controlled live provider smoke — only when explicitly intended, credentialed and budgeted.
+- unit — deterministic helper;
+- service — policy/idempotency;
+- API — auth/transport;
+- FSM — Telegram routing/state;
+- integration — real PostgreSQL/Redis transaction/lock/uniqueness;
+- E2E — multiple real internal layers joined through public/trusted/admin boundaries;
+- Compose/image smoke — production wiring;
+- controlled live provider smoke — only when explicitly credentialed/budgeted.
 
-Do not turn normal CI into a billable KIE provider test. Provider-live smoke is separate because it consumes external credentials/budget and is not deterministic.
+Do not turn normal CI into billable KIE/Telegram financial provider tests.
 
-## Admin security test requirements
+## Admin security requirements
 
-Admin changes must preserve negative tests, not only happy paths:
+Admin changes preserve negative tests for invalid HMAC, stale timestamp, network denial, changed raw body, missing idempotency/confirmation, changed payload under same key and ordinary-user denial.
 
-- non-admin `/admin` denial;
-- forged callback/FSM continuation denial;
-- invalid HMAC;
-- stale timestamp;
-- source outside allowlist;
-- changed raw body after signature;
-- missing idempotency on writes;
-- idempotency key reused with changed payload;
-- missing destructive confirmation;
-- sensitive-field redaction;
-- forged operator-web action from a regular user.
+## Billing/provider safety requirements
 
-## Billing/provider safety test requirements
+A change touching money or external provider side effects needs tests demonstrating relevant invariants, including:
 
-A change touching money or provider submission needs explicit tests that demonstrate:
-
-- duplicate confirmation/admission does not create a second billable generation;
-- provider create ambiguity does not trigger another createTask;
+- duplicate paid admission cannot bill twice;
+- createTask ambiguity cannot blindly resubmit;
 - payment reprocess cannot double-credit;
-- reservation settlement is idempotent;
-- delivery ambiguity does not auto-resend.
+- Stars refund cannot contact Telegram before CREDIT hold commits;
+- insufficient CREDIT cannot enter refund provider side effects;
+- successful refund leaves one final debit;
+- deterministic refund rejection restores once;
+- ambiguous refund keeps the hold until evidence;
+- evidence resolution cannot double-restore;
+- delivery ambiguity cannot auto-resend.
 
 ## CI failure triage
 
-Recommended order:
-
-1. identify the first real failing job/step;
-2. distinguish runner/service initialization failure from code/test failure;
-3. use uploaded diagnostics rather than guessing from truncated log excerpts;
-4. fix the invariant in code/test/config, not by weakening the gate;
-5. rerun the affected commit and wait for the full required pipeline;
-6. merge only after the head SHA has a successful CI run and no unresolved blocking review thread.
+1. identify the first real failing step;
+2. distinguish runner/service failure from code/test failure;
+3. use uploaded logs/artifacts rather than guessing;
+4. fix the invariant, not the gate;
+5. rerun the affected head SHA;
+6. merge only when full required CI and review gates are clean.
 
 ## Workflow/deployment relationship
 
-The production deploy workflow is downstream of successful `main` CI. A PR CI success alone does not deploy. After merge/push to `main`, the corresponding `main` CI run must succeed before the protected deployment workflow can act.
-
-Once deployment starts, the server-side gates are stricter than CI's API readiness smoke: an enabled Happy Fox rollout must also converge through the public Mini App and Telegram default WebApp menu checks within their bounded wall-clock windows before the script emits the final deployment-completed marker.
+PR CI does not deploy. After merge/push, the `main` CI run must also succeed before the protected production workflow can act.
 
 See `production-deploy.md`.

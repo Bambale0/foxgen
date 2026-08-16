@@ -140,7 +140,7 @@ Happy Fox uses a short-lived Telegram-derived JWT. These routes are owner-scoped
 
 The frontend renders enabled model controls from the backend `input_schema` and calls the Mini App validation route before paid admission. The paid route validates again; browser validation is never a trust boundary. Wallet routes are projections only and cannot mutate balances.
 
-For Stars top-up, Happy Fox may request an invoice URL and open it using Telegram WebApp checkout, but the browser has no endpoint for declaring payment success. Only Telegram's native `successful_payment` update received by the trusted bot can create payment evidence and trigger CREDIT settlement.
+For Stars top-up, Happy Fox may request an invoice URL and open it using Telegram WebApp checkout, but the browser has no endpoint for declaring payment success or requesting a privileged refund. Telegram checkout settlement and native Stars refund execution remain server-side.
 
 # Registered signed internal admin API
 
@@ -206,8 +206,14 @@ Admin replay never replays the billable `generation.submit` boundary.
 | GET | `/payments/{payment_id}` | detail |
 | POST | `/payments/{payment_id}/recheck` | idempotent, worker-backed |
 | POST | `/payments/{payment_id}/reprocess` | idempotent + confirm, worker-backed |
+| POST | `/payments/{payment_id}/refund` | idempotent + confirm; hold CREDIT then queue native Stars refund |
+| POST | `/payments/{payment_id}/refund/resolve` | idempotent + confirm; evidence-based resolution of `refund_unknown` |
 
-Payment credit uses a deterministic immutable-ledger key, preventing double credit across repeated reprocess commands. A Telegram Stars charge can therefore be safely reprocessed when its durable `PaymentEvent` exists but the original CREDIT settlement failed after charge evidence was committed.
+Payment credit uses a deterministic immutable-ledger key, preventing double credit across repeated reprocess commands. A Telegram Stars charge can be safely reprocessed when its durable `PaymentEvent` exists but the original CREDIT settlement failed after charge evidence was committed.
+
+Native Stars refund is supported only for an already credited `telegram_stars` payment. The refund command requires a reason and enough currently available CREDIT to reverse the original credit. The service atomically subtracts that CREDIT and appends `payment-refund-debit:telegram_stars:<charge-id>:<attempt-id>` before the dedicated refund worker contacts Telegram.
+
+A deterministic provider rejection restores the CREDIT hold and leaves the payment credited. Ambiguous network/server outcomes remain held through bounded retries and then become `refund_unknown`. The resolution endpoint requires an explicit `refunded` or `not_refunded` outcome plus evidence text; `not_refunded` appends the unique compensating `payment-refund-restore:*` ledger entry. Direct browser/user refund writes do not exist.
 
 ## Tariffs and pricing
 
@@ -323,11 +329,11 @@ When both admin API/web switches are enabled, the operator surface registers:
 | GET | `/internal/admin/ui/api/{section}` | `X-Admin-Session` + network/RBAC |
 | POST | `/internal/admin/ui/api/action` | session + idempotency; confirmation for destructive action classes |
 
-The specific extension router is registered before the base router's generic `GET /api/{section}` route. This ordering is intentional: otherwise `/analytics` and `/admins` would be shadowed by the generic section route even though they appeared in route enumeration.
+The specific extension router is registered before the base router's generic `GET /api/{section}` route. This ordering is intentional: otherwise dedicated extension routes could be shadowed by generic section routes even though they appeared in route enumeration.
 
 Current generic section names supported by the base router include users, payments, operations, tickets, tariffs, campaigns, moderation, runtime, partners, prompts, CMS, audit and finance.
 
-Current generic action dispatcher supports shared-service actions including user block/unblock/balance adjustment, payment recheck/reprocess, operation replay/refund, ticket reply, tariff publish, campaign create/start/cancel, CMS save/publish, model availability/runtime flag and trend/feed moderation. Dedicated analytics/admin/preview paths remain separate typed endpoints above.
+The generic action dispatcher supports existing shared-service actions such as user block/unblock/balance adjustment, payment recheck/reprocess, operation replay/refund, ticket reply, tariff publish, campaign actions, CMS actions, runtime/model availability and moderation. Native Stars refund/refund-resolution use dedicated signed routes because they have stricter financial payload/evidence semantics.
 
 This operator surface is backend-only. It is not the public Mini App.
 
@@ -344,6 +350,8 @@ same (admin, action, key) + changed effective request
 ```
 
 Authentication/authorization failure is always server-side. Hidden buttons, copied callback data or forged operator actions do not bypass policy.
+
+For refund ambiguity, HTTP command idempotency and financial ledger idempotency are independent safeguards: replaying the same resolution command returns the stored command result, while the unique restore ledger key prevents a second CREDIT restoration even across a different execution path.
 
 # Raw-body signing example
 

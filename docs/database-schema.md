@@ -42,15 +42,7 @@ Deduplicated provider callback inbox. Event hash uniqueness prevents the same pr
 
 ### `outbox_events`
 
-Durable generation/local work queue. Important fields include event type, aggregate ID, deduplication key, payload, status, attempts, availability, lease/worker data and failure metadata.
-
-Current status family:
-
-```text
-pending, retry_wait, processing, completed, dead_letter, failed
-```
-
-`failed` remains for compatibility; newer retry/dead-letter behavior uses explicit retry/failure classification.
+Durable generation/local work queue with event type, aggregate ID, deduplication key, payload, status, attempts, availability, lease/worker data and failure metadata.
 
 ## Media and Telegram delivery
 
@@ -58,25 +50,9 @@ pending, retry_wait, processing, completed, dead_letter, failed
 
 One result-archive row per generation/source URL with deterministic storage key metadata, content type, size, checksum, attempts/retry/error state.
 
-Unique constraints prevent duplicate `(generation_id, source_url)` and storage-key ownership.
-
-States:
-
-```text
-pending, retry_wait, stored, failed
-```
-
 ### `generation_deliveries`
 
-One Telegram delivery record per generation.
-
-States:
-
-```text
-pending, retry_wait, sending, sent, delivery_unknown, failed
-```
-
-Stores recipient, attempts/retry scheduling, returned Telegram message IDs, last error and send time.
+One Telegram delivery record per generation. States include `pending`, `retry_wait`, `sending`, `sent`, `delivery_unknown`, `failed`.
 
 ## Billing and user payments
 
@@ -93,11 +69,11 @@ Database checks prevent negative available/reserved values.
 
 ### `model_prices`
 
-Versioned runtime model price history. Uniqueness on `(model_slug, version)`; amount must be positive. A new active version replaces active status rather than overwriting old history.
+Versioned runtime model price history. Uniqueness on `(model_slug, version)`; amount must be positive.
 
 ### `balance_reservations`
 
-One billing reservation per generation. Stores user, price, amount/currency and settlement state:
+One generation billing reservation with settlement state:
 
 ```text
 reserved, captured, released, refunded
@@ -105,46 +81,83 @@ reserved, captured, released, refunded
 
 ### `ledger_entries`
 
-Append-only financial movements with unique idempotency key, actor/reason and available/reserved deltas. Each entry must have a non-zero financial delta.
+Append-only financial movements with unique idempotency key, actor/reason and available/reserved deltas.
 
-Ledger entry types include credit/debit/reserve/capture/release/refund/adjustment semantics represented by the current domain enum/constraint.
+Payment-related deterministic keys include:
+
+```text
+payment-credit:<provider>:<external_id>
+payment-refund-debit:telegram_stars:<charge-id>:<attempt-id>
+payment-refund-restore:telegram_stars:<charge-id>:<attempt-id>
+```
 
 ### `user_payment_orders`
 
-Durable user checkout order introduced by Alembic revision `20260816_0012`. The first transport is Telegram Stars.
-
-The row snapshots commercial terms before an external invoice-link call:
-
-- user/provider and request idempotency key;
-- request hash and package code/title/description;
-- CREDIT amount;
-- provider amount/currency (`XTR` for Stars);
-- opaque invoice payload and returned invoice URL;
-- Telegram/provider charge IDs;
-- raw verified payment projection;
-- paid/credited timestamps.
+Durable user checkout order introduced by Alembic revision `20260816_0012`. Commercial terms are snapshotted before external invoice creation.
 
 Critical uniqueness:
 
 ```text
 (user_id, idempotency_key)
 invoice_payload
-telegram_payment_charge_id   # nullable until Telegram confirms payment
+telegram_payment_charge_id
 ```
 
-Current status constraint:
+Revision `20260816_0013` extends the status constraint for native Stars refunds:
 
 ```text
-created, invoice_ready, paid, credited, failed, refunded
+created
+invoice_ready
+paid
+credited
+refund_pending
+refund_unknown
+refunded
+failed
 ```
 
-`created` is committed before `createInvoiceLink`. A verified Telegram `successful_payment` commits the charge ID, `paid_at` and `status=paid` before wallet settlement. `credited_at` and `status=credited` are populated only after the CREDIT settlement succeeds.
+`paid` proves Telegram charge evidence exists before CREDIT settlement. `refund_pending` means the original CREDIT has already been removed locally and the dedicated refund worker is expected to converge. `refund_unknown` means the external refund result is ambiguous and the CREDIT hold must remain until evidence resolution.
 
-The `paid` state prevents another pre-checkout from being approved for an already charged order and makes paid-but-uncredited recovery observable: an order/payment can prove Telegram charged the user even if the later wallet transaction failed.
+### `payment_refund_attempts`
+
+Introduced by Alembic revision `20260816_0013`. This table is both refund audit record and dedicated external-side-effect queue; native Stars refund does not use the generic admin outbox.
+
+Important columns:
+
+- `payment_id`, `order_id`, `user_id`;
+- provider and original Telegram charge ID;
+- CREDIT amount/currency being reversed;
+- human reason and requesting admin;
+- status, attempts, `available_at`, `locked_at` lease state;
+- unique debit ledger key;
+- optional unique restore ledger key;
+- provider payload/error/evidence-resolution metadata;
+- attempted/resolved/created/updated timestamps.
+
+Allowed states:
+
+```text
+pending
+processing
+succeeded
+failed
+unknown
+resolved_refunded
+resolved_not_refunded
+```
+
+Critical rules:
+
+- `amount_units > 0`;
+- `attempts >= 0`;
+- debit ledger key is unique;
+- restore ledger key is unique when present;
+- payment/order foreign keys cascade with their parent financial record;
+- a successful refund keeps the debit and never creates a restore key;
+- a deterministic rejection or `not_refunded` evidence resolution restores CREDIT through the unique restore key;
+- `unknown` intentionally retains the debit/hold.
 
 ## Administrative control plane
-
-Alembic revision `20260813_0008_admin_contour.py` introduces the main administrative schema groups below.
 
 ### `admin_users`
 
@@ -158,11 +171,7 @@ Idempotent write-command ledger. Unique key:
 (admin_user_id, action, idempotency_key)
 ```
 
-Stores request ID, target, request hash/payload, response payload, error and status:
-
-```text
-reserved, succeeded, failed
-```
+Stars refund/refund-resolution commands are recorded here independently from financial ledger idempotency.
 
 ### `admin_audit_events`
 
@@ -170,29 +179,21 @@ Append-only administrative outcome/audit event with actor, request ID, action, t
 
 ### `admin_outbox`
 
-Durable administrative background work, including payment/replay jobs. Unique deduplication key; leased retry/dead-letter states:
-
-```text
-pending, processing, retry_wait, completed, dead_letter
-```
+Durable general administrative background work, including payment recheck/reprocess, support and campaign jobs. Native Stars refund is intentionally excluded because `payment_refund_attempts` owns that external financial side effect and its ambiguity semantics.
 
 ## Commercial/admin content
 
 ### `tariff_versions`
 
-Immutable/versioned tariff payload history with positive version number and publishing admin/time. Stars-enabled user packages live inside the latest published payload but their values are copied into `user_payment_orders` before checkout, so later tariff publication cannot mutate an existing order.
+Immutable/versioned tariff payload history. Stars package values are copied into `user_payment_orders` before checkout.
 
 ### `payment_events`
 
-Provider payment operational/evidence record. Unique `(provider, external_id)`, amount/currency, raw provider payload, check/process timestamps and optional unique credited ledger key.
+Provider payment evidence record. Unique `(provider, external_id)`, amount/currency, raw provider payload, timestamps and optional unique credited ledger key.
 
-For Telegram Stars, `external_id` is the Telegram payment charge ID. `successful_payment` evidence is persisted here in a committed transaction **before** the wallet/ledger settlement boundary. Thus a backend failure after Telegram charge confirmation leaves a durable completed payment event with no `credited_ledger_key`, which the existing admin payment reprocess worker can credit exactly once.
+For Telegram Stars, `external_id` is the Telegram payment charge ID. Payment status evolves through top-up/refund lifecycle (`completed`, `refund_pending`, `refund_unknown`, `refunded`) while the original external charge identity remains unchanged.
 
-A credited payment uses deterministic billing key:
-
-```text
-payment-credit:<provider>:<external_id>
-```
+A charge with no credited ledger key but completed payment evidence is recoverable through payment reprocess. A credited charge entering native refund is linked to a `payment_refund_attempts` record by `payment_id`.
 
 ### `operation_events`
 
@@ -204,135 +205,68 @@ Administrative/operational timeline. Can reference a generation and parent opera
 
 User support case with subject, status, assigned admin, priority and operator note.
 
-Allowed states:
-
-```text
-open, pending, resolved, closed
-```
-
 ### `support_messages`
 
 Messages attached to a ticket, with sender kind/identity, body and delivery/storage status.
 
 ### `support_outbox`
 
-Durable Telegram reply send queue. Unique deduplication key and leased status:
+Durable Telegram reply send queue with retry/lease state.
 
-```text
-pending, processing, retry_wait, sent, dead_letter
-```
+## CMS and notifications
 
-## CMS
+### `cms_documents` / `cms_document_versions`
 
-### `cms_documents`
+Stable document identity and immutable version history.
 
-Stable document identity/slug/title plus pointer to the currently published version.
+### `notification_campaigns` / `notification_deliveries`
 
-### `cms_document_versions`
-
-Immutable document versions, unique on `(document_id, version)`, with body, metadata, author and optional publish time.
-
-## Notifications
-
-### `notification_campaigns`
-
-Campaign definition/message/segment and lifecycle:
-
-```text
-draft, ready, running, completed, cancelled
-```
-
-### `notification_deliveries`
-
-One recipient delivery per campaign. Unique:
-
-```text
-(campaign_id, recipient_id)
-```
-
-States:
-
-```text
-pending, processing, retry_wait, sent, failed
-```
-
-Stores attempts/lease/error and Telegram message ID.
+Campaign definitions and durable per-recipient deliveries.
 
 ## Partners and promos
 
-### `partner_profiles`
+### `partner_profiles` / `partner_withdrawals`
 
-Materialized partner analytics counters such as earned/withdrawn units and referral count.
-
-### `partner_withdrawals`
-
-Withdrawal request with positive amount, destination/reviewer metadata and states:
-
-```text
-pending, approved, paid, rejected
-```
+Materialized partner state and withdrawal requests.
 
 ### `promo_codes`
 
-Normalized promo identity with active flag, reward, max/current use counters, metadata and creating admin.
+Promo identity, active state, reward and usage counters.
 
 ## Prompt/runtime/moderation administration
 
-### `prompt_library_items`
-
-Moderatable prompt content with author/title/text and states:
-
-```text
-pending, approved, rejected, inactive
-```
-
-### `runtime_flags`
-
-Mutable operational flags with enabled/value payload and last updating admin.
-
-### `model_availability`
-
-Per-model runtime enabled/disabled override with reason/admin/timestamp. Paid admission consults this state in addition to static registry readiness.
-
-### `trend_items`
-
-Administrative trend content records with payload/active state.
-
-### `feed_moderation_actions`
-
-Durable moderation decisions against content IDs with action/reason/active flag/admin/time.
+`prompt_library_items`, `runtime_flags`, `model_availability`, `trend_items` and `feed_moderation_actions` store the corresponding admin-managed durable state.
 
 ## Foreign-key/delete intent
 
-Generation-owned media/delivery and similar child records use database foreign-key relationships appropriate to their lifecycle. Some operational/audit references intentionally use nullable/set-null semantics so deleting a parent business object does not erase the historical meaning of the administrative operation.
-
-Do not infer permission to delete production business/audit/payment data from an ORM cascade alone. Operational retention is a product/security decision.
+Operational/audit relationships use delete behavior appropriate to their lifecycle, but ORM/database cascades are not permission to delete production financial history. Retention is a product/security decision.
 
 ## Migration discipline
 
-- Do not edit historical deployed migrations to change schema truth.
-- Add a new forward Alembic revision.
-- Import new SQLAlchemy metadata into migration environment when required. `payment_models` is explicitly imported by `migrations/env.py` so `user_payment_orders` participates in `Base.metadata` comparisons.
-- Keep status check constraints synchronized with domain enums/transitions.
-- Ensure `scripts/check_schema.py` covers critical new tables/columns.
-- Run upgrade/head/downgrade-reupgrade CI.
-- Document operational rollback/data-retention consequences.
+- Do not edit historical deployed migrations.
+- Add a forward Alembic revision.
+- Import new SQLAlchemy metadata into `migrations/env.py`.
+- Keep check constraints synchronized with runtime state transitions.
+- Extend `scripts/check_schema.py` for critical new tables/columns.
+- Run upgrade/head/downgrade/re-upgrade CI.
+- Document rollback consequences.
+
+For revision `20260816_0013`, downgrade is safe before refund-state data exists. An operator must not blindly downgrade a production database containing `refund_pending`, `refund_unknown` or refund-attempt records because the prior order-status constraint does not represent those states.
 
 ## Financial/audit immutability
 
 For normal operation:
 
 - never UPDATE/DELETE ledger history to repair a balance;
-- never discard a verified external payment merely because CREDIT settlement failed;
-- never rewrite an admin command/audit result to hide an action;
-- use compensating/refund/adjustment records and new audit events;
-- use reconciliation/admin services instead of direct SQL.
+- never discard verified external payment/refund evidence because a later local transaction failed;
+- never restore an ambiguous refund hold by direct SQL;
+- use compensating immutable entries and evidence-based resolution;
+- never rewrite admin command/audit history to hide an action.
 
 ## Related docs
 
 - `architecture.md` — data ownership and pipelines;
 - `billing.md` — financial lifecycle;
-- `telegram-stars-payments.md` — Stars checkout/evidence/settlement lifecycle;
-- `postprocessing-reconciliation.md` — cross-table consistency;
-- `admin-capability-matrix.md` — admin domain behavior;
+- `telegram-stars-payments.md` — checkout/refund/evidence lifecycle;
+- `api-reference.md` — public/trusted/admin routes;
 - migrations/models — exact schema source of truth.

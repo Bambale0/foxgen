@@ -2,13 +2,14 @@ from __future__ import annotations
 
 import html
 from typing import Annotated
+from uuid import UUID
 
 from fastapi import APIRouter, Header, Request, Response
 from pydantic import BaseModel, Field
 
 from foxgen.admin.errors import AdminValidationError
 from foxgen.admin.security import require_manual_confirmation
-from foxgen.api.admin import _authenticate, _services
+from foxgen.api.admin import _authenticate, _idempotency, _services
 from foxgen.core.config import Settings
 
 
@@ -21,6 +22,19 @@ class AdminUserSetRequest(BaseModel):
 class GenerationPreviewRequest(BaseModel):
     model_slug: str = Field(min_length=1, max_length=128)
     input: dict[str, object]
+
+
+class PaymentRefundRequest(BaseModel):
+    reason: str = Field(min_length=1, max_length=1000)
+
+
+class PaymentRefundResolveRequest(BaseModel):
+    outcome: str = Field(pattern="^(refunded|not_refunded)$")
+    evidence: str = Field(min_length=1, max_length=4000)
+
+
+def _command_payload(payload: dict[str, object], replayed: bool) -> dict[str, object]:
+    return {**payload, "replayed": replayed}
 
 
 def create_admin_extensions_router(settings: Settings) -> APIRouter:
@@ -51,9 +65,44 @@ def create_admin_extensions_router(settings: Settings) -> APIRouter:
             active=body.active,
             idempotency_key=idempotency_key.strip(),
         )
-        payload = dict(result.payload)
-        payload["replayed"] = result.replayed
-        return payload
+        return _command_payload(result.payload, result.replayed)
+
+    @router.post("/payments/{payment_id}/refund")
+    async def refund_payment(
+        payment_id: UUID,
+        body: PaymentRefundRequest,
+        request: Request,
+        idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
+        confirmation: Annotated[str | None, Header(alias="X-Admin-Confirm")] = None,
+    ) -> dict[str, object]:
+        context = await _authenticate(request, settings)
+        require_manual_confirmation(confirmation)
+        result = await _services(request).payments.refund_payment(
+            context=context,
+            payment_id=payment_id,
+            reason=body.reason,
+            idempotency_key=_idempotency(idempotency_key),
+        )
+        return _command_payload(result.payload, result.replayed)
+
+    @router.post("/payments/{payment_id}/refund/resolve")
+    async def resolve_payment_refund(
+        payment_id: UUID,
+        body: PaymentRefundResolveRequest,
+        request: Request,
+        idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
+        confirmation: Annotated[str | None, Header(alias="X-Admin-Confirm")] = None,
+    ) -> dict[str, object]:
+        context = await _authenticate(request, settings)
+        require_manual_confirmation(confirmation)
+        result = await _services(request).payments.resolve_refund(
+            context=context,
+            payment_id=payment_id,
+            outcome=body.outcome,
+            evidence=body.evidence,
+            idempotency_key=_idempotency(idempotency_key),
+        )
+        return _command_payload(result.payload, result.replayed)
 
     @router.get("/analytics")
     async def analytics(request: Request, hours: int = 24) -> dict[str, object]:

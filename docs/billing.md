@@ -17,7 +17,7 @@ A billable generation is admitted only when all conditions pass:
 
 Missing price returns a pricing failure before provider access. Insufficient funds fail before provider access. No queued paid generation can exist without its matching reservation in the successful admission path.
 
-User top-up is a separate financial boundary: Telegram Stars payment validation/settlement does not depend on `FOXGEN_TASK_SUBMISSION_ENABLED`, because disabling new provider generations must not prevent a previously paid user transaction from being recorded or reconciled.
+User top-up/refund recovery is a separate financial boundary: Telegram Stars payment validation, settlement and refund reconciliation do not depend on `FOXGEN_TASK_SUBMISSION_ENABLED`, because disabling new provider generations must not prevent an already paid user transaction from being recorded or reconciled.
 
 ## Wallet account
 
@@ -34,29 +34,15 @@ Database constraints prevent negative available/reserved values.
 
 `model_prices` is versioned by `(model_slug, version)` and keeps historical rows. Publishing a new active price disables the previous active version rather than editing history in place.
 
-Price rows include:
+Price rows include amount in integer units, currency, enabled flag, activation window, metadata and version. Migrations do not invent commercial prices. Operations must deliberately publish prices before enabling production paid submission.
 
-- amount in integer units;
-- currency;
-- enabled flag;
-- activation window;
-- metadata;
-- version.
-
-Migrations do not invent commercial prices. Operations must deliberately publish prices before enabling production paid submission.
-
-The full admin contour also maintains a versioned tariff payload for packages and broader product pricing. `model_prices` remains the runtime per-model price used by current generation admission; tariff publishing is an administrative/version-history surface and must be kept consistent with whatever product-price projection is used by a release.
+The full admin contour also maintains a versioned tariff payload for packages and broader product pricing. `model_prices` remains the runtime per-model price used by generation admission.
 
 ## Telegram Stars top-up
 
-Digital-credit top-up inside Telegram uses Telegram Stars (`XTR`) and the latest published tariff package data. A package is purchasable through the Stars flow only when it explicitly contains both:
+Digital-credit top-up inside Telegram uses Telegram Stars (`XTR`) and the latest published tariff package data. A package is purchasable only when it explicitly contains a positive integer CREDIT amount (`credits_units` or legacy `credits`) and positive integer Stars amount (`stars_amount` or `stars`).
 
-- a positive integer CREDIT amount (`credits_units` or legacy `credits`);
-- a positive integer Stars amount (`stars_amount` or `stars`).
-
-Legacy tariff packages that contain only a fiat/display `price` remain valid tariff data but are not silently converted into Stars prices.
-
-Before FoxGen calls Telegram to create an invoice link, it creates a durable `user_payment_orders` row and snapshots package code/title/description, CREDIT amount and XTR amount. The order is idempotent on `(user_id, Idempotency-Key)`. Telegram invoice title/description are normalized to provider limits before a package is exposed as purchasable.
+Before FoxGen calls Telegram to create an invoice link, it creates a durable `user_payment_orders` row and snapshots package terms. The order is idempotent on `(user_id, Idempotency-Key)`.
 
 Payment flow:
 
@@ -70,24 +56,95 @@ latest tariff package
   -> exactly-once CREDIT ledger settlement
 ```
 
-The pre-checkout handler validates order ownership, invoice payload, `XTR` currency and exact snapshotted amount. It does not mutate the wallet.
+A verified Telegram `successful_payment` uses two durable boundaries:
 
-A verified Telegram `successful_payment` is handled in two durable boundaries:
-
-1. persist charge evidence (`PaymentEvent` + Telegram charge ID + paid timestamp) in its own committed transaction;
-2. settle the wallet and immutable ledger in a separate transaction using deterministic key:
+1. persist charge evidence (`PaymentEvent`, Telegram charge ID and `paid` order state);
+2. settle wallet and immutable ledger using:
 
 ```text
 payment-credit:telegram_stars:<telegram_payment_charge_id>
 ```
 
-This separation is deliberate. If wallet settlement fails after Telegram has charged the user, the payment evidence survives and the existing admin payment reprocess worker can recover the CREDIT exactly once. Users must not be told to pay again merely because the second boundary failed.
+If the second boundary fails, the payment evidence survives and the admin payment reprocess worker can recover CREDIT exactly once.
 
-The local order also stores the Telegram charge ID because a later refund capability needs the original charge identity. Refund execution is a separate reviewed slice.
+## Telegram Stars refund
 
-See `telegram-stars-payments.md` for the transport/order lifecycle.
+Native Stars refund is a separate privileged financial lifecycle. It is deliberately not a public browser/bot balance mutation.
 
-## Atomic reservation
+### Eligibility
+
+A refund can begin only when:
+
+- payment provider is `telegram_stars`;
+- the payment already has a credited ledger key;
+- the durable order is `credited`;
+- no active refund attempt exists;
+- the user still has at least the original credited CREDIT available.
+
+The last rule is deliberate in this first refund policy: FoxGen does not create a negative wallet or partially reclaim CREDIT already spent.
+
+### CREDIT hold before external refund
+
+Before Telegram is contacted, FoxGen commits the local reversal intent atomically:
+
+```text
+available_units -= original credited units
+ledger += payment-refund-debit:telegram_stars:<charge-id>:<attempt-id>
+payment_refund_attempts += pending attempt
+order/payment -> refund_pending
+COMMIT
+```
+
+This debit is both a hold and the final financial reversal if Telegram successfully refunds the Stars. It prevents the user from spending the same CREDIT while an external refund is pending.
+
+If the user lacks enough available CREDIT, the refund command fails before any Telegram side effect.
+
+### Dedicated external-side-effect worker
+
+`PaymentRefundWorker` owns the native `refundStarPayment` call. It uses a dedicated durable refund-attempt queue with leasing/retry state instead of the generic admin outbox.
+
+Success:
+
+```text
+attempt -> succeeded
+order/payment -> refunded
+refund debit remains final
+```
+
+Deterministic provider rejection before refund:
+
+```text
+ledger += payment-refund-restore:telegram_stars:<charge-id>:<attempt-id>
+available_units += held units
+attempt -> failed
+order -> credited
+payment -> completed
+```
+
+Ambiguous network/server/rate-limit outcome:
+
+```text
+bounded retry with CREDIT hold preserved
+max attempts reached -> attempt = unknown
+order/payment -> refund_unknown
+```
+
+A retry that observes the original charge already refunded converges to success instead of creating another financial effect.
+
+### Evidence resolution
+
+`refund_unknown` is not guessed away. The privileged resolution command requires an explicit outcome and evidence.
+
+If evidence proves refund occurred, the debit remains final and order/payment become refunded. If evidence proves refund did not occur, FoxGen appends the deterministic restore ledger entry and restores CREDIT exactly once.
+
+Replay protection therefore exists at both levels:
+
+- admin command idempotency protects the operator request;
+- immutable debit/restore ledger keys protect the money movement itself.
+
+See `telegram-stars-payments.md` for the complete transport/state lifecycle.
+
+## Atomic generation reservation
 
 Conceptually, generation admission executes:
 
@@ -107,7 +164,7 @@ COMMIT
 
 Any failure rolls back the transaction.
 
-## Settlement lifecycle
+## Generation settlement lifecycle
 
 Reservation states:
 
@@ -117,101 +174,54 @@ reserved -> released
 captured -> refunded
 ```
 
-### Provider acceptance
+When provider acceptance is durably verified, reserved units are captured. `submission_unknown` keeps the reservation held until evidence resolves the provider side effect. Deterministic pre-capture failure releases the reservation. Terminal post-capture failure applies the current full-generation-refund policy exactly once.
 
-When provider acceptance is durably verified and generation becomes `submitted`, the reservation is captured:
-
-```text
-reserved_units -= amount
-reservation = captured
-ledger += capture
-```
-
-### Ambiguous submission
-
-`submission_unknown` deliberately keeps the reservation in `reserved`. FoxGen does not guess whether the provider charged and does not release/capture solely because a local timeout occurred.
-
-Resolution requires callback, polling evidence or explicit operator reconciliation.
-
-### Deterministic failure before capture
-
-A reservation is released:
-
-```text
-available_units += amount
-reserved_units -= amount
-reservation = released
-ledger += release
-```
-
-### Terminal failure after capture
-
-Current policy applies a full refund:
-
-```text
-available_units += amount
-reservation = refunded
-ledger += refund
-```
-
-Repeated lifecycle events cannot create repeated settlement because reservation rows are locked and ledger operations use deterministic idempotency keys.
+Generation refund and Telegram payment refund are different domains: the former compensates a failed generated product in CREDIT; the latter returns the original Telegram Stars payment and reverses the corresponding CREDIT grant.
 
 ## Immutable ledger
 
-`ledger_entries` records every financial movement with:
+`ledger_entries` records every financial movement with user, optional generation/reservation references, entry type, available/reserved deltas, currency, unique idempotency key, actor, reason, metadata and timestamp.
 
-- user ID;
-- optional generation/reservation references;
-- entry type;
-- available/reserved deltas;
-- currency;
-- unique idempotency key;
-- actor;
-- reason;
-- metadata;
-- timestamp.
+The ledger is append-only. Admin adjustments, payment credits and refund restoration do not rewrite previous entries; they append new movements.
 
-The ledger is append-only by design and is the basis for reconciliation. Admin adjustments do not mutate prior entries; they append new adjustment/credit/debit movements through protected services.
+Important payment keys:
+
+```text
+payment-credit:<provider>:<external_id>
+payment-refund-debit:telegram_stars:<charge-id>:<attempt-id>
+payment-refund-restore:telegram_stars:<charge-id>:<attempt-id>
+```
 
 ## User/admin balance adjustment
 
-Two protected administrative transports currently exist:
-
-### Legacy billing-admin route
+Legacy billing admin:
 
 ```text
 POST /v1/admin/users/{user_id}/balance-adjustments
 ```
 
-It requires the separately configured billing-admin credential and `Idempotency-Key`.
-
-### Full admin control plane
+Full control plane:
 
 ```text
 POST /internal/admin/users/{user_id}/balance-adjustments
 ```
 
-It additionally uses signed HMAC admin authentication, server-side RBAC, command/audit ledger, idempotent replay and explicit confirmation.
+New operator surfaces must use shared billing/admin services rather than direct SQL.
 
-For new operator surfaces, prefer the full admin domain/service path rather than duplicating financial write logic.
+## Payment events, reprocessing and refunds
 
-## Payment events and reprocessing
+`payment_events` stores external payment evidence for operational inspection/recheck/reprocess and refund lifecycle status.
 
-The admin contour stores payment events for operational inspection/recheck/reprocess. Telegram Stars `successful_payment` is also materialized here before wallet settlement so external charge evidence is not lost when the later CREDIT transaction fails.
+A completed payment credit is deterministic, so repeated reprocess cannot credit twice. A Telegram charge with evidence but no credited ledger key can be recovered through generic payment reprocess.
 
-A completed payment credit uses a deterministic immutable-ledger idempotency key:
+Native Stars refund uses dedicated endpoints and `payment_refund_attempts` rather than generic payment reprocess:
 
 ```text
-payment-credit:<provider>:<external_id>
+POST /internal/admin/payments/{payment_id}/refund
+POST /internal/admin/payments/{payment_id}/refund/resolve
 ```
 
-Consequences:
-
-- reprocessing the same completed payment cannot credit it twice;
-- a second admin command with another request id still observes the existing payment credit;
-- a Stars charge with persisted evidence but no `credited_ledger_key` can be recovered through the same generic payment reprocess worker;
-- provider recheck/reprocess is durable admin worker work rather than an unsafe request-lifecycle mutation;
-- when a provider recheck adapter is absent, the job fails closed instead of inventing payment state.
+The first action requires confirmation, idempotency and a reason. The second requires confirmation, idempotency, evidence and `refunded|not_refunded`.
 
 ## Tariff history
 
@@ -224,7 +234,7 @@ GET  /internal/admin/tariffs/versions/{version_id}
 POST /internal/admin/tariffs/publish
 ```
 
-Publishing is idempotent, audited and confirmation-gated. Historical published versions are retained for operational traceability.
+Publishing is idempotent, audited and confirmation-gated. Historical versions are retained.
 
 ## User payment APIs
 
@@ -244,7 +254,7 @@ GET  /v1/miniapp/payments/stars/packages
 POST /v1/miniapp/payments/stars/invoices
 ```
 
-The browser can request an invoice but cannot post a successful payment or mutate a wallet. Settlement originates from the trusted Telegram bot update path.
+The browser can request an invoice but cannot post payment success, request privileged refunds or mutate a wallet.
 
 ## Financial read APIs
 
@@ -276,32 +286,32 @@ wallet.available_units + wallet.reserved_units
 = sum(ledger.available_delta + ledger.reserved_delta)
 ```
 
-and cross-resource expectations such as:
+Cross-resource expectations include:
 
 - every admitted billable generation has one reservation;
-- a captured reservation matches verified provider acceptance or later lifecycle;
-- terminal pre-capture failures do not retain reserved funds;
-- terminal post-capture failures/refunds settle exactly once;
-- a Telegram Stars `PaymentEvent` with no credited ledger key is visible as paid-but-uncredited evidence, not discarded transport state;
-- duplicate Telegram payment updates and duplicate admin/payment commands do not append duplicate financial effects.
+- terminal generation settlement occurs exactly once;
+- a Stars `PaymentEvent` with no credited ledger key remains visible as paid-but-uncredited evidence;
+- duplicate successful-payment updates cannot append duplicate payment credits;
+- `refund_pending` and `refund_unknown` retain the refund debit/hold;
+- successful/refunded resolution never appends a restore entry;
+- `not_refunded` resolution appends at most one restore entry;
+- a refund provider call never occurs before the local CREDIT hold commits.
 
-Automated reconciliation exists and may apply only deterministic local fixes. It never submits a provider task or resolves ambiguous external side effects through guesswork.
-
-See `postprocessing-reconciliation.md`.
+Automated reconciliation may apply only deterministic local fixes. It does not guess ambiguous external side effects.
 
 ## Security requirements
 
 Use separate credentials for ordinary internal generation API, legacy billing-admin API and full admin HMAC control plane. None belong in a public client or Mini App.
 
-Every manual money mutation must include a human-readable reason and be attributable to an actor/admin request. Do not bypass shared billing/admin services with direct SQL for ordinary operations.
+Every manual money mutation/refund resolution must include attributable admin context and human-readable reason/evidence. Do not bypass shared services with direct SQL.
 
 ## Change checklist
 
 A billing/pricing/payment change must update:
 
 - SQLAlchemy model/migration if schema changes;
-- atomic admission/settlement and duplicate-event tests;
-- durable external-payment evidence/recovery expectations;
+- atomic settlement/refund and duplicate-event tests;
+- durable external-payment/refund evidence expectations;
+- E2E coverage for cross-layer financial workflows;
 - reconciliation expectations;
-- `.env`/configuration docs for new switches;
-- `billing.md`, `telegram-stars-payments.md`, `api-reference.md`, `telegram-flows.md` and `database-schema.md` when the payment/user transport changes.
+- relevant API, billing, Telegram payment, schema, admin and operations documentation.
