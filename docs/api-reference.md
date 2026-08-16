@@ -321,3 +321,20 @@ signature = hex(HMAC-SHA256(admin_hmac_key, canonical))
 Do not JSON-reserialize after signing. Query parameters are not included in the current canonical signature string; the URL path is.
 
 See `admin-control-plane.md`, `admin-capability-matrix.md` and `known-limitations.md` for the active admin contract and remaining production limitations.
+
+
+<!-- happy-fox-user-portal-routes -->
+## Happy Fox user portal routes
+
+Owner-scoped Mini App routes authenticated by the Telegram-derived JWT:
+
+- `GET /v1/miniapp/tariff` — current published tariff version;
+- `GET|POST /v1/miniapp/support` — list/create support tickets;
+- `GET /v1/miniapp/support/{ticket_id}` — ticket detail/history;
+- `POST /v1/miniapp/support/{ticket_id}/messages` — reply;
+- `POST /v1/miniapp/support/{ticket_id}/close` — close own ticket;
+- `GET /v1/miniapp/partner` — partner dashboard and withdrawals;
+- `POST /v1/miniapp/partner/join` — idempotent partner enrollment;
+- `POST /v1/miniapp/partner/withdrawals` — create a withdrawal request and requires `Idempotency-Key`.
+
+The equivalent `/v1/user-portal/*` trusted-service routes authenticate user context independently of the paid-task submission kill switch. Admin review/approval actions remain under the privileged admin control plane.

@@ -393,6 +393,9 @@ class PartnerProfile(Base):
 class PartnerWithdrawal(Base):
     __tablename__ = "partner_withdrawals"
     __table_args__ = (
+        UniqueConstraint(
+            "user_id", "idempotency_key", name="uq_partner_withdrawals_user_idempotency"
+        ),
         CheckConstraint("amount_units > 0", name="ck_partner_withdrawals_positive"),
         CheckConstraint(
             "status IN ('pending', 'approved', 'paid', 'rejected')",
@@ -409,6 +412,8 @@ class PartnerWithdrawal(Base):
         String(32), default="pending", server_default="pending", index=True
     )
     destination: Mapped[str | None] = mapped_column(String(255))
+    idempotency_key: Mapped[str | None] = mapped_column(String(128))
+    request_hash: Mapped[str | None] = mapped_column(String(64))
     reviewed_by: Mapped[int | None] = mapped_column(BigInteger)
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(

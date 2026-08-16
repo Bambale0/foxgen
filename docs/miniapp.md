@@ -204,3 +204,20 @@ Required regression coverage includes:
 - final Telegram WebView/public HTTPS smoke after deployment.
 
 `FOXGEN_MINIAPP_ENABLED=false` removes the public Mini App router/static mount and suppresses Telegram WebApp entrypoints without changing durable generation, billing, publication or reference-memory state.
+
+
+<!-- happy-fox-user-portal-routes -->
+## Happy Fox user portal routes
+
+Owner-scoped Mini App routes authenticated by the Telegram-derived JWT:
+
+- `GET /v1/miniapp/tariff` — current published tariff version;
+- `GET|POST /v1/miniapp/support` — list/create support tickets;
+- `GET /v1/miniapp/support/{ticket_id}` — ticket detail/history;
+- `POST /v1/miniapp/support/{ticket_id}/messages` — reply;
+- `POST /v1/miniapp/support/{ticket_id}/close` — close own ticket;
+- `GET /v1/miniapp/partner` — partner dashboard and withdrawals;
+- `POST /v1/miniapp/partner/join` — idempotent partner enrollment;
+- `POST /v1/miniapp/partner/withdrawals` — create a withdrawal request and requires `Idempotency-Key`.
+
+The equivalent `/v1/user-portal/*` trusted-service routes authenticate user context independently of the paid-task submission kill switch. Admin review/approval actions remain under the privileged admin control plane.
