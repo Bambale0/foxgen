@@ -14,6 +14,7 @@ SUBMISSION_MODEL_SLUGS: frozenset[str] = frozenset(
         "nano-banana-pro",
         "seedance-2",
         "seedance-2-mini",
+        "elevenlabs-turbo-2-5",
     }
 )
 
@@ -48,12 +49,42 @@ SEEDREAM_45_MODELS: tuple[ModelSpec, ...] = (
 )
 
 
+ELEVENLABS_TTS_MODEL = replace(
+    model(
+        slug="elevenlabs-turbo-2-5",
+        provider_model="elevenlabs/text-to-speech-turbo-2-5",
+        title="ElevenLabs Turbo 2.5",
+        family="ElevenLabs",
+        media_kind=MediaKind.AUDIO,
+        capabilities=frozenset({Capability.TEXT_TO_SPEECH}),
+        contract=InputContract.ELEVENLABS_TTS_TURBO_2_5,
+        docs_path="/market/elevenlabs/text-to-speech-turbo-2-5",
+        tier="standard",
+        rank=1,
+        defaults={
+            "voice": "Rachel",
+            "stability": 0.5,
+            "similarity_boost": 0.75,
+            "style": 0.0,
+            "speed": 1.0,
+            "timestamps": False,
+            "previous_text": "",
+            "next_text": "",
+            "language_code": "",
+        },
+        recommended_for=("voiceovers", "short narration", "fast multilingual TTS"),
+    ),
+    contract_reviewed_at="2026-08-16",
+)
+
+
 def _active_models() -> tuple[ModelSpec, ...]:
     """Build the reviewed catalog and apply the explicit paid-submission allowlist."""
 
     models: list[ModelSpec] = list(SEEDREAM_45_MODELS)
+    models.append(ELEVENLABS_TTS_MODEL)
     for item in MODEL_SPECS:
-        if item.slug == "seedance-2-fast":
+        if item.slug in {"seedance-2-fast", "elevenlabs-turbo-2-5"}:
             continue
         values: dict[str, object] = {
             "enabled_for_submission": item.slug in SUBMISSION_MODEL_SLUGS,
@@ -62,6 +93,10 @@ def _active_models() -> tuple[ModelSpec, ...]:
             values["rank"] = 2
         item = replace(item, **values)
         models.append(item)
+    models = [
+        replace(item, enabled_for_submission=item.slug in SUBMISSION_MODEL_SLUGS)
+        for item in models
+    ]
     return tuple(models)
 
 
