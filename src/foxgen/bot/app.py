@@ -24,13 +24,12 @@ from foxgen.bot.fsm_contract import contract_for
 from foxgen.bot.generation_wizard import router as generation_wizard_router
 from foxgen.bot.keyboards import main_menu, resolve_miniapp_url
 from foxgen.bot.music import router as music_router
+from foxgen.bot.music_hub import router as suno_hub_router
 from foxgen.bot.payments import router as payments_router
 from foxgen.bot.quick_start import router as quick_start_router
 from foxgen.bot.quick_start_wizard import router as quick_start_wizard_router
 from foxgen.bot.reference_memory import router as reference_memory_router
-from foxgen.bot.suno_extend_flow import router as suno_extend_router
 from foxgen.bot.suno_upload_cover_contract import is_cover_state
-from foxgen.bot.suno_upload_cover_flow import router as suno_upload_cover_router
 from foxgen.bot.uploads import TelegramInputMediaStorage, stored_input_keys
 from foxgen.bot.voice import router as voice_router
 from foxgen.core.config import Settings, get_settings
@@ -207,8 +206,7 @@ def register_runtime_routers(dispatcher: Dispatcher) -> None:
     dispatcher.include_router(feed_publish_router)
     dispatcher.include_router(feed_remix_router)
     dispatcher.include_router(voice_router)
-    dispatcher.include_router(suno_upload_cover_router)
-    dispatcher.include_router(suno_extend_router)
+    dispatcher.include_router(suno_hub_router)
     dispatcher.include_router(music_router)
     dispatcher.include_router(quick_start_wizard_router)
     dispatcher.include_router(reference_memory_router)
