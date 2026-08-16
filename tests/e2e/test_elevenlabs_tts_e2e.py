@@ -92,9 +92,7 @@ class FakeKieClient:
             raw_payload={
                 "taskId": task_id,
                 "state": "success",
-                "resultJson": {
-                    "resultUrls": ["https://kie.example.test/results/tts.mp3"]
-                },
+                "resultJson": {"resultUrls": ["https://kie.example.test/results/tts.mp3"]},
             },
         )
 
@@ -274,17 +272,13 @@ async def test_happy_fox_tts_paid_generation_archives_audio_and_delivers() -> No
             generation = await session.get(Generation, generation_id)
             wallet = await session.get(WalletAccount, user_id)
             reservation = await session.scalar(
-                select(BalanceReservation).where(
-                    BalanceReservation.generation_id == generation_id
-                )
+                select(BalanceReservation).where(BalanceReservation.generation_id == generation_id)
             )
             asset = await session.scalar(
                 select(MediaAsset).where(MediaAsset.generation_id == generation_id)
             )
             delivery = await session.scalar(
-                select(GenerationDelivery).where(
-                    GenerationDelivery.generation_id == generation_id
-                )
+                select(GenerationDelivery).where(GenerationDelivery.generation_id == generation_id)
             )
             ledger = (
                 await session.scalars(
@@ -334,9 +328,7 @@ async def test_happy_fox_tts_paid_generation_archives_audio_and_delivers() -> No
             async with session.begin():
                 if generation_id is not None:
                     await session.execute(
-                        delete(OutboxEvent).where(
-                            OutboxEvent.aggregate_id == generation_id
-                        )
+                        delete(OutboxEvent).where(OutboxEvent.aggregate_id == generation_id)
                     )
                 await session.execute(
                     delete(ProviderEvent).where(
