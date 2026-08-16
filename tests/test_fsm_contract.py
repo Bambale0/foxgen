@@ -1,11 +1,12 @@
 from foxgen.bot.fsm_contract import STATE_CONTRACTS, contract_for, is_reference_draft
-from foxgen.bot.states import GenerationStates, VoiceStates
+from foxgen.bot.states import GenerationStates, MusicStates, VoiceStates
 
 
-def test_every_declared_generation_and_voice_state_has_a_behavior_contract() -> None:
+def test_every_declared_product_state_has_a_behavior_contract() -> None:
     declared = {
         *(state.state for state in GenerationStates.__all_states__),
         *(state.state for state in VoiceStates.__all_states__),
+        *(state.state for state in MusicStates.__all_states__),
     }
 
     assert set(STATE_CONTRACTS) == declared
@@ -26,6 +27,7 @@ def test_unknown_or_expired_state_has_no_live_contract() -> None:
     assert contract_for(None) is None
     assert contract_for("GenerationStates:removed_state") is None
     assert contract_for("VoiceStates:removed_state") is None
+    assert contract_for("MusicStates:removed_state") is None
 
 
 def test_reference_entrypoint_is_explicit_not_inferred_from_media() -> None:
