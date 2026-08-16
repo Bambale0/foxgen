@@ -230,7 +230,7 @@ class SqlAlchemyTelegramStarsPaymentService:
             )
         if order is None or order.user_id != user_id:
             return PreCheckoutDecision(False, "Заказ оплаты не найден. Создайте новую оплату.")
-        if order.status in {"credited", "refunded", "failed"}:
+        if order.status in {"paid", "credited", "refunded", "failed"}:
             return PreCheckoutDecision(False, "Этот заказ уже завершён. Создайте новую оплату.")
         if currency != TELEGRAM_STARS_CURRENCY or order.provider_currency != currency:
             return PreCheckoutDecision(False, "Валюта оплаты не совпадает с заказом.")
@@ -326,6 +326,12 @@ class SqlAlchemyTelegramStarsPaymentService:
                         replayed=True,
                     )
 
+                if order.status != "paid" or order.telegram_payment_charge_id != telegram_payment_charge_id:
+                    raise SubmissionError(
+                        ErrorCode.IDEMPOTENCY_CONFLICT,
+                        "Заказ не находится в подтверждённом состоянии этого Telegram-платежа.",
+                    )
+
                 await session.execute(
                     pg_insert(User)
                     .values(id=user_id, username=username)
@@ -395,7 +401,6 @@ class SqlAlchemyTelegramStarsPaymentService:
 
                 now = datetime.now(timezone.utc)
                 order.status = "credited"
-                order.telegram_payment_charge_id = telegram_payment_charge_id
                 order.provider_payment_charge_id = provider_payment_charge_id
                 order.raw_payment = raw_payload
                 order.paid_at = order.paid_at or now
@@ -444,6 +449,31 @@ class SqlAlchemyTelegramStarsPaymentService:
                     raise SubmissionError(ErrorCode.VALIDATION, "Валюта оплаты не совпадает.")
                 if total_amount != order.provider_amount:
                     raise SubmissionError(ErrorCode.VALIDATION, "Сумма оплаты не совпадает.")
+                if order.status in {"failed", "refunded"}:
+                    raise SubmissionError(
+                        ErrorCode.VALIDATION,
+                        "Этот заказ уже закрыт и не может принять платёж.",
+                    )
+                if order.status in {"paid", "credited"} and (
+                    order.telegram_payment_charge_id != telegram_payment_charge_id
+                ):
+                    raise SubmissionError(
+                        ErrorCode.IDEMPOTENCY_CONFLICT,
+                        "Заказ уже связан с другим Telegram-платежом.",
+                    )
+
+                charge_owner = await session.scalar(
+                    select(UserPaymentOrder)
+                    .where(
+                        UserPaymentOrder.telegram_payment_charge_id == telegram_payment_charge_id
+                    )
+                    .with_for_update()
+                )
+                if charge_owner is not None and charge_owner.id != order.id:
+                    raise SubmissionError(
+                        ErrorCode.IDEMPOTENCY_CONFLICT,
+                        "Этот Telegram-платёж уже связан с другим заказом.",
+                    )
 
                 payment = await session.scalar(
                     select(PaymentEvent)
@@ -478,18 +508,13 @@ class SqlAlchemyTelegramStarsPaymentService:
                         payment.status = "completed"
                     payment.raw_payload = raw_payload
 
-                charge_owner = await session.scalar(
-                    select(UserPaymentOrder)
-                    .where(
-                        UserPaymentOrder.telegram_payment_charge_id == telegram_payment_charge_id
-                    )
-                    .with_for_update()
-                )
-                if charge_owner is None or charge_owner.id == order.id:
-                    order.telegram_payment_charge_id = telegram_payment_charge_id
+                now = datetime.now(timezone.utc)
+                order.telegram_payment_charge_id = telegram_payment_charge_id
                 order.provider_payment_charge_id = provider_payment_charge_id
                 order.raw_payment = raw_payload
-                order.paid_at = order.paid_at or datetime.now(timezone.utc)
+                order.paid_at = order.paid_at or now
+                if order.status != "credited":
+                    order.status = "paid"
 
     async def _packages(self, session: AsyncSession) -> tuple[StarPackage, ...]:
         latest = await session.scalar(
