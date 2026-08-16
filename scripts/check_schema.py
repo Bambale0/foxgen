@@ -75,6 +75,24 @@ REQUIRED_COLUMNS: dict[str, frozenset[str]] = {
     "payment_events": frozenset(
         {"id", "provider", "external_id", "user_id", "status", "credited_ledger_key"}
     ),
+    "user_payment_orders": frozenset(
+        {
+            "id",
+            "user_id",
+            "provider",
+            "idempotency_key",
+            "request_hash",
+            "package_code",
+            "credits_units",
+            "provider_amount",
+            "provider_currency",
+            "invoice_payload",
+            "invoice_url",
+            "status",
+            "telegram_payment_charge_id",
+            "credited_at",
+        }
+    ),
     "operation_events": frozenset(
         {"id", "parent_operation_id", "operation_type", "status", "payload"}
     ),

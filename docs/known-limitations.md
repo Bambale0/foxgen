@@ -4,19 +4,25 @@ This file records known gaps that must not be silently described as completed pr
 
 ## Current status
 
-### Happy Fox balance top-up
+### User payments beyond Telegram Stars
 
-Happy Fox exposes the real materialized wallet balance and immutable ledger history, and paid generation uses the normal atomic FoxGen admission path. The public **Пополнить** affordance does not create a payment invoice yet because the public payment-provider/invoice/webhook portion of EPIC #7 is still open.
+FoxGen supports user-facing digital-credit top-up inside Telegram through Telegram Stars (`XTR`): Happy Fox can request an owner-scoped package/invoice, Telegram checkout is pre-validated against the durable local order, and `successful_payment` settles into the existing immutable `CREDIT` ledger exactly once.
 
-The frontend therefore performs no balance mutation and explicitly reports that top-up is not connected. Do not describe Mini App payments as complete until EPIC #7 lands a user-facing payment flow with idempotent provider webhooks and ledger credit.
+The first production slice deliberately does **not** claim every EPIC #7 payment feature:
 
-This is intentionally different from admin payment inspection/recheck/reprocess, which is a private operator capability and must not be exposed as a user payment API.
+- Telegram Stars refund execution is not yet exposed to operators/users, although the Telegram charge ID is stored for that follow-up;
+- external web checkout/acquiring providers are not implemented by this slice;
+- promo/bonus rules are not automatically coupled to Stars top-up yet.
 
-### Publication feed integration
+Do not bypass the Stars flow by mutating wallet rows from the browser/bot. Admin payment inspection/recheck/reprocess remains a private operator capability and must not be exposed as a user payment API.
 
-Happy Fox currently presents the authenticated owner's generation history. The separate publication/feed/profile/remix domain from issue #58 / PR #63 is not treated as merged production behavior by the Mini App until that work lands in `main` and is integrated explicitly.
+### Planned generation products
 
-Storage provisioning is explicit: application request/worker code never creates S3 buckets, repository Compose provisions its bundled private MinIO bucket through `minio-init`, and external S3-compatible deployments must provision a private bucket before FoxGen startup.
+Happy Fox and Telegram expose the complete product launcher, but voice/TTS, Suno/music, Motion Control/talking avatar, Prompt AI, conversational assistant and Gemini Omni remain intentionally disabled until their backend + lifecycle + bot + Mini App slices are implemented. A visible planned product is not production capability.
+
+### Storage provisioning
+
+Storage provisioning is explicit: application request/worker code never creates external S3 buckets, repository Compose provisions its bundled private MinIO bucket through `minio-init`, and external S3-compatible deployments must provision a private bucket before FoxGen startup.
 
 ## Documentation rule
 

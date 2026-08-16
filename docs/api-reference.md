@@ -10,9 +10,11 @@ FoxGen uses separate credentials for separate trust boundaries.
 
 Health and model catalog/validation routes do not create paid work.
 
-### Trusted internal generation caller
+### Trusted internal generation/user caller
 
-Paid generation/balance user-context routes require the configured internal bearer token. User-scoped routes also bind the request to `X-FoxGen-User-Id`. Paid task creation requires `Idempotency-Key`.
+Paid generation/balance/user-portal routes require the configured internal bearer token. User-scoped routes also bind the request to `X-FoxGen-User-Id`. Paid task creation and user payment invoice creation require `Idempotency-Key` where documented.
+
+Telegram payment settlement is accepted only through this trusted user context; the public Mini App cannot submit a `successful_payment` result.
 
 ### Legacy billing administrator
 
@@ -68,6 +70,28 @@ Paid task admission validates authentication, positive user identity, idempotenc
 | POST | `/v1/admin/users/{user_id}/balance-adjustments` | legacy billing admin | Idempotent manual adjustment |
 | PUT | `/v1/admin/prices/{model_slug}` | legacy billing admin | Publish model-price version |
 
+## Trusted user portal and Telegram Stars
+
+These routes use the same trusted internal bearer + `X-FoxGen-User-Id` owner binding as the bot user portal. They remain available when paid generation admission is disabled so a completed payment is never blocked by the generation kill switch.
+
+| Method | Path | Auth | Purpose |
+|---|---|---|---|
+| GET | `/v1/user-portal/tariff` | trusted internal + owner ID | Current published tariff |
+| GET | `/v1/user-portal/payments/stars/packages` | trusted internal + owner ID | Stars-enabled top-up packages only |
+| POST | `/v1/user-portal/payments/stars/invoices` | trusted internal + owner ID + `Idempotency-Key` | Create/replay durable order and Telegram XTR invoice URL |
+| POST | `/v1/user-portal/payments/stars/pre-checkout` | trusted internal + owner ID | Validate native Telegram `pre_checkout_query` against order snapshot |
+| POST | `/v1/user-portal/payments/stars/success` | trusted internal + owner ID | Persist `successful_payment` charge evidence and settle CREDIT exactly once |
+| GET | `/v1/user-portal/support` | trusted internal + owner ID | List own support tickets |
+| POST | `/v1/user-portal/support` | trusted internal + owner ID | Create support ticket |
+| GET | `/v1/user-portal/support/{ticket_id}` | trusted internal + owner ID | Own ticket detail |
+| POST | `/v1/user-portal/support/{ticket_id}/messages` | trusted internal + owner ID | Reply to own ticket |
+| POST | `/v1/user-portal/support/{ticket_id}/close` | trusted internal + owner ID | Close own ticket |
+| GET | `/v1/user-portal/partner` | trusted internal + owner ID | Partner profile/withdrawals |
+| POST | `/v1/user-portal/partner/join` | trusted internal + owner ID | Idempotent partner enrollment |
+| POST | `/v1/user-portal/partner/withdrawals` | trusted internal + owner ID + `Idempotency-Key` | Request partner withdrawal |
+
+Stars invoice creation snapshots the CREDIT and XTR amount before the external Telegram call. `pre-checkout` is validation-only. `success` first commits the Telegram charge as durable payment evidence, then performs a separate idempotent wallet/ledger settlement using `payment-credit:telegram_stars:<charge-id>`. The browser never calls either settlement route directly.
+
 ## Generation operations
 
 | Method | Path | Auth | Purpose |
@@ -84,7 +108,7 @@ Cancellation is rejected once provider submission may have started. Unknown prov
 
 # Happy Fox public Mini App API
 
-Happy Fox uses a short-lived Telegram-derived JWT. These routes are owner-scoped/read-only except for paid task admission, safe cancellation and private input-media lifecycle. Internal/admin credentials are never accepted by or exposed to the browser.
+Happy Fox uses a short-lived Telegram-derived JWT. These routes are owner-scoped/read-only except for paid task admission, safe cancellation, private input-media lifecycle, user portal actions and durable Stars invoice creation. Internal/admin credentials are never accepted by or exposed to the browser.
 
 | Method | Path | Purpose |
 |---|---|---|
@@ -102,8 +126,21 @@ Happy Fox uses a short-lived Telegram-derived JWT. These routes are owner-scoped
 | POST | `/v1/miniapp/tasks` | Paid admission through shared `SubmissionService` + `Idempotency-Key` |
 | POST | `/v1/miniapp/input-media` | Authenticated private image/video/audio upload |
 | DELETE | `/v1/miniapp/input-media/{storage_key}` | Owner-scoped temporary input cleanup |
+| GET | `/v1/miniapp/tariff` | Current published tariff version |
+| GET | `/v1/miniapp/payments/stars/packages` | Purchasable XTR packages for the authenticated owner |
+| POST | `/v1/miniapp/payments/stars/invoices` | Create/replay Stars invoice; requires `Idempotency-Key` |
+| GET | `/v1/miniapp/support` | List own support tickets |
+| POST | `/v1/miniapp/support` | Create support ticket |
+| GET | `/v1/miniapp/support/{ticket_id}` | Own ticket detail/history |
+| POST | `/v1/miniapp/support/{ticket_id}/messages` | Reply to own ticket |
+| POST | `/v1/miniapp/support/{ticket_id}/close` | Close own ticket |
+| GET | `/v1/miniapp/partner` | Partner profile/withdrawals |
+| POST | `/v1/miniapp/partner/join` | Idempotent partner enrollment |
+| POST | `/v1/miniapp/partner/withdrawals` | Request withdrawal; requires `Idempotency-Key` |
 
 The frontend renders enabled model controls from the backend `input_schema` and calls the Mini App validation route before paid admission. The paid route validates again; browser validation is never a trust boundary. Wallet routes are projections only and cannot mutate balances.
+
+For Stars top-up, Happy Fox may request an invoice URL and open it using Telegram WebApp checkout, but the browser has no endpoint for declaring payment success. Only Telegram's native `successful_payment` update received by the trusted bot can create payment evidence and trigger CREDIT settlement.
 
 # Registered signed internal admin API
 
@@ -170,7 +207,7 @@ Admin replay never replays the billable `generation.submit` boundary.
 | POST | `/payments/{payment_id}/recheck` | idempotent, worker-backed |
 | POST | `/payments/{payment_id}/reprocess` | idempotent + confirm, worker-backed |
 
-Payment credit uses a deterministic immutable-ledger key, preventing double credit across repeated reprocess commands.
+Payment credit uses a deterministic immutable-ledger key, preventing double credit across repeated reprocess commands. A Telegram Stars charge can therefore be safely reprocessed when its durable `PaymentEvent` exists but the original CREDIT settlement failed after charge evidence was committed.
 
 ## Tariffs and pricing
 
@@ -320,21 +357,4 @@ signature = hex(HMAC-SHA256(admin_hmac_key, canonical))
 
 Do not JSON-reserialize after signing. Query parameters are not included in the current canonical signature string; the URL path is.
 
-See `admin-control-plane.md`, `admin-capability-matrix.md` and `known-limitations.md` for the active admin contract and remaining production limitations.
-
-
-<!-- happy-fox-user-portal-routes -->
-## Happy Fox user portal routes
-
-Owner-scoped Mini App routes authenticated by the Telegram-derived JWT:
-
-- `GET /v1/miniapp/tariff` — current published tariff version;
-- `GET|POST /v1/miniapp/support` — list/create support tickets;
-- `GET /v1/miniapp/support/{ticket_id}` — ticket detail/history;
-- `POST /v1/miniapp/support/{ticket_id}/messages` — reply;
-- `POST /v1/miniapp/support/{ticket_id}/close` — close own ticket;
-- `GET /v1/miniapp/partner` — partner dashboard and withdrawals;
-- `POST /v1/miniapp/partner/join` — idempotent partner enrollment;
-- `POST /v1/miniapp/partner/withdrawals` — create a withdrawal request and requires `Idempotency-Key`.
-
-The equivalent `/v1/user-portal/*` trusted-service routes authenticate user context independently of the paid-task submission kill switch. Admin review/approval actions remain under the privileged admin control plane.
+See `admin-control-plane.md`, `admin-capability-matrix.md`, `telegram-stars-payments.md` and `known-limitations.md` for the active contracts and remaining production limitations.

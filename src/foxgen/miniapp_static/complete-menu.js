@@ -74,6 +74,18 @@ const PRODUCT_BUTTONS = [
   },
 ];
 
+let starsToken = null;
+let starsBusy = false;
+
+function esc(value) {
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
+}
+
 function productButton(item) {
   const status = item.ready ? 'Доступно' : 'В реализации';
   return `
@@ -137,13 +149,13 @@ function injectProfileActions() {
   if (!text.includes('Тарифы')) {
     addProfileRow(settings, {
       title: 'Тарифы',
-      subtitle: 'User-safe тарифный API ещё не подключён',
+      subtitle: 'Откройте раздел кошелька для актуальных условий',
     });
   }
   if (!text.includes('Пополнить баланс')) {
     addProfileRow(settings, {
       title: 'Пополнить баланс',
-      subtitle: 'Появится вместе с безопасным invoice flow',
+      subtitle: 'Оплата Telegram Stars доступна в кошельке',
     });
   }
 }
@@ -156,23 +168,176 @@ function injectWalletActions() {
   actions.className = 'complete-wallet-actions';
   actions.dataset.completeWalletActions = '1';
   actions.innerHTML = `
-    <button type="button" disabled aria-disabled="true">
+    <button type="button" class="is-ready" data-stars-topup>
       ＋ Пополнить баланс
-      <small>Invoice flow в реализации</small>
+      <small>Telegram Stars · безопасное зачисление</small>
     </button>
-    <button type="button" disabled aria-disabled="true">
+    <button type="button" class="is-ready" data-nav="tariff">
       Тарифы
-      <small>Тарифный API в реализации</small>
+      <small>Актуальные условия и пакеты</small>
     </button>
   `;
   hero.insertAdjacentElement('afterend', actions);
+}
+
+function starsPanel() {
+  let panel = root?.querySelector('[data-stars-panel]');
+  if (panel) return panel;
+  const actions = root?.querySelector('[data-complete-wallet-actions]');
+  if (!actions) return null;
+  panel = document.createElement('section');
+  panel.className = 'complete-stars-panel';
+  panel.dataset.starsPanel = '1';
+  actions.insertAdjacentElement('afterend', panel);
+  return panel;
+}
+
+function starsStatus(message, kind = 'info') {
+  const panel = starsPanel();
+  if (!panel) return;
+  panel.className = `complete-stars-panel ${kind}`;
+  panel.innerHTML = `<p>${esc(message)}</p>`;
+}
+
+async function starsAuth(force = false) {
+  if (starsToken && !force) return starsToken;
+  if (!tg?.initData) throw new Error('Откройте Happy Fox внутри Telegram для оплаты.');
+  const response = await fetch('/v1/miniapp/auth', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ init_data: tg.initData }),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || !data?.access_token) {
+    throw new Error(data?.detail || data?.message || 'Не удалось подтвердить Telegram-профиль.');
+  }
+  starsToken = data.access_token;
+  return starsToken;
+}
+
+async function starsApi(path, options = {}, retryAuth = true) {
+  const token = await starsAuth(false);
+  const headers = new Headers(options.headers ?? {});
+  headers.set('Authorization', `Bearer ${token}`);
+  const response = await fetch(`/v1/miniapp${path}`, { ...options, headers });
+  const data = await response.json().catch(() => ({}));
+  if (response.status === 401 && retryAuth) {
+    await starsAuth(true);
+    return starsApi(path, options, false);
+  }
+  if (!response.ok) {
+    throw new Error(data?.detail || data?.message || data?.error || `HTTP ${response.status}`);
+  }
+  return data;
+}
+
+function invoiceKey(packageCode) {
+  const storageKey = `foxgen:stars:invoice:${packageCode}`;
+  try {
+    let value = sessionStorage.getItem(storageKey);
+    if (!value) {
+      value = `stars:miniapp:${crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`}`;
+      sessionStorage.setItem(storageKey, value);
+    }
+    return { storageKey, value };
+  } catch {
+    return {
+      storageKey: null,
+      value: `stars:miniapp:${crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`}`,
+    };
+  }
+}
+
+function clearInvoiceKey(storageKey) {
+  if (!storageKey) return;
+  try {
+    sessionStorage.removeItem(storageKey);
+  } catch {
+    // Storage is an optimization; backend idempotency remains authoritative.
+  }
+}
+
+async function showStarPackages() {
+  if (starsBusy) return;
+  starsBusy = true;
+  starsStatus('Загружаю доступные пакеты…');
+  try {
+    const data = await starsApi('/payments/stars/packages');
+    const items = Array.isArray(data?.items) ? data.items : [];
+    const panel = starsPanel();
+    if (!panel) return;
+    if (!items.length) {
+      starsStatus('Пакеты Telegram Stars пока не опубликованы администратором.', 'warning');
+      return;
+    }
+    panel.className = 'complete-stars-panel';
+    panel.innerHTML = `
+      <div class="complete-stars-head">
+        <strong>Пополнение Telegram Stars</strong>
+        <small>Кредиты зачисляются только после подтверждённой оплаты Telegram</small>
+      </div>
+      <div class="complete-stars-grid">
+        ${items.map((item) => `
+          <button type="button" data-stars-package="${esc(item.code)}">
+            <strong>${esc(item.title)}</strong>
+            <span>${Number(item.credits_units).toLocaleString('ru-RU')} CREDIT</span>
+            <small>⭐ ${Number(item.stars_amount).toLocaleString('ru-RU')}</small>
+          </button>
+        `).join('')}
+      </div>
+    `;
+  } catch (error) {
+    starsStatus(error?.message ?? error, 'error');
+  } finally {
+    starsBusy = false;
+  }
+}
+
+async function createStarInvoice(packageCode) {
+  if (starsBusy) return;
+  starsBusy = true;
+  const pending = invoiceKey(packageCode);
+  starsStatus('Создаю защищённый счёт Telegram Stars…');
+  try {
+    const invoice = await starsApi('/payments/stars/invoices', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Idempotency-Key': pending.value,
+      },
+      body: JSON.stringify({ package_code: packageCode }),
+    });
+    if (!invoice?.invoice_url) throw new Error('Сервер не вернул ссылку оплаты.');
+    starsStatus('Счёт готов. Подтвердите оплату в Telegram.');
+    if (tg?.openInvoice) {
+      tg.openInvoice(invoice.invoice_url, (status) => {
+        if (status === 'paid') {
+          clearInvoiceKey(pending.storageKey);
+          starsStatus('Оплата подтверждена Telegram. Обновляю баланс…', 'success');
+          window.setTimeout(() => window.location.reload(), 1200);
+        } else if (status === 'failed') {
+          starsStatus('Telegram не завершил оплату. Повторное списание не выполнялось.', 'error');
+        } else if (status === 'cancelled') {
+          starsStatus('Оплата отменена. Этот же счёт можно открыть повторно.', 'warning');
+        }
+      });
+      return;
+    }
+    window.open(invoice.invoice_url, '_blank', 'noopener,noreferrer');
+  } catch (error) {
+    starsStatus(error?.message ?? error, 'error');
+  } finally {
+    starsBusy = false;
+  }
 }
 
 function injectGenerationDownload() {
   const actions = root?.querySelector('.action-grid');
   if (!actions || actions.querySelector('[data-open-result]')) return;
 
-  const media = root.querySelector('.generation-media img[src], .generation-media video[src], .generation-media audio[src]');
+  const media = root.querySelector(
+    '.generation-media img[src], .generation-media video[src], .generation-media audio[src]',
+  );
   const src = media?.getAttribute('src');
   if (!src) return;
 
@@ -232,6 +397,21 @@ root?.addEventListener('click', (event) => {
   if (tool instanceof HTMLButtonElement && !tool.disabled) {
     event.preventDefault();
     handleToolClick(tool);
+    return;
+  }
+
+  const topup = target.closest('[data-stars-topup]');
+  if (topup instanceof HTMLButtonElement) {
+    event.preventDefault();
+    void showStarPackages();
+    return;
+  }
+
+  const starsPackage = target.closest('[data-stars-package]');
+  if (starsPackage instanceof HTMLButtonElement) {
+    event.preventDefault();
+    const packageCode = starsPackage.dataset.starsPackage;
+    if (packageCode) void createStarInvoice(packageCode);
     return;
   }
 
