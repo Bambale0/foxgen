@@ -15,6 +15,7 @@ This directory documents the executable state of FoxGen on `main`. Source code, 
 | [`miniapp.md`](miniapp.md) | Happy Fox public Telegram Mini App UX, auth, API and media boundaries |
 | [`telegram-flows.md`](telegram-flows.md) | User Telegram flows, Quick Start, FSM and `/admin` shell |
 | [`model-matrix.md`](model-matrix.md) | KIE model readiness and contract policy |
+| [`suno-core.md`](suno-core.md) | Suno V5 dedicated API routing, simple/custom contract, multi-track archive and E2E |
 | [`billing.md`](billing.md) | Pricing, wallet, immutable ledger and settlement |
 | [`telegram-stars-payments.md`](telegram-stars-payments.md) | User `XTR` top-up/refund, durable payment evidence and CREDIT settlement |
 | [`user-promos.md`](user-promos.md) | Owner-scoped promo redemption, max-use concurrency and immutable bonus CREDIT |
@@ -52,7 +53,7 @@ Trusted services -------+    |  |   +--> signed internal admin control plane
                                 v
                             PostgreSQL <----> foxgen-worker
                                 |                 |
-                                |                 +--> KIE status/submission
+                                |                 +--> KIE Market / routed Suno API families
                                 |                 +--> archive/delivery
                                 |                 +--> admin/payment/support jobs
                                 |
@@ -85,6 +86,8 @@ Storage provisioning is infrastructure-owned: repository Compose provisions bund
 13. Specific privileged/financial routes must stay ahead of generic route/callback fallbacks when matching order affects reachability.
 14. Compose-managed MinIO must verify the prefix-scoped temporary `inputs/` lifecycle and bundled stale-multipart cleanup prerequisites before API, worker and bot startup.
 15. Application media execution must not opportunistically provision S3 infrastructure.
+16. Dedicated provider API families are selected from reviewed `ModelSpec.api_family`; worker code must not infer provider routing from arbitrary model-name strings.
+17. Multi-result providers must preserve every canonical billable result while filtering non-result artwork/stream helper URLs before generic media archival.
 
 ## Known limitations are first-class documentation
 
@@ -92,6 +95,6 @@ Storage provisioning is infrastructure-owned: repository Compose provisions bund
 
 ## How to update documentation
 
-When code changes, update documentation by behavior area rather than adding an isolated note. Remove obsolete roadmap language. For schema/financial changes, update architecture/schema/billing/API/testing docs and rollback notes. For user promo changes, keep `user-promos.md`, `billing.md`, `api-reference.md`, `database-schema.md`, `miniapp.md`, `testing-ci.md` and limitation status synchronized. For new admin capability, update capability matrix/API/runbook. For new configuration, update `configuration.md` plus env examples. For Happy Fox changes, keep Mini App/security/user-facing behavior synchronized.
+When code changes, update documentation by behavior area rather than adding an isolated note. Remove obsolete roadmap language. For schema/financial changes, update architecture/schema/billing/API/testing docs and rollback notes. For user promo changes, keep `user-promos.md`, `billing.md`, `api-reference.md`, `database-schema.md`, `miniapp.md`, `testing-ci.md` and limitation status synchronized. For new provider API families, document the routing boundary, exact model/input contract, result normalization and E2E in a focused runbook. For new admin capability, update capability matrix/API/runbook. For new configuration, update `configuration.md` plus env examples. For Happy Fox changes, keep Mini App/security/user-facing behavior synchronized.
 
 Review [`documentation-policy.md`](documentation-policy.md) and [`../AGENTS.md`](../AGENTS.md) for maintenance rules.
