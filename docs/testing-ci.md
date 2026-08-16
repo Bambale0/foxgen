@@ -60,7 +60,8 @@ Core regression areas include:
 - admin HMAC/network/RBAC/confirmation/redaction;
 - admin validation/idempotency;
 - Telegram `/admin` authorization;
-- backend operator-web authorization.
+- backend operator-web authorization;
+- production deploy exact-image/reload/smoke ordering and bounded Happy Fox convergence deadlines.
 
 ## Real infrastructure integration tests
 
@@ -151,9 +152,12 @@ After quality/infrastructure/security prerequisites:
 
 - validate development Compose;
 - validate production Compose/deploy script assets;
+- run deploy contract tests that require non-interactive one-shot Compose commands, exact-image assertions and 30-second elapsed-time Happy Fox/Telegram convergence windows rather than unbounded fixed retry multiplication;
 - build deterministic production image;
 - load/import smoke test;
 - scan the built image with Trivy.
+
+The public Happy Fox and Telegram API checks themselves remain production deploy gates rather than CI network calls. CI verifies their shell contract and bounded timing semantics without depending on live production ingress or Telegram credentials.
 
 ## Production image
 
@@ -221,5 +225,7 @@ Recommended order:
 ## Workflow/deployment relationship
 
 The production deploy workflow is downstream of successful `main` CI. A PR CI success alone does not deploy. After merge/push to `main`, the corresponding `main` CI run must succeed before the protected deployment workflow can act.
+
+Once deployment starts, the server-side gates are stricter than CI's API readiness smoke: an enabled Happy Fox rollout must also converge through the public Mini App and Telegram default WebApp menu checks within their bounded wall-clock windows before the script emits the final deployment-completed marker.
 
 See `production-deploy.md`.

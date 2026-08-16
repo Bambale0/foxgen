@@ -327,32 +327,64 @@ assert button.callback_data is None
 ' || fail "live bot image does not expose the Happy Fox WebApp entrypoint"
 }
 
+verify_public_miniapp() {
+  local miniapp_url deadline remaining attempt_timeout
+  miniapp_url="$1"
+  deadline=$((SECONDS + 30))
+
+  while [ "$SECONDS" -lt "$deadline" ]; do
+    remaining=$((deadline - SECONDS))
+    attempt_timeout=$((remaining < 5 ? remaining : 5))
+    if curl --fail --silent --show-error --location --max-time "$attempt_timeout" "$miniapp_url" | \
+      grep -q 'Happy Fox'; then
+      return 0
+    fi
+    [ "$SECONDS" -lt "$deadline" ] || break
+    remaining=$((deadline - SECONDS))
+    log "public Happy Fox smoke not ready; ${remaining}s remain in the post-reload window"
+    sleep "$((remaining < 2 ? remaining : 2))"
+  done
+  return 1
+}
+
 verify_telegram_menu() {
-  local miniapp_url bot_token menu_json
+  local miniapp_url bot_token menu_json deadline remaining attempt_timeout
   miniapp_url="$1"
   bot_token="$(read_env_value FOXGEN_TELEGRAM_BOT_TOKEN)"
-  sleep 2
-  menu_json="$(
-    curl --fail --silent --show-error --max-time 15 \
-      "https://api.telegram.org/bot${bot_token}/getChatMenuButton"
-  )"
-  MINIAPP_URL="$miniapp_url" MENU_JSON="$menu_json" python3 - <<'PY'
+  deadline=$((SECONDS + 30))
+
+  while [ "$SECONDS" -lt "$deadline" ]; do
+    remaining=$((deadline - SECONDS))
+    attempt_timeout=$((remaining < 5 ? remaining : 5))
+    if menu_json="$(
+      curl --fail --silent --show-error --max-time "$attempt_timeout" \
+        "https://api.telegram.org/bot${bot_token}/getChatMenuButton"
+    )" && MINIAPP_URL="$miniapp_url" MENU_JSON="$menu_json" python3 - <<'PY'
 import json
 import os
 
 expected = os.environ["MINIAPP_URL"].rstrip("/") + "/"
 payload = json.loads(os.environ["MENU_JSON"])
 if payload.get("ok") is not True:
-    raise SystemExit("Telegram getChatMenuButton returned ok=false")
+    raise SystemExit(1)
 result = payload.get("result") or {}
 if result.get("type") != "web_app":
-    raise SystemExit("Telegram default chat menu is not web_app")
+    raise SystemExit(1)
 if result.get("text") != "Happy Fox":
-    raise SystemExit("Telegram default chat menu text is not Happy Fox")
+    raise SystemExit(1)
 actual = ((result.get("web_app") or {}).get("url") or "").rstrip("/") + "/"
 if actual != expected:
-    raise SystemExit("Telegram default chat menu URL does not match Happy Fox")
+    raise SystemExit(1)
 PY
+    then
+      return 0
+    fi
+    [ "$SECONDS" -lt "$deadline" ] || break
+    remaining=$((deadline - SECONDS))
+    log "Telegram Happy Fox menu not ready; ${remaining}s remain in the post-recreate window"
+    sleep "$((remaining < 2 ? remaining : 2))"
+  done
+  return 1
 }
 
 wait_for_container postgres healthy 120
@@ -392,10 +424,11 @@ curl \
 
 if miniapp_enabled; then
   MINIAPP_URL="$(resolved_miniapp_url)" || fail "Mini App is enabled but no public URL is configured"
-  log "checking public Happy Fox Mini App"
-  curl --fail --silent --show-error --location --max-time 15 "$MINIAPP_URL" | \
-    grep -q 'Happy Fox' || fail "public Happy Fox Mini App smoke failed"
-  verify_telegram_menu "$MINIAPP_URL" || fail "Telegram Happy Fox menu verification failed"
+  log "checking public Happy Fox Mini App with bounded post-reload retry"
+  verify_public_miniapp "$MINIAPP_URL" || \
+    fail "public Happy Fox Mini App did not become ready within 30s"
+  verify_telegram_menu "$MINIAPP_URL" || \
+    fail "Telegram Happy Fox menu did not converge within 30s"
   log "Happy Fox public WebApp and Telegram menu verified"
 fi
 

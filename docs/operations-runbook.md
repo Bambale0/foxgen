@@ -39,6 +39,24 @@ docker compose --env-file .env -f docker-compose.prod.yml logs --tail=200 bot
 
 Do not paste full production logs into public issues/chats without checking for user/provider metadata.
 
+## Happy Fox deployment convergence gates
+
+When Happy Fox is enabled, a production deployment is not complete after loopback `/health/ready` alone. After the exact-image API/worker/bot recreation and shared-nginx reload, the deploy script requires two additional gates:
+
+1. public Happy Fox HTML becomes reachable and contains the expected product marker within a 30-second wall-clock window;
+2. Telegram `getChatMenuButton` converges to a `web_app` menu named `Happy Fox` with the configured Mini App URL within a separate 30-second wall-clock window.
+
+Both gates use elapsed-time deadlines with short per-attempt network timeouts. A graceful nginx reload can legitimately return a transient 502 while an old worker drains, so one early failure is not an incident. Failure at the 30-second deadline is a failed rollout.
+
+Successful enabled deployments end with both markers:
+
+```text
+Happy Fox public WebApp and Telegram menu verified
+deployment completed:
+```
+
+If the public Happy Fox gate fails, check public DNS/TLS, reverse-proxy routing, the nginx reload result, and whether `/mini-app/` resolves to the newly recreated API. If the Telegram menu gate fails, check the bot container/image, `FOXGEN_MINIAPP_PUBLIC_URL` resolution, bot token validity and Telegram `getChatMenuButton` response. Do not extend retry loops or rerun deployments indefinitely to hide persistent ingress or menu misconfiguration.
+
 ## Confirm deployed revision
 
 ```bash
@@ -368,6 +386,7 @@ If rollback returns to code that no longer runs `minio-init`, keep the already i
 After recovery:
 
 - API readiness green;
+- enabled Happy Fox deployment has passed public Mini App and Telegram menu convergence gates;
 - bot/worker single intended instances healthy;
 - generation/reconciliation anomaly counts reduced;
 - no unexpected wallet/reservation mismatch;
