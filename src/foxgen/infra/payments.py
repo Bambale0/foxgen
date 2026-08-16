@@ -26,6 +26,8 @@ from foxgen.infra.payment_models import UserPaymentOrder
 
 TELEGRAM_STARS_PROVIDER = "telegram_stars"
 TELEGRAM_STARS_CURRENCY = "XTR"
+TELEGRAM_INVOICE_TITLE_MAX_LENGTH = 32
+TELEGRAM_INVOICE_DESCRIPTION_MAX_LENGTH = 255
 
 
 class TelegramStarsInvoiceClient:
@@ -253,6 +255,17 @@ class SqlAlchemyTelegramStarsPaymentService:
                 ErrorCode.VALIDATION,
                 "Telegram не передал идентификатор платежа.",
             )
+
+        await self._record_successful_payment_evidence(
+            user_id=user_id,
+            invoice_payload=invoice_payload,
+            currency=currency,
+            total_amount=total_amount,
+            telegram_payment_charge_id=telegram_payment_charge_id,
+            provider_payment_charge_id=provider_payment_charge_id,
+            raw_payload=raw_payload,
+        )
+
         ledger_key = f"payment-credit:{TELEGRAM_STARS_PROVIDER}:{telegram_payment_charge_id}"
         replayed = False
 
@@ -332,24 +345,15 @@ class SqlAlchemyTelegramStarsPaymentService:
                     .with_for_update()
                 )
                 if payment is None:
-                    payment = PaymentEvent(
-                        provider=TELEGRAM_STARS_PROVIDER,
-                        external_id=telegram_payment_charge_id,
-                        user_id=user_id,
-                        status="completed",
-                        amount_units=order.credits_units,
-                        currency="CREDIT",
-                        raw_payload=raw_payload,
+                    raise SubmissionError(
+                        ErrorCode.PROVIDER_PROTOCOL,
+                        "Платёж Telegram не сохранён перед зачислением.",
                     )
-                    session.add(payment)
-                elif payment.user_id != user_id or payment.amount_units != order.credits_units:
+                if payment.user_id != user_id or payment.amount_units != order.credits_units:
                     raise SubmissionError(
                         ErrorCode.IDEMPOTENCY_CONFLICT,
                         "Telegram-платёж уже обработан с другими параметрами.",
                     )
-                else:
-                    payment.status = "completed"
-                    payment.raw_payload = raw_payload
 
                 account = await ensure_wallet_locked(
                     session,
@@ -394,8 +398,10 @@ class SqlAlchemyTelegramStarsPaymentService:
                 order.telegram_payment_charge_id = telegram_payment_charge_id
                 order.provider_payment_charge_id = provider_payment_charge_id
                 order.raw_payment = raw_payload
-                order.paid_at = now
+                order.paid_at = order.paid_at or now
                 order.credited_at = now
+                payment.status = "completed"
+                payment.raw_payload = raw_payload
                 payment.credited_ledger_key = ledger_key
                 payment.processed_at = now
                 await session.flush()
@@ -406,6 +412,84 @@ class SqlAlchemyTelegramStarsPaymentService:
                     credited_units=order.credits_units,
                     replayed=replayed,
                 )
+
+    async def _record_successful_payment_evidence(
+        self,
+        *,
+        user_id: int,
+        invoice_payload: str,
+        currency: str,
+        total_amount: int,
+        telegram_payment_charge_id: str,
+        provider_payment_charge_id: str,
+        raw_payload: dict[str, object],
+    ) -> None:
+        async with self._database.session() as session:
+            async with session.begin():
+                await session.execute(
+                    text("SELECT pg_advisory_xact_lock(hashtextextended(:lock_key, 0))"),
+                    {"lock_key": f"stars:charge:{telegram_payment_charge_id}"},
+                )
+                order = await session.scalar(
+                    select(UserPaymentOrder)
+                    .where(UserPaymentOrder.invoice_payload == invoice_payload)
+                    .with_for_update()
+                )
+                if order is None or order.user_id != user_id:
+                    raise SubmissionError(
+                        ErrorCode.AUTHORIZATION,
+                        "Оплата не относится к этому пользователю.",
+                    )
+                if currency != TELEGRAM_STARS_CURRENCY or order.provider_currency != currency:
+                    raise SubmissionError(ErrorCode.VALIDATION, "Валюта оплаты не совпадает.")
+                if total_amount != order.provider_amount:
+                    raise SubmissionError(ErrorCode.VALIDATION, "Сумма оплаты не совпадает.")
+
+                payment = await session.scalar(
+                    select(PaymentEvent)
+                    .where(
+                        PaymentEvent.provider == TELEGRAM_STARS_PROVIDER,
+                        PaymentEvent.external_id == telegram_payment_charge_id,
+                    )
+                    .with_for_update()
+                )
+                if payment is None:
+                    payment = PaymentEvent(
+                        provider=TELEGRAM_STARS_PROVIDER,
+                        external_id=telegram_payment_charge_id,
+                        user_id=user_id,
+                        status="completed",
+                        amount_units=order.credits_units,
+                        currency="CREDIT",
+                        raw_payload=raw_payload,
+                    )
+                    session.add(payment)
+                elif (
+                    payment.user_id != user_id
+                    or payment.amount_units != order.credits_units
+                    or payment.currency != "CREDIT"
+                ):
+                    raise SubmissionError(
+                        ErrorCode.IDEMPOTENCY_CONFLICT,
+                        "Telegram-платёж уже сохранён с другими параметрами.",
+                    )
+                else:
+                    if payment.credited_ledger_key is None:
+                        payment.status = "completed"
+                    payment.raw_payload = raw_payload
+
+                charge_owner = await session.scalar(
+                    select(UserPaymentOrder)
+                    .where(
+                        UserPaymentOrder.telegram_payment_charge_id == telegram_payment_charge_id
+                    )
+                    .with_for_update()
+                )
+                if charge_owner is None or charge_owner.id == order.id:
+                    order.telegram_payment_charge_id = telegram_payment_charge_id
+                order.provider_payment_charge_id = provider_payment_charge_id
+                order.raw_payment = raw_payload
+                order.paid_at = order.paid_at or datetime.now(timezone.utc)
 
     async def _packages(self, session: AsyncSession) -> tuple[StarPackage, ...]:
         latest = await session.scalar(
@@ -446,8 +530,8 @@ class SqlAlchemyTelegramStarsPaymentService:
             packages.append(
                 StarPackage(
                     code=raw_code,
-                    title=title[:255],
-                    description=description[:512],
+                    title=title[:TELEGRAM_INVOICE_TITLE_MAX_LENGTH],
+                    description=description[:TELEGRAM_INVOICE_DESCRIPTION_MAX_LENGTH],
                     credits_units=credits,
                     stars_amount=stars,
                 )
