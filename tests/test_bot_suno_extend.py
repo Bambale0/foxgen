@@ -4,18 +4,19 @@ from unittest.mock import AsyncMock
 import pytest
 
 from foxgen.bot.api_client import BalanceView, PriceQuote, QueuedGeneration
-from foxgen.bot.music import (
+from foxgen.bot.states import MusicExtendStates
+from foxgen.bot.suno_extend_flow import (
     SUNO_EXTEND_MODEL_SLUG,
     begin_extend,
-    begin_music,
+    begin_music_hub,
     choose_extend_mode,
     choose_extend_source,
-    confirm_music,
-    receive_prompt,
-    receive_style,
-    receive_title,
+    confirm_extend,
+    receive_continue_at,
+    receive_extend_prompt,
+    receive_extend_style,
+    receive_extend_title,
 )
-from foxgen.bot.states import MusicStates
 from foxgen.bot.suno_extend_transport import SunoSourceView
 
 
@@ -45,7 +46,6 @@ class FakeApi:
     def __init__(self, *, price: int | None = 30, balance: int = 100) -> None:
         self.price = price
         self.balance_units = balance
-        self.submit_calls: list[dict[str, object]] = []
 
     async def prices(self) -> dict[str, PriceQuote]:
         if self.price is None:
@@ -66,10 +66,6 @@ class FakeApi:
             reserved_units=0,
             currency="CREDIT",
         )
-
-    async def submit(self, **kwargs: object) -> QueuedGeneration:
-        self.submit_calls.append(dict(kwargs))
-        raise AssertionError("Extend must not use generic submit")
 
 
 def callback(data: str) -> SimpleNamespace:
@@ -102,22 +98,41 @@ def owned_source() -> SunoSourceView:
 
 
 @pytest.mark.asyncio
+async def test_music_entry_opens_new_or_extend_hub() -> None:
+    state = FakeState()
+    start = callback("create:music")
+
+    await begin_music_hub(start, state)  # type: ignore[arg-type]
+
+    assert state.current == MusicExtendStates.choosing_action.state
+    markup = start.message.edit_text.await_args.kwargs["reply_markup"]
+    callbacks = {
+        button.callback_data
+        for row in markup.inline_keyboard
+        for button in row
+        if button.callback_data is not None
+    }
+    assert "music:new" in callbacks
+    assert "music:extend:start" in callbacks
+
+
+@pytest.mark.asyncio
 async def test_extend_source_picker_stores_only_index_selected_owner_source(
     monkeypatch: pytest.MonkeyPatch,
     owned_source: SunoSourceView,
 ) -> None:
     state = FakeState()
-    await begin_music(callback("create:music"), state)  # type: ignore[arg-type]
+    await begin_music_hub(callback("create:music"), state)  # type: ignore[arg-type]
 
     async def fake_sources(*, user_id: int) -> tuple[SunoSourceView, ...]:
         assert user_id == 889
         return (owned_source,)
 
-    monkeypatch.setattr("foxgen.bot.music.list_suno_sources", fake_sources)
+    monkeypatch.setattr("foxgen.bot.suno_extend_flow.list_suno_sources", fake_sources)
     start = callback("music:extend:start")
     await begin_extend(start, state)  # type: ignore[arg-type]
 
-    assert state.current == MusicStates.choosing_mode.state
+    assert state.current == MusicExtendStates.choosing_source.state
     items = state.data["extend_sources"]
     assert isinstance(items, list)
     assert items[0]["audio_id"] == "owned-track-a"
@@ -133,8 +148,7 @@ async def test_extend_source_picker_stores_only_index_selected_owner_source(
 
     select = callback("music:extend:source:0")
     await choose_extend_source(select, state)  # type: ignore[arg-type]
-    assert state.current == MusicStates.choosing_vocal_mode.state
-    assert state.data["extend_flow"] is True
+    assert state.current == MusicExtendStates.choosing_mode.state
     assert state.data["extend_source_generation_id"] == owned_source.generation_id
     assert state.data["extend_audio_id"] == owned_source.audio_id
     assert str(state.data["idempotency_key"]).startswith("suno-extend:889:")
@@ -147,24 +161,23 @@ async def test_inherited_extend_quotes_extend_price_not_core_price(
     state = FakeState()
     api = FakeApi(price=30, balance=100)
     await state.update_data(
-        extend_flow=True,
         extend_source_generation_id=owned_source.generation_id,
         extend_audio_id=owned_source.audio_id,
         extend_source_title=owned_source.title,
         extend_source_duration=owned_source.duration_seconds,
         idempotency_key="suno-extend:889:inherit",
     )
-    await state.set_state(MusicStates.choosing_vocal_mode)
+    await state.set_state(MusicExtendStates.choosing_mode)
 
     choose = callback("music:extend:mode:inherit")
     await choose_extend_mode(choose, state, api)  # type: ignore[arg-type]
 
-    assert state.current == MusicStates.confirming.state
+    assert state.current == MusicExtendStates.confirming.state
     assert state.data["default_param_flag"] is False
     assert state.data["can_submit"] is True
     rendered = choose.message.edit_text.await_args.args[0]
     assert "30 CREDIT" in rendered
-    assert "исходными параметрами" in rendered
+    assert "с исходными параметрами" in rendered
 
 
 @pytest.mark.asyncio
@@ -174,28 +187,29 @@ async def test_custom_extend_collects_prompt_style_title_and_continue_at(
     state = FakeState()
     api = FakeApi()
     await state.update_data(
-        extend_flow=True,
         extend_source_generation_id=owned_source.generation_id,
         extend_audio_id=owned_source.audio_id,
         extend_source_title=owned_source.title,
         extend_source_duration=owned_source.duration_seconds,
         idempotency_key="suno-extend:889:custom",
     )
-    await state.set_state(MusicStates.choosing_vocal_mode)
+    await state.set_state(MusicExtendStates.choosing_mode)
 
     await choose_extend_mode(callback("music:extend:mode:custom"), state, api)  # type: ignore[arg-type]
-    assert state.current == MusicStates.waiting_prompt.state
-    await receive_prompt(message("Continue into a bigger final chorus"), state, api)  # type: ignore[arg-type]
-    assert state.current == MusicStates.waiting_style.state
-    await receive_style(message("indie pop, warm female vocal"), state)  # type: ignore[arg-type]
-    assert state.current == MusicStates.waiting_title.state
-    await receive_title(message("Last Train Extended"), state, api)  # type: ignore[arg-type]
-    assert state.current == MusicStates.waiting_prompt.state
-    assert state.data["extend_waiting_continue"] is True
+    assert state.current == MusicExtendStates.waiting_prompt.state
+
+    await receive_extend_prompt(message("Continue into a bigger final chorus"), state)  # type: ignore[arg-type]
+    assert state.current == MusicExtendStates.waiting_style.state
+
+    await receive_extend_style(message("indie pop, warm female vocal"), state)  # type: ignore[arg-type]
+    assert state.current == MusicExtendStates.waiting_title.state
+
+    await receive_extend_title(message("Last Train Extended"), state)  # type: ignore[arg-type]
+    assert state.current == MusicExtendStates.waiting_continue_at.state
 
     at = message("92.5")
-    await receive_prompt(at, state, api)  # type: ignore[arg-type]
-    assert state.current == MusicStates.confirming.state
+    await receive_continue_at(at, state, api)  # type: ignore[arg-type]
+    assert state.current == MusicExtendStates.confirming.state
     assert state.data["continue_at"] == 92.5
     assert state.data["can_submit"] is True
 
@@ -206,18 +220,37 @@ async def test_custom_extend_rejects_point_after_source_end(
 ) -> None:
     state = FakeState()
     api = FakeApi()
-    await state.update_data(
-        extend_flow=True,
-        extend_waiting_continue=True,
-        extend_source_duration=owned_source.duration_seconds,
-    )
-    await state.set_state(MusicStates.waiting_prompt)
+    await state.update_data(extend_source_duration=owned_source.duration_seconds)
+    await state.set_state(MusicExtendStates.waiting_continue_at)
 
     at = message("120")
-    await receive_prompt(at, state, api)  # type: ignore[arg-type]
+    await receive_continue_at(at, state, api)  # type: ignore[arg-type]
 
-    assert state.current == MusicStates.waiting_prompt.state
-    assert "раньше его окончания" in at.answer.await_args.args[0]
+    assert state.current == MusicExtendStates.waiting_continue_at.state
+    assert "раньше конца исходного трека" in at.answer.await_args.args[0]
+
+
+@pytest.mark.asyncio
+async def test_extend_confirmation_fails_closed_without_price(
+    owned_source: SunoSourceView,
+) -> None:
+    state = FakeState()
+    api = FakeApi(price=None, balance=100)
+    await state.update_data(
+        extend_source_generation_id=owned_source.generation_id,
+        extend_audio_id=owned_source.audio_id,
+        extend_source_title=owned_source.title,
+        extend_source_duration=owned_source.duration_seconds,
+        idempotency_key="suno-extend:889:no-price",
+    )
+    await state.set_state(MusicExtendStates.choosing_mode)
+
+    choose = callback("music:extend:mode:inherit")
+    await choose_extend_mode(choose, state, api)  # type: ignore[arg-type]
+
+    assert state.data["can_submit"] is False
+    rendered = choose.message.edit_text.await_args.args[0]
+    assert "не опубликована активная цена" in rendered
 
 
 @pytest.mark.asyncio
@@ -226,9 +259,7 @@ async def test_extend_submit_calls_owner_transport_not_generic_submit(
     owned_source: SunoSourceView,
 ) -> None:
     state = FakeState()
-    api = FakeApi()
     await state.update_data(
-        extend_flow=True,
         default_param_flag=True,
         prompt="Continue into a bigger final chorus",
         style="indie pop",
@@ -240,7 +271,7 @@ async def test_extend_submit_calls_owner_transport_not_generic_submit(
         idempotency_key="suno-extend:889:stable",
         can_submit=True,
     )
-    await state.set_state(MusicStates.confirming)
+    await state.set_state(MusicExtendStates.confirming)
     calls: list[dict[str, object]] = []
 
     async def fake_submit(**kwargs: object) -> QueuedGeneration:
@@ -251,11 +282,10 @@ async def test_extend_submit_calls_owner_transport_not_generic_submit(
             replayed=False,
         )
 
-    monkeypatch.setattr("foxgen.bot.music.submit_suno_extend", fake_submit)
-    submit = callback("music:confirm")
-    await confirm_music(submit, state, api)  # type: ignore[arg-type]
+    monkeypatch.setattr("foxgen.bot.suno_extend_flow.submit_suno_extend", fake_submit)
+    submit = callback("music:extend:confirm")
+    await confirm_extend(submit, state)  # type: ignore[arg-type]
 
-    assert api.submit_calls == []
     assert calls == [
         {
             "user_id": 889,
@@ -267,8 +297,8 @@ async def test_extend_submit_calls_owner_transport_not_generic_submit(
                 "prompt": "Continue into a bigger final chorus",
                 "style": "indie pop",
                 "title": "Last Train Extended",
-                "negative_tags": "",
                 "continue_at": 92.5,
+                "negative_tags": "",
             },
             "idempotency_key": "suno-extend:889:stable",
         }
