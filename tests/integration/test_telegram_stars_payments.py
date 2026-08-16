@@ -134,9 +134,7 @@ async def test_telegram_stars_invoice_and_credit_are_durably_idempotent() -> Non
             assert wallet is not None
             assert wallet.available_units == 1000
             ledger_count = await session.scalar(
-                select(func.count())
-                .select_from(LedgerEntry)
-                .where(LedgerEntry.user_id == user_id)
+                select(func.count()).select_from(LedgerEntry).where(LedgerEntry.user_id == user_id)
             )
             payment_count = await session.scalar(
                 select(func.count())
