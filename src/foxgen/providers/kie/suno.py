@@ -285,7 +285,8 @@ def _normalize_suno_result(data: Mapping[str, Any]) -> dict[str, object]:
             {
                 key: value
                 for key, value in item.items()
-                if key not in {
+                if key
+                not in {
                     "audioUrl",
                     "streamAudioUrl",
                     "imageUrl",
