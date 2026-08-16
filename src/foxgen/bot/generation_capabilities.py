@@ -163,6 +163,9 @@ VIDEO_MODELS: Mapping[str, VideoModelCapability] = {
 }
 
 
+DEDICATED_PRODUCT_SLUGS: frozenset[str] = frozenset({"elevenlabs-turbo-2-5"})
+
+
 def image_model(key: str) -> ImageModelCapability:
     try:
         return IMAGE_MODELS[key]
@@ -178,7 +181,9 @@ def video_model(key: str) -> VideoModelCapability:
 
 
 def wizard_submission_slugs() -> frozenset[str]:
-    values: set[str] = set()
+    """Return every paid submission slug covered by a Telegram product flow."""
+
+    values: set[str] = set(DEDICATED_PRODUCT_SLUGS)
     for item in IMAGE_MODELS.values():
         values.add(item.text_slug)
         if item.edit_slug is not None:
