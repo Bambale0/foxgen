@@ -96,6 +96,16 @@ failed
 
 `paid` proves Telegram charge evidence exists before CREDIT settlement. Refund states preserve the local hold while the external Stars refund converges.
 
+Revision `20260816_0015` adds the immutable Stars purchase-bonus component:
+
+```text
+bonus_units BIGINT NOT NULL DEFAULT 0
+CHECK bonus_units >= 0
+CHECK credits_units > bonus_units
+```
+
+For Stars orders, `credits_units` remains the **total CREDIT grant** consumed by settlement, generic payment reprocess and native refund. `bonus_units` records the explicit package-bonus component, so base package CREDIT is `credits_units - bonus_units`. Existing pre-bonus rows migrate as `bonus_units=0` and retain their previous semantics.
+
 ### `payment_refund_attempts`
 
 Introduced by `20260816_0013`. This is both refund audit record and dedicated external-side-effect queue, with payment/order/user identity, original charge ID, CREDIT amount, requesting admin, lease/retry state, unique debit/restore ledger keys and evidence metadata.
@@ -112,7 +122,7 @@ resolved_refunded
 resolved_not_refunded
 ```
 
-`unknown` intentionally retains the debit/hold until evidence-based resolution.
+`unknown` intentionally retains the debit/hold until evidence-based resolution. For a Stars package with an explicit bonus, `amount_units` is the same total base+bonus amount previously recorded on the payment event/order.
 
 ### `promo_codes`
 
@@ -176,11 +186,11 @@ Durable general administrative background work. Native Stars refund uses `paymen
 
 ### `tariff_versions`
 
-Immutable/versioned tariff payload history. Stars package values are copied into `user_payment_orders` before checkout.
+Immutable/versioned tariff payload history. Stars package base CREDIT, optional explicit package bonus and XTR amount are copied into `user_payment_orders` before checkout. A later tariff publication cannot mutate an existing order snapshot.
 
 ### `payment_events`
 
-External payment evidence unique on `(provider, external_id)`. Telegram Stars retains the original charge identity through settlement/refund states.
+External payment evidence unique on `(provider, external_id)`. Telegram Stars retains the original charge identity through settlement/refund states. `amount_units` records the full CREDIT grant, including an explicit Stars package bonus, so reprocess/refund converge on the same amount.
 
 ### `operation_events`
 
@@ -210,6 +220,8 @@ Operational/audit relationships use delete behavior appropriate to their lifecyc
 
 Revision `20260816_0014` must not be downgraded while production code still expects user promo redemption. Downgrade drops `promo_redemptions`, so operators must treat those audit rows as retained financial/commercial evidence during rollback planning.
 
+Revision `20260816_0015` must not be downgraded while production code expects Stars package bonus snapshots. Downgrade drops only `bonus_units`; operators must not deploy bonus-aware code against a downgraded schema, and should preserve order/payment/ledger evidence during any rollback.
+
 ## Financial/audit immutability
 
 For normal operation:
@@ -217,6 +229,7 @@ For normal operation:
 - never UPDATE/DELETE ledger history to repair balance;
 - never discard verified external payment/refund evidence because a later local transaction failed;
 - never restore an ambiguous refund hold by direct SQL;
+- never rewrite a Stars order's `credits_units`/`bonus_units` after invoice creation to match a later tariff;
 - never credit a promo by directly incrementing wallet rows;
 - use the redemption service so wallet + ledger + redemption + usage counter commit together;
 - never rewrite admin command/audit history to hide an action.
@@ -224,7 +237,7 @@ For normal operation:
 ## Related docs
 
 - `billing.md` — financial lifecycle;
-- `telegram-stars-payments.md` — checkout/refund/evidence lifecycle;
+- `telegram-stars-payments.md` — checkout/refund/evidence and package-bonus lifecycle;
 - `user-promos.md` — promo redemption lifecycle/concurrency;
 - `api-reference.md` — public/trusted/admin routes;
 - migrations/models — exact schema source of truth.

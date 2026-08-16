@@ -23,7 +23,9 @@ from foxgen.application.user_portal import (
     UserPortalServiceProtocol,
 )
 from foxgen.core.config import Settings
-from foxgen.infra.payments import SqlAlchemyTelegramStarsPaymentService
+from foxgen.infra.payments_bonus import (
+    BonusAwareTelegramStarsPaymentService as SqlAlchemyTelegramStarsPaymentService,
+)
 
 
 class SupportCreateRequest(BaseModel):
@@ -174,7 +176,10 @@ def _star_package_payload(item: StarPackage) -> dict[str, object]:
         "code": item.code,
         "title": item.title,
         "description": item.description,
-        "credits_units": item.credits_units,
+        "credits_units": item.total_credits_units,
+        "base_credits_units": item.resolved_base_credits_units,
+        "bonus_units": item.bonus_units,
+        "total_credits_units": item.total_credits_units,
         "stars_amount": item.stars_amount,
         "currency": "XTR",
     }

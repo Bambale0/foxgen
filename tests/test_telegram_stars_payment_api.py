@@ -25,9 +25,11 @@ class FakeStarsService:
         self.package = StarPackage(
             code="starter",
             title="Starter",
-            description="1000 credits",
-            credits_units=1000,
+            description="1000 CREDIT + 250 bonus",
+            credits_units=1250,
             stars_amount=50,
+            bonus_units=250,
+            base_credits_units=1000,
         )
 
     async def list_packages(self) -> tuple[StarPackage, ...]:
@@ -87,8 +89,8 @@ class FakeStarsService:
         self.calls.append(("success", user_id))
         return StarPaymentResult(
             order_id=ORDER_ID,
-            available_units=1000,
-            credited_units=1000,
+            available_units=1250,
+            credited_units=1250,
             replayed=False,
         )
 
@@ -147,9 +149,15 @@ def test_miniapp_stars_packages_and_invoice_use_telegram_identity() -> None:
         )
 
     assert packages.status_code == 200
-    assert packages.json()["items"][0]["stars_amount"] == 50
+    package = packages.json()["items"][0]
+    assert package["credits_units"] == 1250
+    assert package["base_credits_units"] == 1000
+    assert package["bonus_units"] == 250
+    assert package["total_credits_units"] == 1250
+    assert package["stars_amount"] == 50
     assert missing_key.status_code == 400
     assert invoice.status_code == 201
+    assert invoice.json()["package"]["total_credits_units"] == 1250
     assert invoice.json()["invoice_url"] == "https://t.me/$invoice-test"
     assert service.calls[-1][1] == USER_ID
 
@@ -194,6 +202,7 @@ def test_trusted_bot_payment_callbacks_are_owner_bound() -> None:
     assert pre_checkout.status_code == 200
     assert pre_checkout.json()["ok"] is True
     assert success.status_code == 200
-    assert success.json()["available_units"] == 1000
+    assert success.json()["available_units"] == 1250
+    assert success.json()["credited_units"] == 1250
     assert ("pre_checkout", USER_ID) in service.calls
     assert ("success", USER_ID) in service.calls

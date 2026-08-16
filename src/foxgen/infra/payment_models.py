@@ -33,6 +33,11 @@ class UserPaymentOrder(Base):
             name="uq_user_payment_orders_telegram_charge",
         ),
         CheckConstraint("credits_units > 0", name="ck_user_payment_orders_credits_positive"),
+        CheckConstraint("bonus_units >= 0", name="ck_user_payment_orders_bonus_nonnegative"),
+        CheckConstraint(
+            "credits_units > bonus_units",
+            name="ck_user_payment_orders_base_credits_positive",
+        ),
         CheckConstraint("provider_amount > 0", name="ck_user_payment_orders_amount_positive"),
         CheckConstraint(
             "status IN ("
@@ -56,6 +61,7 @@ class UserPaymentOrder(Base):
     package_title: Mapped[str] = mapped_column(String(255))
     package_description: Mapped[str] = mapped_column(String(512), default="", server_default="")
     credits_units: Mapped[int] = mapped_column(BigInteger)
+    bonus_units: Mapped[int] = mapped_column(BigInteger, default=0, server_default="0")
     provider_amount: Mapped[int] = mapped_column(BigInteger)
     provider_currency: Mapped[str] = mapped_column(String(16), default="XTR", server_default="XTR")
     invoice_payload: Mapped[str] = mapped_column(String(128))
