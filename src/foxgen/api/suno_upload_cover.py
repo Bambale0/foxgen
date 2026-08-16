@@ -5,6 +5,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from foxgen.api.miniapp_security import MiniAppPrincipal, decode_miniapp_token
 from foxgen.api.security import authenticate_user_context, validate_idempotency_key
+from foxgen.application.submissions import SubmissionReceipt
 from foxgen.application.suno_upload_cover import SunoUploadCoverService
 from foxgen.core.config import Settings
 from foxgen.infra.input_media import LocalInputMediaStorage
@@ -74,13 +75,13 @@ def _input(body: SunoUploadCoverRequest) -> dict[str, object]:
     return body.model_dump(mode="python", exclude_none=True)
 
 
-def _receipt(receipt: object) -> dict[str, object]:
+def _receipt(receipt: SubmissionReceipt) -> dict[str, object]:
     return {
-        "generation_id": str(getattr(receipt, "generation_id")),
-        "model_slug": str(getattr(receipt, "model_slug")),
-        "status": getattr(receipt, "status"),
-        "provider_task_id": getattr(receipt, "provider_task_id"),
-        "replayed": bool(getattr(receipt, "replayed")),
+        "generation_id": str(receipt.generation_id),
+        "model_slug": receipt.model_slug,
+        "status": receipt.status,
+        "provider_task_id": receipt.provider_task_id,
+        "replayed": receipt.replayed,
     }
 
 
