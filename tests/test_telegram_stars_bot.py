@@ -49,9 +49,8 @@ async def test_pre_checkout_fails_closed_on_backend_error() -> None:
     api_client = SimpleNamespace(
         _user_request=AsyncMock(
             side_effect=FoxGenApiError(
+                "Проверка оплаты временно недоступна",
                 status_code=503,
-                code="provider_unavailable",
-                message="Проверка оплаты временно недоступна",
                 retryable=True,
             )
         )
