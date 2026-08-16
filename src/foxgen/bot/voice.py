@@ -75,7 +75,9 @@ def _confirmation_keyboard(*, can_submit: bool) -> InlineKeyboardMarkup:
     if can_submit:
         rows.append([InlineKeyboardButton(text="Создать озвучку", callback_data="voice:confirm")])
     else:
-        rows.append([InlineKeyboardButton(text="Обновить цену и баланс", callback_data="voice:refresh")])
+        rows.append(
+            [InlineKeyboardButton(text="Обновить цену и баланс", callback_data="voice:refresh")]
+        )
     rows.extend(
         [
             [
@@ -121,8 +123,9 @@ async def _begin(callback: CallbackQuery, state: FSMContext) -> None:
     )
 
 
-@router.callback_query(F.data == "create:voice")
+@router.callback_query(F.data.in_({"create:voice", "planned:voice"}))
 async def begin_voice(callback: CallbackQuery, state: FSMContext) -> None:
+    # The legacy callback keeps already-sent pre-release menus useful after deploy.
     await _begin(callback, state)
 
 
@@ -302,7 +305,9 @@ async def confirm_voice(
 ) -> None:
     data = await state.get_data()
     if not bool(data.get("can_submit")):
-        await callback.answer("Сначала дождитесь доступной цены и достаточного баланса.", show_alert=True)
+        await callback.answer(
+            "Сначала дождитесь доступной цены и достаточного баланса.", show_alert=True
+        )
         return
 
     await state.set_state(VoiceStates.submitting)
@@ -342,7 +347,11 @@ async def confirm_voice(
 
     await state.clear()
     if callback.message:
-        replay = "\nПовторный клик безопасно переиспользовал существующую задачу." if result.replayed else ""
+        replay = (
+            "\nПовторный клик безопасно переиспользовал существующую задачу."
+            if result.replayed
+            else ""
+        )
         await callback.message.answer(
             (
                 "✅ <b>Озвучка поставлена в очередь</b>\n\n"
@@ -350,7 +359,7 @@ async def confirm_voice(
                 "Готовый аудиофайл придёт через обычный FoxGen delivery pipeline."
                 f"{replay}"
             ),
-            reply_markup=after_submit_keyboard(),
+            reply_markup=after_submit_keyboard(result.generation_id),
         )
 
 
@@ -359,19 +368,13 @@ async def duplicate_submit(callback: CallbackQuery) -> None:
     await callback.answer("Озвучка уже ставится в очередь.")
 
 
-@router.callback_query(
-    VoiceStates.waiting_text,
-    F.data == "voice:back",
-)
+@router.callback_query(VoiceStates.waiting_text, F.data == "voice:back")
 async def back_from_text(callback: CallbackQuery, state: FSMContext) -> None:
     await state.clear()
     await safe_edit_callback_message(callback, "Главное меню", main_menu())
 
 
-@router.callback_query(
-    VoiceStates.waiting_voice,
-    F.data == "voice:back",
-)
+@router.callback_query(VoiceStates.waiting_voice, F.data == "voice:back")
 async def back_from_voice(callback: CallbackQuery, state: FSMContext) -> None:
     await state.set_state(VoiceStates.waiting_text)
     await safe_edit_callback_message(
@@ -381,10 +384,7 @@ async def back_from_voice(callback: CallbackQuery, state: FSMContext) -> None:
     )
 
 
-@router.callback_query(
-    VoiceStates.choosing_speed,
-    F.data == "voice:back",
-)
+@router.callback_query(VoiceStates.choosing_speed, F.data == "voice:back")
 async def back_from_speed(callback: CallbackQuery, state: FSMContext) -> None:
     await state.set_state(VoiceStates.waiting_voice)
     await safe_edit_callback_message(
@@ -394,10 +394,7 @@ async def back_from_speed(callback: CallbackQuery, state: FSMContext) -> None:
     )
 
 
-@router.callback_query(
-    VoiceStates.confirming,
-    F.data == "voice:back",
-)
+@router.callback_query(VoiceStates.confirming, F.data == "voice:back")
 async def back_from_confirmation(callback: CallbackQuery, state: FSMContext) -> None:
     data = await state.get_data()
     selected = float(data.get("speed", DEFAULT_SPEED))
