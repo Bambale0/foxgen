@@ -61,7 +61,9 @@ def _confirmation_keyboard(*, can_submit: bool) -> InlineKeyboardMarkup:
     if can_submit:
         rows.append([InlineKeyboardButton(text="Создать музыку", callback_data="music:confirm")])
     else:
-        rows.append([InlineKeyboardButton(text="Обновить цену и баланс", callback_data="music:refresh")])
+        rows.append(
+            [InlineKeyboardButton(text="Обновить цену и баланс", callback_data="music:refresh")]
+        )
     rows.extend(
         [
             [InlineKeyboardButton(text="← Назад", callback_data="music:back")],
@@ -78,11 +80,7 @@ async def _show_mode(callback: CallbackQuery, state: FSMContext) -> None:
     await state.set_state(MusicStates.choosing_mode)
     await safe_edit_callback_message(
         callback,
-        (
-            "<b>Музыка · Suno V5</b>\n\n"
-            "Быстро — один prompt.\n"
-            "Кастомно — отдельно стиль и название."
-        ),
+        ("<b>Музыка · Suno V5</b>\n\nБыстро — один prompt.\nКастомно — отдельно стиль и название."),
         _mode_keyboard(),
     )
 
@@ -132,10 +130,7 @@ async def choose_vocal_mode(callback: CallbackQuery, state: FSMContext) -> None:
         await state.set_state(MusicStates.waiting_style)
         await safe_edit_callback_message(
             callback,
-            (
-                "<b>Стиль музыки</b>\n\n"
-                "Например: cinematic synthwave, dark electronic, 120 BPM."
-            ),
+            ("<b>Стиль музыки</b>\n\nНапример: cinematic synthwave, dark electronic, 120 BPM."),
             _nav(),
         )
         return
