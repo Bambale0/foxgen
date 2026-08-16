@@ -5,8 +5,9 @@ from datetime import datetime, timezone
 from uuid import uuid4
 
 import httpx
-from sqlalchemy import select, update
+from sqlalchemy import select, text, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from foxgen.application.payments import (
     PreCheckoutDecision,
@@ -108,6 +109,13 @@ class SqlAlchemyTelegramStarsPaymentService:
 
         async with self._database.session() as session:
             async with session.begin():
+                await session.execute(
+                    text(
+                        "SELECT pg_advisory_xact_lock("
+                        "hashtextextended(:lock_key, 0))"
+                    ),
+                    {"lock_key": f"stars:invoice:{user_id}:{idempotency_key}"},
+                )
                 order = await session.scalar(
                     select(UserPaymentOrder)
                     .where(
@@ -219,7 +227,9 @@ class SqlAlchemyTelegramStarsPaymentService:
     ) -> PreCheckoutDecision:
         async with self._database.session() as session:
             order = await session.scalar(
-                select(UserPaymentOrder).where(UserPaymentOrder.invoice_payload == invoice_payload)
+                select(UserPaymentOrder).where(
+                    UserPaymentOrder.invoice_payload == invoice_payload
+                )
             )
         if order is None or order.user_id != user_id:
             return PreCheckoutDecision(False, "Заказ оплаты не найден. Создайте новую оплату.")
@@ -253,6 +263,13 @@ class SqlAlchemyTelegramStarsPaymentService:
 
         async with self._database.session() as session:
             async with session.begin():
+                await session.execute(
+                    text(
+                        "SELECT pg_advisory_xact_lock("
+                        "hashtextextended(:lock_key, 0))"
+                    ),
+                    {"lock_key": f"stars:charge:{telegram_payment_charge_id}"},
+                )
                 order = await session.scalar(
                     select(UserPaymentOrder)
                     .where(UserPaymentOrder.invoice_payload == invoice_payload)
@@ -267,6 +284,11 @@ class SqlAlchemyTelegramStarsPaymentService:
                     raise SubmissionError(ErrorCode.VALIDATION, "Валюта оплаты не совпадает.")
                 if total_amount != order.provider_amount:
                     raise SubmissionError(ErrorCode.VALIDATION, "Сумма оплаты не совпадает.")
+                if order.status in {"failed", "refunded"}:
+                    raise SubmissionError(
+                        ErrorCode.VALIDATION,
+                        "Этот заказ уже закрыт и не может быть зачислен.",
+                    )
 
                 charge_owner = await session.scalar(
                     select(UserPaymentOrder)
@@ -288,7 +310,6 @@ class SqlAlchemyTelegramStarsPaymentService:
                             ErrorCode.IDEMPOTENCY_CONFLICT,
                             "Заказ уже оплачен другим Telegram-платежом.",
                         )
-                    replayed = True
                     account = await ensure_wallet_locked(
                         session,
                         user_id=user_id,
@@ -361,7 +382,10 @@ class SqlAlchemyTelegramStarsPaymentService:
                             reserved_delta=0,
                             idempotency_key=ledger_key,
                             actor="system:telegram_stars",
-                            reason=f"Telegram Stars top-up package {order.package_code}",
+                            reason=(
+                                "Telegram Stars top-up package "
+                                f"{order.package_code}"
+                            ),
                             metadata_json={
                                 "payment_order_id": str(order.id),
                                 "package_code": order.package_code,
@@ -395,8 +419,10 @@ class SqlAlchemyTelegramStarsPaymentService:
                     replayed=replayed,
                 )
 
-    async def _packages(self, session: object) -> tuple[StarPackage, ...]:
-        latest = await session.scalar(select(TariffVersion).order_by(TariffVersion.version.desc()).limit(1))
+    async def _packages(self, session: AsyncSession) -> tuple[StarPackage, ...]:
+        latest = await session.scalar(
+            select(TariffVersion).order_by(TariffVersion.version.desc()).limit(1)
+        )
         if latest is None:
             return ()
         raw_packages = latest.payload.get("packages") if isinstance(latest.payload, dict) else None
@@ -404,7 +430,11 @@ class SqlAlchemyTelegramStarsPaymentService:
             return ()
         packages: list[StarPackage] = []
         for raw_code, raw in raw_packages.items():
-            if not isinstance(raw_code, str) or not raw_code.strip() or not isinstance(raw, dict):
+            if (
+                not isinstance(raw_code, str)
+                or not raw_code.strip()
+                or not isinstance(raw, dict)
+            ):
                 continue
             credits = raw.get("credits_units", raw.get("credits"))
             stars = raw.get("stars_amount", raw.get("stars"))
@@ -419,7 +449,11 @@ class SqlAlchemyTelegramStarsPaymentService:
                 continue
             title_value = raw.get("title")
             description_value = raw.get("description")
-            title = title_value.strip() if isinstance(title_value, str) and title_value.strip() else raw_code
+            title = (
+                title_value.strip()
+                if isinstance(title_value, str) and title_value.strip()
+                else raw_code
+            )
             description = (
                 description_value.strip()
                 if isinstance(description_value, str) and description_value.strip()
