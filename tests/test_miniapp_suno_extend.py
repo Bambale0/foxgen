@@ -22,7 +22,7 @@ def test_suno_extend_uses_owner_sources_not_manual_ids() -> None:
     assert "audio_id: selected.audio_id" in script
     assert "data-suno-extend-at" in script
     assert "Точка продолжения должна быть раньше конца исходного трека" in script
-    assert "data-model=\"suno-v5-extend\"" in script
+    assert 'data-model="suno-v5-extend"' in script
     assert ".remove()" in script
 
 
