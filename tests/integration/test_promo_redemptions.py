@@ -107,8 +107,6 @@ async def test_promo_redemption_is_exactly_once_and_max_uses_is_atomic() -> None
                         WalletAccount.user_id.in_([first_user, second_user])
                     )
                 )
-                await session.execute(
-                    delete(User).where(User.id.in_([first_user, second_user]))
-                )
+                await session.execute(delete(User).where(User.id.in_([first_user, second_user])))
                 await session.execute(delete(PromoCode).where(PromoCode.code == code))
         await database.close()
