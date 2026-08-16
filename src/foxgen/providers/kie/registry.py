@@ -16,6 +16,7 @@ SUBMISSION_MODEL_SLUGS: frozenset[str] = frozenset(
         "seedance-2-mini",
         "elevenlabs-turbo-2-5",
         "suno-v5",
+        "suno-v5-extend",
     }
 )
 
@@ -109,11 +110,40 @@ SUNO_V5_MODEL = ModelSpec(
 )
 
 
+SUNO_V5_EXTEND_MODEL = ModelSpec(
+    slug="suno-v5-extend",
+    provider_model="V5",
+    title="Suno V5 Extend",
+    family="Suno",
+    media_kind=MediaKind.AUDIO,
+    capabilities=frozenset({Capability.MUSIC_EDIT}),
+    verified=True,
+    defaults={
+        "default_param_flag": False,
+        "prompt": "",
+        "style": "",
+        "title": "",
+        "negative_tags": "",
+    },
+    contract=InputContract.SUNO_V5_EXTEND,
+    tier="standard",
+    rank=2,
+    docs_url="https://docs.kie.ai/suno-api/extend-music/",
+    recommended_for=("continue generated songs", "longer arrangements", "custom continuation"),
+    api_family="suno_extend",
+    provider_id_verified=True,
+    schema_verified=True,
+    enabled_for_submission=True,
+    tested_live=False,
+    contract_reviewed_at="2026-08-16",
+)
+
+
 def _active_models() -> tuple[ModelSpec, ...]:
     """Build the reviewed catalog and apply the explicit paid-submission allowlist."""
 
     models: list[ModelSpec] = list(SEEDREAM_45_MODELS)
-    models.extend((ELEVENLABS_TTS_MODEL, SUNO_V5_MODEL))
+    models.extend((ELEVENLABS_TTS_MODEL, SUNO_V5_MODEL, SUNO_V5_EXTEND_MODEL))
     for item in MODEL_SPECS:
         if item.slug in {"seedance-2-fast", "elevenlabs-turbo-2-5"}:
             continue
