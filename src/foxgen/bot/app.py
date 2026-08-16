@@ -29,6 +29,7 @@ from foxgen.bot.quick_start import router as quick_start_router
 from foxgen.bot.quick_start_wizard import router as quick_start_wizard_router
 from foxgen.bot.reference_memory import router as reference_memory_router
 from foxgen.bot.suno_extend_flow import router as suno_extend_router
+from foxgen.bot.suno_upload_cover_contract import is_cover_state
 from foxgen.bot.suno_upload_cover_flow import router as suno_upload_cover_router
 from foxgen.bot.uploads import TelegramInputMediaStorage, stored_input_keys
 from foxgen.bot.voice import router as voice_router
@@ -126,7 +127,7 @@ async def stale_callback(
     input_media: TelegramInputMediaStorage,
 ) -> None:
     current = await state.get_state()
-    if contract_for(current) is not None:
+    if contract_for(current) is not None or is_cover_state(current):
         await callback.answer(
             "Эта кнопка не относится к текущему шагу. Используйте кнопки в последнем сообщении или /menu.",
             show_alert=True,
@@ -154,7 +155,7 @@ async def fallback_message(
     input_media: TelegramInputMediaStorage,
 ) -> None:
     current = await state.get_state()
-    if contract_for(current) is not None:
+    if contract_for(current) is not None or is_cover_state(current):
         await message.answer(
             "Сейчас открыт незавершённый шаг. Используйте кнопки или формат ввода из последнего сообщения. "
             "Команда /menu отменит черновик и вернёт в главное меню."
@@ -206,8 +207,6 @@ def register_runtime_routers(dispatcher: Dispatcher) -> None:
     dispatcher.include_router(feed_publish_router)
     dispatcher.include_router(feed_remix_router)
     dispatcher.include_router(voice_router)
-    # Cover must consume music:cover:* and its audio-upload FSM before the hub/core
-    # music routers and before the generic shell fallback.
     dispatcher.include_router(suno_upload_cover_router)
     dispatcher.include_router(suno_extend_router)
     dispatcher.include_router(music_router)
