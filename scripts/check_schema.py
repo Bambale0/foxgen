@@ -93,6 +93,26 @@ REQUIRED_COLUMNS: dict[str, frozenset[str]] = {
             "credited_at",
         }
     ),
+    "payment_refund_attempts": frozenset(
+        {
+            "id",
+            "payment_id",
+            "order_id",
+            "user_id",
+            "provider",
+            "external_charge_id",
+            "amount_units",
+            "currency",
+            "status",
+            "attempts",
+            "available_at",
+            "locked_at",
+            "debit_ledger_key",
+            "restore_ledger_key",
+            "attempted_at",
+            "resolved_at",
+        }
+    ),
     "operation_events": frozenset(
         {"id", "parent_operation_id", "operation_type", "status", "payload"}
     ),
