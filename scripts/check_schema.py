@@ -137,6 +137,9 @@ REQUIRED_COLUMNS: dict[str, frozenset[str]] = {
     "partner_profiles": frozenset({"user_id", "earned_units", "withdrawn_units"}),
     "partner_withdrawals": frozenset({"id", "user_id", "amount_units", "status"}),
     "promo_codes": frozenset({"code", "active", "reward_units", "uses"}),
+    "promo_redemptions": frozenset(
+        {"id", "promo_code", "user_id", "reward_units", "ledger_key", "redeemed_at"}
+    ),
     "prompt_library_items": frozenset({"id", "title", "prompt", "status"}),
     "runtime_flags": frozenset({"key", "enabled", "value", "updated_by"}),
     "model_availability": frozenset({"model_slug", "enabled", "reason", "updated_by"}),

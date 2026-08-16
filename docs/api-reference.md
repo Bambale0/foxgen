@@ -14,7 +14,7 @@ Health and model catalog/validation routes do not create paid work.
 
 Paid generation/balance/user-portal routes require the configured internal bearer token. User-scoped routes also bind the request to `X-FoxGen-User-Id`. Paid task creation and user payment invoice creation require `Idempotency-Key` where documented.
 
-Telegram payment settlement is accepted only through this trusted user context; the public Mini App cannot submit a `successful_payment` result.
+Telegram payment settlement and trusted promo redemption are accepted only through this owner-bound context; the public Mini App cannot submit a `successful_payment` result or a reward amount.
 
 ### Legacy billing administrator
 
@@ -70,9 +70,9 @@ Paid task admission validates authentication, positive user identity, idempotenc
 | POST | `/v1/admin/users/{user_id}/balance-adjustments` | legacy billing admin | Idempotent manual adjustment |
 | PUT | `/v1/admin/prices/{model_slug}` | legacy billing admin | Publish model-price version |
 
-## Trusted user portal and Telegram Stars
+## Trusted user portal, Stars and promos
 
-These routes use the same trusted internal bearer + `X-FoxGen-User-Id` owner binding as the bot user portal. They remain available when paid generation admission is disabled so a completed payment is never blocked by the generation kill switch.
+These routes use the trusted internal bearer + `X-FoxGen-User-Id` owner binding. Payment/promo recovery remains available independently of the paid-generation kill switch.
 
 | Method | Path | Auth | Purpose |
 |---|---|---|---|
@@ -80,7 +80,8 @@ These routes use the same trusted internal bearer + `X-FoxGen-User-Id` owner bin
 | GET | `/v1/user-portal/payments/stars/packages` | trusted internal + owner ID | Stars-enabled top-up packages only |
 | POST | `/v1/user-portal/payments/stars/invoices` | trusted internal + owner ID + `Idempotency-Key` | Create/replay durable order and Telegram XTR invoice URL |
 | POST | `/v1/user-portal/payments/stars/pre-checkout` | trusted internal + owner ID | Validate native Telegram `pre_checkout_query` against order snapshot |
-| POST | `/v1/user-portal/payments/stars/success` | trusted internal + owner ID | Persist `successful_payment` charge evidence and settle CREDIT exactly once |
+| POST | `/v1/user-portal/payments/stars/success` | trusted internal + owner ID | Persist `successful_payment` evidence and settle CREDIT exactly once |
+| POST | `/v1/user-portal/promos/redeem` | trusted internal + owner ID | Redeem one server-defined promo bonus for this owner |
 | GET | `/v1/user-portal/support` | trusted internal + owner ID | List own support tickets |
 | POST | `/v1/user-portal/support` | trusted internal + owner ID | Create support ticket |
 | GET | `/v1/user-portal/support/{ticket_id}` | trusted internal + owner ID | Own ticket detail |
@@ -90,7 +91,7 @@ These routes use the same trusted internal bearer + `X-FoxGen-User-Id` owner bin
 | POST | `/v1/user-portal/partner/join` | trusted internal + owner ID | Idempotent partner enrollment |
 | POST | `/v1/user-portal/partner/withdrawals` | trusted internal + owner ID + `Idempotency-Key` | Request partner withdrawal |
 
-Stars invoice creation snapshots the CREDIT and XTR amount before the external Telegram call. `pre-checkout` is validation-only. `success` first commits the Telegram charge as durable payment evidence, then performs a separate idempotent wallet/ledger settlement using `payment-credit:telegram_stars:<charge-id>`. The browser never calls either settlement route directly.
+Stars invoice creation snapshots CREDIT/XTR terms before the external Telegram call. Promo redemption accepts only `{code}`: reward amount, active state and remaining uses are loaded under a PostgreSQL lock from the server-side promo definition. Successful redemption atomically creates the immutable `promo-credit:<CODE>:<user-id>` ledger movement, durable redemption row and usage-counter increment. Repeating the same owner/code returns the existing result without another credit/use.
 
 ## Generation operations
 
@@ -108,27 +109,28 @@ Cancellation is rejected once provider submission may have started. Unknown prov
 
 # Happy Fox public Mini App API
 
-Happy Fox uses a short-lived Telegram-derived JWT. These routes are owner-scoped/read-only except for paid task admission, safe cancellation, private input-media lifecycle, user portal actions and durable Stars invoice creation. Internal/admin credentials are never accepted by or exposed to the browser.
+Happy Fox uses a short-lived Telegram-derived JWT. These routes are owner-scoped/read-only except for bounded user actions such as paid admission, safe cancellation, private input media, user portal operations, Stars invoice creation and promo redemption. Internal/admin credentials are never accepted by or exposed to the browser.
 
 | Method | Path | Purpose |
 |---|---|---|
 | POST | `/v1/miniapp/auth` | Validate Telegram `initData` and issue Mini App JWT |
-| GET | `/v1/miniapp/bootstrap` | Initial user, wallet, prices, compact ledger, model schemas, recent jobs, feature flags and limits |
+| GET | `/v1/miniapp/bootstrap` | Initial user, wallet, prices, ledger, schemas, jobs, feature flags and limits |
 | GET | `/v1/miniapp/models` | Submission-enabled model catalog + JSON schemas |
 | GET | `/v1/miniapp/models/{model_slug}` | Submission-enabled model detail |
-| POST | `/v1/miniapp/models/{model_slug}/validate` | Free model-contract validation and normalization |
-| GET | `/v1/miniapp/balance` | Current authenticated owner wallet projection |
+| POST | `/v1/miniapp/models/{model_slug}/validate` | Free model-contract validation/normalization |
+| GET | `/v1/miniapp/balance` | Current owner wallet projection |
 | GET | `/v1/miniapp/prices` | Current active prices |
-| GET | `/v1/miniapp/ledger` | Authenticated owner immutable ledger projection, max 200 |
-| GET | `/v1/miniapp/generations` | Authenticated owner history, max 100 |
+| GET | `/v1/miniapp/ledger` | Owner immutable ledger projection, max 200 |
+| GET | `/v1/miniapp/generations` | Owner history, max 100 |
 | GET | `/v1/miniapp/generations/{generation_id}` | Owner detail + short-lived stored-media URLs |
 | POST | `/v1/miniapp/generations/{generation_id}/cancel` | Existing safe pre-provider cancellation boundary |
 | POST | `/v1/miniapp/tasks` | Paid admission through shared `SubmissionService` + `Idempotency-Key` |
 | POST | `/v1/miniapp/input-media` | Authenticated private image/video/audio upload |
 | DELETE | `/v1/miniapp/input-media/{storage_key}` | Owner-scoped temporary input cleanup |
 | GET | `/v1/miniapp/tariff` | Current published tariff version |
-| GET | `/v1/miniapp/payments/stars/packages` | Purchasable XTR packages for the authenticated owner |
+| GET | `/v1/miniapp/payments/stars/packages` | Purchasable XTR packages for the owner |
 | POST | `/v1/miniapp/payments/stars/invoices` | Create/replay Stars invoice; requires `Idempotency-Key` |
+| POST | `/v1/miniapp/promos/redeem` | Redeem a server-defined promo bonus once for this owner |
 | GET | `/v1/miniapp/support` | List own support tickets |
 | POST | `/v1/miniapp/support` | Create support ticket |
 | GET | `/v1/miniapp/support/{ticket_id}` | Own ticket detail/history |
@@ -138,19 +140,11 @@ Happy Fox uses a short-lived Telegram-derived JWT. These routes are owner-scoped
 | POST | `/v1/miniapp/partner/join` | Idempotent partner enrollment |
 | POST | `/v1/miniapp/partner/withdrawals` | Request withdrawal; requires `Idempotency-Key` |
 
-The frontend renders enabled model controls from the backend `input_schema` and calls the Mini App validation route before paid admission. The paid route validates again; browser validation is never a trust boundary. Wallet routes are projections only and cannot mutate balances.
-
-For Stars top-up, Happy Fox may request an invoice URL and open it using Telegram WebApp checkout, but the browser has no endpoint for declaring payment success or requesting a privileged refund. Telegram checkout settlement and native Stars refund execution remain server-side.
+The frontend renders model controls from backend schemas and validates again server-side before paid admission. Wallet routes are projections only. Stars success/refund remain server-side. Promo redemption is a bounded financial command where the browser supplies only a code; the backend owns the CREDIT amount and max-use policy.
 
 # Registered signed internal admin API
 
-All paths below are relative to:
-
-```text
-/internal/admin
-```
-
-Every route is private/signed/RBAC-protected even when the table labels it read-only.
+All paths below are relative to `/internal/admin`. Every route is private/signed/RBAC-protected even when read-only.
 
 ## Health, summary, analytics and access
 
@@ -166,8 +160,6 @@ Every route is private/signed/RBAC-protected even when the table labels it read-
 | GET | `/commands/{command_id}` | command/result detail |
 | GET | `/ai/diagnostics` | read-only diagnostic synthesis; AI-admin scope required |
 
-The access/analytics routes use the same shared services and `_authenticate` boundary as the core admin router. Admin-role writes retain server-side policy, `Idempotency-Key` and explicit confirmation.
-
 ## Users
 
 | Method | Path | Write semantics |
@@ -177,14 +169,12 @@ The access/analytics routes use the same shared services and `_authenticate` bou
 | POST | `/users/{user_id}/unblock` | idempotent + confirm |
 | POST | `/users/{user_id}/balance-adjustments` | idempotent + confirm |
 
-Blocked-user state is rechecked at transactional paid admission.
-
 ## Generations
 
 | Method | Path | Semantics |
 |---|---|---|
 | GET | `/generations` | generation list/filter |
-| POST | `/previews/generation` | privileged local generation preview through shared preview service; does not bypass normal paid submission |
+| POST | `/previews/generation` | privileged local preview; does not bypass normal paid submission |
 
 ## Operations
 
@@ -209,11 +199,7 @@ Admin replay never replays the billable `generation.submit` boundary.
 | POST | `/payments/{payment_id}/refund` | idempotent + confirm; hold CREDIT then queue native Stars refund |
 | POST | `/payments/{payment_id}/refund/resolve` | idempotent + confirm; evidence-based resolution of `refund_unknown` |
 
-Payment credit uses a deterministic immutable-ledger key, preventing double credit across repeated reprocess commands. A Telegram Stars charge can be safely reprocessed when its durable `PaymentEvent` exists but the original CREDIT settlement failed after charge evidence was committed.
-
-Native Stars refund is supported only for an already credited `telegram_stars` payment. The refund command requires a reason and enough currently available CREDIT to reverse the original credit. The service atomically subtracts that CREDIT and appends `payment-refund-debit:telegram_stars:<charge-id>:<attempt-id>` before the dedicated refund worker contacts Telegram.
-
-A deterministic provider rejection restores the CREDIT hold and leaves the payment credited. Ambiguous network/server outcomes remain held through bounded retries and then become `refund_unknown`. The resolution endpoint requires an explicit `refunded` or `not_refunded` outcome plus evidence text; `not_refunded` appends the unique compensating `payment-refund-restore:*` ledger entry. Direct browser/user refund writes do not exist.
+Payment credit/reprocess and Stars refund use independent immutable ledger/idempotency boundaries. Direct browser/user refund writes do not exist.
 
 ## Tariffs and pricing
 
@@ -233,8 +219,6 @@ A deterministic provider rejection restores the CREDIT hold and leaves the payme
 | POST | `/tickets/{ticket_id}/assign` | idempotent |
 | POST | `/tickets/{ticket_id}/update` | idempotent |
 | POST | `/tickets/{ticket_id}/reply` | idempotent + confirm; durable outbox |
-
-A reply request commits support message/outbox state. Telegram delivery occurs later in the worker.
 
 ## CMS
 
@@ -271,9 +255,11 @@ Campaign start materializes durable recipient deliveries once; mass send never r
 
 | Method | Path | Write semantics |
 |---|---|---|
-| GET | `/promos/{code}` | lookup |
-| POST | `/promos` | idempotent create |
+| GET | `/promos/{code}` | lookup definition |
+| POST | `/promos` | idempotent create of server-owned reward/max-use policy |
 | POST | `/promos/{code}/active` | idempotent + confirm enable/disable |
+
+Admin promo routes define policy; they do not themselves credit a user. User redemption runs through `/v1/user-portal/promos/redeem` or `/v1/miniapp/promos/redeem` and is recorded in `promo_redemptions` + immutable ledger. Redemption audit prevents deletion of a promo definition that already has user-redemption rows.
 
 ## Prompt library moderation
 
@@ -302,8 +288,6 @@ Runtime model availability is revalidated before paid admission.
 | POST | `/trends/{trend_id}/remove` | idempotent + confirm |
 | POST | `/feed/{content_id}/moderate` | idempotent + confirm |
 
-These backend contracts do not imply a finished public Mini App UI.
-
 ## Active exports
 
 | Method | Path | Format |
@@ -315,31 +299,11 @@ These backend contracts do not imply a finished public Mini App UI.
 
 # Registered internal operator web
 
-When both admin API/web switches are enabled, the operator surface registers:
-
-| Method | Path | Auth |
-|---|---|---|
-| POST | `/internal/admin/ui/session` | signed admin HTTP + network/RBAC; mints short session |
-| GET | `/internal/admin/ui?session=...` | admin session + network/RBAC |
-| GET | `/internal/admin/ui/api/summary` | `X-Admin-Session` + network/RBAC |
-| GET | `/internal/admin/ui/api/analytics` | session + network/RBAC; dedicated analytics snapshot |
-| POST | `/internal/admin/ui/api/preview-generation` | session + network/RBAC; shared privileged preview service |
-| GET | `/internal/admin/ui/api/admins` | session + network/RBAC; durable admin list |
-| PUT | `/internal/admin/ui/api/admins/{user_id}` | session + idempotency + confirm + RBAC |
-| GET | `/internal/admin/ui/api/{section}` | `X-Admin-Session` + network/RBAC |
-| POST | `/internal/admin/ui/api/action` | session + idempotency; confirmation for destructive action classes |
-
-The specific extension router is registered before the base router's generic `GET /api/{section}` route. This ordering is intentional: otherwise dedicated extension routes could be shadowed by generic section routes even though they appeared in route enumeration.
-
-Current generic section names supported by the base router include users, payments, operations, tickets, tariffs, campaigns, moderation, runtime, partners, prompts, CMS, audit and finance.
-
-The generic action dispatcher supports existing shared-service actions such as user block/unblock/balance adjustment, payment recheck/reprocess, operation replay/refund, ticket reply, tariff publish, campaign actions, CMS actions, runtime/model availability and moderation. Native Stars refund/refund-resolution use dedicated signed routes because they have stricter financial payload/evidence semantics.
-
-This operator surface is backend-only. It is not the public Mini App.
+When both admin API/web switches are enabled, the operator surface registers session-backed equivalents of supported admin reads/actions. The extension router is registered before the base generic section route to prevent shadowing. Native Stars refund resolution remains a dedicated signed API because of stricter evidence semantics.
 
 # Idempotency and error semantics
 
-For a write command, the admin command executor records request fingerprint/result.
+Admin writes use the command executor:
 
 ```text
 same (admin, action, key) + same effective request
@@ -349,13 +313,11 @@ same (admin, action, key) + changed effective request
   -> idempotency conflict
 ```
 
-Authentication/authorization failure is always server-side. Hidden buttons, copied callback data or forged operator actions do not bypass policy.
+User promo redemption uses durable business idempotency rather than a client-controlled reward request: unique `(promo_code,user_id)` plus unique `promo-credit:<CODE>:<user-id>` ledger key.
 
-For refund ambiguity, HTTP command idempotency and financial ledger idempotency are independent safeguards: replaying the same resolution command returns the stored command result, while the unique restore ledger key prevents a second CREDIT restoration even across a different execution path.
+Authentication/authorization failure is always server-side. Hidden buttons, copied callbacks or forged operator actions do not bypass policy.
 
 # Raw-body signing example
-
-Pseudo-code:
 
 ```text
 raw = exact bytes sent on wire
@@ -365,4 +327,4 @@ signature = hex(HMAC-SHA256(admin_hmac_key, canonical))
 
 Do not JSON-reserialize after signing. Query parameters are not included in the current canonical signature string; the URL path is.
 
-See `admin-control-plane.md`, `admin-capability-matrix.md`, `telegram-stars-payments.md` and `known-limitations.md` for the active contracts and remaining production limitations.
+See `admin-control-plane.md`, `telegram-stars-payments.md`, `user-promos.md`, `billing.md` and `known-limitations.md` for active contracts and remaining limitations.

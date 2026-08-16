@@ -6,7 +6,7 @@ PostgreSQL is FoxGen's durable source of truth. This document maps table respons
 
 ### `users`
 
-Telegram/internal user identity (`id`, optional username, creation time). Generation, wallet and user payment rows reference users.
+Telegram/internal user identity (`id`, optional username, creation time). Generation, wallet, payment and promo-redemption rows reference users.
 
 ### `user_restrictions`
 
@@ -14,13 +14,7 @@ Administrative block state used by paid generation admission. A blocked user is 
 
 ### `generations`
 
-One durable generation per user/idempotency key. Key responsibilities:
-
-- model/media/prompt/input payload;
-- durable lifecycle state;
-- provider task identity;
-- result/error/failure metadata;
-- lifecycle timestamps and polling schedule.
+One durable generation per user/idempotency key. Key responsibilities include model/input payload, provider identity, lifecycle/error metadata and timestamps.
 
 Unique invariant:
 
@@ -38,42 +32,35 @@ delivery_pending, succeeded, failed, cancelled
 
 ### `provider_events`
 
-Deduplicated provider callback inbox. Event hash uniqueness prevents the same provider event from being processed as a new callback repeatedly.
+Deduplicated provider callback inbox.
 
 ### `outbox_events`
 
-Durable generation/local work queue with event type, aggregate ID, deduplication key, payload, status, attempts, availability, lease/worker data and failure metadata.
+Durable generation/local work queue with event type, aggregate ID, deduplication key, payload, status, attempts, availability and lease data.
 
 ## Media and Telegram delivery
 
 ### `media_assets`
 
-One result-archive row per generation/source URL with deterministic storage key metadata, content type, size, checksum, attempts/retry/error state.
+One result-archive row per generation/source URL with deterministic storage metadata and retry/error state.
 
 ### `generation_deliveries`
 
-One Telegram delivery record per generation. States include `pending`, `retry_wait`, `sending`, `sent`, `delivery_unknown`, `failed`.
+One Telegram delivery record per generation with states including `pending`, `retry_wait`, `sending`, `sent`, `delivery_unknown`, `failed`.
 
-## Billing and user payments
+## Billing, payments and bonuses
 
 ### `wallet_accounts`
 
-Materialized per-user balance:
-
-- `available_units`;
-- `reserved_units`;
-- currency;
-- version.
-
-Database checks prevent negative available/reserved values.
+Materialized per-user `CREDIT` balance: available/reserved units, currency and version. Database checks prevent negative available/reserved values.
 
 ### `model_prices`
 
-Versioned runtime model price history. Uniqueness on `(model_slug, version)`; amount must be positive.
+Versioned runtime model price history; `(model_slug, version)` is unique and amount must be positive.
 
 ### `balance_reservations`
 
-One generation billing reservation with settlement state:
+One generation reservation with states:
 
 ```text
 reserved, captured, released, refunded
@@ -83,27 +70,18 @@ reserved, captured, released, refunded
 
 Append-only financial movements with unique idempotency key, actor/reason and available/reserved deltas.
 
-Payment-related deterministic keys include:
+Important deterministic keys include:
 
 ```text
 payment-credit:<provider>:<external_id>
 payment-refund-debit:telegram_stars:<charge-id>:<attempt-id>
 payment-refund-restore:telegram_stars:<charge-id>:<attempt-id>
+promo-credit:<promo-code>:<user-id>
 ```
 
 ### `user_payment_orders`
 
-Durable user checkout order introduced by Alembic revision `20260816_0012`. Commercial terms are snapshotted before external invoice creation.
-
-Critical uniqueness:
-
-```text
-(user_id, idempotency_key)
-invoice_payload
-telegram_payment_charge_id
-```
-
-Revision `20260816_0013` extends the status constraint for native Stars refunds:
+Durable checkout order introduced by `20260816_0012`. Commercial terms are snapshotted before external invoice creation. Revision `20260816_0013` extends the Stars refund states:
 
 ```text
 created
@@ -116,23 +94,11 @@ refunded
 failed
 ```
 
-`paid` proves Telegram charge evidence exists before CREDIT settlement. `refund_pending` means the original CREDIT has already been removed locally and the dedicated refund worker is expected to converge. `refund_unknown` means the external refund result is ambiguous and the CREDIT hold must remain until evidence resolution.
+`paid` proves Telegram charge evidence exists before CREDIT settlement. Refund states preserve the local hold while the external Stars refund converges.
 
 ### `payment_refund_attempts`
 
-Introduced by Alembic revision `20260816_0013`. This table is both refund audit record and dedicated external-side-effect queue; native Stars refund does not use the generic admin outbox.
-
-Important columns:
-
-- `payment_id`, `order_id`, `user_id`;
-- provider and original Telegram charge ID;
-- CREDIT amount/currency being reversed;
-- human reason and requesting admin;
-- status, attempts, `available_at`, `locked_at` lease state;
-- unique debit ledger key;
-- optional unique restore ledger key;
-- provider payload/error/evidence-resolution metadata;
-- attempted/resolved/created/updated timestamps.
+Introduced by `20260816_0013`. This is both refund audit record and dedicated external-side-effect queue, with payment/order/user identity, original charge ID, CREDIT amount, requesting admin, lease/retry state, unique debit/restore ledger keys and evidence metadata.
 
 Allowed states:
 
@@ -146,40 +112,65 @@ resolved_refunded
 resolved_not_refunded
 ```
 
-Critical rules:
+`unknown` intentionally retains the debit/hold until evidence-based resolution.
 
-- `amount_units > 0`;
-- `attempts >= 0`;
-- debit ledger key is unique;
-- restore ledger key is unique when present;
-- payment/order foreign keys cascade with their parent financial record;
-- a successful refund keeps the debit and never creates a restore key;
-- a deterministic rejection or `not_refunded` evidence resolution restores CREDIT through the unique restore key;
-- `unknown` intentionally retains the debit/hold.
+### `promo_codes`
+
+Admin-defined promo policy:
+
+- normalized code primary key;
+- active flag;
+- server-owned `reward_units`;
+- optional `max_uses`;
+- materialized `uses` counter;
+- metadata and creating admin.
+
+### `promo_redemptions`
+
+Introduced by Alembic revision `20260816_0014`. This is the durable user-level bonus fact created in the same transaction as wallet/ledger mutation and promo-use consumption.
+
+Columns:
+
+```text
+id
+promo_code -> promo_codes.code
+user_id -> users.id
+reward_units
+ledger_key
+redeemed_at
+```
+
+Critical constraints:
+
+```text
+UNIQUE (promo_code, user_id)
+UNIQUE (ledger_key)
+CHECK reward_units > 0
+```
+
+`promo_code` uses `ON DELETE RESTRICT`: once a code has redemption audit rows, its definition cannot be deleted out from under those rows. Normal retirement uses `active=false`.
+
+`user_id` follows the repository's existing user-owned financial-row delete policy. Ledger history remains the financial audit source.
+
+The application also locks the `promo_codes` row during redemption. That lock serializes both same-user duplicate redemption and global `max_uses` consumption. The schema unique constraints remain the final durable guard.
 
 ## Administrative control plane
 
 ### `admin_users`
 
-Durable RBAC identity: role, explicit scopes and active flag.
+Durable RBAC identity: role, scopes and active flag.
 
 ### `admin_commands`
 
-Idempotent write-command ledger. Unique key:
-
-```text
-(admin_user_id, action, idempotency_key)
-```
-
-Stars refund/refund-resolution commands are recorded here independently from financial ledger idempotency.
+Idempotent write-command ledger unique on `(admin_user_id, action, idempotency_key)`.
 
 ### `admin_audit_events`
 
-Append-only administrative outcome/audit event with actor, request ID, action, target, outcome and redacted-safe payload.
+Append-only admin outcome/audit event.
 
 ### `admin_outbox`
 
-Durable general administrative background work, including payment recheck/reprocess, support and campaign jobs. Native Stars refund is intentionally excluded because `payment_refund_attempts` owns that external financial side effect and its ambiguity semantics.
+Durable general administrative background work. Native Stars refund uses `payment_refund_attempts` instead because of its external financial ambiguity semantics.
 
 ## Commercial/admin content
 
@@ -189,57 +180,23 @@ Immutable/versioned tariff payload history. Stars package values are copied into
 
 ### `payment_events`
 
-Provider payment evidence record. Unique `(provider, external_id)`, amount/currency, raw provider payload, timestamps and optional unique credited ledger key.
-
-For Telegram Stars, `external_id` is the Telegram payment charge ID. Payment status evolves through top-up/refund lifecycle (`completed`, `refund_pending`, `refund_unknown`, `refunded`) while the original external charge identity remains unchanged.
-
-A charge with no credited ledger key but completed payment evidence is recoverable through payment reprocess. A credited charge entering native refund is linked to a `payment_refund_attempts` record by `payment_id`.
+External payment evidence unique on `(provider, external_id)`. Telegram Stars retains the original charge identity through settlement/refund states.
 
 ### `operation_events`
 
-Administrative/operational timeline. Can reference a generation and parent operation, enabling auditable replay child chains.
+Administrative/operational timeline, optionally linked to generation/parent operation.
 
-## Support
+## Support, CMS, notifications and partners
 
-### `support_tickets`
-
-User support case with subject, status, assigned admin, priority and operator note.
-
-### `support_messages`
-
-Messages attached to a ticket, with sender kind/identity, body and delivery/storage status.
-
-### `support_outbox`
-
-Durable Telegram reply send queue with retry/lease state.
-
-## CMS and notifications
-
-### `cms_documents` / `cms_document_versions`
-
-Stable document identity and immutable version history.
-
-### `notification_campaigns` / `notification_deliveries`
-
-Campaign definitions and durable per-recipient deliveries.
-
-## Partners and promos
-
-### `partner_profiles` / `partner_withdrawals`
-
-Materialized partner state and withdrawal requests.
-
-### `promo_codes`
-
-Promo identity, active state, reward and usage counters.
+`support_tickets`, `support_messages`, `support_outbox`, CMS version tables, notification campaign/delivery tables and partner profile/withdrawal tables own their corresponding durable state.
 
 ## Prompt/runtime/moderation administration
 
-`prompt_library_items`, `runtime_flags`, `model_availability`, `trend_items` and `feed_moderation_actions` store the corresponding admin-managed durable state.
+`prompt_library_items`, `runtime_flags`, `model_availability`, `trend_items` and `feed_moderation_actions` store their corresponding admin-managed state.
 
 ## Foreign-key/delete intent
 
-Operational/audit relationships use delete behavior appropriate to their lifecycle, but ORM/database cascades are not permission to delete production financial history. Retention is a product/security decision.
+Operational/audit relationships use delete behavior appropriate to their lifecycle, but ORM/database cascades are not permission to delete production financial history. Promo redemption deliberately restricts promo-definition deletion once redeemed.
 
 ## Migration discipline
 
@@ -251,22 +208,23 @@ Operational/audit relationships use delete behavior appropriate to their lifecyc
 - Run upgrade/head/downgrade/re-upgrade CI.
 - Document rollback consequences.
 
-For revision `20260816_0013`, downgrade is safe before refund-state data exists. An operator must not blindly downgrade a production database containing `refund_pending`, `refund_unknown` or refund-attempt records because the prior order-status constraint does not represent those states.
+Revision `20260816_0014` must not be downgraded while production code still expects user promo redemption. Downgrade drops `promo_redemptions`, so operators must treat those audit rows as retained financial/commercial evidence during rollback planning.
 
 ## Financial/audit immutability
 
 For normal operation:
 
-- never UPDATE/DELETE ledger history to repair a balance;
+- never UPDATE/DELETE ledger history to repair balance;
 - never discard verified external payment/refund evidence because a later local transaction failed;
 - never restore an ambiguous refund hold by direct SQL;
-- use compensating immutable entries and evidence-based resolution;
+- never credit a promo by directly incrementing wallet rows;
+- use the redemption service so wallet + ledger + redemption + usage counter commit together;
 - never rewrite admin command/audit history to hide an action.
 
 ## Related docs
 
-- `architecture.md` — data ownership and pipelines;
 - `billing.md` — financial lifecycle;
 - `telegram-stars-payments.md` — checkout/refund/evidence lifecycle;
+- `user-promos.md` — promo redemption lifecycle/concurrency;
 - `api-reference.md` — public/trusted/admin routes;
 - migrations/models — exact schema source of truth.

@@ -4,20 +4,22 @@ This file records known gaps that must not be silently described as completed pr
 
 ## Current status
 
-### User payments beyond current Telegram Stars scope
+### Payments, promos and bonuses beyond current Telegram Stars scope
 
 FoxGen supports user-facing digital-credit top-up inside Telegram through Telegram Stars (`XTR`): Happy Fox can request an owner-scoped package/invoice, Telegram checkout is pre-validated against the durable local order, and `successful_payment` settles into the immutable `CREDIT` ledger exactly once.
 
-Privileged native Stars refunds are also implemented through the operator control plane. Refund execution first holds the original CREDIT locally, then a dedicated durable worker calls Telegram. Ambiguous provider outcomes converge to `refund_unknown`; CREDIT remains held until an administrator resolves the attempt with evidence. A `not_refunded` resolution restores the hold exactly once through a compensating immutable ledger entry.
+Privileged native Stars refunds are implemented through the operator control plane. Refund execution first holds the original CREDIT locally, then a dedicated durable worker calls Telegram. Ambiguous provider outcomes converge to `refund_unknown`; CREDIT remains held until an administrator resolves the attempt with evidence. A `not_refunded` resolution restores the hold exactly once through a compensating immutable ledger entry.
 
-The current production slice deliberately does **not** claim every EPIC #7 payment feature:
+Explicit promo-code bonuses are also implemented: admins define server-side reward/usage limits, Happy Fox users can redeem a code through the Telegram-JWT owner boundary, and one `(promo_code, user_id)` transaction atomically updates the wallet, immutable ledger, redemption audit row and usage counter. Concurrent duplicate redemption and `max_uses` are covered by real PostgreSQL tests and cross-layer E2E.
+
+The current production slice deliberately does **not** claim every possible commercial payment/bonus policy:
 
 - external web checkout/acquiring providers are not implemented;
-- promo/bonus rules are not automatically coupled to Stars top-up yet;
-- this first Stars refund policy requires the user to still have the full originally credited amount available; FoxGen does not create debt or partially reclaim credits already spent;
+- automatic purchase-triggered bonus campaigns are not coupled to Stars top-up yet; explicit promo-code redemption is implemented, but a payment/package does not silently infer an extra bonus;
+- the current Stars refund policy requires the user to still have the full originally credited amount available; FoxGen does not create debt or partially reclaim credits already spent;
 - refund ambiguity resolution is evidence-based/manual after bounded retries; FoxGen does not guess an external financial outcome.
 
-Do not bypass the Stars flow by mutating wallet rows from the browser/bot or direct SQL. Admin payment inspection/recheck/reprocess/refund/resolution remains a private operator capability and must not be exposed as a user payment API.
+Do not bypass Stars/promo services by mutating wallet rows from the browser/bot or direct SQL. Admin payment inspection/recheck/reprocess/refund/resolution and promo definition remain private operator capabilities; browsers can only submit a promo code, never a reward amount.
 
 ### Planned generation products
 
