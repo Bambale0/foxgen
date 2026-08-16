@@ -3,7 +3,15 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID as UUIDValue
 
-from sqlalchemy import BigInteger, DateTime, ForeignKey, String, UniqueConstraint, func
+from sqlalchemy import (
+    BigInteger,
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    String,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -19,6 +27,7 @@ class PromoRedemption(Base):
             name="uq_promo_redemptions_code_user",
         ),
         UniqueConstraint("ledger_key", name="uq_promo_redemptions_ledger_key"),
+        CheckConstraint("reward_units > 0", name="ck_promo_redemptions_reward_positive"),
     )
 
     id: Mapped[UUIDValue] = mapped_column(
