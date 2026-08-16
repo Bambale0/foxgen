@@ -35,10 +35,12 @@ from foxgen.api.reference_memory import (
     create_reference_memory_router,
 )
 from foxgen.api.security import authenticate_submission, validate_idempotency_key
+from foxgen.api.user_portal import create_user_portal_router
 from foxgen.application.generation_ops import GenerationOperationsService
 from foxgen.application.reconciliation import ReconciliationService
 from foxgen.application.reference_memory import ReferenceMemoryService
 from foxgen.application.submissions import SubmissionReceipt, SubmissionService
+from foxgen.application.user_portal import UserPortalServiceProtocol
 from foxgen.core.config import Settings, get_settings
 from foxgen.core.errors import ErrorCode, FoxGenError, WebhookVerificationError
 from foxgen.infra.billing import SqlAlchemyBillingRepository
@@ -56,6 +58,7 @@ from foxgen.infra.reference_media import (
 from foxgen.infra.reference_memory import SqlAlchemyReferenceMemoryRepository
 from foxgen.infra.rate_limit import RedisSubmissionRateLimiter
 from foxgen.infra.redis import RedisPool
+from foxgen.infra.user_portal import SqlAlchemyUserPortalService
 from foxgen.infra.repositories import SqlAlchemyGenerationRepository
 from foxgen.providers.kie.contracts import contract_schema, validate_input
 from foxgen.providers.kie.registry import ModelRegistry
@@ -296,6 +299,7 @@ def create_app(
     publication_service: PublicationServiceProtocol | None = None,
     reference_memory_service: ReferenceMemoryServiceProtocol | None = None,
     reference_media_delivery: ReferenceMediaDeliveryProtocol | None = None,
+    user_portal_service: UserPortalServiceProtocol | None = None,
     admin_services: AdminServices | None = None,
 ) -> FastAPI:
     resolved_settings = settings or get_settings()
@@ -345,6 +349,8 @@ def create_app(
             app.state.miniapp_repository = _miniapp_repository(resolved_settings, database)
         if app.state.publication_service is None:
             app.state.publication_service = SqlAlchemyPublicationRepository(database)
+        if app.state.user_portal_service is None:
+            app.state.user_portal_service = SqlAlchemyUserPortalService(database)
         if app.state.reference_memory_service is None or app.state.reference_media_delivery is None:
             memory_service, media_delivery = _reference_memory_components(
                 resolved_settings, database
@@ -376,6 +382,7 @@ def create_app(
     app.state.publication_service = publication_service
     app.state.reference_memory_service = reference_memory_service
     app.state.reference_media_delivery = reference_media_delivery
+    app.state.user_portal_service = user_portal_service
     app.state.admin_services = admin_services
     app.include_router(create_billing_router(resolved_settings))
     app.include_router(create_generation_router(resolved_settings))
@@ -383,6 +390,7 @@ def create_app(
     app.include_router(create_publication_media_router(resolved_settings))
     app.include_router(create_reference_memory_router(resolved_settings))
     app.include_router(create_reference_media_router())
+    app.include_router(create_user_portal_router(resolved_settings))
     if resolved_settings.miniapp_enabled:
         app.include_router(create_miniapp_router(resolved_settings))
     app.include_router(create_admin_router(resolved_settings))
