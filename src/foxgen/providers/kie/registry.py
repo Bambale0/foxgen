@@ -94,8 +94,7 @@ def _active_models() -> tuple[ModelSpec, ...]:
         item = replace(item, **values)
         models.append(item)
     models = [
-        replace(item, enabled_for_submission=item.slug in SUBMISSION_MODEL_SLUGS)
-        for item in models
+        replace(item, enabled_for_submission=item.slug in SUBMISSION_MODEL_SLUGS) for item in models
     ]
     return tuple(models)
 
