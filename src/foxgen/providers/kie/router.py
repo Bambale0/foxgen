@@ -2,7 +2,12 @@ from __future__ import annotations
 
 from foxgen.core.errors import ErrorCode, ProviderError
 from foxgen.providers.kie.client import KieClient
-from foxgen.providers.kie.suno import SUNO_API_FAMILY, SunoClient
+from foxgen.providers.kie.suno import (
+    SUNO_API_FAMILY,
+    SUNO_EXTEND_API_FAMILY,
+    SunoClient,
+    SunoExtendClient,
+)
 
 
 MARKET_API_FAMILY = "market"
@@ -14,12 +19,15 @@ class RoutedKieClient:
     def __init__(self, market: KieClient) -> None:
         self._market = market
         self._suno = SunoClient(market)
+        self._suno_extend = SunoExtendClient(market)
 
-    def for_family(self, api_family: str) -> KieClient | SunoClient:
+    def for_family(self, api_family: str) -> KieClient | SunoClient | SunoExtendClient:
         if api_family == MARKET_API_FAMILY:
             return self._market
         if api_family == SUNO_API_FAMILY:
             return self._suno
+        if api_family == SUNO_EXTEND_API_FAMILY:
+            return self._suno_extend
         raise ProviderError(
             ErrorCode.PROVIDER_PROTOCOL,
             f"Неподдерживаемое семейство API провайдера: {api_family}",
