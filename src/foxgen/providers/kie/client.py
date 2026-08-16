@@ -80,9 +80,7 @@ class KieClient:
         reraise=True,
     )
     async def get_task(self, task_id: str) -> TaskRecord:
-        data = await self.request_data(
-            "GET", "/api/v1/jobs/recordInfo", params={"taskId": task_id}
-        )
+        data = await self.request_data("GET", "/api/v1/jobs/recordInfo", params={"taskId": task_id})
         normalized_id = data.get("taskId", task_id)
         if not isinstance(normalized_id, str):
             normalized_id = task_id
