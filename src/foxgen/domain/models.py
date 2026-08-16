@@ -105,13 +105,14 @@ class Capability(StrEnum):
 
 _REVIEWED_SUBMISSION_CONTRACTS = frozenset(
     {
+        "elevenlabs_tts_turbo_2_5",
         "seedream_5_text",
         "seedream_5_image",
         "nano_banana",
         "seedance_2",
     }
 )
-_REVIEW_DATE = "2026-07-23"
+_REVIEW_DATE = "2026-08-16"
 
 
 @dataclass(frozen=True, slots=True)
