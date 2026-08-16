@@ -21,7 +21,8 @@ from foxgen.infra.billing_models import LedgerEntry, WalletAccount
 from foxgen.infra.database import Database
 from foxgen.infra.payment_models import UserPaymentOrder
 from foxgen.infra.payment_refund_models import PaymentRefundAttempt
-from foxgen.infra.payments import SqlAlchemyTelegramStarsPaymentService, TelegramStarsInvoiceClient
+from foxgen.infra.payments import TelegramStarsInvoiceClient
+from foxgen.infra.payments_bonus import BonusAwareTelegramStarsPaymentService
 
 pytestmark = pytest.mark.skipif(
     os.getenv("FOXGEN_RUN_E2E") != "1",
@@ -120,10 +121,10 @@ def _admin_headers(*, path: str, raw_body: bytes, request_id: str) -> dict[str, 
 
 
 @pytest.mark.asyncio
-async def test_happy_fox_stars_payment_to_admin_refund_e2e() -> None:
+async def test_happy_fox_stars_payment_bonus_to_admin_refund_e2e() -> None:
     database = Database(os.environ["FOXGEN_DATABASE_URL"])
     invoice_client = FakeInvoiceClient()
-    stars_service = SqlAlchemyTelegramStarsPaymentService(
+    stars_service = BonusAwareTelegramStarsPaymentService(
         database,
         bot_token="e2e-test-token",
         invoice_client=invoice_client,
@@ -155,8 +156,9 @@ async def test_happy_fox_stars_payment_to_admin_refund_e2e() -> None:
                             "packages": {
                                 "e2e_starter": {
                                     "title": "E2E Starter",
-                                    "description": "E2E 1000 CREDIT",
+                                    "description": "E2E 1000 CREDIT + 250 bonus",
                                     "credits": 1000,
+                                    "bonus_units": 250,
                                     "stars": 50,
                                 }
                             }
@@ -175,8 +177,11 @@ async def test_happy_fox_stars_payment_to_admin_refund_e2e() -> None:
                 {
                     "code": "e2e_starter",
                     "title": "E2E Starter",
-                    "description": "E2E 1000 CREDIT",
-                    "credits_units": 1000,
+                    "description": "E2E 1000 CREDIT + 250 bonus",
+                    "credits_units": 1250,
+                    "base_credits_units": 1000,
+                    "bonus_units": 250,
+                    "total_credits_units": 1250,
                     "stars_amount": 50,
                     "currency": "XTR",
                 }
@@ -189,6 +194,9 @@ async def test_happy_fox_stars_payment_to_admin_refund_e2e() -> None:
             )
             assert invoice.status_code == 201
             invoice_payload = invoice.json()["invoice_payload"]
+            assert invoice.json()["package"]["base_credits_units"] == 1000
+            assert invoice.json()["package"]["bonus_units"] == 250
+            assert invoice.json()["package"]["total_credits_units"] == 1250
             assert invoice.json()["invoice_url"].startswith("https://t.me/$e2e-stars-")
 
             pre_checkout = await client.post(
@@ -215,8 +223,8 @@ async def test_happy_fox_stars_payment_to_admin_refund_e2e() -> None:
                 },
             )
             assert success.status_code == 200
-            assert success.json()["credited_units"] == 1000
-            assert success.json()["available_units"] == 1000
+            assert success.json()["credited_units"] == 1250
+            assert success.json()["available_units"] == 1250
 
             async with database.session() as session:
                 payment = await session.scalar(
@@ -225,7 +233,16 @@ async def test_happy_fox_stars_payment_to_admin_refund_e2e() -> None:
                         PaymentEvent.external_id == charge_id,
                     )
                 )
+                order = await session.scalar(
+                    select(UserPaymentOrder).where(
+                        UserPaymentOrder.telegram_payment_charge_id == charge_id
+                    )
+                )
                 assert payment is not None
+                assert payment.amount_units == 1250
+                assert order is not None
+                assert order.credits_units == 1250
+                assert order.bonus_units == 250
                 payment_id = payment.id
 
             refund_path = f"/internal/admin/payments/{payment_id}/refund"
@@ -244,7 +261,7 @@ async def test_happy_fox_stars_payment_to_admin_refund_e2e() -> None:
             )
             assert refund.status_code == 200
             assert refund.json()["status"] == "refund_pending"
-            assert refund.json()["held_units"] == 1000
+            assert refund.json()["held_units"] == 1250
 
         async with database.session() as session:
             wallet = await session.get(WalletAccount, user_id)
@@ -253,6 +270,7 @@ async def test_happy_fox_stars_payment_to_admin_refund_e2e() -> None:
                 select(PaymentRefundAttempt).where(PaymentRefundAttempt.payment_id == payment_id)
             )
             assert attempt is not None and attempt.status == "pending"
+            assert attempt.amount_units == 1250
             attempt_id = attempt.id
 
         refund_sender = FakeRefundSender()
@@ -276,6 +294,7 @@ async def test_happy_fox_stars_payment_to_admin_refund_e2e() -> None:
             wallet = await session.get(WalletAccount, user_id)
             assert payment is not None and payment.status == "refunded"
             assert order is not None and order.status == "refunded"
+            assert order.bonus_units == 250
             assert attempt is not None and attempt.status == "succeeded"
             assert wallet is not None and wallet.available_units == 0
 
@@ -283,7 +302,7 @@ async def test_happy_fox_stars_payment_to_admin_refund_e2e() -> None:
                 await session.scalar(
                     select(func.count(LedgerEntry.id)).where(
                         LedgerEntry.user_id == user_id,
-                        LedgerEntry.available_delta == 1000,
+                        LedgerEntry.available_delta == 1250,
                     )
                 )
                 or 0
@@ -292,7 +311,7 @@ async def test_happy_fox_stars_payment_to_admin_refund_e2e() -> None:
                 await session.scalar(
                     select(func.count(LedgerEntry.id)).where(
                         LedgerEntry.user_id == user_id,
-                        LedgerEntry.available_delta == -1000,
+                        LedgerEntry.available_delta == -1250,
                     )
                 )
                 or 0
