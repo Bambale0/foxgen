@@ -80,7 +80,9 @@ class TelegramStarsRefundSender:
                 "Telegram Stars refund outcome is not confirmed"
             ) from exc
         except TelegramAPIError as exc:
-            raise PermanentPaymentRefundError(f"Telegram refund API rejected request: {exc}") from exc
+            raise PermanentPaymentRefundError(
+                f"Telegram refund API rejected request: {exc}"
+            ) from exc
         if accepted is not True:
             raise RetriablePaymentRefundError("Telegram did not confirm Stars refund")
         return RefundProviderResult(
@@ -193,7 +195,9 @@ class PaymentRefundWorker:
                 payment = await session.get(PaymentEvent, attempt.payment_id, with_for_update=True)
                 order = await session.get(UserPaymentOrder, attempt.order_id, with_for_update=True)
                 if payment is None or order is None:
-                    raise RuntimeError("Refund payment/order disappeared after provider confirmation")
+                    raise RuntimeError(
+                        "Refund payment/order disappeared after provider confirmation"
+                    )
                 now = datetime.now(timezone.utc)
                 attempt.status = "succeeded"
                 attempt.provider_payload = {**attempt.provider_payload, **result.raw_payload}
