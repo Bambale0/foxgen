@@ -7,6 +7,7 @@ from aiogram import Bot
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 
+from foxgen.admin.payment_refund_worker import PaymentRefundWorker, TelegramStarsRefundSender
 from foxgen.admin.rate_limit import RateLimitedAdminSender
 from foxgen.admin.worker import AdminWorker, TelegramAdminDeliverySender
 from foxgen.application.delivery import MediaPipeline
@@ -117,14 +118,29 @@ async def run(settings: Settings | None = None) -> None:
         max_attempts=resolved.admin_worker_max_attempts,
         notification_rate_per_second=resolved.admin_notification_rate_per_second,
     )
+    refund_worker = PaymentRefundWorker(
+        database=database,
+        sender=TelegramStarsRefundSender(bot),
+        worker_id=f"{worker_id}:stars-refund",
+        batch_size=resolved.admin_worker_batch_size,
+        lease_seconds=resolved.admin_worker_lease_seconds,
+        max_attempts=resolved.admin_worker_max_attempts,
+    )
 
     try:
         while True:
             processed = await worker.run_once()
             polled = await worker.poll_once()
             reconciled = await worker.reconcile_once(datetime.now(timezone.utc))
+            refund_processed = await refund_worker.run_once()
             admin_processed = await admin_worker.run_once()
-            if processed == 0 and polled == 0 and reconciled == 0 and admin_processed == 0:
+            if (
+                processed == 0
+                and polled == 0
+                and reconciled == 0
+                and refund_processed == 0
+                and admin_processed == 0
+            ):
                 await asyncio.sleep(resolved.worker_loop_interval_seconds)
     finally:
         await bot.session.close()
