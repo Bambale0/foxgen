@@ -52,7 +52,6 @@ class KieClient:
         model: str,
         input_data: Mapping[str, object],
         callback_url: str | None = None,
-        api_family: str = "market",
     ) -> TaskCreated:
         """Submit one Market task.
 
@@ -60,7 +59,6 @@ class KieClient:
         second billable task, so orchestration persists `submission_unknown` instead.
         """
 
-        self._require_market(api_family)
         payload: dict[str, object] = {"model": model, "input": dict(input_data)}
         if callback_url:
             payload["callBackUrl"] = callback_url
@@ -81,13 +79,7 @@ class KieClient:
         wait=wait_exponential_jitter(initial=0.5, max=5),
         reraise=True,
     )
-    async def get_task(
-        self,
-        task_id: str,
-        *,
-        api_family: str = "market",
-    ) -> TaskRecord:
-        self._require_market(api_family)
+    async def get_task(self, task_id: str) -> TaskRecord:
         data = await self.request_data(
             "GET", "/api/v1/jobs/recordInfo", params={"taskId": task_id}
         )
@@ -198,12 +190,3 @@ class KieClient:
             "KIE.ai вернул некорректное поле data.",
             details={"payload": payload},
         )
-
-    @staticmethod
-    def _require_market(api_family: str) -> None:
-        if api_family != "market":
-            raise ProviderError(
-                ErrorCode.PROVIDER_PROTOCOL,
-                f"Market KIE client cannot handle API family: {api_family}",
-                retryable=False,
-            )
