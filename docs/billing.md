@@ -17,7 +17,7 @@ A billable generation is admitted only when all conditions pass:
 
 Missing price returns a pricing failure before provider access. Insufficient funds fail before provider access. No queued paid generation can exist without its matching reservation in the successful admission path.
 
-User top-up/refund recovery is a separate financial boundary: Telegram Stars payment validation, settlement and refund reconciliation do not depend on `FOXGEN_TASK_SUBMISSION_ENABLED`, because disabling new provider generations must not prevent an already paid user transaction from being recorded or reconciled.
+User top-up/refund/promo recovery is a separate financial boundary: Telegram Stars payment validation, settlement, refund reconciliation and explicit promo redemption do not depend on `FOXGEN_TASK_SUBMISSION_ENABLED`.
 
 ## Wallet account
 
@@ -65,27 +65,13 @@ A verified Telegram `successful_payment` uses two durable boundaries:
 payment-credit:telegram_stars:<telegram_payment_charge_id>
 ```
 
-If the second boundary fails, the payment evidence survives and the admin payment reprocess worker can recover CREDIT exactly once.
+If the second boundary fails, payment evidence survives and the admin payment reprocess worker can recover CREDIT exactly once.
 
 ## Telegram Stars refund
 
-Native Stars refund is a separate privileged financial lifecycle. It is deliberately not a public browser/bot balance mutation.
+Native Stars refund is a privileged financial lifecycle. It is not a public browser/bot balance mutation.
 
-### Eligibility
-
-A refund can begin only when:
-
-- payment provider is `telegram_stars`;
-- the payment already has a credited ledger key;
-- the durable order is `credited`;
-- no active refund attempt exists;
-- the user still has at least the original credited CREDIT available.
-
-The last rule is deliberate in this first refund policy: FoxGen does not create a negative wallet or partially reclaim CREDIT already spent.
-
-### CREDIT hold before external refund
-
-Before Telegram is contacted, FoxGen commits the local reversal intent atomically:
+A refund can begin only for a credited Stars payment with no active refund attempt and enough currently available CREDIT to reverse the original grant. FoxGen commits the local CREDIT hold and immutable debit before the dedicated refund worker contacts Telegram:
 
 ```text
 available_units -= original credited units
@@ -95,58 +81,48 @@ order/payment -> refund_pending
 COMMIT
 ```
 
-This debit is both a hold and the final financial reversal if Telegram successfully refunds the Stars. It prevents the user from spending the same CREDIT while an external refund is pending.
+Successful provider refund leaves the debit final. Deterministic provider rejection restores CREDIT exactly once. Ambiguous network/server outcomes preserve the hold through bounded retry and then become `refund_unknown`; evidence-based resolution either keeps the debit (`refunded`) or appends the unique compensating `payment-refund-restore:*` ledger entry (`not_refunded`).
 
-If the user lacks enough available CREDIT, the refund command fails before any Telegram side effect.
+See `telegram-stars-payments.md` for the complete lifecycle.
 
-### Dedicated external-side-effect worker
+## Explicit promo-code bonus
 
-`PaymentRefundWorker` owns the native `refundStarPayment` call. It uses a dedicated durable refund-attempt queue with leasing/retry state instead of the generic admin outbox.
+Promo redemption is a direct CREDIT grant from a server-owned `promo_codes` definition. The public client supplies only the promo code; reward amount and usage policy never come from the browser.
 
-Success:
-
-```text
-attempt -> succeeded
-order/payment -> refunded
-refund debit remains final
-```
-
-Deterministic provider rejection before refund:
+The transaction is:
 
 ```text
-ledger += payment-refund-restore:telegram_stars:<charge-id>:<attempt-id>
-available_units += held units
-attempt -> failed
-order -> credited
-payment -> completed
+BEGIN
+  lock promo_codes row
+  find existing (promo_code, user_id) redemption
+  validate active / reward > 0 / max_uses
+  ensure user + lock/ensure CREDIT wallet
+  available_units += reward_units
+  ledger += promo-credit:<NORMALIZED_CODE>:<user_id>
+  promo_redemptions += immutable redemption fact
+  promo_codes.uses += 1
+COMMIT
 ```
 
-Ambiguous network/server/rate-limit outcome:
+Financial/business idempotency is layered:
 
-```text
-bounded retry with CREDIT hold preserved
-max attempts reached -> attempt = unknown
-order/payment -> refund_unknown
-```
+- unique `(promo_code, user_id)` prevents a second redemption for the same owner;
+- unique deterministic `promo-credit:<CODE>:<user-id>` prevents a second ledger grant;
+- the locked promo row serializes `max_uses` consumption across users.
 
-A retry that observes the original charge already refunded converges to success instead of creating another financial effect.
+A concurrent duplicate request from the same user waits on the promo lock, then replays the durable redemption. A different user arriving after the last remaining use fails before wallet/redemption creation.
 
-### Evidence resolution
+A replay remains valid even if the promo is disabled/exhausted after the original redemption because replay does not create a new financial effect.
 
-`refund_unknown` is not guessed away. The privileged resolution command requires an explicit outcome and evidence.
+`promo_redemptions` references the promo definition with restrictive deletion semantics so a definition cannot be removed while redemption audit rows exist. Normal retirement uses `active=false`.
 
-If evidence proves refund occurred, the debit remains final and order/payment become refunded. If evidence proves refund did not occur, FoxGen appends the deterministic restore ledger entry and restores CREDIT exactly once.
+Explicit promo-code bonuses are distinct from automatic purchase-triggered bonus campaigns. A Stars payment does not implicitly grant an additional bonus unless a separately reviewed policy is implemented.
 
-Replay protection therefore exists at both levels:
-
-- admin command idempotency protects the operator request;
-- immutable debit/restore ledger keys protect the money movement itself.
-
-See `telegram-stars-payments.md` for the complete transport/state lifecycle.
+See `user-promos.md`.
 
 ## Atomic generation reservation
 
-Conceptually, generation admission executes:
+Generation admission executes conceptually:
 
 ```text
 BEGIN
@@ -176,20 +152,21 @@ captured -> refunded
 
 When provider acceptance is durably verified, reserved units are captured. `submission_unknown` keeps the reservation held until evidence resolves the provider side effect. Deterministic pre-capture failure releases the reservation. Terminal post-capture failure applies the current full-generation-refund policy exactly once.
 
-Generation refund and Telegram payment refund are different domains: the former compensates a failed generated product in CREDIT; the latter returns the original Telegram Stars payment and reverses the corresponding CREDIT grant.
+Generation refund and Telegram payment refund are different domains: the former compensates a failed generated product in CREDIT; the latter returns the original Stars payment and reverses its CREDIT grant.
 
 ## Immutable ledger
 
 `ledger_entries` records every financial movement with user, optional generation/reservation references, entry type, available/reserved deltas, currency, unique idempotency key, actor, reason, metadata and timestamp.
 
-The ledger is append-only. Admin adjustments, payment credits and refund restoration do not rewrite previous entries; they append new movements.
+The ledger is append-only. Admin adjustments, payment credits, refund restoration and promo bonuses append new movements rather than rewriting history.
 
-Important payment keys:
+Important commercial keys:
 
 ```text
 payment-credit:<provider>:<external_id>
 payment-refund-debit:telegram_stars:<charge-id>:<attempt-id>
 payment-refund-restore:telegram_stars:<charge-id>:<attempt-id>
+promo-credit:<promo-code>:<user-id>
 ```
 
 ## User/admin balance adjustment
@@ -210,18 +187,35 @@ New operator surfaces must use shared billing/admin services rather than direct 
 
 ## Payment events, reprocessing and refunds
 
-`payment_events` stores external payment evidence for operational inspection/recheck/reprocess and refund lifecycle status.
+`payment_events` stores external payment evidence for operational inspection/recheck/reprocess and refund lifecycle status. Completed payment credit is deterministic; a charge with evidence but no credited ledger key can be recovered through generic payment reprocess.
 
-A completed payment credit is deterministic, so repeated reprocess cannot credit twice. A Telegram charge with evidence but no credited ledger key can be recovered through generic payment reprocess.
-
-Native Stars refund uses dedicated endpoints and `payment_refund_attempts` rather than generic payment reprocess:
+Native Stars refund uses:
 
 ```text
 POST /internal/admin/payments/{payment_id}/refund
 POST /internal/admin/payments/{payment_id}/refund/resolve
 ```
 
-The first action requires confirmation, idempotency and a reason. The second requires confirmation, idempotency, evidence and `refunded|not_refunded`.
+The first requires confirmation, idempotency and reason. The second requires confirmation, idempotency, evidence and `refunded|not_refunded`.
+
+## Promo definition and redemption APIs
+
+Admin definition:
+
+```text
+GET  /internal/admin/promos/{code}
+POST /internal/admin/promos
+POST /internal/admin/promos/{code}/active
+```
+
+Owner redemption:
+
+```text
+POST /v1/user-portal/promos/redeem
+POST /v1/miniapp/promos/redeem
+```
+
+The redemption request contains only a code. Server-side promo reward/limit policy is authoritative.
 
 ## Tariff history
 
@@ -254,7 +248,7 @@ GET  /v1/miniapp/payments/stars/packages
 POST /v1/miniapp/payments/stars/invoices
 ```
 
-The browser can request an invoice but cannot post payment success, request privileged refunds or mutate a wallet.
+The browser can request an invoice or redeem a code, but cannot post payment success, request privileged refunds, choose a reward amount or directly mutate a wallet.
 
 ## Financial read APIs
 
@@ -275,8 +269,6 @@ GET /internal/admin/payments/{payment_id}
 GET /internal/admin/exports/finance.csv
 ```
 
-See `api-reference.md` for authentication details.
-
 ## Reconciliation invariants
 
 Operational checks include:
@@ -290,28 +282,30 @@ Cross-resource expectations include:
 
 - every admitted billable generation has one reservation;
 - terminal generation settlement occurs exactly once;
-- a Stars `PaymentEvent` with no credited ledger key remains visible as paid-but-uncredited evidence;
+- a Stars `PaymentEvent` with no credited ledger key remains recoverable evidence;
 - duplicate successful-payment updates cannot append duplicate payment credits;
-- `refund_pending` and `refund_unknown` retain the refund debit/hold;
-- successful/refunded resolution never appends a restore entry;
+- `refund_pending` / `refund_unknown` retain the refund debit/hold;
 - `not_refunded` resolution appends at most one restore entry;
-- a refund provider call never occurs before the local CREDIT hold commits.
+- a refund provider call never occurs before the local CREDIT hold commits;
+- every successful promo redemption has exactly one matching `promo-credit:*` ledger movement;
+- `(promo_code,user_id)` can consume at most one promo use;
+- `promo_codes.uses` cannot exceed `max_uses` through concurrent redemption.
 
-Automated reconciliation may apply only deterministic local fixes. It does not guess ambiguous external side effects.
+Automated reconciliation may apply only deterministic local fixes. It does not guess ambiguous external side effects or fabricate promo rewards.
 
 ## Security requirements
 
 Use separate credentials for ordinary internal generation API, legacy billing-admin API and full admin HMAC control plane. None belong in a public client or Mini App.
 
-Every manual money mutation/refund resolution must include attributable admin context and human-readable reason/evidence. Do not bypass shared services with direct SQL.
+Every manual money mutation/refund resolution must include attributable admin context. Promo reward/limits remain server-side admin policy; the public client sends only the code.
 
 ## Change checklist
 
-A billing/pricing/payment change must update:
+A billing/pricing/payment/promo change must update:
 
-- SQLAlchemy model/migration if schema changes;
-- atomic settlement/refund and duplicate-event tests;
-- durable external-payment/refund evidence expectations;
+- SQLAlchemy model/migration when schema changes;
+- atomic settlement/redemption and duplicate/concurrency tests;
+- durable external evidence expectations when relevant;
 - E2E coverage for cross-layer financial workflows;
 - reconciliation expectations;
-- relevant API, billing, Telegram payment, schema, admin and operations documentation.
+- API, billing, schema, Mini App/testing documentation.
