@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Mapping
 
-from foxgen.bot.states import GenerationStates, MusicStates, VoiceStates
+from foxgen.bot.states import GenerationStates, MusicExtendStates, MusicStates, VoiceStates
 
 
 @dataclass(frozen=True, slots=True)
@@ -343,6 +343,78 @@ STATE_CONTRACTS: Mapping[str, StateContract] = MappingProxyType(
             cancel="blocked while atomic Suno admission is in progress",
             timeout="recover from durable generation/idempotency state",
             invalid_input="report that Suno generation is already launching",
+            stale_callback="resolve through durable generation/idempotency state",
+        ),
+        MusicExtendStates.choosing_action.state: StateContract(
+            success=(MusicStates.choosing_mode.state, MusicExtendStates.choosing_source.state),
+            back=_TO_MENU,
+            cancel=_TO_MENU,
+            timeout=_EXPIRED,
+            invalid_input="keep state and repeat new-track/extend choices",
+            stale_callback=_STALE,
+        ),
+        MusicExtendStates.choosing_source.state: StateContract(
+            success=(MusicExtendStates.choosing_mode.state,),
+            back=MusicExtendStates.choosing_action.state,
+            cancel=_TO_MENU,
+            timeout=_EXPIRED,
+            invalid_input="keep state and repeat owner Suno source choices",
+            stale_callback=_STALE,
+        ),
+        MusicExtendStates.choosing_mode.state: StateContract(
+            success=(MusicExtendStates.waiting_prompt.state, MusicExtendStates.confirming.state),
+            back=MusicExtendStates.choosing_source.state,
+            cancel=_TO_MENU,
+            timeout=_EXPIRED,
+            invalid_input="keep state and repeat inherited/custom Extend choices",
+            stale_callback=_STALE,
+        ),
+        MusicExtendStates.waiting_prompt.state: StateContract(
+            success=(MusicExtendStates.waiting_style.state,),
+            back=MusicExtendStates.choosing_mode.state,
+            cancel=_TO_MENU,
+            timeout=_EXPIRED,
+            invalid_input="keep state and request custom Extend prompt",
+            stale_callback=_STALE,
+        ),
+        MusicExtendStates.waiting_style.state: StateContract(
+            success=(MusicExtendStates.waiting_title.state,),
+            back=MusicExtendStates.waiting_prompt.state,
+            cancel=_TO_MENU,
+            timeout=_EXPIRED,
+            invalid_input="keep state and request custom Extend style",
+            stale_callback=_STALE,
+        ),
+        MusicExtendStates.waiting_title.state: StateContract(
+            success=(MusicExtendStates.waiting_continue_at.state,),
+            back=MusicExtendStates.waiting_style.state,
+            cancel=_TO_MENU,
+            timeout=_EXPIRED,
+            invalid_input="keep state and request custom Extend title",
+            stale_callback=_STALE,
+        ),
+        MusicExtendStates.waiting_continue_at.state: StateContract(
+            success=(MusicExtendStates.confirming.state,),
+            back=MusicExtendStates.waiting_title.state,
+            cancel=_TO_MENU,
+            timeout=_EXPIRED,
+            invalid_input="keep state and request a valid continuation timestamp",
+            stale_callback=_STALE,
+        ),
+        MusicExtendStates.confirming.state: StateContract(
+            success=(MusicExtendStates.submitting.state,),
+            back="Extend mode or continue-at step depending on selected mode",
+            cancel=_TO_MENU,
+            timeout=_EXPIRED,
+            invalid_input="keep state and repeat Extend confirmation actions",
+            stale_callback=_STALE,
+        ),
+        MusicExtendStates.submitting.state: StateContract(
+            success=(_TO_MENU,),
+            back="blocked while atomic Extend admission is in progress",
+            cancel="blocked while atomic Extend admission is in progress",
+            timeout="recover from durable generation/idempotency state",
+            invalid_input="report that Suno Extend is already launching",
             stale_callback="resolve through durable generation/idempotency state",
         ),
     }
