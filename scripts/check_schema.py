@@ -84,6 +84,7 @@ REQUIRED_COLUMNS: dict[str, frozenset[str]] = {
             "request_hash",
             "package_code",
             "credits_units",
+            "bonus_units",
             "provider_amount",
             "provider_currency",
             "invoice_payload",
