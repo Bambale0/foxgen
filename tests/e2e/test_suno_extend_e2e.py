@@ -17,11 +17,23 @@ from foxgen.application.lifecycle import GenerationWorker
 from foxgen.application.media import DownloadedMedia, StoredMedia
 from foxgen.application.submissions import NoopSubmissionRateLimiter, SubmissionService
 from foxgen.core.config import Settings
-from foxgen.domain.models import DeliveryStatus, GenerationStatus, LedgerEntryType, ReservationStatus
+from foxgen.domain.models import (
+    DeliveryStatus,
+    GenerationStatus,
+    LedgerEntryType,
+    ReservationStatus,
+)
 from foxgen.infra.billing import SqlAlchemyBillingRepository
 from foxgen.infra.billing_lifecycle_repository import BillingAwareLifecycleRepository
 from foxgen.infra.billing_models import BalanceReservation, LedgerEntry, ModelPrice, WalletAccount
-from foxgen.infra.database import Database, Generation, GenerationDelivery, MediaAsset, OutboxEvent, User
+from foxgen.infra.database import (
+    Database,
+    Generation,
+    GenerationDelivery,
+    MediaAsset,
+    OutboxEvent,
+    User,
+)
 from foxgen.infra.repositories import SqlAlchemyGenerationRepository
 from foxgen.providers.kie.client import KieClient
 from foxgen.providers.kie.registry import ModelRegistry
@@ -49,7 +61,9 @@ class FakeAudioDownloader:
     async def download(self, url: str) -> DownloadedMedia:
         self.urls.append(url)
         body = f"ID3-{url.rsplit('/', 1)[-1]}".encode()
-        handle = tempfile.NamedTemporaryFile(prefix="foxgen-suno-extend-", suffix=".mp3", delete=False)
+        handle = tempfile.NamedTemporaryFile(
+            prefix="foxgen-suno-extend-", suffix=".mp3", delete=False
+        )
         try:
             handle.write(body)
             path = Path(handle.name)
@@ -381,9 +395,7 @@ async def test_owner_can_extend_stored_suno_track_and_foreign_user_cannot() -> N
                 )
             )
             ledger = (
-                await session.scalars(
-                    select(LedgerEntry).where(LedgerEntry.user_id == owner_id)
-                )
+                await session.scalars(select(LedgerEntry).where(LedgerEntry.user_id == owner_id))
             ).all()
             outbox = (
                 await session.scalars(
