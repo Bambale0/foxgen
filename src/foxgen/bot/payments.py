@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from aiogram import F, Router
+from aiogram.filters import Command
 from aiogram.types import Message, PreCheckoutQuery
 
 from foxgen.bot.api_client import FoxGenApiClient, FoxGenApiError
@@ -26,6 +27,56 @@ async def _user_api_request(
         user_id=user_id,
         username=username,
         json=json,
+    )
+
+
+@router.message(Command("promo"))
+async def redeem_promo(
+    message: Message,
+    api_client: FoxGenApiClient,
+) -> None:
+    user = message.from_user
+    if user is None:
+        return
+    text = message.text or ""
+    code = text.partition(" ")[2].strip()
+    if not code:
+        await message.answer(
+            "Введите промокод после команды:\n"
+            "<code>/promo FOX500</code>"
+        )
+        return
+
+    try:
+        payload = await _user_api_request(
+            api_client,
+            "POST",
+            "/v1/user-portal/promos/redeem",
+            user_id=user.id,
+            username=user.username,
+            json={"code": code},
+        )
+    except FoxGenApiError as exc:
+        await message.answer(f"Промокод не активирован: {exc.message}")
+        return
+
+    if not isinstance(payload, dict):
+        await message.answer("Промокод обработан. Проверьте баланс в Happy Fox.")
+        return
+
+    reward = int(payload.get("reward_units", 0))
+    available = int(payload.get("available_units", 0))
+    replayed = payload.get("replayed") is True
+    if replayed:
+        await message.answer(
+            "ℹ️ Этот промокод уже был активирован.\n\n"
+            f"Баланс: <b>{available} CREDIT</b>"
+        )
+        return
+    await message.answer(
+        "✅ Промокод активирован\n\n"
+        f"Начислено: <b>{reward} CREDIT</b>\n"
+        f"Баланс: <b>{available} CREDIT</b>"
     )
 
 
