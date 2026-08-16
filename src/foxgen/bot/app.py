@@ -23,6 +23,7 @@ from foxgen.bot.flows import router as generation_router
 from foxgen.bot.fsm_contract import contract_for
 from foxgen.bot.generation_wizard import router as generation_wizard_router
 from foxgen.bot.keyboards import main_menu, resolve_miniapp_url
+from foxgen.bot.music import router as music_router
 from foxgen.bot.payments import router as payments_router
 from foxgen.bot.quick_start import router as quick_start_router
 from foxgen.bot.quick_start_wizard import router as quick_start_wizard_router
@@ -205,9 +206,10 @@ def register_runtime_routers(dispatcher: Dispatcher) -> None:
     dispatcher.include_router(feed_router)
     dispatcher.include_router(feed_publish_router)
     dispatcher.include_router(feed_remix_router)
-    # Voice/TTS owns its dedicated FSM and must consume create:voice before the
-    # broad generation/shell fallbacks.
+    # Dedicated paid media products must consume their entry callbacks/FSM states
+    # before the broad generation/shell fallbacks.
     dispatcher.include_router(voice_router)
+    dispatcher.include_router(music_router)
     # Quick Start already owns reference upload. This bridge only replaces its
     # post-upload product/model/settings branch with the same screen wizard used
     # by ordinary Create Image / Create Video entrypoints.

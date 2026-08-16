@@ -20,6 +20,7 @@ from foxgen.infra.media import SecureMediaDownloader, S3MediaStorage, TelegramMe
 from foxgen.infra.reference_memory import SqlAlchemyReferenceMemoryRepository
 from foxgen.providers.kie.client import KieClient
 from foxgen.providers.kie.registry import ModelRegistry
+from foxgen.providers.kie.router import RoutedKieClient
 
 
 async def run(settings: Settings | None = None) -> None:
@@ -33,9 +34,11 @@ async def run(settings: Settings | None = None) -> None:
 
     database = Database(resolved.database_url)
     repository = BillingAwareLifecycleRepository(database)
-    client = KieClient(
-        api_key=api_key.get_secret_value(),
-        base_url=str(resolved.kie_base_url),
+    client = RoutedKieClient(
+        KieClient(
+            api_key=api_key.get_secret_value(),
+            base_url=str(resolved.kie_base_url),
+        )
     )
     downloader = SecureMediaDownloader(
         timeout_seconds=resolved.media_download_timeout_seconds,

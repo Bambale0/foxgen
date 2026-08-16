@@ -70,6 +70,10 @@ class LifecycleTaskClient(Protocol):
     async def get_task(self, task_id: str) -> TaskRecord: ...
 
 
+class LifecycleClientRouter(Protocol):
+    def for_family(self, api_family: str) -> LifecycleTaskClient: ...
+
+
 class OutboxProcessor(Protocol):
     async def process(self, message: OutboxMessage) -> None: ...
 
@@ -146,7 +150,7 @@ class GenerationWorker:
         self,
         *,
         repository: LifecycleRepository,
-        client: LifecycleTaskClient,
+        client: LifecycleTaskClient | LifecycleClientRouter,
         registry: ModelRegistry | None = None,
         callback_url: str | None = None,
         media_pipeline: OutboxProcessor | None = None,
@@ -271,7 +275,8 @@ class GenerationWorker:
 
         callback_url = _callback_url_for_generation(self._callback_url, generation.id)
         try:
-            task = await self._client.create_task(
+            provider_client = _client_for_family(self._client, model.api_family)
+            task = await provider_client.create_task(
                 model=model.provider_model,
                 input_data=generation.input_payload,
                 callback_url=callback_url,
@@ -374,8 +379,10 @@ class GenerationWorker:
         task_id = generation.provider_task_id
         if task_id is None:
             return
+        model = self._registry.get(generation.model_slug)
         try:
-            task = await self._client.get_task(task_id)
+            provider_client = _client_for_family(self._client, model.api_family)
+            task = await provider_client.get_task(task_id)
         except ProviderError:
             await self._repository.schedule_next_poll(
                 generation_id=generation.id,
@@ -399,6 +406,23 @@ class GenerationWorker:
             failure_stage=("provider" if state.status == GenerationStatus.FAILED else None),
             status_reason=state.status_reason,
         )
+
+
+def _client_for_family(
+    client: LifecycleTaskClient | LifecycleClientRouter,
+    api_family: str,
+) -> LifecycleTaskClient:
+    selector = getattr(client, "for_family", None)
+    if callable(selector):
+        routed = selector(api_family)
+        return routed
+    if api_family != "market":
+        raise ProviderError(
+            ErrorCode.PROVIDER_PROTOCOL,
+            f"Provider client is not configured for API family: {api_family}",
+            retryable=False,
+        )
+    return client  # type: ignore[return-value]
 
 
 def _callback_url_for_generation(base_url: str | None, generation_id: UUID) -> str | None:
@@ -438,19 +462,38 @@ def normalize_provider_payload(payload: dict[str, object]) -> NormalizedProvider
             error_code=None,
             status_reason="provider_result_ready",
         )
-    if state in {"processing", "running", "in_progress", "in-progress", "queued"}:
+    if state in {
+        "processing",
+        "running",
+        "in_progress",
+        "in-progress",
+        "queued",
+        "pending",
+        "text_success",
+        "first_success",
+    }:
         return NormalizedProviderState(
             status=GenerationStatus.PROCESSING,
             result_payload=None,
             error_code=None,
             status_reason="provider_processing",
         )
-    if state in {"failed", "failure", "error", "cancelled", "canceled"}:
+    if state in {
+        "failed",
+        "failure",
+        "error",
+        "cancelled",
+        "canceled",
+        "create_task_failed",
+        "generate_audio_failed",
+        "callback_exception",
+        "sensitive_word_error",
+    }:
         raw_error = source.get("failCode") or source.get("errorCode") or source.get("code")
         return NormalizedProviderState(
             status=GenerationStatus.FAILED,
             result_payload=None,
-            error_code=str(raw_error or ErrorCode.PROVIDER_REJECTED),
+            error_code=str(raw_error or state or ErrorCode.PROVIDER_REJECTED),
             status_reason="provider_terminal_failure",
         )
     return NormalizedProviderState(status=None, result_payload=None, error_code=None)

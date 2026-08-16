@@ -10,9 +10,9 @@ FoxGen supports user-facing digital-credit top-up inside Telegram through Telegr
 
 Privileged native Stars refunds are implemented through the operator control plane. Refund execution first holds the original CREDIT locally, then a dedicated durable worker calls Telegram. Ambiguous provider outcomes converge to `refund_unknown`; CREDIT remains held until an administrator resolves the attempt with evidence. A `not_refunded` resolution restores the hold exactly once through a compensating immutable ledger entry.
 
-Explicit promo-code bonuses are also implemented: admins define server-side reward/usage limits, Happy Fox users can redeem a code through the Telegram-JWT owner boundary, and one `(promo_code, user_id)` transaction atomically updates the wallet, immutable ledger, redemption audit row and usage counter. Concurrent duplicate redemption and `max_uses` are covered by real PostgreSQL tests and cross-layer E2E.
+Explicit promo-code bonuses are implemented: admins define server-side reward/usage limits, Happy Fox users can redeem a code through the Telegram-JWT owner boundary, and one `(promo_code, user_id)` transaction atomically updates the wallet, immutable ledger, redemption audit row and usage counter.
 
-Stars packages may now also publish an explicit non-negative purchase bonus (`bonus_units` or `bonus_credits`). Base CREDIT, bonus CREDIT and the XTR price are snapshotted into the durable payment order before invoice creation. Settlement, generic payment reprocess and native Stars refund operate on the full base+bonus CREDIT grant. Happy Fox can display the bonus, but the browser never supplies or computes the financial amount.
+Stars packages may publish an explicit non-negative purchase bonus (`bonus_units` or `bonus_credits`). Base CREDIT, bonus CREDIT and the XTR price are snapshotted into the durable payment order before invoice creation. Settlement, generic payment reprocess and native Stars refund operate on the full base+bonus CREDIT grant.
 
 The current production slice deliberately does **not** claim every possible commercial payment/bonus policy:
 
@@ -21,11 +21,33 @@ The current production slice deliberately does **not** claim every possible comm
 - the current Stars refund policy requires the user to still have the full originally credited amount available; FoxGen does not create debt or partially reclaim credits already spent;
 - refund ambiguity resolution is evidence-based/manual after bounded retries; FoxGen does not guess an external financial outcome.
 
-Do not bypass Stars/promo services by mutating wallet rows from the browser/bot or direct SQL. Admin payment inspection/recheck/reprocess/refund/resolution and promo definition remain private operator capabilities; browsers can only choose a published Stars package or submit a promo code, never choose a bonus/reward amount.
+Do not bypass Stars/promo services by mutating wallet rows from the browser/bot or direct SQL.
 
-### Planned generation products
+### Voice/TTS
 
-Happy Fox and Telegram expose the complete product launcher, but voice/TTS, Suno/music, Motion Control/talking avatar, Prompt AI, conversational assistant and Gemini Omni remain intentionally disabled until their backend + lifecycle + bot + Mini App slices are implemented. A visible planned product is not production capability.
+ElevenLabs Turbo 2.5 TTS is an executable production product in Telegram and Happy Fox. It uses the shared paid admission, immutable ledger, generation lifecycle, audio archive and Telegram delivery pipeline. No commercial price is hardcoded: launch remains fail-closed until an active model price is published.
+
+The current TTS slice does **not** claim voice cloning, speech-to-speech, dialogue synthesis or audio cleanup. Those remain separate EPIC #5 slices.
+
+### Suno/music
+
+Suno V5 core text-to-song is an executable product slice after #109 lands. It supports simple and custom generation, vocal/instrumental modes, dedicated KIE Suno API-family routing, polling through Suno record-info, and preservation/archive/delivery of multiple canonical audio tracks through the shared paid lifecycle. No commercial price is hardcoded.
+
+The Suno core slice deliberately does **not** claim the rest of issue #15:
+
+- extend / upload-extend;
+- upload cover / cover;
+- add vocals / add instrumental / replace section;
+- lyrics-only workflows;
+- WAV conversion/download helpers;
+- vocal/instrument separation / stems;
+- MIDI;
+- mashup / persona / music video / Suno voice features;
+- dedicated Suno callback ingestion. Core generation is intentionally polling-driven until that callback contract is reviewed separately.
+
+### Remaining planned generation products
+
+Motion Control/talking avatar, Prompt AI, conversational assistant and Gemini Omni remain intentionally disabled until their backend + lifecycle + bot + Mini App slices are implemented. A visible planned product is not production capability.
 
 ### Storage provisioning
 

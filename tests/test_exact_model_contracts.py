@@ -84,6 +84,7 @@ def test_registry_separates_catalog_models_from_submission_models() -> None:
         "seedance-2",
         "seedance-2-mini",
         "elevenlabs-turbo-2-5",
+        "suno-v5",
     }
     assert all(item.provider_id_verified for item in enabled)
     assert all(item.schema_verified for item in enabled)
@@ -221,6 +222,7 @@ def test_model_api_exposes_independent_readiness_statuses() -> None:
     with TestClient(app) as client:
         enabled = client.get("/v1/models/seedream-5-pro")
         tts = client.get("/v1/models/elevenlabs-turbo-2-5")
+        suno = client.get("/v1/models/suno-v5")
         catalog_only = client.get("/v1/models/gpt-image-2")
 
     assert enabled.status_code == 200
@@ -237,6 +239,14 @@ def test_model_api_exposes_independent_readiness_statuses() -> None:
     assert tts.json()["enabled_for_submission"] is True
     assert tts.json()["production_ready"] is True
     assert tts.json()["contract_reviewed_at"] == "2026-08-16"
+
+    assert suno.status_code == 200
+    assert suno.json()["provider_model"] == "V5"
+    assert suno.json()["media_kind"] == "audio"
+    assert suno.json()["schema_verified"] is True
+    assert suno.json()["enabled_for_submission"] is True
+    assert suno.json()["production_ready"] is True
+    assert suno.json()["contract_reviewed_at"] == "2026-08-16"
 
     assert catalog_only.status_code == 200
     assert catalog_only.json()["provider_id_verified"] is True
@@ -372,9 +382,14 @@ def test_priority_contract_examples_normalize_to_provider_payloads() -> None:
         InputContract.ELEVENLABS_TTS_TURBO_2_5,
         {"text": "Hello from FoxGen", "voice": "Rachel", "speed": 1.2},
     )
+    suno = validate_input(
+        InputContract.SUNO_V5_GENERATE,
+        {"prompt": "Dreamy instrumental fox theme", "instrumental": True},
+    )
 
     assert seedream["quality"] == "high"
     assert nano["resolution"] == "2K"
     assert seedance["duration"] == 15
     assert tts["voice"] == "Rachel"
     assert tts["speed"] == 1.2
+    assert suno["prompt"] == "Dreamy instrumental fox theme"
