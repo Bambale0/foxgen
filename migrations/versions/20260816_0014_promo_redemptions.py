@@ -34,7 +34,7 @@ def upgrade() -> None:
             nullable=False,
         ),
         sa.CheckConstraint("reward_units > 0", name="ck_promo_redemptions_reward_positive"),
-        sa.ForeignKeyConstraint(["promo_code"], ["promo_codes.code"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(["promo_code"], ["promo_codes.code"], ondelete="RESTRICT"),
         sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint(
