@@ -328,26 +328,36 @@ assert button.callback_data is None
 }
 
 verify_public_miniapp() {
-  local miniapp_url attempt
+  local miniapp_url deadline remaining attempt_timeout
   miniapp_url="$1"
-  for attempt in $(seq 1 15); do
-    if curl --fail --silent --show-error --location --max-time 15 "$miniapp_url" | \
+  deadline=$((SECONDS + 30))
+
+  while [ "$SECONDS" -lt "$deadline" ]; do
+    remaining=$((deadline - SECONDS))
+    attempt_timeout=$((remaining < 5 ? remaining : 5))
+    if curl --fail --silent --show-error --location --max-time "$attempt_timeout" "$miniapp_url" | \
       grep -q 'Happy Fox'; then
       return 0
     fi
-    log "public Happy Fox smoke attempt ${attempt}/15 not ready; retrying in 2s"
-    sleep 2
+    [ "$SECONDS" -lt "$deadline" ] || break
+    remaining=$((deadline - SECONDS))
+    log "public Happy Fox smoke not ready; ${remaining}s remain in the post-reload window"
+    sleep "$((remaining < 2 ? remaining : 2))"
   done
   return 1
 }
 
 verify_telegram_menu() {
-  local miniapp_url bot_token menu_json attempt
+  local miniapp_url bot_token menu_json deadline remaining attempt_timeout
   miniapp_url="$1"
   bot_token="$(read_env_value FOXGEN_TELEGRAM_BOT_TOKEN)"
-  for attempt in $(seq 1 15); do
+  deadline=$((SECONDS + 30))
+
+  while [ "$SECONDS" -lt "$deadline" ]; do
+    remaining=$((deadline - SECONDS))
+    attempt_timeout=$((remaining < 5 ? remaining : 5))
     if menu_json="$(
-      curl --fail --silent --show-error --max-time 15 \
+      curl --fail --silent --show-error --max-time "$attempt_timeout" \
         "https://api.telegram.org/bot${bot_token}/getChatMenuButton"
     )" && MINIAPP_URL="$miniapp_url" MENU_JSON="$menu_json" python3 - <<'PY'
 import json
@@ -369,8 +379,10 @@ PY
     then
       return 0
     fi
-    log "Telegram Happy Fox menu attempt ${attempt}/15 not ready; retrying in 2s"
-    sleep 2
+    [ "$SECONDS" -lt "$deadline" ] || break
+    remaining=$((deadline - SECONDS))
+    log "Telegram Happy Fox menu not ready; ${remaining}s remain in the post-recreate window"
+    sleep "$((remaining < 2 ? remaining : 2))"
   done
   return 1
 }
