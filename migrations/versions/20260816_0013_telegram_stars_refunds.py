@@ -47,6 +47,14 @@ def upgrade() -> None:
         sa.Column("reason", sa.Text(), nullable=False),
         sa.Column("requested_by", sa.BigInteger(), nullable=False),
         sa.Column("status", sa.String(length=32), server_default="pending", nullable=False),
+        sa.Column("attempts", sa.Integer(), server_default="0", nullable=False),
+        sa.Column(
+            "available_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.func.now(),
+            nullable=False,
+        ),
+        sa.Column("locked_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("debit_ledger_key", sa.String(length=255), nullable=False),
         sa.Column("restore_ledger_key", sa.String(length=255), nullable=True),
         sa.Column(
@@ -72,6 +80,7 @@ def upgrade() -> None:
             nullable=False,
         ),
         sa.CheckConstraint("amount_units > 0", name="ck_payment_refunds_amount_positive"),
+        sa.CheckConstraint("attempts >= 0", name="ck_payment_refunds_attempts_nonnegative"),
         sa.CheckConstraint(
             "status IN ("
             "'pending', 'processing', 'succeeded', 'failed', 'unknown', "
@@ -96,11 +105,15 @@ def upgrade() -> None:
     )
     op.create_index("ix_payment_refund_attempts_requested_by", "payment_refund_attempts", ["requested_by"])
     op.create_index("ix_payment_refund_attempts_status", "payment_refund_attempts", ["status"])
+    op.create_index("ix_payment_refund_attempts_available_at", "payment_refund_attempts", ["available_at"])
+    op.create_index("ix_payment_refund_attempts_locked_at", "payment_refund_attempts", ["locked_at"])
     op.create_index("ix_payment_refund_attempts_created_at", "payment_refund_attempts", ["created_at"])
 
 
 def downgrade() -> None:
     op.drop_index("ix_payment_refund_attempts_created_at", table_name="payment_refund_attempts")
+    op.drop_index("ix_payment_refund_attempts_locked_at", table_name="payment_refund_attempts")
+    op.drop_index("ix_payment_refund_attempts_available_at", table_name="payment_refund_attempts")
     op.drop_index("ix_payment_refund_attempts_status", table_name="payment_refund_attempts")
     op.drop_index("ix_payment_refund_attempts_requested_by", table_name="payment_refund_attempts")
     op.drop_index(
