@@ -6,7 +6,7 @@ PostgreSQL is FoxGen's durable source of truth. This document maps table respons
 
 ### `users`
 
-Telegram/internal user identity (`id`, optional username, creation time). Generation rows reference users.
+Telegram/internal user identity (`id`, optional username, creation time). Generation, wallet and user payment rows reference users.
 
 ### `user_restrictions`
 
@@ -78,7 +78,7 @@ pending, retry_wait, sending, sent, delivery_unknown, failed
 
 Stores recipient, attempts/retry scheduling, returned Telegram message IDs, last error and send time.
 
-## Billing
+## Billing and user payments
 
 ### `wallet_accounts`
 
@@ -108,6 +108,39 @@ reserved, captured, released, refunded
 Append-only financial movements with unique idempotency key, actor/reason and available/reserved deltas. Each entry must have a non-zero financial delta.
 
 Ledger entry types include credit/debit/reserve/capture/release/refund/adjustment semantics represented by the current domain enum/constraint.
+
+### `user_payment_orders`
+
+Durable user checkout order introduced by Alembic revision `20260816_0012`. The first transport is Telegram Stars.
+
+The row snapshots commercial terms before an external invoice-link call:
+
+- user/provider and request idempotency key;
+- request hash and package code/title/description;
+- CREDIT amount;
+- provider amount/currency (`XTR` for Stars);
+- opaque invoice payload and returned invoice URL;
+- Telegram/provider charge IDs;
+- raw verified payment projection;
+- paid/credited timestamps.
+
+Critical uniqueness:
+
+```text
+(user_id, idempotency_key)
+invoice_payload
+telegram_payment_charge_id   # nullable until Telegram confirms payment
+```
+
+Current status constraint:
+
+```text
+created, invoice_ready, credited, failed, refunded
+```
+
+`created` is committed before `createInvoiceLink`. A verified Telegram `successful_payment` records the charge ID and `paid_at` before wallet settlement. `credited_at` is populated only after the CREDIT settlement succeeds.
+
+This distinction makes paid-but-uncredited recovery observable: an order/payment can prove Telegram charged the user even if the later wallet transaction failed.
 
 ## Administrative control plane
 
@@ -147,11 +180,13 @@ pending, processing, retry_wait, completed, dead_letter
 
 ### `tariff_versions`
 
-Immutable/versioned tariff payload history with positive version number and publishing admin/time.
+Immutable/versioned tariff payload history with positive version number and publishing admin/time. Stars-enabled user packages live inside the latest published payload but their values are copied into `user_payment_orders` before checkout, so later tariff publication cannot mutate an existing order.
 
 ### `payment_events`
 
-Provider payment operational record. Unique `(provider, external_id)`, amount/currency, raw provider payload, check/process timestamps and optional unique credited ledger key.
+Provider payment operational/evidence record. Unique `(provider, external_id)`, amount/currency, raw provider payload, check/process timestamps and optional unique credited ledger key.
+
+For Telegram Stars, `external_id` is the Telegram payment charge ID. `successful_payment` evidence is persisted here in a committed transaction **before** the wallet/ledger settlement boundary. Thus a backend failure after Telegram charge confirmation leaves a durable completed payment event with no `credited_ledger_key`, which the existing admin payment reprocess worker can credit exactly once.
 
 A credited payment uses deterministic billing key:
 
@@ -271,13 +306,13 @@ Durable moderation decisions against content IDs with action/reason/active flag/
 
 Generation-owned media/delivery and similar child records use database foreign-key relationships appropriate to their lifecycle. Some operational/audit references intentionally use nullable/set-null semantics so deleting a parent business object does not erase the historical meaning of the administrative operation.
 
-Do not infer permission to delete production business/audit data from an ORM cascade alone. Operational retention is a product/security decision.
+Do not infer permission to delete production business/audit/payment data from an ORM cascade alone. Operational retention is a product/security decision.
 
 ## Migration discipline
 
 - Do not edit historical deployed migrations to change schema truth.
 - Add a new forward Alembic revision.
-- Import new SQLAlchemy metadata into migration environment when required.
+- Import new SQLAlchemy metadata into migration environment when required. `payment_models` is explicitly imported by `migrations/env.py` so `user_payment_orders` participates in `Base.metadata` comparisons.
 - Keep status check constraints synchronized with domain enums/transitions.
 - Ensure `scripts/check_schema.py` covers critical new tables/columns.
 - Run upgrade/head/downgrade-reupgrade CI.
@@ -288,6 +323,7 @@ Do not infer permission to delete production business/audit data from an ORM cas
 For normal operation:
 
 - never UPDATE/DELETE ledger history to repair a balance;
+- never discard a verified external payment merely because CREDIT settlement failed;
 - never rewrite an admin command/audit result to hide an action;
 - use compensating/refund/adjustment records and new audit events;
 - use reconciliation/admin services instead of direct SQL.
@@ -296,6 +332,7 @@ For normal operation:
 
 - `architecture.md` — data ownership and pipelines;
 - `billing.md` — financial lifecycle;
+- `telegram-stars-payments.md` — Stars checkout/evidence/settlement lifecycle;
 - `postprocessing-reconciliation.md` — cross-table consistency;
 - `admin-capability-matrix.md` — admin domain behavior;
 - migrations/models — exact schema source of truth.
