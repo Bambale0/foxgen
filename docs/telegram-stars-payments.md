@@ -18,15 +18,16 @@ The browser and Telegram bot never mutate wallet rows directly. User payment set
 
 Top-up offers come from the latest published `tariff_versions.payload.packages` object. Existing non-Stars packages remain valid tariff data but are not purchasable through the Stars transport until they explicitly publish a Stars amount.
 
-Example:
+Example with explicit package bonus:
 
 ```json
 {
   "packages": {
     "starter": {
       "title": "Starter",
-      "description": "1000 FoxGen credits",
+      "description": "1000 FoxGen credits + 250 bonus",
       "credits": 1000,
+      "bonus_units": 250,
       "price": 199,
       "stars": 50
     }
@@ -34,9 +35,21 @@ Example:
 }
 ```
 
-Accepted credit fields are `credits_units` or legacy `credits`. Accepted Stars fields are `stars_amount` or `stars`. Both must be positive integers. A package without explicit Stars pricing is filtered out of the Stars catalog and cannot create an invoice.
+Accepted base CREDIT fields are `credits_units` or legacy `credits`. Accepted Stars fields are `stars_amount` or `stars`; both must be positive integers. An optional purchase bonus may be supplied as `bonus_units` or `bonus_credits` and must be a non-negative integer. Missing bonus means zero. Negative, boolean or non-integer bonus values make that package unavailable to the Stars purchase flow.
 
-Commercial package terms are snapshotted into `user_payment_orders` before the external Telegram invoice-link call. Later tariff changes cannot change the amount/credits of an already-created order. User-supplied titles/descriptions are normalized to Telegram invoice field limits before provider submission.
+The public package projection exposes:
+
+```text
+credits_units       total CREDIT grant (base + bonus; backward-compatible field)
+base_credits_units  base package CREDIT
+bonus_units         explicit package bonus
+total_credits_units base + bonus
+stars_amount        XTR price
+```
+
+Commercial package terms are snapshotted into `user_payment_orders` before the external Telegram invoice-link call. The durable order stores total CREDIT in `credits_units` and the bonus component in `bonus_units`; base CREDIT is `credits_units - bonus_units`. Later tariff changes cannot change base CREDIT, bonus CREDIT or XTR price of an already-created order. User-supplied titles/descriptions are normalized to Telegram invoice field limits before provider submission.
+
+The browser cannot submit a bonus amount. Happy Fox invoice creation sends only `package_code` plus authenticated/idempotency context.
 
 ## Durable order states
 
@@ -61,12 +74,12 @@ created -> invoice_ready -> paid -> credited
 
 ## Checkout flow
 
-1. FoxGen creates or replays the durable payment order.
+1. FoxGen creates or replays the durable payment order and snapshots base/bonus/XTR terms.
 2. Backend calls Telegram `createInvoiceLink` with `currency=XTR`, one price item and the opaque local invoice payload.
-3. Telegram sends `pre_checkout_query`; the bot asks the trusted backend to validate owner, payload, currency and snapshotted amount.
+3. Telegram sends `pre_checkout_query`; the bot asks the trusted backend to validate owner, payload, currency and snapshotted XTR amount.
 4. Telegram sends `successful_payment` after payment.
 5. Backend commits charge evidence and moves the order to `paid`.
-6. Backend performs a separate idempotent CREDIT settlement and moves the order to `credited`.
+6. Backend performs a separate idempotent total-CREDIT settlement and moves the order to `credited`.
 
 The pre-checkout route is validation-only. It cannot add credits.
 
@@ -81,17 +94,17 @@ successful_payment
   -> user_payment_orders.telegram_payment_charge_id
   -> user_payment_orders.status = paid
   -> user_payment_orders.paid_at
-  -> payment_events(provider=telegram_stars, external_id=<charge id>)
+  -> payment_events(provider=telegram_stars, external_id=<charge id>, amount_units=<base+bonus>)
 COMMIT
 ```
 
-This commit happens before wallet mutation. If the later CREDIT settlement fails, FoxGen still knows Telegram charged the user and the user does not need to pay again.
+This commit happens before wallet mutation. If the later CREDIT settlement fails, FoxGen still knows Telegram charged the user and the user does not need to pay again. `PaymentEvent.amount_units` is the full snapshotted CREDIT grant, so generic reprocess cannot lose the bonus component.
 
 ### Boundary 2 — CREDIT settlement
 
 ```text
 payment event + paid order
-  -> wallet_accounts.available_units += credits
+  -> wallet_accounts.available_units += total credits (base + bonus)
   -> ledger_entries(payment-credit:telegram_stars:<charge id>)
   -> payment_events.credited_ledger_key
   -> user_payment_orders.status = credited
@@ -105,7 +118,7 @@ Uniqueness exists at three levels:
 - one order per `telegram_payment_charge_id`;
 - one immutable ledger entry per deterministic payment-credit key.
 
-Duplicate Telegram updates reuse the same evidence/ledger key and do not append another credit. If Boundary 2 fails, the generic admin `payment.reprocess` path can recover CREDIT exactly once.
+Duplicate Telegram updates reuse the same evidence/ledger key and do not append another base or bonus credit. If Boundary 2 fails, the generic admin `payment.reprocess` path recovers the same total CREDIT exactly once.
 
 ## Native Telegram Stars refund
 
@@ -128,14 +141,14 @@ A refund can start only when:
 - the payment has already been credited;
 - the durable order is `credited`;
 - no active refund attempt exists;
-- the user still has at least the original credited amount in available CREDIT.
+- the user still has at least the original total credited amount in available CREDIT.
 
-FoxGen first commits:
+FoxGen first commits the full original grant, including any package bonus:
 
 ```text
-wallet.available_units -= credited amount
+wallet.available_units -= total credited amount
 ledger += payment-refund-debit:telegram_stars:<charge id>:<attempt id>
-payment_refund_attempts(status=pending)
+payment_refund_attempts(status=pending, amount_units=<base+bonus>)
 user_payment_orders.status = refund_pending
 payment_events.status = refund_pending
 COMMIT
@@ -143,7 +156,7 @@ COMMIT
 
 Only after that local financial boundary can the dedicated refund worker call Telegram `refundStarPayment(user_id, telegram_payment_charge_id)`. This prevents the user from spending the same CREDIT while an external refund is being attempted.
 
-If available CREDIT is insufficient, FoxGen rejects the refund before any Telegram refund side effect. This first slice intentionally does not create debt or partially reclaim previously spent credits.
+If available CREDIT is insufficient, FoxGen rejects the refund before any Telegram refund side effect. This slice intentionally does not create debt or partially reclaim previously spent credits.
 
 ### Dedicated refund worker
 
@@ -187,7 +200,7 @@ Evidence says Telegram did not refund:
 
 ```text
 ledger += payment-refund-restore:telegram_stars:<charge id>:<attempt id>
-wallet.available_units += held amount
+wallet.available_units += held total amount
 attempt -> resolved_not_refunded
 order -> credited
 payment -> completed
@@ -213,20 +226,22 @@ GET  /v1/miniapp/payments/stars/packages
 POST /v1/miniapp/payments/stars/invoices
 ```
 
-Happy Fox receives an invoice URL, not a bot/provider credential. Checkout completion still arrives through Telegram updates and settles server-side. Refund endpoints are intentionally absent from the public user API.
+Package/invoice payloads expose base, bonus and total CREDIT breakdown. Happy Fox receives an invoice URL, not a bot/provider credential. Checkout completion still arrives through Telegram updates and settles server-side. Refund endpoints are intentionally absent from the public user API.
 
 ## Failure rules
 
 - missing/changed package price: fail before invoice creation;
+- invalid base/bonus/Stars package fields: package is not purchasable;
 - Telegram invoice API timeout: local order stays durable and can retry;
 - missing/foreign order at pre-checkout: reject checkout;
 - `paid`, `credited`, refund states, failed or refunded order at pre-checkout: reject checkout;
 - amount/currency mismatch: reject checkout/settlement;
 - duplicate charge on another order: idempotency conflict;
-- backend failure after Telegram reports payment: durable charge evidence remains reprocessable;
+- backend failure after Telegram reports payment: durable charge evidence remains reprocessable for the same total base+bonus grant;
 - insufficient available CREDIT for refund: reject before Telegram refund call;
 - permanent refund rejection: restore the local CREDIT hold exactly once;
 - ambiguous refund transport: retain CREDIT hold, retry within the bounded policy, then require evidence if still unknown;
+- later tariff bonus changes do not alter an already-created order snapshot;
 - `FOXGEN_TASK_SUBMISSION_ENABLED=false` does not disable payment settlement/refund recovery.
 
 ## Operations
@@ -236,12 +251,13 @@ Happy Fox receives an invoice URL, not a bot/provider credential. Checkout compl
 1. Do not ask the user to pay again.
 2. Locate order/payment by user, invoice payload or Telegram charge ID.
 3. `user_payment_orders.status=paid` with no credited ledger key means charge evidence exists but settlement did not finish.
-4. Use payment reprocess; never append a manual duplicate payment credit.
+4. Confirm `credits_units` (total) and `bonus_units` snapshot on the order.
+5. Use payment reprocess; never append a manual duplicate payment credit.
 
 ### Refund pending/unknown
 
 1. Inspect `payment_refund_attempts`, order/payment status and debit/restore ledger keys.
-2. `refund_pending` means the CREDIT is already held and the worker is expected to converge.
+2. `refund_pending` means the full CREDIT grant is already held and the worker is expected to converge.
 3. `refund_unknown` means do not retry manually and do not restore CREDIT by direct SQL.
 4. Obtain Telegram/provider evidence for the original charge.
 5. Resolve through `/internal/admin/payments/{payment_id}/refund/resolve` with explicit evidence.
@@ -253,9 +269,10 @@ Admin payment/refund inspection remains the operator plane. User Mini App creden
 
 The required CI infrastructure path includes:
 
-- Alembic upgrade/schema/downgrade/re-upgrade;
+- Alembic upgrade/schema/downgrade/re-upgrade including `user_payment_orders.bonus_units`;
+- real PostgreSQL package filtering, immutable invoice-time bonus snapshot and exactly-once total CREDIT settlement;
 - real PostgreSQL refund success and idempotent command/worker execution;
 - real PostgreSQL `refund_unknown -> not_refunded` recovery with exactly one restore ledger entry;
-- cross-layer E2E from Happy Fox Stars package/invoice HTTP through successful payment, signed admin refund HTTP, dedicated worker and final refunded ledger state.
+- cross-layer E2E using package `1000 CREDIT + 250 bonus` from Happy Fox package/invoice HTTP through successful payment (`1250 CREDIT`), signed admin refund (`1250` hold), dedicated worker and final refunded wallet/ledger state (`0`).
 
 The E2E replaces only the external Telegram network adapter; FoxGen HTTP, auth, financial services, PostgreSQL state and worker behavior remain real.
