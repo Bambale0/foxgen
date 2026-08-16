@@ -47,7 +47,9 @@ def _service(request: Request, settings: Settings) -> SunoExtendService:
     storage = S3MediaStorage(
         bucket=settings.s3_bucket,
         region=settings.s3_region,
-        endpoint_url=str(settings.s3_endpoint_url) if settings.s3_endpoint_url is not None else None,
+        endpoint_url=str(settings.s3_endpoint_url)
+        if settings.s3_endpoint_url is not None
+        else None,
         access_key_id=_secret_value(settings.s3_access_key_id),
         secret_access_key=_secret_value(settings.s3_secret_access_key),
         force_path_style=settings.s3_force_path_style,
