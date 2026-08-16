@@ -8,6 +8,7 @@ from sqlalchemy import (
     CheckConstraint,
     DateTime,
     ForeignKey,
+    Integer,
     String,
     Text,
     UniqueConstraint,
@@ -25,6 +26,7 @@ class PaymentRefundAttempt(Base):
         UniqueConstraint("debit_ledger_key", name="uq_payment_refunds_debit_ledger_key"),
         UniqueConstraint("restore_ledger_key", name="uq_payment_refunds_restore_ledger_key"),
         CheckConstraint("amount_units > 0", name="ck_payment_refunds_amount_positive"),
+        CheckConstraint("attempts >= 0", name="ck_payment_refunds_attempts_nonnegative"),
         CheckConstraint(
             "status IN ("
             "'pending', 'processing', 'succeeded', 'failed', 'unknown', "
@@ -53,6 +55,11 @@ class PaymentRefundAttempt(Base):
     status: Mapped[str] = mapped_column(
         String(32), default="pending", server_default="pending", index=True
     )
+    attempts: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    available_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
+    )
+    locked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
     debit_ledger_key: Mapped[str] = mapped_column(String(255))
     restore_ledger_key: Mapped[str | None] = mapped_column(String(255))
     provider_payload: Mapped[dict[str, object]] = mapped_column(JSONB, default=dict)
