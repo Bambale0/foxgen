@@ -16,6 +16,7 @@ let imageFile = null;
 let videoFile = null;
 let imageKey = null;
 let videoKey = null;
+let promptValue = '';
 let submitted = false;
 
 function esc(value) {
@@ -73,7 +74,7 @@ function storagePath(key) {
 }
 
 async function deleteKey(key) {
-  if (!key || submitted) return;
+  if (!key) return;
   try {
     await api(`/input-media/${storagePath(key)}`, { method: 'DELETE' });
   } catch {
@@ -82,13 +83,16 @@ async function deleteKey(key) {
 }
 
 async function resetInputs() {
+  const shouldDelete = !submitted;
   const oldImage = imageKey;
   const oldVideo = videoKey;
   imageKey = null;
   videoKey = null;
   imageFile = null;
   videoFile = null;
-  if (!submitted) await Promise.all([deleteKey(oldImage), deleteKey(oldVideo)]);
+  promptValue = '';
+  submitted = false;
+  if (shouldDelete) await Promise.all([deleteKey(oldImage), deleteKey(oldVideo)]);
 }
 
 function quoteFromBootstrap(data) {
@@ -186,7 +190,7 @@ function ensureMotionProduct() {
   head.insertAdjacentElement('afterend', list);
 }
 
-function selectedFile(name, file, hint) {
+function selectedFile(file, hint) {
   if (!file) return `<small>${hint}</small>`;
   return `<small><strong>${esc(file.name)}</strong> · ${formatBytes(file.size)}</small>`;
 }
@@ -214,18 +218,18 @@ function renderPanel() {
     <div class="motion-input-grid">
       <label class="upload-box motion-file-box">
         <strong>1. Фото персонажа</strong>
-        ${selectedFile('image', imageFile, 'JPEG / PNG · до 10 MB · обе стороны > 340 px')}
+        ${selectedFile(imageFile, 'JPEG / PNG · до 10 MB · обе стороны > 340 px')}
         <input name="motion-image" type="file" accept="image/jpeg,image/png" hidden>
       </label>
       <label class="upload-box motion-file-box">
         <strong>2. Видео движения</strong>
-        ${selectedFile('video', videoFile, 'MP4 / MOV · 3–30 сек · до 100 MB')}
+        ${selectedFile(videoFile, 'MP4 / MOV · 3–30 сек · до 100 MB')}
         <input name="motion-video" type="file" accept="video/mp4,video/quicktime,.mov" hidden>
       </label>
     </div>
     <label class="field motion-prompt-field">
       <span>3. Что должно происходить</span>
-      <textarea name="motion-prompt" maxlength="10000" placeholder="Например: персонаж повторяет танец из видео, движения естественные, лицо стабильно"></textarea>
+      <textarea name="motion-prompt" maxlength="10000" placeholder="Например: персонаж повторяет танец из видео, движения естественные, лицо стабильно">${esc(promptValue)}</textarea>
     </label>
     <div class="notice grunge-lite motion-settings-note">
       <strong>Настройки</strong>
@@ -254,7 +258,7 @@ async function refreshQuote() {
         ? `<small>Цена</small><strong>${Number(value.amount).toLocaleString('ru-RU')} CREDIT</strong><span>Баланс ${Number(value.available).toLocaleString('ru-RU')} CREDIT</span>`
         : `<small>Запуск недоступен</small><strong>—</strong><span>${esc(value.reason)}</span>`;
     }
-    if (submit instanceof HTMLButtonElement) submit.disabled = !value.ok || busy;
+    if (submit instanceof HTMLButtonElement) submit.disabled = submitted || !value.ok || busy;
     if (!value.ok) {
       status(value.reason, value.insufficient ? 'warning' : 'error');
       if (value.insufficient && !host.querySelector('[data-motion-wallet]')) {
@@ -264,7 +268,7 @@ async function refreshQuote() {
         wallet.textContent = 'Пополнить баланс';
         host.querySelector('[data-motion-status]')?.insertAdjacentElement('afterend', wallet);
       }
-    } else {
+    } else if (!submitted) {
       status('Файлы проверятся локально и ещё раз на backend до списания CREDIT.', 'success');
     }
   } catch (error) {
@@ -276,6 +280,10 @@ async function refreshQuote() {
 function bindPanel(host) {
   const image = host.querySelector('[name="motion-image"]');
   const video = host.querySelector('[name="motion-video"]');
+  const prompt = host.querySelector('[name="motion-prompt"]');
+  prompt?.addEventListener('input', () => {
+    promptValue = prompt.value;
+  });
   image?.addEventListener('change', async () => {
     const file = image.files?.[0] ?? null;
     if (!file) return;
@@ -313,7 +321,6 @@ function bindPanel(host) {
     host.remove();
   });
   host.querySelector('[data-motion-submit]')?.addEventListener('click', submitMotion);
-  host.querySelector('[data-motion-wallet]')?.addEventListener('click', openWallet);
 }
 
 async function imageDimensions(file) {
@@ -424,12 +431,12 @@ function idempotencyKey() {
 }
 
 async function submitMotion() {
-  if (busy) return;
+  if (busy || submitted) return;
   const host = panel();
-  const prompt = host?.querySelector('[name="motion-prompt"]')?.value?.trim() ?? '';
+  promptValue = host?.querySelector('[name="motion-prompt"]')?.value?.trim() ?? promptValue.trim();
   if (!imageFile) return status('Добавьте фото персонажа.', 'error');
   if (!videoFile) return status('Добавьте видео движения.', 'error');
-  if (!prompt) return status('Опишите, что должно происходить.', 'error');
+  if (!promptValue) return status('Опишите, что должно происходить.', 'error');
 
   busy = true;
   const submit = host?.querySelector('[data-motion-submit]');
@@ -452,7 +459,7 @@ async function submitMotion() {
         'Idempotency-Key': pending.value,
       },
       body: JSON.stringify({
-        prompt,
+        prompt: promptValue,
         image_storage_key: imageKey,
         video_storage_key: videoKey,
         mode: '720p',
@@ -463,18 +470,20 @@ async function submitMotion() {
     submitted = true;
     sessionStorage.removeItem(pending.key);
     status(`Генерация поставлена в очередь · ${result.generation_id}`, 'success');
+    if (submit instanceof HTMLButtonElement) {
+      submit.disabled = true;
+      submit.textContent = 'В очереди';
+    }
+    for (const field of host?.querySelectorAll('input, textarea') ?? []) field.disabled = true;
     const actions = document.createElement('div');
     actions.className = 'action-grid';
     actions.innerHTML = '<button type="button" data-motion-works>Открыть мои работы</button>';
     host?.append(actions);
-    actions.querySelector('[data-motion-works]')?.addEventListener('click', () => {
-      root?.querySelector('[data-nav="works"]')?.click();
-    });
   } catch (error) {
     status(error?.message ?? String(error), 'error');
   } finally {
     busy = false;
-    if (submit instanceof HTMLButtonElement) submit.disabled = false;
+    if (submit instanceof HTMLButtonElement && !submitted) submit.disabled = false;
   }
 }
 
@@ -516,6 +525,16 @@ root?.addEventListener(
       event.preventDefault();
       event.stopImmediatePropagation();
       openPanel();
+      return;
+    }
+    if (target.closest('[data-motion-wallet]')) {
+      event.preventDefault();
+      openWallet();
+      return;
+    }
+    if (target.closest('[data-motion-works]')) {
+      event.preventDefault();
+      root.querySelector('[data-nav="works"]')?.click();
     }
   },
   true,
