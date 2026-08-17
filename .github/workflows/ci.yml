@@ -40,7 +40,9 @@ jobs:
           python scripts/check_lock.py
       - name: Ruff check
         id: ruff
-        run: ruff check . 2>&1 | tee ruff.log
+        run: |
+          set -o pipefail
+          ruff check . 2>&1 | tee ruff.log
       - name: Publish lint diagnostics
         if: always() && github.event_name == 'pull_request' && steps.ruff.outcome == 'failure'
         uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b
@@ -98,7 +100,9 @@ jobs:
           if-no-files-found: error
       - name: Type check
         id: mypy
-        run: mypy src 2>&1 | tee mypy.log
+        run: |
+          set -o pipefail
+          mypy src 2>&1 | tee mypy.log
       - name: Publish type-check diagnostics
         if: always() && github.event_name == 'pull_request' && steps.mypy.outcome == 'failure'
         uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b
@@ -115,6 +119,7 @@ jobs:
       - name: Unit and contract tests with coverage
         id: tests
         run: |
+          set -o pipefail
           pytest -q \
             --cov=foxgen \
             --cov-report=term-missing \
@@ -203,13 +208,15 @@ jobs:
       - name: Real PostgreSQL Redis and lifecycle tests
         id: integration_tests
         run: |
+          set -o pipefail
           pytest -vv --maxfail=1 \
             --junitxml=/tmp/foxgen-integration.xml \
             tests/integration \
             2>&1 | tee /tmp/foxgen-integration.log
-      - name: Cross-layer payment E2E tests
+      - name: Cross-layer E2E tests
         id: e2e_tests
         run: |
+          set -o pipefail
           pytest -vv --maxfail=1 \
             --junitxml=/tmp/foxgen-e2e.xml \
             tests/e2e \
