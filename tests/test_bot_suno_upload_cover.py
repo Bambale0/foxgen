@@ -120,7 +120,9 @@ async def test_cover_audio_is_stored_in_media_for_global_cancel_cleanup(
     await state.set_state(MusicCoverStates.waiting_audio)
     storage = FakeInputMedia()
     incoming = message()
-    monkeypatch.setattr("foxgen.bot.suno_upload_cover_flow.message_media_kind", lambda _message: "audio")
+    monkeypatch.setattr(
+        "foxgen.bot.suno_upload_cover_flow.message_media_kind", lambda _message: "audio"
+    )
 
     await receive_cover_audio(  # type: ignore[arg-type]
         incoming,
@@ -136,20 +138,21 @@ async def test_cover_audio_is_stored_in_media_for_global_cancel_cleanup(
 
 
 @pytest.mark.asyncio
-async def test_simple_cover_quotes_price_after_prompt() -> None:
+async def test_simple_cover_goes_directly_to_prompt_and_quotes_price() -> None:
     state = FakeState()
     api = FakeApi(price=25, balance=100)
     await state.update_data(input_storage_key="inputs/515/cover.mp3")
     await state.set_state(MusicCoverStates.choosing_mode)
 
     await choose_cover_mode(callback("music:cover:mode:simple"), state)  # type: ignore[arg-type]
-    await choose_cover_vocal(callback("music:cover:vocal:yes"), state)  # type: ignore[arg-type]
+    assert state.current == MusicCoverStates.waiting_prompt.state
+    assert state.data["custom_mode"] is False
+    assert state.data["instrumental"] is False
+
     prompt = message("Make this a dreamy indie-pop cover")
     await receive_cover_prompt(prompt, state, api)  # type: ignore[arg-type]
 
     assert state.current == MusicCoverStates.confirming.state
-    assert state.data["custom_mode"] is False
-    assert state.data["instrumental"] is False
     assert state.data["can_submit"] is True
     rendered = prompt.answer.await_args.args[0]
     assert "25 CREDIT" in rendered
@@ -174,6 +177,19 @@ async def test_custom_instrumental_skips_prompt_and_requires_style_title() -> No
     assert state.current == MusicCoverStates.confirming.state
     assert state.data["prompt"] == ""
     assert state.data["can_submit"] is True
+
+
+@pytest.mark.asyncio
+async def test_simple_mode_rejects_stale_vocal_callback() -> None:
+    state = FakeState()
+    await state.update_data(custom_mode=False)
+    await state.set_state(MusicCoverStates.choosing_vocal_mode)
+    stale = callback("music:cover:vocal:no")
+
+    await choose_cover_vocal(stale, state)  # type: ignore[arg-type]
+
+    assert state.data.get("instrumental") is None
+    stale.answer.assert_awaited_once()
 
 
 @pytest.mark.asyncio
