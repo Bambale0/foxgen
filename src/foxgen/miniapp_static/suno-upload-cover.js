@@ -84,12 +84,14 @@ function syncFields() {
   const host = panel();
   if (!host) return;
   const custom = host.querySelector('[name="suno-cover-mode"]:checked')?.value === 'custom';
-  const instrumental = host.querySelector('[name="suno-cover-instrumental"]')?.checked === true;
+  const instrumentalToggle = host.querySelector('[name="suno-cover-instrumental"]');
+  if (!custom && instrumentalToggle) instrumentalToggle.checked = false;
   for (const item of host.querySelectorAll('[data-suno-cover-custom]')) item.hidden = !custom;
   const prompt = host.querySelector('[name="suno-cover-prompt"]');
+  const instrumental = custom && instrumentalToggle?.checked === true;
   if (prompt) {
     prompt.maxLength = custom ? 5000 : 500;
-    prompt.required = !custom || !instrumental;
+    prompt.required = !instrumental;
     prompt.placeholder = custom && instrumental
       ? 'Необязательно для кастомного инструментала'
       : 'Опишите, как переработать исходное аудио';
@@ -141,7 +143,7 @@ async function submitCover(event) {
     if (!uploadedKey) await uploadAudio(file);
 
     const custom = form.querySelector('[name="suno-cover-mode"]:checked')?.value === 'custom';
-    const instrumental = form.querySelector('[name="suno-cover-instrumental"]')?.checked === true;
+    const instrumental = custom && form.querySelector('[name="suno-cover-instrumental"]')?.checked === true;
     const prompt = form.querySelector('[name="suno-cover-prompt"]')?.value?.trim() ?? '';
     const style = form.querySelector('[name="suno-cover-style"]')?.value?.trim() ?? '';
     const title = form.querySelector('[name="suno-cover-title"]')?.value?.trim() ?? '';
@@ -215,7 +217,7 @@ function openPanel() {
           <label><input type="radio" name="suno-cover-mode" value="simple" checked> Быстрый</label>
           <label><input type="radio" name="suno-cover-mode" value="custom"> Кастомный</label>
         </fieldset>
-        <label><input type="checkbox" name="suno-cover-instrumental"> Инструментал</label>
+        <label data-suno-cover-custom hidden><input type="checkbox" name="suno-cover-instrumental"> Инструментал</label>
         <label><strong>Prompt</strong><textarea name="suno-cover-prompt" maxlength="500" required></textarea></label>
         <label data-suno-cover-custom hidden><strong>Стиль</strong><input name="suno-cover-style" maxlength="1000"></label>
         <label data-suno-cover-custom hidden><strong>Название</strong><input name="suno-cover-title" maxlength="100"></label>
