@@ -184,7 +184,9 @@ async def choose_cover_vocal(callback: CallbackQuery, state: FSMContext) -> None
     data = await state.get_data()
     custom = bool(data.get("custom_mode"))
     if not custom:
-        await callback.answer("Тип результата настраивается только в кастомном режиме.", show_alert=True)
+        await callback.answer(
+            "Тип результата настраивается только в кастомном режиме.", show_alert=True
+        )
         return
     await state.update_data(instrumental=instrumental, can_submit=False)
     if instrumental:
