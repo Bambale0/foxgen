@@ -46,6 +46,16 @@ def test_upload_cover_price_and_balance_are_server_owned() -> None:
     assert "available_units" in script
 
 
+def test_simple_cover_hides_advanced_instrumental_and_custom_fields() -> None:
+    script = (MINIAPP / "suno-upload-cover.js").read_text(encoding="utf-8")
+
+    assert 'data-suno-cover-custom hidden><input type="checkbox"' in script
+    assert "if (!custom && instrumentalToggle) instrumentalToggle.checked = false" in script
+    assert "const instrumental = custom &&" in script
+    assert "style: custom ? style : ''" in script
+    assert "title: custom ? title : ''" in script
+
+
 def test_unsubmitted_cover_input_is_cleaned_on_replace_or_close() -> None:
     script = (MINIAPP / "suno-upload-cover.js").read_text(encoding="utf-8")
 
