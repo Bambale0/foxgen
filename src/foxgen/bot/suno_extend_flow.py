@@ -34,6 +34,7 @@ def _hub_keyboard() -> InlineKeyboardMarkup:
         inline_keyboard=[
             [_button("♫ Новый трек", "music:new")],
             [_button("↗ Продолжить свой трек", "music:extend:start")],
+            [_button("🎧 Cover из аудио", "music:cover:start")],
             [_button("← Главное меню", "music:extend:menu")],
         ]
     )
@@ -112,7 +113,7 @@ async def _show_hub(callback: CallbackQuery, state: FSMContext, *, clear: bool) 
         callback,
         (
             "<b>Музыка · Suno V5</b>\n\n"
-            "Создайте новый трек или продолжите один из своих сохранённых вариантов."
+            "Создайте новый трек, продолжите свой вариант или сделайте Cover из аудио."
         ),
         _hub_keyboard(),
     )
