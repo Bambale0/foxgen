@@ -25,14 +25,11 @@ jobs:
     name: Deploy tested main commit
     if: >-
       ${{
-        vars.AUTODEPLOY_ENABLED == 'true' &&
+        github.event_name == 'workflow_dispatch' ||
         (
-          github.event_name == 'workflow_dispatch' ||
-          (
-            github.event.workflow_run.conclusion == 'success' &&
-            github.event.workflow_run.event == 'push' &&
-            github.event.workflow_run.head_branch == 'main'
-          )
+          github.event.workflow_run.conclusion == 'success' &&
+          github.event.workflow_run.event == 'push' &&
+          github.event.workflow_run.head_branch == 'main'
         )
       }}
     runs-on: ubuntu-24.04

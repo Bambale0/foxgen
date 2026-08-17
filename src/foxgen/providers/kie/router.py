@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from foxgen.core.errors import ErrorCode, ProviderError
 from foxgen.providers.kie.client import KieClient
+from foxgen.providers.kie.motion import KLING_MOTION_API_FAMILY, KlingMotionClient
 from foxgen.providers.kie.suno import (
     SUNO_API_FAMILY,
     SUNO_EXTEND_API_FAMILY,
@@ -11,10 +12,7 @@ from foxgen.providers.kie.suno import (
     SunoExtendClient,
     SunoUploadCoverClient,
 )
-from foxgen.providers.kie.suno_upload_extend import (
-    SUNO_UPLOAD_EXTEND_API_FAMILY,
-    SunoUploadExtendClient,
-)
+
 
 MARKET_API_FAMILY = "market"
 
@@ -29,14 +27,14 @@ class RoutedKieClient:
         self._suno_upload_cover = (
             SunoUploadCoverClient(market, input_media) if input_media is not None else None
         )
-        self._suno_upload_extend = (
-            SunoUploadExtendClient(market, input_media) if input_media is not None else None
+        self._kling_motion = (
+            KlingMotionClient(market, input_media) if input_media is not None else None
         )
 
     def for_family(
         self,
         api_family: str,
-    ) -> KieClient | SunoClient | SunoExtendClient | SunoUploadCoverClient | SunoUploadExtendClient:
+    ) -> KieClient | SunoClient | SunoExtendClient | SunoUploadCoverClient | KlingMotionClient:
         if api_family == MARKET_API_FAMILY:
             return self._market
         if api_family == SUNO_API_FAMILY:
@@ -51,14 +49,14 @@ class RoutedKieClient:
                     retryable=False,
                 )
             return self._suno_upload_cover
-        if api_family == SUNO_UPLOAD_EXTEND_API_FAMILY:
-            if self._suno_upload_extend is None:
+        if api_family == KLING_MOTION_API_FAMILY:
+            if self._kling_motion is None:
                 raise ProviderError(
                     ErrorCode.PROVIDER_UNAVAILABLE,
-                    "Suno Upload & Extend input storage is not configured.",
+                    "Kling Motion Control input storage is not configured.",
                     retryable=False,
                 )
-            return self._suno_upload_extend
+            return self._kling_motion
         raise ProviderError(
             ErrorCode.PROVIDER_PROTOCOL,
             f"Неподдерживаемое семейство API провайдера: {api_family}",
