@@ -1,3 +1,5 @@
+import './user-parity-hardening.js';
+
 const root = document.getElementById('app');
 const tg = window.Telegram?.WebApp ?? null;
 
