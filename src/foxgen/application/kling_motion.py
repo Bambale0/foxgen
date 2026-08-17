@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Protocol
 
+from pydantic import ValidationError
+
 from foxgen.application.media import DownloadedMedia
 from foxgen.application.media_probe import VisualMediaProbe, probe_image, probe_iso_video
 from foxgen.application.submissions import SubmissionReceipt
@@ -57,7 +59,15 @@ class KlingMotionService:
         input_data: dict[str, object],
         idempotency_key: str,
     ) -> SubmissionReceipt:
-        normalized = validate_input(InputContract.KLING_3_MOTION_CONTROL, input_data)
+        try:
+            normalized = validate_input(InputContract.KLING_3_MOTION_CONTROL, input_data)
+        except ValidationError as exc:
+            raise SubmissionError(
+                ErrorCode.VALIDATION,
+                "Некорректные параметры Motion Control.",
+                retryable=False,
+                details={"errors": exc.errors(include_url=False)},
+            ) from exc
         image_key = self._owned_key(user_id, normalized, "image_storage_key")
         video_key = self._owned_key(user_id, normalized, "video_storage_key")
 
