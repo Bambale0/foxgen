@@ -63,7 +63,7 @@ async def test_generic_submit_cannot_cover_foreign_input_and_money_rolls_back() 
                 },
                 idempotency_key=idempotency_key,
             )
-        assert "ck_generations_suno_upload_cover_owner_input" in str(error.value)
+        assert "Suno Upload & Cover input is not owned by generation user" in str(error.value)
 
         async with database.session() as session:
             wallet = await session.get(WalletAccount, attacker_id)
