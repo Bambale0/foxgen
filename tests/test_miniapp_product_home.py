@@ -2,7 +2,6 @@ import shutil
 import subprocess
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
 STATIC = ROOT / "src" / "foxgen" / "miniapp_static"
 HOME_JS = STATIC / "product-home.js"
