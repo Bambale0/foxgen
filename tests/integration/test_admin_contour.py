@@ -349,7 +349,6 @@ async def test_blocked_user_is_rejected_at_transactional_generation_admission() 
                 media_kind=MediaKind.IMAGE,
                 prompt="blocked",
                 input_payload={"prompt": "blocked"},
-                source_publication_id=None,
                 user_concurrency_limit=2,
                 global_concurrency_limit=20,
             )
