@@ -13,6 +13,7 @@ This directory documents the executable state of FoxGen on `main`. Source code, 
 | [`configuration.md`](configuration.md) | Complete configuration groups and production rules |
 | [`api-reference.md`](api-reference.md) | Core, public Mini App, billing/generation and signed internal-admin HTTP surface |
 | [`miniapp.md`](miniapp.md) | Happy Fox public Telegram Mini App UX, auth, API and media boundaries |
+| [`miniapp-user-parity-hardening.md`](miniapp-user-parity-hardening.md) | Multi-result media, playback, publish/unpublish and real Stars affordance hardening for Happy Fox |
 | [`telegram-flows.md`](telegram-flows.md) | User Telegram flows, Quick Start, FSM and `/admin` shell |
 | [`model-matrix.md`](model-matrix.md) | KIE model readiness and contract policy |
 | [`suno-core.md`](suno-core.md) | Suno V5 dedicated API routing, simple/custom contract, multi-track archive and E2E |
