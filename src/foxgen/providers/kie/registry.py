@@ -2,10 +2,10 @@ from dataclasses import replace
 from typing import Iterable
 
 from foxgen.domain.models import Capability, MediaKind, ModelSpec
-from foxgen.providers.kie.catalog import MODEL_SPECS, ModelRegistry as BaseModelRegistry, model
+from foxgen.providers.kie.catalog import MODEL_SPECS, model
+from foxgen.providers.kie.catalog import ModelRegistry as BaseModelRegistry
 from foxgen.providers.kie.contracts import InputContract
 from foxgen.providers.kie.motion import KLING_MOTION_API_FAMILY
-
 
 SUBMISSION_MODEL_SLUGS: frozenset[str] = frozenset(
     {
