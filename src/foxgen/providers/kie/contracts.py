@@ -18,6 +18,7 @@ class InputContract(StrEnum):
     SUNO_V5_GENERATE = "suno_v5_generate"
     SUNO_V5_EXTEND = "suno_v5_extend"
     SUNO_V5_UPLOAD_COVER = "suno_v5_upload_cover"
+    SUNO_V5_UPLOAD_EXTEND = "suno_v5_upload_extend"
     SEEDREAM_45_TEXT = "seedream_45_text"
     SEEDREAM_45_EDIT = "seedream_45_edit"
     SEEDREAM_5_TEXT = "seedream_5_text"
@@ -277,6 +278,57 @@ class SunoV5UploadCoverInput(StrictInput):
         return self
 
 
+class SunoV5UploadExtendInput(StrictInput):
+    """Reviewed V5 upload-extend contract with FoxGen-owned input identity."""
+
+    input_storage_key: str = Field(min_length=8, max_length=512, pattern=r"^inputs/")
+    default_param_flag: bool = False
+    instrumental: bool = False
+    prompt: str = Field(default="", max_length=5_000)
+    style: str = Field(default="", max_length=1_000)
+    title: str = Field(default="", max_length=100)
+    continue_at: float | None = Field(default=None, gt=0)
+    negative_tags: str = Field(default="", max_length=1_000)
+    vocal_gender: Literal["m", "f"] | None = None
+    style_weight: float | None = Field(default=None, ge=0.0, le=1.0)
+    weirdness_constraint: float | None = Field(default=None, ge=0.0, le=1.0)
+    audio_weight: float | None = Field(default=None, ge=0.0, le=1.0)
+    persona_id: str | None = Field(default=None, max_length=128)
+
+    @model_validator(mode="after")
+    def validate_upload_extend_mode(self) -> "SunoV5UploadExtendInput":
+        prompt = self.prompt.strip()
+        style = self.style.strip()
+        title = self.title.strip()
+        advanced_present = bool(
+            style
+            or title
+            or self.continue_at is not None
+            or self.negative_tags.strip()
+            or self.vocal_gender is not None
+            or self.style_weight is not None
+            or self.weirdness_constraint is not None
+            or self.audio_weight is not None
+            or (self.persona_id is not None and self.persona_id.strip())
+        )
+        if not self.default_param_flag:
+            if not prompt:
+                raise ValueError("prompt is required in default upload-extend mode")
+            if advanced_present:
+                raise ValueError("custom upload-extend fields require default_param_flag=true")
+            return self
+
+        if not style:
+            raise ValueError("style is required in custom upload-extend mode")
+        if not title:
+            raise ValueError("title is required in custom upload-extend mode")
+        if self.continue_at is None:
+            raise ValueError("continue_at is required in custom upload-extend mode")
+        if not self.instrumental and not prompt:
+            raise ValueError("prompt is required for custom vocal upload-extend")
+        return self
+
+
 class DialogueLine(StrictInput):
     text: str = Field(min_length=1)
     voice: str = Field(min_length=1)
@@ -404,6 +456,7 @@ CONTRACT_MODELS: dict[InputContract, type[BaseModel]] = {
     InputContract.SUNO_V5_GENERATE: SunoV5GenerateInput,
     InputContract.SUNO_V5_EXTEND: SunoV5ExtendInput,
     InputContract.SUNO_V5_UPLOAD_COVER: SunoV5UploadCoverInput,
+    InputContract.SUNO_V5_UPLOAD_EXTEND: SunoV5UploadExtendInput,
     InputContract.SEEDREAM_45_TEXT: Seedream45TextInput,
     InputContract.SEEDREAM_45_EDIT: Seedream45EditInput,
     InputContract.SEEDREAM_5_TEXT: Seedream5TextInput,
@@ -420,6 +473,7 @@ SCHEMA_VERIFIED_CONTRACTS: frozenset[InputContract] = frozenset(
         InputContract.SUNO_V5_GENERATE,
         InputContract.SUNO_V5_EXTEND,
         InputContract.SUNO_V5_UPLOAD_COVER,
+        InputContract.SUNO_V5_UPLOAD_EXTEND,
         InputContract.SEEDREAM_5_TEXT,
         InputContract.SEEDREAM_5_IMAGE,
         InputContract.NANO_BANANA,
