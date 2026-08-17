@@ -6,7 +6,7 @@ from sqlalchemy import delete, func, select
 
 from foxgen.infra.admin_models import PaymentEvent, TariffVersion
 from foxgen.infra.billing_models import LedgerEntry, WalletAccount
-from foxgen.infra.database import Database, User
+from foxgen.infra.database import Database
 from foxgen.infra.payment_models import UserPaymentOrder
 from foxgen.infra.payments import TelegramStarsInvoiceClient
 from foxgen.infra.payments_bonus import BonusAwareTelegramStarsPaymentService
@@ -183,16 +183,12 @@ async def test_stars_package_bonus_is_snapshotted_and_settled_exactly_once() -> 
             assert order.credits_units == 1250
             assert ledger is not None and ledger.available_delta == 1250
     finally:
-        async with database.session() as session:
-            async with session.begin():
-                await session.execute(
-                    delete(UserPaymentOrder).where(UserPaymentOrder.user_id == user_id)
-                )
-                await session.execute(delete(PaymentEvent).where(PaymentEvent.user_id == user_id))
-                await session.execute(delete(LedgerEntry).where(LedgerEntry.user_id == user_id))
-                await session.execute(delete(WalletAccount).where(WalletAccount.user_id == user_id))
-                await session.execute(delete(User).where(User.id == user_id))
-                if created_versions:
+        # Payment/order/wallet/ledger rows are durable financial evidence. The order
+        # snapshots the package and has no FK to tariff_versions, so only remove the
+        # temporary tariff publications to restore the previous catalog for later tests.
+        if created_versions:
+            async with database.session() as session:
+                async with session.begin():
                     await session.execute(
                         delete(TariffVersion).where(TariffVersion.version.in_(created_versions))
                     )
