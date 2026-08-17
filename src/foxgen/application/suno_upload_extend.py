@@ -8,7 +8,6 @@ from foxgen.application.suno_upload_cover import _owned_input_key
 from foxgen.core.errors import ErrorCode, SubmissionError
 from foxgen.providers.kie.contracts import InputContract, validate_input
 
-
 SUNO_UPLOAD_EXTEND_MODEL_SLUG = "suno-v5-upload-extend"
 
 
