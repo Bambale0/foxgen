@@ -4,9 +4,9 @@ This document describes the production Mini App parity hardening added under iss
 
 ## Scope
 
-The browser enhancement is loaded as `user-parity-hardening.js` from the existing Mini App module graph.
+The browser enhancements are loaded as `user-parity-hardening.js` and `user-parity-phase2.js` from the existing Mini App module graph.
 
-It closes user-facing gaps where backend behavior was already production-capable but the Happy Fox screen did not expose the complete result/action set:
+They close user-facing gaps where backend behavior was already production-capable but the Happy Fox screen did not expose the complete result/action set:
 
 - generation detail renders **every** stored media result instead of only `media[0]`;
 - audio results use a native `<audio controls>` player;
@@ -14,15 +14,18 @@ It closes user-facing gaps where backend behavior was already production-capable
 - every generation result gets its own open/download action;
 - publication detail renders every stored media item, including playable audio;
 - succeeded-generation publication controls converge to **publish / unpublish** by querying the authenticated owner's publications and using the existing `DELETE /generations/{generation_id}/publications/{scope}` route;
+- failed and cancelled generations expose the existing repeat-draft transition instead of ending on a dead detail screen;
+- generic generation studios fail closed when no active server price is published;
+- an insufficient CREDIT balance disables launch before paid admission and exposes the real Telegram Stars top-up action;
 - the Profile payment row is upgraded from the obsolete placeholder to the existing Telegram Stars top-up action;
 - stale Wallet copy is replaced with the real native Telegram Stars settlement semantics;
 - the Profile publications counter scrolls to the user's publication section instead of being a dead control.
 
 ## Trust boundary
 
-The hardening module does not introduce a new business API.
+The hardening modules do not introduce a new business API.
 
-It authenticates exactly like the other Happy Fox browser modules:
+The authenticated enhancement follows the same Happy Fox boundary as the other browser modules:
 
 1. send opaque `Telegram.WebApp.initData` to `POST /v1/miniapp/auth`;
 2. keep the returned short-lived bearer token in JavaScript memory;
@@ -33,17 +36,21 @@ It never receives or sends the internal API token, KIE credentials, Telegram bot
 
 Publication removal remains server-authorized. The browser supplies only generation identity and the requested publication scope; ownership is derived from the Mini App JWT by the backend.
 
-Telegram Stars top-up remains owned by `complete-menu.js` and the existing durable package/invoice/payment settlement path. This slice only makes that already-implemented action reachable from the Profile surface.
+Telegram Stars top-up remains owned by `complete-menu.js` and the existing durable package/invoice/payment settlement path. These slices only make that already-implemented action reachable from Profile and insufficient-balance states.
+
+The no-price and insufficient-balance guards are UX fail-closed checks only. Backend model readiness, current price, balance, reservation and paid admission remain authoritative; the browser never creates its own commercial price or wallet mutation.
 
 ## Progressive enhancement and failure behavior
 
 The canonical `parity-app.js` renderer remains the fallback.
 
-The hardening module observes screen changes and only enhances matching generation/publication/profile/wallet DOM. If an enhancement fetch fails, it leaves the base renderer intact rather than hiding an otherwise usable screen.
+The hardening modules observe screen changes and only enhance matching generation/publication/profile/wallet/studio DOM. If an authenticated enhancement fetch fails, it leaves the base renderer intact rather than hiding an otherwise usable screen.
 
 Generation and publication media are re-fetched through owner-safe Mini App detail APIs so multi-result pages use fresh short-lived media URLs. No provider temporary URL is persisted in browser state.
 
-The module does not poll independently for generation lifecycle state. Existing `parity-app.js` polling remains authoritative; enhancement runs after each terminal render.
+The module does not poll independently for generation lifecycle state. Existing `parity-app.js` polling remains authoritative; media enhancement runs on the succeeded terminal screen.
+
+Retry reuses the existing `data-repeat-generation` transition from `parity-app.js`, so a new draft/idempotency key is created through the ordinary studio path instead of resubmitting an old billable request.
 
 ## Planned products remain planned
 
@@ -62,21 +69,28 @@ This change does **not** enable Motion Control/talking avatar, Prompt AI, conver
 - multi-media publication detail;
 - absence of internal/admin/provider credentials in the browser module.
 
-Local frontend smoke for this slice:
+`tests/test_miniapp_user_parity_phase2.py` checks:
+
+- retry affordance for failed/cancelled generations;
+- fail-closed no-price state;
+- insufficient-balance state and real Stars top-up affordance.
+
+Local frontend smoke for these slices:
 
 ```bash
 node --check src/foxgen/miniapp_static/user-parity-hardening.js
+node --check src/foxgen/miniapp_static/user-parity-phase2.js
 node --check src/foxgen/miniapp_static/promo-redeem.js
-pytest -q tests/test_miniapp_user_parity_hardening.py
+pytest -q tests/test_miniapp_user_parity_hardening.py tests/test_miniapp_user_parity_phase2.py
 ```
 
-Full repository CI remains required before merge.
+The current narrow suite returns 9 passing tests. Full repository CI remains required before merge.
 
 ## Rollback
 
 Rollback is transport-only:
 
-1. remove the import of `user-parity-hardening.js` from `promo-redeem.js`;
-2. remove the module and its regression test/documentation.
+1. remove the imports of `user-parity-hardening.js` and `user-parity-phase2.js` from `promo-redeem.js`;
+2. remove the modules and their regression tests/documentation.
 
 No database migration, provider operation, billing mutation or durable state rollback is required.
