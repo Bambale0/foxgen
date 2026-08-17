@@ -2,7 +2,7 @@ import os
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import delete, func, select
+from sqlalchemy import func, select, update
 
 from foxgen.application.submissions import NoopSubmissionRateLimiter, SubmissionService
 from foxgen.core.errors import ErrorCode, SubmissionError
@@ -174,9 +174,12 @@ async def test_suno_price_wallet_reservation_and_outbox_are_exactly_once() -> No
             assert reserve_entries[0].reserved_delta == 55
             assert len(outbox) == 1
     finally:
-        async with database.session() as session:
-            async with session.begin():
-                await session.execute(delete(User).where(User.id == user_id))
-                if price_id is not None:
-                    await session.execute(delete(ModelPrice).where(ModelPrice.id == price_id))
+        # The reservation references this price snapshot and the wallet/ledger state is
+        # durable billing evidence. Disable the fixture so later tests cannot select it.
+        if price_id is not None:
+            async with database.session() as session:
+                async with session.begin():
+                    await session.execute(
+                        update(ModelPrice).where(ModelPrice.id == price_id).values(enabled=False)
+                    )
         await database.close()

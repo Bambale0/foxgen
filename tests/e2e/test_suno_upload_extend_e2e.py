@@ -41,17 +41,17 @@ pytestmark = pytest.mark.skipif(
 )
 
 
-MODEL = "suno-v5-upload-cover"
-JWT_SECRET = "cover-e2e-miniapp-jwt-secret-long-enough"
-RESULT_A = "https://cdn.example.test/cover-a.mp3"
-RESULT_B = "https://cdn.example.test/cover-b.mp3"
+MODEL = "suno-v5-upload-extend"
+JWT_SECRET = "upload-extend-e2e-miniapp-jwt-secret-long-enough"
+RESULT_A = "https://cdn.example.test/upload-extend-a.mp3"
+RESULT_B = "https://cdn.example.test/upload-extend-b.mp3"
 
 
 class FakeResultDownloader:
     async def download(self, url: str) -> DownloadedMedia:
         body = f"ID3-{url.rsplit('/', 1)[-1]}".encode()
         handle = tempfile.NamedTemporaryFile(
-            prefix="foxgen-cover-result-", suffix=".mp3", delete=False
+            prefix="foxgen-upload-extend-result-", suffix=".mp3", delete=False
         )
         try:
             handle.write(body)
@@ -65,9 +65,6 @@ class FakeResultDownloader:
             size_bytes=len(body),
             checksum_sha256=hashlib.sha256(body).hexdigest(),
         )
-
-    async def aclose(self) -> None:
-        return None
 
 
 class FakeResultStorage:
@@ -97,19 +94,19 @@ class FakeTelegramSender:
 
     async def send(self, *, recipient_id: int, urls: list[str], caption: str) -> list[int]:
         self.calls.append({"recipient_id": recipient_id, "urls": list(urls), "caption": caption})
-        return [5001 + index for index in range(len(urls))]
+        return [6101 + index for index in range(len(urls))]
 
 
 def auth(user_id: int, username: str) -> str:
     return issue_miniapp_token(
-        TelegramMiniAppUser(id=user_id, first_name="Cover", username=username),
+        TelegramMiniAppUser(id=user_id, first_name="Extend", username=username),
         secret=JWT_SECRET,
         ttl_seconds=3600,
     )
 
 
 @pytest.mark.asyncio
-async def test_happy_fox_owner_audio_cover_reaches_two_track_delivery() -> None:
+async def test_happy_fox_owner_audio_upload_extend_reaches_two_track_delivery() -> None:
     database = Database(os.environ["FOXGEN_DATABASE_URL"])
     billing = SqlAlchemyBillingRepository(database)
     lifecycle = BillingAwareLifecycleRepository(database)
@@ -117,7 +114,7 @@ async def test_happy_fox_owner_audio_cover_reaches_two_track_delivery() -> None:
         repository=SqlAlchemyGenerationRepository(database),
         rate_limiter=NoopSubmissionRateLimiter(),
     )
-    owner_id = 995_000_000 + uuid4().int % 200_000
+    owner_id = 996_000_000 + uuid4().int % 200_000
     foreign_id = owner_id + 300_000
     price = await billing.set_model_price(
         model_slug=MODEL,
@@ -125,24 +122,24 @@ async def test_happy_fox_owner_audio_cover_reaches_two_track_delivery() -> None:
         currency="CREDIT",
         active_from=datetime.now(timezone.utc),
         active_until=None,
-        metadata={"test": "suno-upload-cover-e2e"},
+        metadata={"test": "suno-upload-extend-e2e"},
     )
     await billing.adjust_balance(
         user_id=owner_id,
-        username="cover_owner",
+        username="upload_extend_owner",
         amount_units=100,
-        idempotency_key=f"cover-e2e-credit-{owner_id}",
+        idempotency_key=f"upload-extend-e2e-credit-{owner_id}",
         actor="test:e2e",
-        reason="Cover E2E starting balance",
+        reason="Upload Extend E2E starting balance",
     )
 
-    with tempfile.TemporaryDirectory(prefix="foxgen-cover-inputs-") as input_root:
+    with tempfile.TemporaryDirectory(prefix="foxgen-upload-extend-inputs-") as input_root:
         settings = Settings(
             env="test",
             miniapp_enabled=True,
             miniapp_jwt_secret=JWT_SECRET,
             task_submission_enabled=True,
-            internal_api_token="cover-e2e-internal-token",
+            internal_api_token="upload-extend-e2e-internal-token",
             telegram_input_storage_root=input_root,
             telegram_input_public_base_url="https://foxgen.example.test",
             telegram_input_presigned_url_ttl_seconds=600,
@@ -155,48 +152,52 @@ async def test_happy_fox_owner_audio_cover_reaches_two_track_delivery() -> None:
             submission_service=submission,
             billing_service=billing,
         )
-        transport = httpx.ASGITransport(app=app, client=("127.0.0.1", 37123))
-        owner_token = auth(owner_id, "cover_owner")
-        foreign_token = auth(foreign_id, "cover_foreign")
+        transport = httpx.ASGITransport(app=app, client=("127.0.0.1", 38123))
+        owner_token = auth(owner_id, "upload_extend_owner")
+        foreign_token = auth(foreign_id, "upload_extend_foreign")
         provider_posts: list[dict[str, object]] = []
 
         async def provider_handler(request: httpx.Request) -> httpx.Response:
-            if request.method == "POST" and request.url.path == "/api/v1/generate/upload-cover":
+            if request.method == "POST" and request.url.path == "/api/v1/generate/upload-extend":
                 body = json.loads(request.content.decode())
                 provider_posts.append(body)
                 assert body["model"] == "V5"
-                assert body["customMode"] is True
+                assert body["defaultParamFlag"] is True
                 assert body["instrumental"] is False
-                assert body["title"] == "Neon Cover"
+                assert body["title"] == "Neon Extension"
+                assert body["continueAt"] == 45.0
                 assert str(body["uploadUrl"]).startswith(
                     "https://foxgen.example.test/v1/input-media/"
                 )
                 assert "input_storage_key" not in body
-                return httpx.Response(200, json={"code": 200, "data": {"taskId": "cover-e2e-task"}})
+                return httpx.Response(
+                    200,
+                    json={"code": 200, "data": {"taskId": "upload-extend-e2e-task"}},
+                )
             if request.method == "GET" and request.url.path == "/api/v1/generate/record-info":
-                assert request.url.params["taskId"] == "cover-e2e-task"
+                assert request.url.params["taskId"] == "upload-extend-e2e-task"
                 return httpx.Response(
                     200,
                     json={
                         "code": 200,
                         "data": {
-                            "taskId": "cover-e2e-task",
+                            "taskId": "upload-extend-e2e-task",
                             "status": "SUCCESS",
-                            "type": "upload_cover",
+                            "type": "upload_extend",
                             "response": {
                                 "sunoData": [
                                     {
-                                        "id": "cover-track-a",
+                                        "id": "upload-extend-track-a",
                                         "audioUrl": RESULT_A,
-                                        "title": "Neon Cover A",
-                                        "duration": 150.0,
+                                        "title": "Neon Extension A",
+                                        "duration": 170.0,
                                         "sourceAudioUrl": "https://provider-helper.example/source.mp3",
                                     },
                                     {
-                                        "id": "cover-track-b",
+                                        "id": "upload-extend-track-b",
                                         "audioUrl": RESULT_B,
-                                        "title": "Neon Cover B",
-                                        "duration": 148.0,
+                                        "title": "Neon Extension B",
+                                        "duration": 168.0,
                                     },
                                 ]
                             },
@@ -234,7 +235,7 @@ async def test_happy_fox_owner_audio_cover_reaches_two_track_delivery() -> None:
             registry=ModelRegistry(),
             callback_url="https://foxgen.example.test/webhooks/kie",
             media_pipeline=media,
-            worker_id="cover-e2e-worker",
+            worker_id="upload-extend-e2e-worker",
             batch_size=10,
             max_attempts=3,
         )
@@ -248,7 +249,7 @@ async def test_happy_fox_owner_audio_cover_reaches_two_track_delivery() -> None:
                         "Authorization": f"Bearer {owner_token}",
                         "Content-Type": "audio/mpeg",
                     },
-                    content=b"ID3-owner-cover-source",
+                    content=b"ID3-owner-upload-extend-source",
                 )
                 assert upload.status_code == 201
                 storage_key = upload.json()["storage_key"]
@@ -256,37 +257,38 @@ async def test_happy_fox_owner_audio_cover_reaches_two_track_delivery() -> None:
                 assert "http" not in storage_key
 
                 foreign = await client.post(
-                    "/v1/miniapp/music/suno/upload-cover",
+                    "/v1/miniapp/music/suno/upload-extend",
                     headers={
                         "Authorization": f"Bearer {foreign_token}",
-                        "Idempotency-Key": "foreign-cover",
+                        "Idempotency-Key": "foreign-upload-extend",
                     },
                     json={
                         "input_storage_key": storage_key,
-                        "custom_mode": False,
+                        "default_param_flag": False,
                         "instrumental": False,
                         "prompt": "steal this source",
                     },
                 )
                 assert foreign.status_code == 404
 
-                cover = await client.post(
-                    "/v1/miniapp/music/suno/upload-cover",
+                result = await client.post(
+                    "/v1/miniapp/music/suno/upload-extend",
                     headers={
                         "Authorization": f"Bearer {owner_token}",
-                        "Idempotency-Key": "owner-cover-001",
+                        "Idempotency-Key": "owner-upload-extend-001",
                     },
                     json={
                         "input_storage_key": storage_key,
-                        "custom_mode": True,
+                        "default_param_flag": True,
                         "instrumental": False,
-                        "prompt": "[Verse] new lyrics over the same melodic idea",
+                        "prompt": "[Verse] continue with a warm vocal bridge",
                         "style": "synthwave, warm female vocal",
-                        "title": "Neon Cover",
+                        "title": "Neon Extension",
+                        "continue_at": 45.0,
                     },
                 )
-                assert cover.status_code == 202
-                generation_id = UUID(cover.json()["generation_id"])
+                assert result.status_code == 202
+                generation_id = UUID(result.json()["generation_id"])
 
             assert await worker.run_once() == 1
             assert len(provider_posts) == 1
@@ -326,6 +328,7 @@ async def test_happy_fox_owner_audio_cover_reaches_two_track_delivery() -> None:
                 assert generation is not None
                 assert generation.status == GenerationStatus.SUCCEEDED
                 assert generation.input_payload["input_storage_key"] == storage_key
+                assert generation.input_payload["continue_at"] == 45.0
                 assert "uploadUrl" not in generation.input_payload
                 assert "upload_url" not in generation.input_payload
                 assert generation.result_payload["audioUrls"] == [RESULT_A, RESULT_B]

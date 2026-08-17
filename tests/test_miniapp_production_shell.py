@@ -20,6 +20,7 @@ def test_production_shell_loads_all_user_parity_modules() -> None:
         "suno-parity.js",
         "suno-extend.js",
         "suno-upload-cover.js",
+        "suno-upload-extend.js",
         "motion-control.js",
         "promo-redeem.js",
     ):

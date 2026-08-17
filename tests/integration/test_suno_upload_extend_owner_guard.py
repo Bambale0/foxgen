@@ -4,9 +4,9 @@ from uuid import uuid4
 
 import pytest
 from sqlalchemy import func, select
-from sqlalchemy.exc import IntegrityError
 
 from foxgen.application.submissions import NoopSubmissionRateLimiter, SubmissionService
+from foxgen.core.errors import ErrorCode, SubmissionError
 from foxgen.infra.billing import SqlAlchemyBillingRepository
 from foxgen.infra.billing_models import BalanceReservation, LedgerEntry, WalletAccount
 from foxgen.infra.database import Database, Generation, OutboxEvent
@@ -18,52 +18,52 @@ pytestmark = pytest.mark.skipif(
 )
 
 
-MODEL = "suno-v5-upload-cover"
+MODEL = "suno-v5-upload-extend"
 
 
 @pytest.mark.asyncio
-async def test_generic_submit_cannot_cover_foreign_input_and_money_rolls_back() -> None:
+async def test_generic_submit_cannot_extend_foreign_input_and_money_rolls_back() -> None:
     database = Database(os.environ["FOXGEN_DATABASE_URL"])
     billing = SqlAlchemyBillingRepository(database)
     service = SubmissionService(
         repository=SqlAlchemyGenerationRepository(database),
         rate_limiter=NoopSubmissionRateLimiter(),
     )
-    owner_id = 812_000_000 + uuid4().int % 100_000
+    owner_id = 813_000_000 + uuid4().int % 100_000
     attacker_id = owner_id + 200_000
-    idempotency_key = f"cover-forged-{uuid4()}"
+    idempotency_key = f"upload-extend-forged-{uuid4()}"
     await billing.set_model_price(
         model_slug=MODEL,
         amount_units=25,
         currency="CREDIT",
         active_from=datetime.now(timezone.utc),
         active_until=None,
-        metadata={"test": "cover-owner-guard"},
+        metadata={"test": "upload-extend-owner-guard"},
     )
     await billing.adjust_balance(
         user_id=attacker_id,
-        username="cover_attacker",
+        username="upload_extend_attacker",
         amount_units=100,
-        idempotency_key=f"cover-guard-credit-{attacker_id}",
+        idempotency_key=f"upload-extend-guard-credit-{attacker_id}",
         actor="test",
         reason="owner guard starting balance",
     )
 
     try:
-        with pytest.raises(IntegrityError) as error:
+        with pytest.raises(SubmissionError) as error:
             await service.submit(
                 user_id=attacker_id,
-                username="cover_attacker",
+                username="upload_extend_attacker",
                 model_slug=MODEL,
                 input_data={
                     "input_storage_key": f"inputs/{owner_id}/source.mp3",
-                    "custom_mode": False,
+                    "default_param_flag": False,
                     "instrumental": False,
-                    "prompt": "dream pop cover",
+                    "prompt": "continue this source",
                 },
                 idempotency_key=idempotency_key,
             )
-        assert "Suno Upload & Cover input is not owned by generation user" in str(error.value)
+        assert error.value.code == ErrorCode.TASK_NOT_FOUND
 
         async with database.session() as session:
             wallet = await session.get(WalletAccount, attacker_id)

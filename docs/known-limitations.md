@@ -31,9 +31,9 @@ The current TTS slice does **not** claim voice cloning, speech-to-speech, dialog
 
 ### Suno/music
 
-Suno V5 core text-to-song, owner-bound V5 Extend and owner-bound V5 Upload & Cover are executable product slices. Core generation supports simple/custom and vocal/instrumental modes. Extend lets a user choose only their own `SUCCEEDED` + STORED Suno result, then either inherit source parameters or submit a custom V5 continuation. Upload & Cover accepts only a FoxGen-owned private audio upload; the public client never supplies a trusted KIE `uploadUrl`.
+Suno V5 core text-to-song, owner-bound V5 Extend, owner-bound V5 Upload & Cover and owner-bound V5 Upload & Extend are executable product slices. Core generation supports simple/custom and vocal/instrumental modes. Extend lets a user choose only their own `SUCCEEDED` + STORED Suno result, then either inherit source parameters or submit a custom V5 continuation. Upload products accept only FoxGen-owned private audio; the public client never supplies a trusted KIE `uploadUrl`.
 
-All three products use dedicated KIE Suno API-family routing and the shared paid reservation/capture, immutable ledger, multi-track archive and Telegram delivery lifecycle. No commercial price is hardcoded; each model slug remains fail-closed until an active price is published.
+All four products use dedicated KIE Suno API-family routing and the shared paid reservation/capture, immutable ledger, multi-track archive and Telegram delivery lifecycle. No commercial price is hardcoded; each model slug remains fail-closed until an active price is published.
 
 Extend deliberately adds stronger source ownership than ordinary text generation:
 
@@ -42,28 +42,27 @@ Extend deliberately adds stronger source ownership than ordinary text generation
 - the application re-verifies `(user_id, source_generation_id, audio_id)` before paid submission;
 - PostgreSQL revision `20260816_0016` rejects forged `suno-v5-extend` generation rows even if a future caller tries to bypass the owner service through generic task admission.
 
-Upload & Cover adds a corresponding private-input boundary:
+Upload & Cover and Upload & Extend add a corresponding private-input boundary:
 
 - Telegram/Happy Fox upload audio into owner-scoped FoxGen input storage;
 - durable generation input contains only `input_storage_key`, never a provider URL;
 - the application checks owner prefix, existence, size and `audio/*` before paid admission;
-- PostgreSQL revision `20260817_0017` rejects forged/foreign input keys at the durable generation boundary;
+- PostgreSQL revisions `20260817_0017` and `20260817_0018` reject forged/foreign input keys for Cover and Upload & Extend respectively;
 - the worker resolves a fresh short-lived FoxGen URL immediately before the KIE POST;
-- simple mode exposes only prompt; instrumental/style/title/advanced options are custom-only;
+- default/simple modes expose only reviewed minimal fields; custom-only controls are not sent in default mode;
 - provider helper/source/stream/artwork URLs are not archived as generated assets.
 
-KIE documents an 8-minute maximum uploaded-audio duration. FoxGen currently has reliable owner/content-type/byte-size metadata but does not derive trustworthy audio duration for private uploads, so duration remains provider-authoritative for this slice. Do not claim local 8-minute pre-validation until duration metadata/media probing is implemented.
+KIE documents an 8-minute maximum uploaded-audio duration for the Upload & Extend request contract and requires custom `continueAt` to be greater than zero and lower than source duration. FoxGen currently has reliable owner/content-type/byte-size metadata but does not derive trustworthy audio duration for private uploads. FoxGen therefore validates positive `continue_at` locally while KIE remains authoritative for the upper source-duration bound. Do not claim local duration/8-minute pre-validation until duration metadata/media probing is implemented.
 
 The Suno implementation still does **not** claim the rest of issue #15:
 
-- upload-and-extend for arbitrary uploaded source audio;
 - add vocals / add instrumental / replace section;
 - lyrics-only workflows;
 - WAV conversion/download helpers;
 - vocal/instrument separation / stems;
 - MIDI;
-- mashup / persona / music video / Suno voice features;
-- dedicated Suno callback ingestion. Current generation/Extend/Cover flows remain polling-driven until that callback contract is reviewed separately.
+- mashup / music video / Suno voice features;
+- dedicated Suno callback ingestion. Current generation/Extend/Cover/Upload-Extend flows remain polling-driven until that callback contract is reviewed separately.
 
 ### Remaining planned generation products
 

@@ -1,5 +1,5 @@
 import os
-from uuid import UUID, uuid4
+from uuid import uuid4
 
 import pytest
 from sqlalchemy import delete, func, select
@@ -119,7 +119,7 @@ async def test_generic_extend_cannot_reference_foreign_owned_suno_track() -> Non
                 },
                 idempotency_key=f"foreign-extend-{uuid4()}",
             )
-        assert "ck_generations_suno_extend_owner_source" in str(error.value)
+        assert "Suno Extend source is not an owned succeeded Suno track" in str(error.value)
 
         async with database.session() as session:
             wallet = await session.get(WalletAccount, foreign_id)
