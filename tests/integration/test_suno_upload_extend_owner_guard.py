@@ -6,7 +6,6 @@ import pytest
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 
-from foxgen.application.billing import BillingServiceProtocol
 from foxgen.application.submissions import NoopSubmissionRateLimiter, SubmissionService
 from foxgen.infra.billing import SqlAlchemyBillingRepository
 from foxgen.infra.billing_models import BalanceReservation, LedgerEntry, WalletAccount
@@ -25,7 +24,7 @@ MODEL = "suno-v5-upload-extend"
 @pytest.mark.asyncio
 async def test_generic_submit_cannot_extend_foreign_input_and_money_rolls_back() -> None:
     database = Database(os.environ["FOXGEN_DATABASE_URL"])
-    billing: BillingServiceProtocol = SqlAlchemyBillingRepository(database)
+    billing = SqlAlchemyBillingRepository(database)
     service = SubmissionService(
         repository=SqlAlchemyGenerationRepository(database),
         rate_limiter=NoopSubmissionRateLimiter(),
