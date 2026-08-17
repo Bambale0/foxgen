@@ -158,10 +158,7 @@ async def choose_cover_mode(callback: CallbackQuery, state: FSMContext) -> None:
     await state.set_state(MusicCoverStates.choosing_vocal_mode)
     await safe_edit_callback_message(
         callback,
-        (
-            "<b>Тип результата</b>\n\n"
-            "Выберите вокальный Cover или инструментальную переработку."
-        ),
+        ("<b>Тип результата</b>\n\nВыберите вокальный Cover или инструментальную переработку."),
         _vocal_keyboard(),
     )
 
