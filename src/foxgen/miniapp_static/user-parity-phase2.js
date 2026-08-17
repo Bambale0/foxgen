@@ -33,9 +33,45 @@ function enhanceRetryAction() {
   actions.prepend(button);
 }
 
+function profileTopup(button) {
+  if (!(button instanceof HTMLButtonElement)) return;
+  if (
+    button.dataset.userParityTopup === '1'
+    && button.textContent?.includes('Telegram Stars')
+  ) return;
+  button.disabled = false;
+  button.removeAttribute('aria-disabled');
+  button.dataset.starsTopup = '1';
+  button.dataset.userParityTopup = '1';
+  button.innerHTML = 'Пополнить баланс <small>Telegram Stars</small><span>›</span>';
+}
+
+function normalizeProfilePayments() {
+  const settings = root?.querySelector('.settings-list');
+  if (!(settings instanceof HTMLElement)) return;
+  const buttons = [...settings.querySelectorAll('button')];
+  const stale = buttons.find((button) => button.textContent?.includes('Платежи'));
+  const topups = buttons.filter((button) => button.textContent?.includes('Пополнить баланс'));
+
+  if (stale instanceof HTMLButtonElement) {
+    for (const button of topups) {
+      if (button !== stale) button.remove();
+    }
+    profileTopup(stale);
+    return;
+  }
+
+  const [primary, ...duplicates] = topups;
+  for (const button of duplicates) button.remove();
+  profileTopup(primary);
+}
+
 function admissionNotice(card, kind, message, { topup = false } = {}) {
-  let notice = card.querySelector('[data-parity-admission-notice]');
-  if (!(notice instanceof HTMLElement)) {
+  let notice = card.nextElementSibling;
+  if (
+    !(notice instanceof HTMLElement)
+    || !notice.hasAttribute('data-parity-admission-notice')
+  ) {
     notice = document.createElement('div');
     notice.className = 'notice grunge-lite';
     notice.dataset.parityAdmissionNotice = '1';
@@ -70,13 +106,18 @@ function enhanceAdmissionCard() {
     previous instanceof HTMLElement
     && previous.hasAttribute('data-parity-admission-notice')
     && state === 'ready'
-  ) {
-    previous.remove();
-  }
+  ) previous.remove();
 
   if (state === 'no-price') {
     submit.disabled = true;
     submit.textContent = 'Цена не опубликована';
+    if (card.querySelector('[data-tts-price-warning],[data-suno-price-warning]')) {
+      if (
+        previous instanceof HTMLElement
+        && previous.hasAttribute('data-parity-admission-notice')
+      ) previous.remove();
+      return;
+    }
     admissionNotice(
       card,
       state,
@@ -98,6 +139,7 @@ function enhanceAdmissionCard() {
 }
 
 function enhance() {
+  normalizeProfilePayments();
   enhanceRetryAction();
   enhanceAdmissionCard();
 }
