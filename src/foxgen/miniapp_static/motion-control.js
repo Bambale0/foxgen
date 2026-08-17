@@ -8,7 +8,8 @@ const MIN_SIDE = 341;
 const MIN_RATIO = 2 / 5;
 const MAX_RATIO = 5 / 2;
 const MIN_DURATION = 3;
-const MAX_DURATION = 30;
+const IMAGE_ORIENTATION_MAX_DURATION = 10;
+const VIDEO_ORIENTATION_MAX_DURATION = 30;
 
 let token = null;
 let busy = false;
@@ -17,6 +18,8 @@ let videoFile = null;
 let imageKey = null;
 let videoKey = null;
 let promptValue = '';
+let modeValue = '720p';
+let orientationValue = 'image';
 let submitted = false;
 
 function esc(value) {
@@ -33,6 +36,12 @@ function formatBytes(value) {
   if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
   if (bytes < 1024 * 1024) return `${Math.ceil(bytes / 1024)} KB`;
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function durationLimit() {
+  return orientationValue === 'image'
+    ? IMAGE_ORIENTATION_MAX_DURATION
+    : VIDEO_ORIENTATION_MAX_DURATION;
 }
 
 async function auth(force = false) {
@@ -91,6 +100,8 @@ async function resetInputs() {
   imageFile = null;
   videoFile = null;
   promptValue = '';
+  modeValue = '720p';
+  orientationValue = 'image';
   submitted = false;
   if (shouldDelete) await Promise.all([deleteKey(oldImage), deleteKey(oldVideo)]);
 }
@@ -181,7 +192,7 @@ function ensureMotionProduct() {
       <div>
         <strong>Kling 3.0 Motion Control</strong>
         <small>Фото персонажа + видео движения · цена из backend</small>
-        <p>Перенос позы и движения без технических настроек провайдера</p>
+        <p>720p / 1080p · перенос движения с выбором ориентации</p>
       </div>
       <span>›</span>
     </button>
@@ -206,6 +217,7 @@ function renderPanel() {
     list.insertAdjacentElement('afterend', host);
   }
 
+  const maxDuration = durationLimit();
   host.innerHTML = `
     <div class="section-head">
       <div>
@@ -223,17 +235,33 @@ function renderPanel() {
       </label>
       <label class="upload-box motion-file-box">
         <strong>2. Видео движения</strong>
-        ${selectedFile(videoFile, 'MP4 / MOV · 3–30 сек · до 100 MB')}
+        ${selectedFile(videoFile, `MP4 / MOV · 3–${maxDuration} сек · до 100 MB`)}
         <input name="motion-video" type="file" accept="video/mp4,video/quicktime,.mov" hidden>
       </label>
     </div>
     <label class="field motion-prompt-field">
       <span>3. Что должно происходить</span>
-      <textarea name="motion-prompt" maxlength="10000" placeholder="Например: персонаж повторяет танец из видео, движения естественные, лицо стабильно">${esc(promptValue)}</textarea>
+      <textarea name="motion-prompt" maxlength="2500" placeholder="Например: персонаж повторяет танец из видео, движения естественные, лицо стабильно">${esc(promptValue)}</textarea>
     </label>
+    <div class="motion-options-grid">
+      <label class="field">
+        <span>Качество</span>
+        <select name="motion-mode">
+          <option value="720p" ${modeValue === '720p' ? 'selected' : ''}>720p · быстрее</option>
+          <option value="1080p" ${modeValue === '1080p' ? 'selected' : ''}>1080p · выше детализация</option>
+        </select>
+      </label>
+      <label class="field">
+        <span>Ориентация персонажа</span>
+        <select name="motion-orientation">
+          <option value="image" ${orientationValue === 'image' ? 'selected' : ''}>Как на фото · видео до 10 сек</option>
+          <option value="video" ${orientationValue === 'video' ? 'selected' : ''}>Как в motion-видео · до 30 сек</option>
+        </select>
+      </label>
+    </div>
     <div class="notice grunge-lite motion-settings-note">
-      <strong>Настройки</strong>
-      <span>720p · движение берём из видео · внешний вид персонажа из фото · фон из motion video</span>
+      <strong>Как это работает</strong>
+      <span>${orientationValue === 'image' ? 'Сохраняем ориентацию персонажа из фото; движение берём из видео.' : 'Ориентация персонажа следует motion-видео; доступны ролики до 30 секунд.'} Фон берём из motion-видео.</span>
     </div>
     <div class="launch-card grunge-card motion-launch">
       <div data-motion-quote><small>Цена</small><strong>Проверяем…</strong><span>Из backend</span></div>
@@ -281,9 +309,37 @@ function bindPanel(host) {
   const image = host.querySelector('[name="motion-image"]');
   const video = host.querySelector('[name="motion-video"]');
   const prompt = host.querySelector('[name="motion-prompt"]');
+  const mode = host.querySelector('[name="motion-mode"]');
+  const orientation = host.querySelector('[name="motion-orientation"]');
+
   prompt?.addEventListener('input', () => {
     promptValue = prompt.value;
   });
+  mode?.addEventListener('change', () => {
+    modeValue = mode.value;
+  });
+  orientation?.addEventListener('change', async () => {
+    orientationValue = orientation.value;
+    let message = orientationValue === 'image'
+      ? 'Режим по фото: motion-видео должно быть 3–10 секунд.'
+      : 'Режим по видео: motion-видео может длиться 3–30 секунд.';
+    let kind = 'success';
+    if (videoFile) {
+      try {
+        await validateVideo(videoFile, orientationValue);
+      } catch (error) {
+        const oldKey = videoKey;
+        videoKey = null;
+        videoFile = null;
+        await deleteKey(oldKey);
+        message = error?.message ?? String(error);
+        kind = 'error';
+      }
+    }
+    renderPanel()?.scrollIntoView({ block: 'start' });
+    status(message, kind);
+  });
+
   image?.addEventListener('change', async () => {
     const file = image.files?.[0] ?? null;
     if (!file) return;
@@ -304,7 +360,7 @@ function bindPanel(host) {
     const file = video.files?.[0] ?? null;
     if (!file) return;
     try {
-      await validateVideo(file);
+      await validateVideo(file, orientationValue);
       const oldKey = videoKey;
       videoKey = null;
       videoFile = file;
@@ -392,7 +448,7 @@ async function validateImage(file) {
   validateGeometry(await imageDimensions(file), 'Фото');
 }
 
-async function validateVideo(file) {
+async function validateVideo(file, orientation = orientationValue) {
   const allowed = ['video/mp4', 'video/quicktime'];
   const movByName = file.name.toLowerCase().endsWith('.mov');
   if (!allowed.includes(file.type) && !movByName) {
@@ -403,12 +459,15 @@ async function validateVideo(file) {
   }
   const metadata = await videoMetadata(file);
   validateGeometry(metadata, 'Видео');
+  const maxDuration = orientation === 'image'
+    ? IMAGE_ORIENTATION_MAX_DURATION
+    : VIDEO_ORIENTATION_MAX_DURATION;
   if (
     !Number.isFinite(metadata.duration)
     || metadata.duration < MIN_DURATION
-    || metadata.duration > MAX_DURATION
+    || metadata.duration > maxDuration
   ) {
-    throw new Error('Видео движения должно длиться от 3 до 30 секунд.');
+    throw new Error(`Для выбранной ориентации видео должно длиться 3–${maxDuration} секунд.`);
   }
 }
 
@@ -434,6 +493,8 @@ async function submitMotion() {
   if (busy || submitted) return;
   const host = panel();
   promptValue = host?.querySelector('[name="motion-prompt"]')?.value?.trim() ?? promptValue.trim();
+  modeValue = host?.querySelector('[name="motion-mode"]')?.value ?? modeValue;
+  orientationValue = host?.querySelector('[name="motion-orientation"]')?.value ?? orientationValue;
   if (!imageFile) return status('Добавьте фото персонажа.', 'error');
   if (!videoFile) return status('Добавьте видео движения.', 'error');
   if (!promptValue) return status('Опишите, что должно происходить.', 'error');
@@ -442,6 +503,8 @@ async function submitMotion() {
   const submit = host?.querySelector('[data-motion-submit]');
   if (submit instanceof HTMLButtonElement) submit.disabled = true;
   try {
+    await validateImage(imageFile);
+    await validateVideo(videoFile, orientationValue);
     const pricing = await quote();
     if (!pricing.ok) throw new Error(pricing.reason);
     status('Проверяю и загружаю приватные исходники…');
@@ -462,8 +525,8 @@ async function submitMotion() {
         prompt: promptValue,
         image_storage_key: imageKey,
         video_storage_key: videoKey,
-        mode: '720p',
-        character_orientation: 'image',
+        mode: modeValue,
+        character_orientation: orientationValue,
         background_source: 'input_video',
       }),
     });
@@ -474,7 +537,7 @@ async function submitMotion() {
       submit.disabled = true;
       submit.textContent = 'В очереди';
     }
-    for (const field of host?.querySelectorAll('input, textarea') ?? []) field.disabled = true;
+    for (const field of host?.querySelectorAll('input, textarea, select') ?? []) field.disabled = true;
     const actions = document.createElement('div');
     actions.className = 'action-grid';
     actions.innerHTML = '<button type="button" data-motion-works>Открыть мои работы</button>';
