@@ -191,7 +191,11 @@ SUNO_V5_UPLOAD_EXTEND_MODEL = ModelSpec(
     tier="standard",
     rank=4,
     docs_url="https://docs.kie.ai/suno-api/upload-and-extend-audio",
-    recommended_for=("continue uploaded audio", "longer arrangements", "custom uploaded continuation"),
+    recommended_for=(
+        "continue uploaded audio",
+        "longer arrangements",
+        "custom uploaded continuation",
+    ),
     api_family="suno_upload_extend",
     provider_id_verified=True,
     schema_verified=True,
