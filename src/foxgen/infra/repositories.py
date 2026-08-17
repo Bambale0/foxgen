@@ -56,7 +56,7 @@ class SqlAlchemyGenerationRepository:
         media_kind: MediaKind,
         prompt: str | None,
         input_payload: dict[str, object],
-        source_publication_id: UUID | None,
+        source_publication_id: UUID | None = None,
         user_concurrency_limit: int,
         global_concurrency_limit: int,
     ) -> tuple[GenerationSnapshot, bool]:
@@ -137,6 +137,7 @@ class SqlAlchemyGenerationRepository:
                         model_slug=model_slug,
                         prompt=prompt,
                         status=GenerationStatus.QUEUED.value,
+                        status_changed_at=func.now(),
                         input_payload=input_payload,
                     )
                     .on_conflict_do_nothing(
