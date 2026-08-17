@@ -13,7 +13,7 @@ from foxgen.application.kling_motion import KLING_MOTION_MODEL_SLUG, KlingMotion
 from foxgen.application.media import DownloadedMedia
 from foxgen.application.submissions import SubmissionReceipt, _validate_private_storage_ownership
 from foxgen.core.config import Settings
-from foxgen.core.errors import ErrorCode, ProviderError, SubmissionError
+from foxgen.core.errors import ErrorCode, SubmissionError
 from foxgen.domain.models import GenerationStatus
 from foxgen.providers.kie.client import KieClient
 from foxgen.providers.kie.contracts import InputContract, validate_input
@@ -80,31 +80,50 @@ class FakeSubmission:
         )
 
 
-def payload(user_id: int = 42) -> dict[str, object]:
+def payload(
+    user_id: int = 42,
+    *,
+    mode: str = "720p",
+    orientation: str = "image",
+) -> dict[str, object]:
     return {
         "prompt": "Transfer the dancer motion to the character",
         "image_storage_key": f"inputs/miniapp/{user_id}/character.png",
         "video_storage_key": f"inputs/miniapp/{user_id}/motion.mp4",
-        "mode": "720p",
-        "character_orientation": "image",
+        "mode": mode,
+        "character_orientation": orientation,
         "background_source": "input_video",
     }
 
 
-def test_motion_contract_is_strict_and_fail_closed() -> None:
-    normalized = validate_input(InputContract.KLING_3_MOTION_CONTROL, payload())
-    assert normalized["mode"] == "720p"
+def test_motion_contract_accepts_current_resolution_and_orientation_variants() -> None:
+    image_mode = validate_input(InputContract.KLING_3_MOTION_CONTROL, payload())
+    video_mode = validate_input(
+        InputContract.KLING_3_MOTION_CONTROL,
+        payload(mode="1080p", orientation="video"),
+    )
 
+    assert image_mode["mode"] == "720p"
+    assert image_mode["character_orientation"] == "image"
+    assert video_mode["mode"] == "1080p"
+    assert video_mode["character_orientation"] == "video"
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"mode": "4K"},
+        {"character_orientation": "sideways"},
+        {"background_source": "image"},
+        {"input_urls": ["https://evil.example/image.png"]},
+        {"prompt": "x" * 2501},
+    ],
+)
+def test_motion_contract_fails_closed_on_unsupported_fields(overrides: dict[str, object]) -> None:
+    candidate = payload()
+    candidate.update(overrides)
     with pytest.raises(ValidationError):
-        validate_input(
-            InputContract.KLING_3_MOTION_CONTROL,
-            {**payload(), "mode": "1080p"},
-        )
-    with pytest.raises(ValidationError):
-        validate_input(
-            InputContract.KLING_3_MOTION_CONTROL,
-            {**payload(), "input_urls": ["https://evil.example/image.png"]},
-        )
+        validate_input(InputContract.KLING_3_MOTION_CONTROL, candidate)
 
 
 def test_registry_exposes_production_motion_model() -> None:
@@ -151,11 +170,11 @@ async def test_motion_service_probes_media_before_submission(tmp_path: Path) -> 
 
 
 @pytest.mark.asyncio
-async def test_motion_service_rejects_invalid_duration_before_submission(tmp_path: Path) -> None:
+async def test_image_orientation_rejects_video_longer_than_ten_seconds(tmp_path: Path) -> None:
     image_path = tmp_path / "character.png"
     image_path.write_bytes(_png())
     video_path = tmp_path / "motion.mp4"
-    video_path.write_bytes(_motion_mp4(duration=31))
+    video_path.write_bytes(_motion_mp4(duration=11))
     submission = FakeSubmission()
     service = KlingMotionService(
         input_media=FakeInputMedia(
@@ -169,12 +188,39 @@ async def test_motion_service_rejects_invalid_duration_before_submission(tmp_pat
         await service.submit(
             user_id=42,
             username="owner",
-            input_data=payload(),
-            idempotency_key="motion-duration",
+            input_data=payload(orientation="image"),
+            idempotency_key="motion-image-duration",
         )
 
     assert error.value.code == ErrorCode.VALIDATION
+    assert "3–10" in error.value.public_message
     assert submission.calls == []
+
+
+@pytest.mark.asyncio
+async def test_video_orientation_accepts_thirty_seconds(tmp_path: Path) -> None:
+    image_path = tmp_path / "character.png"
+    image_path.write_bytes(_png())
+    video_path = tmp_path / "motion.mp4"
+    video_path.write_bytes(_motion_mp4(duration=30))
+    submission = FakeSubmission()
+    service = KlingMotionService(
+        input_media=FakeInputMedia(
+            image=_media(image_path, "image/png"),
+            video=_media(video_path, "video/mp4"),
+        ),
+        submission=submission,
+    )
+
+    receipt = await service.submit(
+        user_id=42,
+        username="owner",
+        input_data=payload(mode="1080p", orientation="video"),
+        idempotency_key="motion-video-duration",
+    )
+
+    assert receipt.model_slug == KLING_MOTION_MODEL_SLUG
+    assert len(submission.calls) == 1
 
 
 @pytest.mark.asyncio
@@ -203,7 +249,7 @@ async def test_provider_resolves_fresh_urls_without_leaking_storage_keys(tmp_pat
     try:
         created = await client.create_task(
             model="kling-3.0/motion-control",
-            input_data=payload(),
+            input_data=payload(mode="1080p", orientation="video"),
             callback_url="https://fox.example/webhooks/kie?generation_id=1",
         )
     finally:
@@ -216,6 +262,8 @@ async def test_provider_resolves_fresh_urls_without_leaking_storage_keys(tmp_pat
     provider_input = body["input"]
     assert provider_input["input_urls"][0].startswith("https://inputs.example.test/")
     assert provider_input["video_urls"][0].startswith("https://inputs.example.test/")
+    assert provider_input["mode"] == "1080p"
+    assert provider_input["character_orientation"] == "video"
     assert "image_storage_key" not in provider_input
     assert "video_storage_key" not in provider_input
     assert body["callBackUrl"].startswith("https://fox.example/")
