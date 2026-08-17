@@ -7,7 +7,6 @@ from foxgen.application.media import DownloadedMedia
 from foxgen.core.errors import ErrorCode, ProviderError
 from foxgen.providers.kie.client import KieClient, TaskCreated, TaskRecord
 
-
 SUNO_API_FAMILY = "suno"
 SUNO_EXTEND_API_FAMILY = "suno_extend"
 SUNO_UPLOAD_COVER_API_FAMILY = "suno_upload_cover"
