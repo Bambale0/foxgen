@@ -3,7 +3,9 @@ from __future__ import annotations
 from foxgen.bot.states import MusicUploadExtendStates
 
 UPLOAD_EXTEND_STATE_NAMES: frozenset[str] = frozenset(
-    state.state for state in MusicUploadExtendStates.__all_states__
+    state_name
+    for state in MusicUploadExtendStates.__all_states__
+    if (state_name := state.state) is not None
 )
 
 
