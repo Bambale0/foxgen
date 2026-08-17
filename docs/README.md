@@ -19,6 +19,7 @@ This directory documents the executable state of FoxGen on `main`. Source code, 
 | [`suno-core.md`](suno-core.md) | Suno V5 dedicated API routing, simple/custom contract, multi-track archive and E2E |
 | [`suno-extend.md`](suno-extend.md) | Owner-bound Suno V5 Extend source/API/DB guard, UX and E2E runbook |
 | [`suno-upload-cover.md`](suno-upload-cover.md) | Owner-bound Suno V5 Upload & Cover private-input/provider-URL boundary, UX and E2E runbook |
+| [`kling-motion-control.md`](kling-motion-control.md) | Kling 3.0 Motion Control private-input, pre-billing media validation, provider routing and Happy Fox runbook |
 | [`billing.md`](billing.md) | Pricing, wallet, immutable ledger and settlement |
 | [`telegram-stars-payments.md`](telegram-stars-payments.md) | User `XTR` top-up/refund, durable payment evidence and CREDIT settlement |
 | [`user-promos.md`](user-promos.md) | Owner-scoped promo redemption, max-use concurrency and immutable bonus CREDIT |
@@ -93,6 +94,7 @@ Storage provisioning is infrastructure-owned: repository Compose provisions bund
 17. Multi-result providers must preserve every canonical billable result while filtering non-result artwork/stream helper URLs before generic media archival.
 18. Source-bound generation such as Suno Extend must re-verify owner/source identity before paid admission and retain a durable database guard against generic-transport bypass.
 19. Upload-bound generation such as Suno Upload & Cover must persist only an owner-scoped private storage key; a short-lived provider URL is resolved server-side immediately before provider submission.
+20. Motion/reference products that depend on private source media must validate storage ownership and media limits before paid admission and resolve provider URLs only inside the worker immediately before submission.
 
 ## Known limitations are first-class documentation
 

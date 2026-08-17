@@ -9,7 +9,7 @@ DEPLOY = ROOT / ".github" / "workflows" / "deploy-production.yml"
 def test_production_shell_loads_all_user_parity_modules() -> None:
     html = INDEX.read_text(encoding="utf-8")
 
-    assert 'name="foxgen-miniapp-shell" content="parity-v2"' in html
+    assert 'name="foxgen-miniapp-shell" content="parity-v3"' in html
     for module in (
         "parity-app.js",
         "complete-menu.js",
@@ -20,10 +20,12 @@ def test_production_shell_loads_all_user_parity_modules() -> None:
         "suno-parity.js",
         "suno-extend.js",
         "suno-upload-cover.js",
+        "motion-control.js",
         "promo-redeem.js",
     ):
-        assert f"/mini-app/{module}?v=parity-v2" in html
+        assert f"/mini-app/{module}?v=parity-v3" in html
 
+    assert "/mini-app/motion-control.css?v=parity-v3" in html
     assert '<script type="module" src="/mini-app/app.js' not in html
 
 
