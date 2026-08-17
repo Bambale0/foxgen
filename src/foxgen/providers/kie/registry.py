@@ -4,6 +4,7 @@ from typing import Iterable
 from foxgen.domain.models import Capability, MediaKind, ModelSpec
 from foxgen.providers.kie.catalog import MODEL_SPECS, ModelRegistry as BaseModelRegistry, model
 from foxgen.providers.kie.contracts import InputContract
+from foxgen.providers.kie.motion import KLING_MOTION_API_FAMILY
 
 
 SUBMISSION_MODEL_SLUGS: frozenset[str] = frozenset(
@@ -18,6 +19,7 @@ SUBMISSION_MODEL_SLUGS: frozenset[str] = frozenset(
         "suno-v5",
         "suno-v5-extend",
         "suno-v5-upload-cover",
+        "kling-3-motion-control",
     }
 )
 
@@ -170,6 +172,33 @@ SUNO_V5_UPLOAD_COVER_MODEL = ModelSpec(
 )
 
 
+KLING_3_MOTION_MODEL = ModelSpec(
+    slug="kling-3-motion-control",
+    provider_model="kling-3.0/motion-control",
+    title="Kling 3.0 Motion Control",
+    family="Kling",
+    media_kind=MediaKind.VIDEO,
+    capabilities=frozenset({Capability.MOTION_CONTROL}),
+    verified=True,
+    defaults={
+        "mode": "720p",
+        "character_orientation": "image",
+        "background_source": "input_video",
+    },
+    contract=InputContract.KLING_3_MOTION_CONTROL,
+    tier="flagship",
+    rank=4,
+    docs_url="https://docs.kie.ai/market/kling/motion-control-v3",
+    recommended_for=("character animation", "motion transfer", "dance and performance"),
+    api_family=KLING_MOTION_API_FAMILY,
+    provider_id_verified=True,
+    schema_verified=True,
+    enabled_for_submission=True,
+    tested_live=False,
+    contract_reviewed_at="2026-08-17",
+)
+
+
 def _active_models() -> tuple[ModelSpec, ...]:
     """Build the reviewed catalog and apply the explicit paid-submission allowlist."""
 
@@ -180,6 +209,7 @@ def _active_models() -> tuple[ModelSpec, ...]:
             SUNO_V5_MODEL,
             SUNO_V5_EXTEND_MODEL,
             SUNO_V5_UPLOAD_COVER_MODEL,
+            KLING_3_MOTION_MODEL,
         )
     )
     for item in MODEL_SPECS:
