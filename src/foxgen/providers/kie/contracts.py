@@ -25,6 +25,7 @@ class InputContract(StrEnum):
     NANO_BANANA = "nano_banana"
     SEEDANCE_2 = "seedance_2"
     KLING_3 = "kling_3"
+    KLING_3_MOTION_CONTROL = "kling_3_motion_control"
 
 
 SeedreamAspectRatio = Literal[
@@ -391,6 +392,17 @@ class Kling3Input(OpenInput):
         return self
 
 
+class Kling3MotionControlInput(StrictInput):
+    """Reviewed KIE Kling 3.0 Motion Control contract with private FoxGen inputs."""
+
+    prompt: str = Field(min_length=1, max_length=10_000)
+    image_storage_key: str = Field(min_length=8, max_length=512, pattern=r"^inputs/")
+    video_storage_key: str = Field(min_length=8, max_length=512, pattern=r"^inputs/")
+    mode: Literal["720p"] = "720p"
+    character_orientation: Literal["image"] = "image"
+    background_source: Literal["input_video"] = "input_video"
+
+
 CONTRACT_MODELS: dict[InputContract, type[BaseModel]] = {
     InputContract.PASSTHROUGH: PassthroughInput,
     InputContract.PROMPT: PromptInput,
@@ -411,6 +423,7 @@ CONTRACT_MODELS: dict[InputContract, type[BaseModel]] = {
     InputContract.NANO_BANANA: NanoBananaInput,
     InputContract.SEEDANCE_2: Seedance2Input,
     InputContract.KLING_3: Kling3Input,
+    InputContract.KLING_3_MOTION_CONTROL: Kling3MotionControlInput,
 }
 
 
@@ -424,6 +437,7 @@ SCHEMA_VERIFIED_CONTRACTS: frozenset[InputContract] = frozenset(
         InputContract.SEEDREAM_5_IMAGE,
         InputContract.NANO_BANANA,
         InputContract.SEEDANCE_2,
+        InputContract.KLING_3_MOTION_CONTROL,
     }
 )
 
