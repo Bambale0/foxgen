@@ -4,7 +4,7 @@ This document describes the production Mini App parity hardening added under iss
 
 ## Scope
 
-The browser enhancements are loaded as `user-parity-hardening.js` and `user-parity-phase2.js` from the existing Mini App module graph.
+The browser enhancements are loaded as `user-parity-hardening.js`, `user-parity-phase2.js` and `user-draft-recovery.js` from the existing Mini App module graph.
 
 They close user-facing gaps where backend behavior was already production-capable but the Happy Fox screen did not expose the complete result/action set:
 
@@ -20,7 +20,8 @@ They close user-facing gaps where backend behavior was already production-capabl
 - the Profile payment row is upgraded from the obsolete placeholder to the existing Telegram Stars top-up action, while duplicate/stale payment rows are collapsed to one live action;
 - stale Wallet copy is replaced with the real native Telegram Stars settlement semantics;
 - the Profile publications counter scrolls to the user's publication section instead of being a dead control;
-- generic no-price hardening does not duplicate the dedicated TTS/Suno price warnings.
+- generic no-price hardening does not duplicate the dedicated TTS/Suno price warnings;
+- schema-field/model-setting drafts are recoverable for 12 hours across Happy Fox reload/return, with explicit continue/discard controls.
 
 ## Trust boundary
 
@@ -41,6 +42,8 @@ Telegram Stars top-up remains owned by `complete-menu.js` and the existing durab
 
 The no-price and insufficient-balance guards are UX fail-closed checks only. Backend model readiness, current price, balance, reservation and paid admission remain authoritative; the browser never creates its own commercial price or wallet mutation.
 
+Draft recovery stores only ordinary schema fields, selected model identity, media mode and a boolean that media must be reattached. It never stores upload/storage keys, short-lived media URLs or provider credentials. Stored draft data expires after 12 hours and is removed after a successful transition to generation detail or explicit reset/discard.
+
 ## Progressive enhancement and failure behavior
 
 The canonical `parity-app.js` renderer remains the fallback.
@@ -52,6 +55,8 @@ Generation and publication media are re-fetched through owner-safe Mini App deta
 The module does not poll independently for generation lifecycle state. Existing `parity-app.js` polling remains authoritative; media enhancement runs on the succeeded terminal screen.
 
 Retry reuses the existing `data-repeat-generation` transition from `parity-app.js`, so a new draft/idempotency key is created through the ordinary studio path instead of resubmitting an old billable request.
+
+Draft restoration replays the stored schema values through the existing `input`/`change` events, so `parity-app.js` remains the owner of the actual generation draft. Media/reference objects are deliberately not revived from browser persistence and must be attached again through the ordinary private-input/reference-memory paths.
 
 ## Planned products remain planned
 
@@ -82,22 +87,31 @@ This change does **not** enable Motion Control/talking avatar, Prompt AI, conver
 - admission notices reuse the existing sibling instead of duplicating;
 - generic hardening does not duplicate dedicated TTS/Suno no-price warnings.
 
+`tests/test_miniapp_user_draft_recovery.py` checks:
+
+- module wiring, local storage and 12-hour expiry;
+- schema-field/media-mode persistence without media URLs/storage keys;
+- restoration through existing studio events;
+- successful-submit/reset cleanup;
+- absence of privileged credentials.
+
 Local frontend smoke for these slices:
 
 ```bash
 node --check src/foxgen/miniapp_static/user-parity-hardening.js
 node --check src/foxgen/miniapp_static/user-parity-phase2.js
+node --check src/foxgen/miniapp_static/user-draft-recovery.js
 node --check src/foxgen/miniapp_static/promo-redeem.js
-pytest -q tests/test_miniapp_user_parity_hardening.py tests/test_miniapp_user_parity_phase2.py tests/test_miniapp_user_parity_phase2_polish.py
+pytest -q tests/test_miniapp_user_parity_hardening.py tests/test_miniapp_user_parity_phase2.py tests/test_miniapp_user_parity_phase2_polish.py tests/test_miniapp_user_draft_recovery.py
 ```
 
-The current narrow suite returns 12 passing tests. Full repository CI remains required before merge.
+The current narrow suite returns 17 passing tests. Full repository CI remains required before merge.
 
 ## Rollback
 
 Rollback is transport-only:
 
-1. remove the imports of `user-parity-hardening.js` and `user-parity-phase2.js` from `promo-redeem.js`;
+1. remove the imports of `user-parity-hardening.js`, `user-parity-phase2.js` and `user-draft-recovery.js` from `promo-redeem.js`;
 2. remove the modules and their regression tests/documentation.
 
 No database migration, provider operation, billing mutation or durable state rollback is required.
