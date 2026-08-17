@@ -28,8 +28,7 @@ def _box(kind: bytes, payload: bytes) -> bytes:
 def _motion_mp4(*, width: int = 720, height: int = 1280, duration: int = 5) -> bytes:
     mvhd = _box(
         b"mvhd",
-        b"\x00\x00\x00\x00"
-        + struct.pack(">IIII", 0, 0, 1000, duration * 1000),
+        b"\x00\x00\x00\x00" + struct.pack(">IIII", 0, 0, 1000, duration * 1000),
     )
     tkhd = _box(
         b"tkhd",
