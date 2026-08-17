@@ -1,12 +1,13 @@
 import os
+from uuid import uuid4
 
 import pytest
-from sqlalchemy import delete, func, select
+from sqlalchemy import func, select
 
 from foxgen.core.errors import ErrorCode, SubmissionError
 from foxgen.infra.admin_models import PaymentEvent, TariffVersion
 from foxgen.infra.billing_models import LedgerEntry, WalletAccount
-from foxgen.infra.database import Database, User
+from foxgen.infra.database import Database
 from foxgen.infra.payment_models import UserPaymentOrder
 from foxgen.infra.payments import SqlAlchemyTelegramStarsPaymentService, TelegramStarsInvoiceClient
 
@@ -45,10 +46,12 @@ async def test_telegram_stars_invoice_and_credit_are_durably_idempotent(
         bot_token="test-token",
         invoice_client=invoice_client,
     )
-    user_id = 910_000_097
-    tariff_version = 900_097
-    charge_id = "stars-charge-integration-97"
-    failed_charge_id = "stars-charge-evidence-97"
+    nonce = uuid4().hex
+    numeric_nonce = uuid4().int % 50_000_000
+    user_id = 910_000_000 + numeric_nonce
+    tariff_version = 900_000_000 + numeric_nonce
+    charge_id = f"stars-charge-integration-{nonce}"
+    failed_charge_id = f"stars-charge-evidence-{nonce}"
 
     try:
         async with database.session() as session:
@@ -83,13 +86,13 @@ async def test_telegram_stars_invoice_and_credit_are_durably_idempotent(
             user_id=user_id,
             username="stars-user",
             package_code="starter",
-            idempotency_key="stars:invoice:97",
+            idempotency_key=f"stars:invoice:{nonce}",
         )
         replay = await service.create_invoice(
             user_id=user_id,
             username="stars-user",
             package_code="starter",
-            idempotency_key="stars:invoice:97",
+            idempotency_key=f"stars:invoice:{nonce}",
         )
         assert replay.order_id == first.order_id
         assert replay.invoice_url == first.invoice_url
@@ -157,7 +160,7 @@ async def test_telegram_stars_invoice_and_credit_are_durably_idempotent(
             user_id=user_id,
             username="stars-user",
             package_code="starter",
-            idempotency_key="stars:evidence:97",
+            idempotency_key=f"stars:evidence:{nonce}",
         )
 
         async def fail_wallet(*args: object, **kwargs: object) -> object:
@@ -207,20 +210,9 @@ async def test_telegram_stars_invoice_and_credit_are_durably_idempotent(
                 user_id=user_id,
                 username="stars-user",
                 package_code="legacy",
-                idempotency_key="stars:legacy:97",
+                idempotency_key=f"stars:legacy:{nonce}",
             )
         assert unavailable.value.code == ErrorCode.PRICING_UNAVAILABLE
     finally:
-        async with database.session() as session:
-            async with session.begin():
-                await session.execute(
-                    delete(UserPaymentOrder).where(UserPaymentOrder.user_id == user_id)
-                )
-                await session.execute(delete(PaymentEvent).where(PaymentEvent.user_id == user_id))
-                await session.execute(delete(LedgerEntry).where(LedgerEntry.user_id == user_id))
-                await session.execute(delete(WalletAccount).where(WalletAccount.user_id == user_id))
-                await session.execute(delete(User).where(User.id == user_id))
-                await session.execute(
-                    delete(TariffVersion).where(TariffVersion.version == tariff_version)
-                )
+        # Wallet, ledger and payment rows are audit history and intentionally append-only.
         await database.close()
