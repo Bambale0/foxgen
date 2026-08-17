@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from foxgen.bot.states import MusicCoverStates, MusicUploadExtendStates
 
-
 COVER_STATE_NAMES: frozenset[str] = frozenset(
     state.state for state in MusicCoverStates.__all_states__
 )
