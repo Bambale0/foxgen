@@ -100,4 +100,4 @@ def test_motion_control_success_is_one_shot_and_links_to_works() -> None:
     assert "submitted = true" in script
     assert "submit.textContent = 'В очереди'" in script
     assert "data-motion-works" in script
-    assert "[data-nav=\"works\"]" in script
+    assert '[data-nav="works"]' in script
