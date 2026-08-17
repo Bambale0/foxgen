@@ -8,7 +8,7 @@ from uuid import uuid4
 
 import httpx
 import pytest
-from sqlalchemy import delete, select
+from sqlalchemy import select, update
 
 from foxgen.api.app import create_app
 from foxgen.api.miniapp_security import TelegramMiniAppUser, issue_miniapp_token
@@ -312,9 +312,11 @@ async def test_happy_fox_tts_paid_generation_archives_audio_and_delivers() -> No
             assert all(str(item.status) == "completed" for item in outbox)
     finally:
         await provider_http.aclose()
-        # The user/wallet/ledger history is intentionally immutable and the CI database
-        # is ephemeral. Remove only the mutable price fixture used by this test.
+        # The referenced price snapshot is part of the durable billing history. Disable
+        # the fixture so later tests cannot select it, but preserve its reservation FK.
         async with database.session() as session:
             async with session.begin():
-                await session.execute(delete(ModelPrice).where(ModelPrice.id == price.id))
+                await session.execute(
+                    update(ModelPrice).where(ModelPrice.id == price.id).values(enabled=False)
+                )
         await database.close()
