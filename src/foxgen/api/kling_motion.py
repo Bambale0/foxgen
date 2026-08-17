@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import tempfile
 from pathlib import Path
+from typing import Literal
 from uuid import uuid4
 
 from fastapi import APIRouter, Header, HTTPException, Request, status
@@ -27,9 +28,9 @@ class KlingMotionRequest(BaseModel):
     prompt: str = Field(min_length=1, max_length=10_000)
     image_storage_key: str = Field(min_length=8, max_length=512)
     video_storage_key: str = Field(min_length=8, max_length=512)
-    mode: str = "720p"
-    character_orientation: str = "image"
-    background_source: str = "input_video"
+    mode: Literal["720p"] = "720p"
+    character_orientation: Literal["image"] = "image"
+    background_source: Literal["input_video"] = "input_video"
 
 
 def _miniapp_principal(settings: Settings, authorization: str | None) -> MiniAppPrincipal:
