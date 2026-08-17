@@ -17,9 +17,10 @@ They close user-facing gaps where backend behavior was already production-capabl
 - failed and cancelled generations expose the existing repeat-draft transition instead of ending on a dead detail screen;
 - generic generation studios fail closed when no active server price is published;
 - an insufficient CREDIT balance disables launch before paid admission and exposes the real Telegram Stars top-up action;
-- the Profile payment row is upgraded from the obsolete placeholder to the existing Telegram Stars top-up action;
+- the Profile payment row is upgraded from the obsolete placeholder to the existing Telegram Stars top-up action, while duplicate/stale payment rows are collapsed to one live action;
 - stale Wallet copy is replaced with the real native Telegram Stars settlement semantics;
-- the Profile publications counter scrolls to the user's publication section instead of being a dead control.
+- the Profile publications counter scrolls to the user's publication section instead of being a dead control;
+- generic no-price hardening does not duplicate the dedicated TTS/Suno price warnings.
 
 ## Trust boundary
 
@@ -75,16 +76,22 @@ This change does **not** enable Motion Control/talking avatar, Prompt AI, conver
 - fail-closed no-price state;
 - insufficient-balance state and real Stars top-up affordance.
 
+`tests/test_miniapp_user_parity_phase2_polish.py` checks:
+
+- profile payment rows converge to one live Stars action;
+- admission notices reuse the existing sibling instead of duplicating;
+- generic hardening does not duplicate dedicated TTS/Suno no-price warnings.
+
 Local frontend smoke for these slices:
 
 ```bash
 node --check src/foxgen/miniapp_static/user-parity-hardening.js
 node --check src/foxgen/miniapp_static/user-parity-phase2.js
 node --check src/foxgen/miniapp_static/promo-redeem.js
-pytest -q tests/test_miniapp_user_parity_hardening.py tests/test_miniapp_user_parity_phase2.py
+pytest -q tests/test_miniapp_user_parity_hardening.py tests/test_miniapp_user_parity_phase2.py tests/test_miniapp_user_parity_phase2_polish.py
 ```
 
-The current narrow suite returns 9 passing tests. Full repository CI remains required before merge.
+The current narrow suite returns 12 passing tests. Full repository CI remains required before merge.
 
 ## Rollback
 
