@@ -67,6 +67,20 @@ jobs:
           set -Eeuo pipefail
           mapfile -t files < changed-python.txt
           ruff check "${files[@]}" 2>&1 | tee ruff.log
+      - name: Generate Ruff lint fix patch
+        if: always() && steps.ruff.outcome == 'failure'
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mapfile -t files < changed-python.txt
+          ruff check --fix --diff "${files[@]}" > ruff-lint.patch || true
+      - name: Upload Ruff lint fix patch
+        if: always() && steps.ruff.outcome == 'failure'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ruff-lint-patch
+          path: ruff-lint.patch
+          if-no-files-found: error
       - name: Publish lint diagnostics
         if: always() && github.event_name == 'pull_request' && steps.ruff.outcome == 'failure'
         uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b
