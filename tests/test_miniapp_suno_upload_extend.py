@@ -1,6 +1,5 @@
 from pathlib import Path
 
-
 MINIAPP = Path(__file__).resolve().parents[1] / "src" / "foxgen" / "miniapp_static"
 
 
