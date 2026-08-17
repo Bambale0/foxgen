@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any, Protocol
 
+from foxgen.application.media import DownloadedMedia
 from foxgen.core.errors import ErrorCode, ProviderError
 from foxgen.providers.kie.client import KieClient, TaskCreated, TaskRecord
 
@@ -12,13 +13,8 @@ SUNO_EXTEND_API_FAMILY = "suno_extend"
 SUNO_UPLOAD_COVER_API_FAMILY = "suno_upload_cover"
 
 
-class InputMediaDescription(Protocol):
-    content_type: str
-    size_bytes: int
-
-
 class InputMediaResolver(Protocol):
-    async def describe(self, storage_key: str) -> InputMediaDescription: ...
+    async def describe(self, storage_key: str) -> DownloadedMedia: ...
 
     async def presigned_url(self, storage_key: str) -> str: ...
 
@@ -230,7 +226,7 @@ def _upload_cover_payload(
     upload_url: str,
 ) -> dict[str, object]:
     custom_mode = bool(input_data.get("custom_mode", False))
-    instrumental = bool(input_data.get("instrumental", False))
+    instrumental = bool(input_data.get("instrumental", False)) if custom_mode else False
     payload: dict[str, object] = {
         "uploadUrl": upload_url,
         "customMode": custom_mode,
