@@ -25,11 +25,11 @@ from foxgen.providers.kie.motion import (
 class KlingMotionRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    prompt: str = Field(min_length=1, max_length=10_000)
+    prompt: str = Field(min_length=1, max_length=2_500)
     image_storage_key: str = Field(min_length=8, max_length=512)
     video_storage_key: str = Field(min_length=8, max_length=512)
-    mode: Literal["720p"] = "720p"
-    character_orientation: Literal["image"] = "image"
+    mode: Literal["720p", "1080p"] = "720p"
+    character_orientation: Literal["image", "video"] = "image"
     background_source: Literal["input_video"] = "input_video"
 
 
