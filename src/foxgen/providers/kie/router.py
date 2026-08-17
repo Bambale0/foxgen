@@ -16,7 +16,6 @@ from foxgen.providers.kie.suno_upload_extend import (
     SunoUploadExtendClient,
 )
 
-
 MARKET_API_FAMILY = "market"
 
 
