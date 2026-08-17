@@ -104,6 +104,30 @@ def request_fingerprint(
     return hashlib.sha256(canonical).hexdigest()
 
 
+def _validate_private_storage_ownership(
+    user_id: int,
+    input_payload: dict[str, object],
+) -> None:
+    """Reject foreign durable private-input keys before any paid admission occurs."""
+
+    allowed_prefixes = (f"inputs/{user_id}/", f"inputs/miniapp/{user_id}/")
+    for field, value in input_payload.items():
+        if not field.endswith("_storage_key"):
+            continue
+        if (
+            not isinstance(value, str)
+            or ".." in value
+            or "://" in value
+            or not value.startswith(allowed_prefixes)
+        ):
+            raise SubmissionError(
+                ErrorCode.TASK_NOT_FOUND,
+                "Приватный исходный файл не найден.",
+                retryable=False,
+                details={"field": field},
+            )
+
+
 def _receipt(
     generation: GenerationSnapshot,
     model: ModelSpec,
@@ -169,6 +193,7 @@ class SubmissionService:
         await self._availability_guard.ensure_enabled(model.slug)
 
         normalized = validate_input(model.contract, input_data)
+        _validate_private_storage_ownership(user_id, normalized)
         request_hash = request_fingerprint(
             model_slug=model.slug,
             input_payload=normalized,
