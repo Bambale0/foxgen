@@ -155,10 +155,22 @@ async def choose_cover_mode(callback: CallbackQuery, state: FSMContext) -> None:
         negative_tags="",
         can_submit=False,
     )
+    if not custom:
+        await state.set_state(MusicCoverStates.waiting_prompt)
+        await safe_edit_callback_message(
+            callback,
+            (
+                "<b>Prompt для быстрого Cover</b>\n\n"
+                "Опишите желаемую переработку. В быстром режиме используется только prompt "
+                "и загруженное аудио; лимит prompt — 500 символов."
+            ),
+            _nav("music:cover:back:mode"),
+        )
+        return
     await state.set_state(MusicCoverStates.choosing_vocal_mode)
     await safe_edit_callback_message(
         callback,
-        ("<b>Тип результата</b>\n\nВыберите вокальный Cover или инструментальную переработку."),
+        "<b>Тип результата</b>\n\nВыберите вокальный Cover или инструментальную переработку.",
         _vocal_keyboard(),
     )
 
@@ -171,8 +183,11 @@ async def choose_cover_vocal(callback: CallbackQuery, state: FSMContext) -> None
     instrumental = (callback.data or "").endswith(":no")
     data = await state.get_data()
     custom = bool(data.get("custom_mode"))
+    if not custom:
+        await callback.answer("Тип результата настраивается только в кастомном режиме.", show_alert=True)
+        return
     await state.update_data(instrumental=instrumental, can_submit=False)
-    if custom and instrumental:
+    if instrumental:
         await state.set_state(MusicCoverStates.waiting_style)
         await safe_edit_callback_message(
             callback,
@@ -181,13 +196,9 @@ async def choose_cover_vocal(callback: CallbackQuery, state: FSMContext) -> None
         )
         return
     await state.set_state(MusicCoverStates.waiting_prompt)
-    limit = 5000 if custom else 500
     await safe_edit_callback_message(
         callback,
-        (
-            "<b>Prompt для Cover</b>\n\n"
-            f"Опишите желаемую переработку. Лимит этого режима — {limit} символов."
-        ),
+        "<b>Prompt для Cover</b>\n\nОпишите новый текст/направление. Лимит — 5000 символов.",
         _nav("music:cover:back:vocal"),
     )
 
@@ -278,13 +289,14 @@ async def _quote(
     enough = balance.available_units >= quote.amount_units
     await state.update_data(can_submit=enough)
     custom = bool(data.get("custom_mode"))
-    instrumental = bool(data.get("instrumental"))
+    instrumental = bool(data.get("instrumental")) if custom else False
     lines = [
         "<b>Проверьте Suno Cover</b>",
         "",
         f"Режим: {'кастомный' if custom else 'быстрый'}",
-        f"Результат: {'инструментал' if instrumental else 'с вокалом'}",
     ]
+    if custom:
+        lines.append(f"Результат: {'инструментал' if instrumental else 'с вокалом'}")
     if data.get("prompt"):
         lines.append(f"Prompt: {escape(str(data.get('prompt')))}")
     if custom:
@@ -347,14 +359,15 @@ async def confirm_cover(callback: CallbackQuery, state: FSMContext) -> None:
     if not isinstance(storage_key, str):
         await callback.answer("Исходный аудиофайл потерян. Загрузите его заново.", show_alert=True)
         return
+    custom = bool(data.get("custom_mode"))
     payload: dict[str, object] = {
         "input_storage_key": storage_key,
-        "custom_mode": bool(data.get("custom_mode")),
-        "instrumental": bool(data.get("instrumental")),
+        "custom_mode": custom,
+        "instrumental": bool(data.get("instrumental")) if custom else False,
         "prompt": str(data.get("prompt") or ""),
-        "style": str(data.get("style") or ""),
-        "title": str(data.get("title") or ""),
-        "negative_tags": str(data.get("negative_tags") or ""),
+        "style": str(data.get("style") or "") if custom else "",
+        "title": str(data.get("title") or "") if custom else "",
+        "negative_tags": str(data.get("negative_tags") or "") if custom else "",
     }
     await state.set_state(MusicCoverStates.submitting)
     await safe_edit_callback_message(
@@ -379,8 +392,6 @@ async def confirm_cover(callback: CallbackQuery, state: FSMContext) -> None:
             )
         return
 
-    # Do not delete the uploaded source here: the worker still needs the durable
-    # input_storage_key. Temporary-input retention cleans it after the provider side effect.
     await state.clear()
     if callback.message:
         await callback.message.answer(
@@ -411,10 +422,13 @@ async def back_cover(callback: CallbackQuery, state: FSMContext) -> None:
         return
     if action == "prompt":
         await state.set_state(MusicCoverStates.waiting_prompt)
+        data = await state.get_data()
+        custom = bool(data.get("custom_mode"))
+        limit = 5000 if custom else 500
         await safe_edit_callback_message(
             callback,
-            "Отправьте prompt для Cover:",
-            _nav("music:cover:back:vocal"),
+            f"Отправьте prompt для Cover (до {limit} символов):",
+            _nav("music:cover:back:vocal" if custom else "music:cover:back:mode"),
         )
         return
     if action == "style":
@@ -439,8 +453,8 @@ async def back_cover(callback: CallbackQuery, state: FSMContext) -> None:
             await state.set_state(MusicCoverStates.waiting_prompt)
             await safe_edit_callback_message(
                 callback,
-                "Отправьте prompt для Cover:",
-                _nav("music:cover:back:vocal"),
+                "Отправьте prompt для быстрого Cover:",
+                _nav("music:cover:back:mode"),
             )
         return
     if action == "hub":
