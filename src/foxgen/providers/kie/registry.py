@@ -221,12 +221,11 @@ def _active_models() -> tuple[ModelSpec, ...]:
     for item in MODEL_SPECS:
         if item.slug in {"seedance-2-fast", "elevenlabs-turbo-2-5"}:
             continue
-        values: dict[str, object] = {
-            "enabled_for_submission": item.slug in SUBMISSION_MODEL_SLUGS,
-        }
-        if item.slug == "seedance-2-mini":
-            values["rank"] = 2
-        item = replace(item, **values)
+        item = replace(
+            item,
+            enabled_for_submission=item.slug in SUBMISSION_MODEL_SLUGS,
+            rank=2 if item.slug == "seedance-2-mini" else item.rank,
+        )
         models.append(item)
     models = [
         replace(item, enabled_for_submission=item.slug in SUBMISSION_MODEL_SLUGS) for item in models
