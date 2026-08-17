@@ -119,9 +119,7 @@ function persistCurrentDraft() {
     model_title: title,
     values: collectFields(),
     media_mode: currentMediaMode(),
-    media_restore_required: Boolean(
-      studio.querySelector('.draft-media-item, [data-pick-studio]'),
-    ),
+    media_restore_required: Boolean(studio.querySelector('.draft-media-item')),
     updated_at: Date.now(),
   }));
 }
@@ -267,6 +265,9 @@ function enhance() {
   ensureStyles();
   observeSuccessfulSubmission();
   applyPendingRestore();
+  if (root?.querySelector('.studio-page') instanceof HTMLElement && activeModelSlug) {
+    persistCurrentDraft();
+  }
   injectRecoveryCard();
 }
 
