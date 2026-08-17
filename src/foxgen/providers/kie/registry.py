@@ -17,6 +17,7 @@ SUBMISSION_MODEL_SLUGS: frozenset[str] = frozenset(
         "elevenlabs-turbo-2-5",
         "suno-v5",
         "suno-v5-extend",
+        "suno-v5-upload-cover",
     }
 )
 
@@ -139,11 +140,48 @@ SUNO_V5_EXTEND_MODEL = ModelSpec(
 )
 
 
+SUNO_V5_UPLOAD_COVER_MODEL = ModelSpec(
+    slug="suno-v5-upload-cover",
+    provider_model="V5",
+    title="Suno V5 Cover",
+    family="Suno",
+    media_kind=MediaKind.AUDIO,
+    capabilities=frozenset({Capability.MUSIC_EDIT}),
+    verified=True,
+    defaults={
+        "custom_mode": False,
+        "instrumental": False,
+        "prompt": "",
+        "style": "",
+        "title": "",
+        "negative_tags": "",
+    },
+    contract=InputContract.SUNO_V5_UPLOAD_COVER,
+    tier="standard",
+    rank=3,
+    docs_url="https://docs.kie.ai/suno-api/upload-and-cover-audio/",
+    recommended_for=("restyle uploaded audio", "genre covers", "instrumental remakes"),
+    api_family="suno_upload_cover",
+    provider_id_verified=True,
+    schema_verified=True,
+    enabled_for_submission=True,
+    tested_live=False,
+    contract_reviewed_at="2026-08-17",
+)
+
+
 def _active_models() -> tuple[ModelSpec, ...]:
     """Build the reviewed catalog and apply the explicit paid-submission allowlist."""
 
     models: list[ModelSpec] = list(SEEDREAM_45_MODELS)
-    models.extend((ELEVENLABS_TTS_MODEL, SUNO_V5_MODEL, SUNO_V5_EXTEND_MODEL))
+    models.extend(
+        (
+            ELEVENLABS_TTS_MODEL,
+            SUNO_V5_MODEL,
+            SUNO_V5_EXTEND_MODEL,
+            SUNO_V5_UPLOAD_COVER_MODEL,
+        )
+    )
     for item in MODEL_SPECS:
         if item.slug in {"seedance-2-fast", "elevenlabs-turbo-2-5"}:
             continue

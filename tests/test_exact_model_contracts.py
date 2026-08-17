@@ -85,6 +85,8 @@ def test_registry_separates_catalog_models_from_submission_models() -> None:
         "seedance-2-mini",
         "elevenlabs-turbo-2-5",
         "suno-v5",
+        "suno-v5-extend",
+        "suno-v5-upload-cover",
     }
     assert all(item.provider_id_verified for item in enabled)
     assert all(item.schema_verified for item in enabled)
@@ -223,6 +225,8 @@ def test_model_api_exposes_independent_readiness_statuses() -> None:
         enabled = client.get("/v1/models/seedream-5-pro")
         tts = client.get("/v1/models/elevenlabs-turbo-2-5")
         suno = client.get("/v1/models/suno-v5")
+        extend = client.get("/v1/models/suno-v5-extend")
+        cover = client.get("/v1/models/suno-v5-upload-cover")
         catalog_only = client.get("/v1/models/gpt-image-2")
 
     assert enabled.status_code == 200
@@ -247,6 +251,20 @@ def test_model_api_exposes_independent_readiness_statuses() -> None:
     assert suno.json()["enabled_for_submission"] is True
     assert suno.json()["production_ready"] is True
     assert suno.json()["contract_reviewed_at"] == "2026-08-16"
+
+    assert extend.status_code == 200
+    assert extend.json()["provider_model"] == "V5"
+    assert extend.json()["schema_verified"] is True
+    assert extend.json()["enabled_for_submission"] is True
+    assert extend.json()["production_ready"] is True
+
+    assert cover.status_code == 200
+    assert cover.json()["provider_model"] == "V5"
+    assert cover.json()["media_kind"] == "audio"
+    assert cover.json()["schema_verified"] is True
+    assert cover.json()["enabled_for_submission"] is True
+    assert cover.json()["production_ready"] is True
+    assert cover.json()["contract_reviewed_at"] == "2026-08-17"
 
     assert catalog_only.status_code == 200
     assert catalog_only.json()["provider_id_verified"] is True

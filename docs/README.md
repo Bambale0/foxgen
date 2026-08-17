@@ -17,6 +17,7 @@ This directory documents the executable state of FoxGen on `main`. Source code, 
 | [`model-matrix.md`](model-matrix.md) | KIE model readiness and contract policy |
 | [`suno-core.md`](suno-core.md) | Suno V5 dedicated API routing, simple/custom contract, multi-track archive and E2E |
 | [`suno-extend.md`](suno-extend.md) | Owner-bound Suno V5 Extend source/API/DB guard, UX and E2E runbook |
+| [`suno-upload-cover.md`](suno-upload-cover.md) | Owner-bound Suno V5 Upload & Cover private-input/provider-URL boundary, UX and E2E runbook |
 | [`billing.md`](billing.md) | Pricing, wallet, immutable ledger and settlement |
 | [`telegram-stars-payments.md`](telegram-stars-payments.md) | User `XTR` top-up/refund, durable payment evidence and CREDIT settlement |
 | [`user-promos.md`](user-promos.md) | Owner-scoped promo redemption, max-use concurrency and immutable bonus CREDIT |
@@ -90,6 +91,7 @@ Storage provisioning is infrastructure-owned: repository Compose provisions bund
 16. Dedicated provider API families are selected from reviewed `ModelSpec.api_family`; worker code must not infer provider routing from arbitrary model-name strings.
 17. Multi-result providers must preserve every canonical billable result while filtering non-result artwork/stream helper URLs before generic media archival.
 18. Source-bound generation such as Suno Extend must re-verify owner/source identity before paid admission and retain a durable database guard against generic-transport bypass.
+19. Upload-bound generation such as Suno Upload & Cover must persist only an owner-scoped private storage key; a short-lived provider URL is resolved server-side immediately before provider submission.
 
 ## Known limitations are first-class documentation
 

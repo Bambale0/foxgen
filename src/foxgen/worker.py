@@ -16,6 +16,7 @@ from foxgen.application.reference_memory import ReferenceDeleteProcessor
 from foxgen.core.config import Settings, get_settings
 from foxgen.infra.billing_lifecycle_repository import BillingAwareLifecycleRepository
 from foxgen.infra.database import Database
+from foxgen.infra.input_media import LocalInputMediaStorage
 from foxgen.infra.media import SecureMediaDownloader, S3MediaStorage, TelegramMediaSender
 from foxgen.infra.reference_memory import SqlAlchemyReferenceMemoryRepository
 from foxgen.providers.kie.client import KieClient
@@ -27,18 +28,29 @@ async def run(settings: Settings | None = None) -> None:
     resolved = settings or get_settings()
     api_key = resolved.kie_api_key
     telegram_token = resolved.telegram_bot_token
+    internal_token = resolved.internal_api_token
     if api_key is None:
         raise RuntimeError("FOXGEN_KIE_API_KEY is required for the generation worker")
     if telegram_token is None:
         raise RuntimeError("FOXGEN_TELEGRAM_BOT_TOKEN is required for result delivery")
+    if internal_token is None:
+        raise RuntimeError("FOXGEN_INTERNAL_API_TOKEN is required for private generation inputs")
 
     database = Database(resolved.database_url)
     repository = BillingAwareLifecycleRepository(database)
+    input_storage = LocalInputMediaStorage(
+        root=resolved.telegram_input_storage_root,
+        public_base_url=resolved.telegram_input_public_base_url,
+        signing_secret=internal_token.get_secret_value(),
+        presigned_url_ttl_seconds=resolved.telegram_input_presigned_url_ttl_seconds,
+        retention_seconds=resolved.telegram_input_retention_seconds,
+    )
     client = RoutedKieClient(
         KieClient(
             api_key=api_key.get_secret_value(),
             base_url=str(resolved.kie_base_url),
-        )
+        ),
+        input_media=input_storage,
     )
     downloader = SecureMediaDownloader(
         timeout_seconds=resolved.media_download_timeout_seconds,

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any
+from typing import Any, Protocol
 
 from foxgen.core.errors import ErrorCode, ProviderError
 from foxgen.providers.kie.client import KieClient, TaskCreated, TaskRecord
@@ -9,6 +9,18 @@ from foxgen.providers.kie.client import KieClient, TaskCreated, TaskRecord
 
 SUNO_API_FAMILY = "suno"
 SUNO_EXTEND_API_FAMILY = "suno_extend"
+SUNO_UPLOAD_COVER_API_FAMILY = "suno_upload_cover"
+
+
+class InputMediaDescription(Protocol):
+    content_type: str
+    size_bytes: int
+
+
+class InputMediaResolver(Protocol):
+    async def describe(self, storage_key: str) -> InputMediaDescription: ...
+
+    async def presigned_url(self, storage_key: str) -> str: ...
 
 
 class SunoClient:
@@ -46,14 +58,71 @@ class SunoExtendClient:
         input_data: Mapping[str, object],
         callback_url: str | None = None,
     ) -> TaskCreated:
-        # The reviewed core/extend slices are polling-driven. `callback_url` is
-        # deliberately ignored until the dedicated Suno callback signature is
-        # integrated as a separate #15 slice.
         del callback_url
         payload = _extend_payload(model=model, input_data=input_data)
         data = await self._transport.request_data(
             "POST",
             "/api/v1/generate/extend",
+            json=payload,
+        )
+        return _task_created(data)
+
+    async def get_task(self, task_id: str) -> TaskRecord:
+        return await _get_suno_task(self._transport, task_id)
+
+
+class SunoUploadCoverClient:
+    """Generate a V5 cover from one FoxGen-owned temporary audio input."""
+
+    def __init__(self, transport: KieClient, input_media: InputMediaResolver) -> None:
+        self._transport = transport
+        self._input_media = input_media
+
+    async def create_task(
+        self,
+        *,
+        model: str,
+        input_data: Mapping[str, object],
+        callback_url: str | None = None,
+    ) -> TaskCreated:
+        del callback_url
+        storage_key = input_data.get("input_storage_key")
+        if not isinstance(storage_key, str) or not storage_key.startswith("inputs/"):
+            raise ProviderError(
+                ErrorCode.PROVIDER_PROTOCOL,
+                "Suno Cover не получил проверенный приватный аудиофайл.",
+                retryable=False,
+            )
+        try:
+            media = await self._input_media.describe(storage_key)
+        except Exception as exc:
+            raise ProviderError(
+                ErrorCode.INPUT_DOWNLOAD_FAILED,
+                "Исходный аудиофайл для Suno Cover больше недоступен.",
+                retryable=False,
+            ) from exc
+        if media.size_bytes <= 0 or not media.content_type.lower().startswith("audio/"):
+            raise ProviderError(
+                ErrorCode.VALIDATION,
+                "Suno Cover принимает только непустой аудиофайл.",
+                retryable=False,
+            )
+        try:
+            upload_url = await self._input_media.presigned_url(storage_key)
+        except Exception as exc:
+            raise ProviderError(
+                ErrorCode.INPUT_STORAGE_FAILED,
+                "Не удалось подготовить безопасную ссылку исходного аудио.",
+                retryable=False,
+            ) from exc
+        payload = _upload_cover_payload(
+            model=model,
+            input_data=input_data,
+            upload_url=upload_url,
+        )
+        data = await self._transport.request_data(
+            "POST",
+            "/api/v1/generate/upload-cover",
             json=payload,
         )
         return _task_created(data)
@@ -154,6 +223,39 @@ def _extend_payload(*, model: str, input_data: Mapping[str, object]) -> dict[str
     return payload
 
 
+def _upload_cover_payload(
+    *,
+    model: str,
+    input_data: Mapping[str, object],
+    upload_url: str,
+) -> dict[str, object]:
+    custom_mode = bool(input_data.get("custom_mode", False))
+    instrumental = bool(input_data.get("instrumental", False))
+    payload: dict[str, object] = {
+        "uploadUrl": upload_url,
+        "customMode": custom_mode,
+        "instrumental": instrumental,
+        "model": model,
+    }
+    _copy_optional_fields(payload, input_data, (("prompt", "prompt"),))
+    if custom_mode:
+        _copy_optional_fields(
+            payload,
+            input_data,
+            (
+                ("style", "style"),
+                ("title", "title"),
+                ("negative_tags", "negativeTags"),
+                ("vocal_gender", "vocalGender"),
+                ("style_weight", "styleWeight"),
+                ("weirdness_constraint", "weirdnessConstraint"),
+                ("audio_weight", "audioWeight"),
+                ("persona_id", "personaId"),
+            ),
+        )
+    return payload
+
+
 def _copy_optional_fields(
     target: dict[str, object],
     source: Mapping[str, object],
@@ -183,7 +285,15 @@ def _normalize_suno_result(data: Mapping[str, Any]) -> dict[str, object]:
             {
                 key: value
                 for key, value in item.items()
-                if key not in {"audioUrl", "streamAudioUrl", "imageUrl"}
+                if key
+                not in {
+                    "audioUrl",
+                    "streamAudioUrl",
+                    "imageUrl",
+                    "sourceAudioUrl",
+                    "sourceStreamAudioUrl",
+                    "sourceImageUrl",
+                }
             }
         )
 
