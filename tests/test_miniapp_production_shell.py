@@ -1,6 +1,5 @@
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
 INDEX = ROOT / "src" / "foxgen" / "miniapp_static" / "index.html"
 DEPLOY = ROOT / ".github" / "workflows" / "deploy-production.yml"
@@ -23,10 +22,16 @@ def test_production_shell_loads_all_user_parity_modules() -> None:
         "suno-upload-extend.js",
         "motion-control.js",
         "promo-redeem.js",
+        "product-home.js",
     ):
         assert f"/mini-app/{module}?v=parity-v3" in html
 
-    assert "/mini-app/motion-control.css?v=parity-v3" in html
+    for stylesheet in (
+        "motion-control.css",
+        "product-home.css",
+    ):
+        assert f"/mini-app/{stylesheet}?v=parity-v3" in html
+
     assert '<script type="module" src="/mini-app/app.js' not in html
 
 

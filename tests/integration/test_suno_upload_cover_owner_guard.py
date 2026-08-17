@@ -4,9 +4,9 @@ from uuid import uuid4
 
 import pytest
 from sqlalchemy import func, select
-from sqlalchemy.exc import IntegrityError
 
 from foxgen.application.submissions import NoopSubmissionRateLimiter, SubmissionService
+from foxgen.core.errors import ErrorCode, SubmissionError
 from foxgen.infra.billing import SqlAlchemyBillingRepository
 from foxgen.infra.billing_models import BalanceReservation, LedgerEntry, WalletAccount
 from foxgen.infra.database import Database, Generation, OutboxEvent
@@ -50,7 +50,7 @@ async def test_generic_submit_cannot_cover_foreign_input_and_money_rolls_back() 
     )
 
     try:
-        with pytest.raises(IntegrityError) as error:
+        with pytest.raises(SubmissionError) as error:
             await service.submit(
                 user_id=attacker_id,
                 username="cover_attacker",
@@ -63,7 +63,7 @@ async def test_generic_submit_cannot_cover_foreign_input_and_money_rolls_back() 
                 },
                 idempotency_key=idempotency_key,
             )
-        assert "Suno Upload & Cover input is not owned by generation user" in str(error.value)
+        assert error.value.code == ErrorCode.TASK_NOT_FOUND
 
         async with database.session() as session:
             wallet = await session.get(WalletAccount, attacker_id)

@@ -74,6 +74,9 @@ async def _seed_credited_stars_payment(
     async with database.session() as session:
         async with session.begin():
             session.add(User(id=user_id, username=f"refund-{user_id}"))
+            # Flush the FK parent explicitly before append-only wallet/ledger audit rows.
+            # These models intentionally do not rely on ORM relationships for insert ordering.
+            await session.flush()
             session.add(
                 WalletAccount(
                     user_id=user_id,
