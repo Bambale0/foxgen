@@ -18,7 +18,6 @@ from foxgen.bot.suno_upload_extend_transport import (
 from foxgen.bot.uploads import TelegramInputMediaStorage, message_media_kind
 from foxgen.core.errors import SubmissionError
 
-
 router = Router(name="music-suno-upload-extend")
 MODEL_SLUG = "suno-v5-upload-extend"
 
