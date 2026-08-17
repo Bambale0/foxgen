@@ -393,13 +393,13 @@ class Kling3Input(OpenInput):
 
 
 class Kling3MotionControlInput(StrictInput):
-    """Reviewed KIE Kling 3.0 Motion Control contract with private FoxGen inputs."""
+    """Reviewed current KIE Kling 3.0 Motion Control contract with private inputs."""
 
-    prompt: str = Field(min_length=1, max_length=10_000)
+    prompt: str = Field(min_length=1, max_length=2_500)
     image_storage_key: str = Field(min_length=8, max_length=512, pattern=r"^inputs/")
     video_storage_key: str = Field(min_length=8, max_length=512, pattern=r"^inputs/")
-    mode: Literal["720p"] = "720p"
-    character_orientation: Literal["image"] = "image"
+    mode: Literal["720p", "1080p"] = "720p"
+    character_orientation: Literal["image", "video"] = "image"
     background_source: Literal["input_video"] = "input_video"
 
 
