@@ -185,9 +185,11 @@ async def test_tts_price_wallet_reservation_and_outbox_are_exactly_once() -> Non
             assert reserve_entries[0].reserved_delta == 37
             assert len(outbox) == 1
     finally:
-        async with database.session() as session:
-            async with session.begin():
-                await session.execute(delete(User).where(User.id == user_id))
-                if price_id is not None:
+        # Keep the randomly keyed user/wallet/reservation/ledger rows. Ledger history is
+        # intentionally append-only and CI runs against an ephemeral database. Only the
+        # mutable price fixture needs cleanup so it cannot affect later pricing tests.
+        if price_id is not None:
+            async with database.session() as session:
+                async with session.begin():
                     await session.execute(delete(ModelPrice).where(ModelPrice.id == price_id))
         await database.close()
