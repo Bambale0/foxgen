@@ -20,7 +20,8 @@ _MIN_SIDE = 341
 _MIN_RATIO = 2 / 5
 _MAX_RATIO = 5 / 2
 _MIN_DURATION_SECONDS = 3.0
-_MAX_DURATION_SECONDS = 30.0
+_IMAGE_ORIENTATION_MAX_SECONDS = 10.0
+_VIDEO_ORIENTATION_MAX_SECONDS = 30.0
 
 
 class InputMediaInspector(Protocol):
@@ -74,7 +75,10 @@ class KlingMotionService:
         image = await self._describe(image_key, "изображение")
         video = await self._describe(video_key, "видео")
         self._validate_image(image)
-        self._validate_video(video)
+        self._validate_video(
+            video,
+            character_orientation=str(normalized["character_orientation"]),
+        )
 
         return await self._submission.submit(
             user_id=user_id,
@@ -128,11 +132,10 @@ class KlingMotionService:
         KlingMotionService._validate_visual_probe(
             probe_image(media.path, media.content_type),
             label="Изображение",
-            require_duration=False,
         )
 
     @staticmethod
-    def _validate_video(media: DownloadedMedia) -> None:
+    def _validate_video(media: DownloadedMedia, *, character_orientation: str) -> None:
         if media.size_bytes <= 0 or media.size_bytes > KLING_MOTION_VIDEO_MAX_BYTES:
             raise SubmissionError(
                 ErrorCode.VALIDATION,
@@ -143,19 +146,26 @@ class KlingMotionService:
                 ErrorCode.VALIDATION,
                 "Для Motion Control используйте MP4 или QuickTime видео.",
             )
-        KlingMotionService._validate_visual_probe(
-            probe_iso_video(media.path),
-            label="Видео",
-            require_duration=True,
+        probe = probe_iso_video(media.path)
+        KlingMotionService._validate_visual_probe(probe, label="Видео")
+        max_duration = (
+            _IMAGE_ORIENTATION_MAX_SECONDS
+            if character_orientation == "image"
+            else _VIDEO_ORIENTATION_MAX_SECONDS
         )
+        duration = probe.duration_seconds
+        if duration is None or not _MIN_DURATION_SECONDS <= duration <= max_duration:
+            raise SubmissionError(
+                ErrorCode.VALIDATION,
+                (
+                    "Для ориентации по фото видео должно длиться 3–10 секунд."
+                    if character_orientation == "image"
+                    else "Для ориентации по видео ролик должен длиться 3–30 секунд."
+                ),
+            )
 
     @staticmethod
-    def _validate_visual_probe(
-        probe: VisualMediaProbe,
-        *,
-        label: str,
-        require_duration: bool,
-    ) -> None:
+    def _validate_visual_probe(probe: VisualMediaProbe, *, label: str) -> None:
         if probe.width < _MIN_SIDE or probe.height < _MIN_SIDE:
             raise SubmissionError(
                 ErrorCode.VALIDATION,
@@ -167,10 +177,3 @@ class KlingMotionService:
                 ErrorCode.VALIDATION,
                 f"Соотношение сторон {label.lower()} должно быть от 2:5 до 5:2.",
             )
-        if require_duration:
-            duration = probe.duration_seconds
-            if duration is None or not _MIN_DURATION_SECONDS <= duration <= _MAX_DURATION_SECONDS:
-                raise SubmissionError(
-                    ErrorCode.VALIDATION,
-                    "Видео движения должно длиться от 3 до 30 секунд.",
-                )
