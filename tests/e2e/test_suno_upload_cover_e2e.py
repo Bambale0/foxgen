@@ -152,7 +152,6 @@ async def test_happy_fox_owner_audio_cover_reaches_two_track_delivery() -> None:
         app = create_app(
             settings,
             manage_resources=False,
-            database=database,
             submission_service=submission,
             billing_service=billing,
         )
