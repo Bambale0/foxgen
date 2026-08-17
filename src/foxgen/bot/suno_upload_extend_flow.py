@@ -467,7 +467,9 @@ async def back_upload_extend(callback: CallbackQuery, state: FSMContext) -> None
 
     if action == "mode":
         await state.set_state(MusicUploadExtendStates.choosing_mode)
-        await safe_edit_callback_message(callback, "Выберите режим Upload & Extend:", _mode_keyboard())
+        await safe_edit_callback_message(
+            callback, "Выберите режим Upload & Extend:", _mode_keyboard()
+        )
         return
     if action == "vocal":
         await state.set_state(MusicUploadExtendStates.choosing_vocal_mode)
@@ -486,7 +488,11 @@ async def back_upload_extend(callback: CallbackQuery, state: FSMContext) -> None
         await safe_edit_callback_message(
             callback,
             "Отправьте стиль продолжения:",
-            _nav("music:upload-extend:back:prompt" if not instrumental else "music:upload-extend:back:vocal"),
+            _nav(
+                "music:upload-extend:back:prompt"
+                if not instrumental
+                else "music:upload-extend:back:vocal"
+            ),
         )
         return
     if action == "title":
