@@ -1,7 +1,23 @@
+import shutil
+import subprocess
 from pathlib import Path
+
+import pytest
 
 
 MINIAPP = Path(__file__).resolve().parents[1] / "src" / "foxgen" / "miniapp_static"
+
+
+def test_motion_control_javascript_parses() -> None:
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("node is not installed")
+    subprocess.run(
+        [node, "--check", str(MINIAPP / "motion-control.js")],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
 
 
 def test_motion_control_uses_dedicated_owner_scoped_api() -> None:
