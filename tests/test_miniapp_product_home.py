@@ -25,10 +25,10 @@ def test_catalog_home_replaces_feed_tab_without_removing_community() -> None:
     assert "COMMUNITY / LIVE" in source
     assert "AI CATALOG / LIVE" in source
     assert "data-quick-start" in source
-    assert "data-nav=\"create\"" in source
-    assert "data-nav=\"works\"" in source
-    assert "data-nav=\"wallet\"" in source
-    assert "data-nav=\"profile\"" in source
+    assert 'data-nav="create"' in source
+    assert 'data-nav="works"' in source
+    assert 'data-nav="wallet"' in source
+    assert 'data-nav="profile"' in source
 
 
 def test_catalog_home_routes_private_input_products_to_dedicated_flows() -> None:
