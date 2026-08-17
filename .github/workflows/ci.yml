@@ -115,11 +115,98 @@ jobs:
           name: ruff-format-patch
           path: ruff-format.patch
           if-no-files-found: error
-      - name: Type check
+      - name: Type check regression gate
         id: mypy
+        shell: bash
         run: |
-          set -o pipefail
-          mypy src 2>&1 | tee mypy.log
+          set -Eeuo pipefail
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            base_sha="${{ github.event.pull_request.base.sha }}"
+          else
+            base_sha="${{ github.event.before }}"
+            if [ -z "$base_sha" ] || [ "$base_sha" = "0000000000000000000000000000000000000000" ]; then
+              base_sha="HEAD^"
+            fi
+          fi
+
+          set +e
+          mypy --show-error-codes --no-pretty src > mypy.log 2>&1
+          head_status=$?
+          set -e
+
+          rm -rf /tmp/foxgen-mypy-base
+          git worktree add --detach /tmp/foxgen-mypy-base "$base_sha"
+          set +e
+          (
+            cd /tmp/foxgen-mypy-base
+            mypy --show-error-codes --no-pretty src > /tmp/mypy-base.log 2>&1
+          )
+          base_status=$?
+          set -e
+
+          HEAD_STATUS="$head_status" BASE_STATUS="$base_status" python - <<'PY'
+          from __future__ import annotations
+
+          from collections import Counter
+          import os
+          from pathlib import Path
+          import re
+          import sys
+
+          pattern = re.compile(
+              r"^(?P<path>.*?):\d+(?::\d+)?: error: (?P<message>.*?)(?:  \[(?P<code>[^]]+)\])?$"
+          )
+
+          def parse(path: str) -> Counter[tuple[str, str, str]]:
+              result: Counter[tuple[str, str, str]] = Counter()
+              for raw in Path(path).read_text(encoding="utf-8", errors="replace").splitlines():
+                  match = pattern.match(raw)
+                  if match is None:
+                      continue
+                  result[(
+                      match.group("path"),
+                      match.group("message").strip(),
+                      match.group("code") or "",
+                  )] += 1
+              return result
+
+          head = parse("mypy.log")
+          base = parse("/tmp/mypy-base.log")
+          head_status = int(os.environ["HEAD_STATUS"])
+          base_status = int(os.environ["BASE_STATUS"])
+
+          if head_status != 0 and not head:
+              print("mypy head failed without parseable error diagnostics", file=sys.stderr)
+              sys.exit(2)
+          if base_status != 0 and not base:
+              print("mypy base failed without parseable error diagnostics", file=sys.stderr)
+              sys.exit(2)
+
+          new_errors = head - base
+          print(f"mypy baseline fingerprints: {sum(base.values())}")
+          print(f"mypy head fingerprints: {sum(head.values())}")
+          if not new_errors:
+              print("No new mypy errors relative to base.")
+              sys.exit(0)
+
+          print("New mypy errors relative to base:", file=sys.stderr)
+          for (path, message, code), count in sorted(new_errors.items()):
+              suffix = f" [{code}]" if code else ""
+              print(f"{count}x {path}: {message}{suffix}", file=sys.stderr)
+          sys.exit(1)
+          PY
+
+          cp /tmp/mypy-base.log mypy-base.log
+          git worktree remove --force /tmp/foxgen-mypy-base
+      - name: Upload mypy baseline diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: mypy-diagnostics
+          path: |
+            mypy.log
+            mypy-base.log
+          if-no-files-found: warn
       - name: Publish type-check diagnostics
         if: always() && github.event_name == 'pull_request' && steps.mypy.outcome == 'failure'
         uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b
@@ -131,7 +218,7 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.issue.number,
-              body: `## CI type-check diagnostics\n\n\`\`\`text\n${report}\n\`\`\``
+              body: `## CI type-check diagnostics\n\nFull mypy still runs against the head; this transitional gate blocks new error fingerprints relative to the base revision while #118 burns down the historical baseline.\n\n\`\`\`text\n${report}\n\`\`\``
             });
       - name: Unit and contract tests with coverage
         id: tests
