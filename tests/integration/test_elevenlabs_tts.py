@@ -2,7 +2,7 @@ import os
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import delete, func, select
+from sqlalchemy import func, select, update
 
 from foxgen.application.submissions import NoopSubmissionRateLimiter, SubmissionService
 from foxgen.core.errors import ErrorCode, SubmissionError
@@ -185,11 +185,12 @@ async def test_tts_price_wallet_reservation_and_outbox_are_exactly_once() -> Non
             assert reserve_entries[0].reserved_delta == 37
             assert len(outbox) == 1
     finally:
-        # Keep the randomly keyed user/wallet/reservation/ledger rows. Ledger history is
-        # intentionally append-only and CI runs against an ephemeral database. Only the
-        # mutable price fixture needs cleanup so it cannot affect later pricing tests.
+        # The price snapshot is referenced by the durable reservation and must remain
+        # available for audit. Disable the fixture so later tests cannot select it.
         if price_id is not None:
             async with database.session() as session:
                 async with session.begin():
-                    await session.execute(delete(ModelPrice).where(ModelPrice.id == price_id))
+                    await session.execute(
+                        update(ModelPrice).where(ModelPrice.id == price_id).values(enabled=False)
+                    )
         await database.close()
