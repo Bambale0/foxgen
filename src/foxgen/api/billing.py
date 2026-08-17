@@ -4,6 +4,7 @@ from typing import Any, Protocol
 from fastapi import APIRouter, Header, HTTPException, Query, Request
 from pydantic import BaseModel, ConfigDict, Field
 
+from foxgen.api.kling_motion import create_kling_motion_router
 from foxgen.api.miniapp_security import MiniAppPrincipal, decode_miniapp_token
 from foxgen.api.security import (
     authenticate_billing_admin,
@@ -287,4 +288,5 @@ def create_billing_router(settings: Settings) -> APIRouter:
 
     router.include_router(create_suno_extend_router(settings))
     router.include_router(create_suno_upload_cover_router(settings))
+    router.include_router(create_kling_motion_router(settings))
     return router
