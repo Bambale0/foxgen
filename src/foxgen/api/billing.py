@@ -14,6 +14,7 @@ from foxgen.api.security import (
 )
 from foxgen.api.suno_extend import create_suno_extend_router
 from foxgen.api.suno_upload_cover import create_suno_upload_cover_router
+from foxgen.api.suno_upload_extend import create_suno_upload_extend_router
 from foxgen.application.billing import (
     BalanceSnapshot,
     LedgerSnapshot,
@@ -288,5 +289,6 @@ def create_billing_router(settings: Settings) -> APIRouter:
 
     router.include_router(create_suno_extend_router(settings))
     router.include_router(create_suno_upload_cover_router(settings))
+    router.include_router(create_suno_upload_extend_router(settings))
     router.include_router(create_kling_motion_router(settings))
     return router
