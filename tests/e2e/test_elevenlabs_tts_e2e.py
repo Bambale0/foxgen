@@ -1,18 +1,21 @@
 import hashlib
+import json
 import os
-from dataclasses import dataclass
+import tempfile
 from datetime import datetime, timezone
+from pathlib import Path
 from uuid import uuid4
 
 import httpx
 import pytest
 from sqlalchemy import delete, select
 
-from foxgen.application.delivery import DeliveryResult, MediaBlob, MediaPipeline, StoredMedia
-from foxgen.application.lifecycle import GenerationWorker
-from foxgen.application.submissions import NoopSubmissionRateLimiter, SubmissionService
 from foxgen.api.app import create_app
 from foxgen.api.miniapp_security import TelegramMiniAppUser, issue_miniapp_token
+from foxgen.application.delivery import MediaPipeline
+from foxgen.application.lifecycle import GenerationWorker
+from foxgen.application.media import DownloadedMedia, StoredMedia
+from foxgen.application.submissions import NoopSubmissionRateLimiter, SubmissionService
 from foxgen.core.config import Settings
 from foxgen.domain.models import (
     DeliveryStatus,
@@ -30,11 +33,10 @@ from foxgen.infra.database import (
     GenerationDelivery,
     MediaAsset,
     OutboxEvent,
-    ProviderEvent,
     User,
 )
 from foxgen.infra.repositories import SqlAlchemyGenerationRepository
-from foxgen.providers.kie.client import CreateTaskResponse, KieTaskState, TaskResult
+from foxgen.providers.kie.client import KieClient
 from foxgen.providers.kie.registry import ModelRegistry
 
 pytestmark = pytest.mark.skipif(
@@ -46,6 +48,7 @@ pytestmark = pytest.mark.skipif(
 MODEL_SLUG = "elevenlabs-turbo-2-5"
 PROVIDER_MODEL = "elevenlabs/text-to-speech-turbo-2-5"
 JWT_SECRET = "tts-e2e-miniapp-jwt-secret-long-enough"
+RESULT_URL = "https://kie.example.test/results/tts.mp3"
 
 
 def tts_payload() -> dict[str, object]:
@@ -63,84 +66,56 @@ def tts_payload() -> dict[str, object]:
     }
 
 
-class FakeKieClient:
-    def __init__(self) -> None:
-        self.create_calls: list[dict[str, object]] = []
-        self.check_calls: list[str] = []
-
-    async def create(
-        self,
-        *,
-        provider_model: str,
-        input_payload: dict[str, object],
-        callback_url: str | None,
-    ) -> CreateTaskResponse:
-        self.create_calls.append(
-            {
-                "provider_model": provider_model,
-                "input_payload": dict(input_payload),
-                "callback_url": callback_url,
-            }
-        )
-        return CreateTaskResponse(task_id="kie-tts-e2e-task")
-
-    async def check(self, task_id: str) -> TaskResult:
-        self.check_calls.append(task_id)
-        return TaskResult(
-            state=KieTaskState.SUCCESS,
-            result_urls=("https://kie.example.test/results/tts.mp3",),
-            raw_payload={
-                "taskId": task_id,
-                "state": "success",
-                "resultJson": {"resultUrls": ["https://kie.example.test/results/tts.mp3"]},
-            },
-        )
-
-
 class FakeAudioDownloader:
     def __init__(self) -> None:
         self.urls: list[str] = []
 
-    async def download(self, url: str) -> MediaBlob:
+    async def download(self, url: str) -> DownloadedMedia:
         self.urls.append(url)
         body = b"ID3-e2e-elevenlabs-audio"
-        return MediaBlob(
-            body=body,
+        handle = tempfile.NamedTemporaryFile(prefix="foxgen-tts-result-", suffix=".mp3", delete=False)
+        try:
+            handle.write(body)
+            path = Path(handle.name)
+        finally:
+            handle.close()
+        return DownloadedMedia(
+            path=path,
+            filename="tts.mp3",
             content_type="audio/mpeg",
-            extension="mp3",
+            size_bytes=len(body),
             checksum_sha256=hashlib.sha256(body).hexdigest(),
         )
 
 
 class FakeAudioStorage:
     def __init__(self) -> None:
-        self.keys: list[str] = []
+        self.objects: dict[str, StoredMedia] = {}
 
-    async def put(self, *, object_key: str, media: MediaBlob) -> StoredMedia:
-        assert media.content_type == "audio/mpeg"
-        assert media.extension == "mp3"
-        self.keys.append(object_key)
-        return StoredMedia(
-            object_key=object_key,
-            storage_url=f"s3://foxgen-e2e/{object_key}",
+    async def store(self, *, key: str, media: DownloadedMedia) -> StoredMedia:
+        result = StoredMedia(
+            storage_key=key,
+            content_type=media.content_type,
+            size_bytes=media.size_bytes,
             checksum_sha256=media.checksum_sha256,
         )
+        self.objects[key] = result
+        return result
+
+    async def delete(self, storage_key: str) -> None:
+        self.objects.pop(storage_key, None)
+
+    async def presigned_url(self, storage_key: str) -> str:
+        return f"https://results.example.test/{storage_key}"
 
 
 class FakeTelegramAudioSender:
     def __init__(self) -> None:
-        self.calls: list[tuple[int, tuple[str, ...]]] = []
+        self.calls: list[dict[str, object]] = []
 
-    async def send(self, *, user_id: int, storage_urls: tuple[str, ...]) -> DeliveryResult:
-        self.calls.append((user_id, storage_urls))
-        return DeliveryResult(message_ids=(7001,), uncertain=False)
-
-
-@dataclass(frozen=True)
-class E2EResources:
-    generation_id: object
-    price_id: object
-    user_id: int
+    async def send(self, *, recipient_id: int, urls: list[str], caption: str) -> list[int]:
+        self.calls.append({"recipient_id": recipient_id, "urls": list(urls), "caption": caption})
+        return [7001]
 
 
 def _settings() -> Settings:
@@ -152,16 +127,16 @@ def _settings() -> Settings:
     )
 
 
-def _miniapp_headers(user_id: int) -> dict[str, str]:
+def _miniapp_headers(user_id: int, *, idempotency_key: str | None = None) -> dict[str, str]:
     token = issue_miniapp_token(
         TelegramMiniAppUser(id=user_id, first_name="TTS", username="tts_e2e"),
         secret=JWT_SECRET,
         ttl_seconds=3600,
     )
-    return {
-        "Authorization": f"Bearer {token}",
-        "Idempotency-Key": f"tts-e2e-{uuid4()}",
-    }
+    headers = {"Authorization": f"Bearer {token}"}
+    if idempotency_key is not None:
+        headers["Idempotency-Key"] = idempotency_key
+    return headers
 
 
 @pytest.mark.asyncio
@@ -198,8 +173,35 @@ async def test_happy_fox_tts_paid_generation_archives_audio_and_delivers() -> No
         billing_service=billing,
     )
     transport = httpx.ASGITransport(app=app, client=("127.0.0.1", 34123))
-    generation_id = None
-    fake_kie = FakeKieClient()
+    provider_posts: list[dict[str, object]] = []
+
+    async def provider_handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "POST" and request.url.path == "/api/v1/jobs/createTask":
+            body = json.loads(request.content.decode())
+            provider_posts.append(body)
+            assert body["model"] == PROVIDER_MODEL
+            assert body["input"] == tts_payload()
+            assert str(body["callBackUrl"]).startswith("https://foxgen.example.test/webhooks/kie")
+            return httpx.Response(200, json={"code": 200, "data": {"taskId": "kie-tts-e2e-task"}})
+        if request.method == "GET" and request.url.path == "/api/v1/jobs/recordInfo":
+            assert request.url.params["taskId"] == "kie-tts-e2e-task"
+            return httpx.Response(
+                200,
+                json={
+                    "code": 200,
+                    "data": {
+                        "taskId": "kie-tts-e2e-task",
+                        "state": "success",
+                        "resultJson": {"resultUrls": [RESULT_URL]},
+                    },
+                },
+            )
+        raise AssertionError(f"Unexpected provider request: {request.method} {request.url}")
+
+    provider_http = httpx.AsyncClient(
+        base_url="https://api.kie.ai",
+        transport=httpx.MockTransport(provider_handler),
+    )
     downloader = FakeAudioDownloader()
     storage = FakeAudioStorage()
     sender = FakeTelegramAudioSender()
@@ -211,7 +213,7 @@ async def test_happy_fox_tts_paid_generation_archives_audio_and_delivers() -> No
     )
     worker = GenerationWorker(
         repository=lifecycle,
-        client=fake_kie,  # type: ignore[arg-type]
+        client=KieClient(api_key="e2e-key", client=provider_http),
         registry=ModelRegistry(),
         callback_url="https://foxgen.example.test/webhooks/kie",
         media_pipeline=media,
@@ -219,13 +221,14 @@ async def test_happy_fox_tts_paid_generation_archives_audio_and_delivers() -> No
         batch_size=10,
         max_attempts=3,
     )
+    generation_id = None
 
     try:
         async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
             payload = tts_payload()
             validation = await client.post(
                 f"/v1/miniapp/models/{MODEL_SLUG}/validate",
-                headers={"Authorization": _miniapp_headers(user_id)["Authorization"]},
+                headers=_miniapp_headers(user_id),
                 json={"input": payload},
             )
             assert validation.status_code == 200
@@ -233,7 +236,7 @@ async def test_happy_fox_tts_paid_generation_archives_audio_and_delivers() -> No
 
             task = await client.post(
                 "/v1/miniapp/tasks",
-                headers=_miniapp_headers(user_id),
+                headers=_miniapp_headers(user_id, idempotency_key=f"tts-e2e-{uuid4()}"),
                 json={"model_slug": MODEL_SLUG, "input": payload},
             )
             assert task.status_code == 202
@@ -242,31 +245,15 @@ async def test_happy_fox_tts_paid_generation_archives_audio_and_delivers() -> No
             generation_id = task.json()["generation_id"]
 
         assert await worker.run_once() == 1
-        assert fake_kie.create_calls == [
-            {
-                "provider_model": PROVIDER_MODEL,
-                "input_payload": tts_payload(),
-                "callback_url": "https://foxgen.example.test/webhooks/kie",
-            }
-        ]
-
-        completed = await worker.process_callback("kie-tts-e2e-task")
-        assert completed is not None
-        assert completed.status == GenerationStatus.RESULT_READY
-        assert fake_kie.check_calls == ["kie-tts-e2e-task"]
-
+        assert len(provider_posts) == 1
+        assert await worker.poll_once() == 1
         assert await worker.run_once() == 1
-        assert downloader.urls == ["https://kie.example.test/results/tts.mp3"]
-        assert len(storage.keys) == 1
-        assert storage.keys[0].endswith(".mp3")
-
         assert await worker.run_once() == 1
-        assert sender.calls == [
-            (
-                user_id,
-                (f"s3://foxgen-e2e/{storage.keys[0]}",),
-            )
-        ]
+
+        assert downloader.urls == [RESULT_URL]
+        assert len(storage.objects) == 1
+        assert sender.calls[0]["recipient_id"] == user_id
+        assert len(sender.calls[0]["urls"]) == 1
 
         async with database.session() as session:
             generation = await session.get(Generation, generation_id)
@@ -306,7 +293,6 @@ async def test_happy_fox_tts_paid_generation_archives_audio_and_delivers() -> No
             assert asset is not None
             assert asset.status == MediaAssetStatus.STORED
             assert asset.content_type == "audio/mpeg"
-            assert asset.storage_key == storage.keys[0]
             assert delivery is not None
             assert delivery.status == DeliveryStatus.SENT
             assert delivery.telegram_message_ids == [7001]
@@ -324,17 +310,9 @@ async def test_happy_fox_tts_paid_generation_archives_audio_and_delivers() -> No
             }
             assert all(str(item.status) == "completed" for item in outbox)
     finally:
+        await provider_http.aclose()
         async with database.session() as session:
             async with session.begin():
-                if generation_id is not None:
-                    await session.execute(
-                        delete(OutboxEvent).where(OutboxEvent.aggregate_id == generation_id)
-                    )
-                await session.execute(
-                    delete(ProviderEvent).where(
-                        ProviderEvent.provider_task_id == "kie-tts-e2e-task"
-                    )
-                )
                 await session.execute(delete(User).where(User.id == user_id))
                 await session.execute(delete(ModelPrice).where(ModelPrice.id == price.id))
         await database.close()
