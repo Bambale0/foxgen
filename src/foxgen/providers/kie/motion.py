@@ -82,7 +82,12 @@ class KlingMotionClient:
 
 def _storage_key(input_data: Mapping[str, object], field: str) -> str:
     value = input_data.get(field)
-    if not isinstance(value, str) or not value.startswith("inputs/") or ".." in value or "://" in value:
+    if (
+        not isinstance(value, str)
+        or not value.startswith("inputs/")
+        or ".." in value
+        or "://" in value
+    ):
         raise ProviderError(
             ErrorCode.PROVIDER_PROTOCOL,
             "Motion Control не получил проверенные приватные файлы.",
