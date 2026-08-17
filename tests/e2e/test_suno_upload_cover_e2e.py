@@ -21,7 +21,14 @@ from foxgen.domain.models import DeliveryStatus, GenerationStatus, ReservationSt
 from foxgen.infra.billing import SqlAlchemyBillingRepository
 from foxgen.infra.billing_lifecycle_repository import BillingAwareLifecycleRepository
 from foxgen.infra.billing_models import BalanceReservation, LedgerEntry, ModelPrice, WalletAccount
-from foxgen.infra.database import Database, Generation, GenerationDelivery, MediaAsset, OutboxEvent, User
+from foxgen.infra.database import (
+    Database,
+    Generation,
+    GenerationDelivery,
+    MediaAsset,
+    OutboxEvent,
+    User,
+)
 from foxgen.infra.input_media import LocalInputMediaStorage
 from foxgen.infra.repositories import SqlAlchemyGenerationRepository
 from foxgen.providers.kie.client import KieClient
@@ -43,7 +50,9 @@ RESULT_B = "https://cdn.example.test/cover-b.mp3"
 class FakeResultDownloader:
     async def download(self, url: str) -> DownloadedMedia:
         body = f"ID3-{url.rsplit('/', 1)[-1]}".encode()
-        handle = tempfile.NamedTemporaryFile(prefix="foxgen-cover-result-", suffix=".mp3", delete=False)
+        handle = tempfile.NamedTemporaryFile(
+            prefix="foxgen-cover-result-", suffix=".mp3", delete=False
+        )
         try:
             handle.write(body)
             path = Path(handle.name)
@@ -160,7 +169,9 @@ async def test_happy_fox_owner_audio_cover_reaches_two_track_delivery() -> None:
                 assert body["customMode"] is True
                 assert body["instrumental"] is False
                 assert body["title"] == "Neon Cover"
-                assert str(body["uploadUrl"]).startswith("https://foxgen.example.test/v1/input-media/")
+                assert str(body["uploadUrl"]).startswith(
+                    "https://foxgen.example.test/v1/input-media/"
+                )
                 assert "input_storage_key" not in body
                 return httpx.Response(200, json={"code": 200, "data": {"taskId": "cover-e2e-task"}})
             if request.method == "GET" and request.url.path == "/api/v1/generate/record-info":
@@ -303,7 +314,9 @@ async def test_happy_fox_owner_audio_cover_reaches_two_track_delivery() -> None:
                     )
                 )
                 ledger = (
-                    await session.scalars(select(LedgerEntry).where(LedgerEntry.user_id == owner_id))
+                    await session.scalars(
+                        select(LedgerEntry).where(LedgerEntry.user_id == owner_id)
+                    )
                 ).all()
                 outbox = (
                     await session.scalars(
@@ -317,7 +330,9 @@ async def test_happy_fox_owner_audio_cover_reaches_two_track_delivery() -> None:
                 assert "uploadUrl" not in generation.input_payload
                 assert "upload_url" not in generation.input_payload
                 assert generation.result_payload["audioUrls"] == [RESULT_A, RESULT_B]
-                assert all("sourceAudioUrl" not in item for item in generation.result_payload["tracks"])
+                assert all(
+                    "sourceAudioUrl" not in item for item in generation.result_payload["tracks"]
+                )
                 assert wallet is not None
                 assert wallet.available_units == 75
                 assert wallet.reserved_units == 0
