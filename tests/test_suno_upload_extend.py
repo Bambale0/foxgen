@@ -6,11 +6,13 @@ import httpx
 import pytest
 from pydantic import ValidationError
 
+from foxgen.api.app import create_app
 from foxgen.application.submissions import SubmissionReceipt
 from foxgen.application.suno_upload_extend import (
     SUNO_UPLOAD_EXTEND_MODEL_SLUG,
     SunoUploadExtendService,
 )
+from foxgen.core.config import Settings
 from foxgen.core.errors import ErrorCode, ProviderError, SubmissionError
 from foxgen.domain.models import GenerationStatus
 from foxgen.providers.kie.client import KieClient
@@ -82,6 +84,17 @@ def custom_vocal_payload(storage_key: str = "inputs/42/source.mp3") -> dict[str,
         "weirdness_constraint": 0.2,
         "audio_weight": 0.8,
     }
+
+
+def test_upload_extend_routes_are_mounted_with_current_application() -> None:
+    app = create_app(Settings(env="test"), manage_resources=False)
+    paths = {route.path for route in app.routes}
+
+    assert "/v1/user-portal/music/suno/upload-extend" in paths
+    assert "/v1/miniapp/music/suno/upload-extend" in paths
+    # Synchronizing this feature must not evict already-shipped dedicated products.
+    assert "/v1/miniapp/music/suno/upload-cover" in paths
+    assert "/v1/miniapp/motion/kling" in paths
 
 
 def test_upload_extend_contract_accepts_default_and_custom_v5_modes() -> None:
