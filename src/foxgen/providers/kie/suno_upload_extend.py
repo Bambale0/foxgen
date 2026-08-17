@@ -7,7 +7,6 @@ from foxgen.providers.kie.client import KieClient, TaskCreated, TaskRecord
 from foxgen.providers.kie.contracts import InputContract, validate_input
 from foxgen.providers.kie.suno import InputMediaResolver, _get_suno_task, _task_created
 
-
 SUNO_UPLOAD_EXTEND_API_FAMILY = "suno_upload_extend"
 
 
