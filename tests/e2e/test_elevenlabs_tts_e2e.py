@@ -33,7 +33,6 @@ from foxgen.infra.database import (
     GenerationDelivery,
     MediaAsset,
     OutboxEvent,
-    User,
 )
 from foxgen.infra.repositories import SqlAlchemyGenerationRepository
 from foxgen.providers.kie.client import KieClient
@@ -73,7 +72,9 @@ class FakeAudioDownloader:
     async def download(self, url: str) -> DownloadedMedia:
         self.urls.append(url)
         body = b"ID3-e2e-elevenlabs-audio"
-        handle = tempfile.NamedTemporaryFile(prefix="foxgen-tts-result-", suffix=".mp3", delete=False)
+        handle = tempfile.NamedTemporaryFile(
+            prefix="foxgen-tts-result-", suffix=".mp3", delete=False
+        )
         try:
             handle.write(body)
             path = Path(handle.name)
@@ -311,8 +312,9 @@ async def test_happy_fox_tts_paid_generation_archives_audio_and_delivers() -> No
             assert all(str(item.status) == "completed" for item in outbox)
     finally:
         await provider_http.aclose()
+        # The user/wallet/ledger history is intentionally immutable and the CI database
+        # is ephemeral. Remove only the mutable price fixture used by this test.
         async with database.session() as session:
             async with session.begin():
-                await session.execute(delete(User).where(User.id == user_id))
                 await session.execute(delete(ModelPrice).where(ModelPrice.id == price.id))
         await database.close()
