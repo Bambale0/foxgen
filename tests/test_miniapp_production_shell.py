@@ -1,6 +1,5 @@
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
 INDEX = ROOT / "src" / "foxgen" / "miniapp_static" / "index.html"
 DEPLOY = ROOT / ".github" / "workflows" / "deploy-production.yml"
