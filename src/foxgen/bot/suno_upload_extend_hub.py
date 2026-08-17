@@ -5,7 +5,6 @@ from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMar
 from foxgen.bot.callbacks import safe_edit_callback_message
 from foxgen.bot.states import MusicExtendStates
 
-
 router = Router(name="music-suno-upload-extend-hub")
 
 
