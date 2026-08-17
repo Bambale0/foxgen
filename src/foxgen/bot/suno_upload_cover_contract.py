@@ -1,12 +1,24 @@
 from __future__ import annotations
 
-from foxgen.bot.states import MusicCoverStates
-
+from foxgen.bot.states import MusicCoverStates, MusicUploadExtendStates
 
 COVER_STATE_NAMES: frozenset[str] = frozenset(
-    state.state for state in MusicCoverStates.__all_states__
+    state_name
+    for state in MusicCoverStates.__all_states__
+    if (state_name := state.state) is not None
+)
+MUSIC_UPLOAD_STATE_NAMES: frozenset[str] = COVER_STATE_NAMES | frozenset(
+    state_name
+    for state in MusicUploadExtendStates.__all_states__
+    if (state_name := state.state) is not None
 )
 
 
 def is_cover_state(state_name: str | None) -> bool:
-    return state_name in COVER_STATE_NAMES if state_name is not None else False
+    """Legacy shell guard for dedicated uploaded-audio music FSMs.
+
+    The public name is retained to avoid a broad shell refactor in the product slice.
+    COVER_STATE_NAMES remains Cover-only for callers that need exact Cover membership.
+    """
+
+    return state_name in MUSIC_UPLOAD_STATE_NAMES if state_name is not None else False

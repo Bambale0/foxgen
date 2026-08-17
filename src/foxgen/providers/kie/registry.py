@@ -2,10 +2,10 @@ from dataclasses import replace
 from typing import Iterable
 
 from foxgen.domain.models import Capability, MediaKind, ModelSpec
-from foxgen.providers.kie.catalog import MODEL_SPECS, ModelRegistry as BaseModelRegistry, model
+from foxgen.providers.kie.catalog import MODEL_SPECS, model
+from foxgen.providers.kie.catalog import ModelRegistry as BaseModelRegistry
 from foxgen.providers.kie.contracts import InputContract
 from foxgen.providers.kie.motion import KLING_MOTION_API_FAMILY
-
 
 SUBMISSION_MODEL_SLUGS: frozenset[str] = frozenset(
     {
@@ -19,6 +19,7 @@ SUBMISSION_MODEL_SLUGS: frozenset[str] = frozenset(
         "suno-v5",
         "suno-v5-extend",
         "suno-v5-upload-cover",
+        "suno-v5-upload-extend",
         "kling-3-motion-control",
     }
 )
@@ -172,6 +173,40 @@ SUNO_V5_UPLOAD_COVER_MODEL = ModelSpec(
 )
 
 
+SUNO_V5_UPLOAD_EXTEND_MODEL = ModelSpec(
+    slug="suno-v5-upload-extend",
+    provider_model="V5",
+    title="Suno V5 Upload & Extend",
+    family="Suno",
+    media_kind=MediaKind.AUDIO,
+    capabilities=frozenset({Capability.MUSIC_EDIT}),
+    verified=True,
+    defaults={
+        "default_param_flag": False,
+        "instrumental": False,
+        "prompt": "",
+        "style": "",
+        "title": "",
+        "negative_tags": "",
+    },
+    contract=InputContract.SUNO_V5_UPLOAD_EXTEND,
+    tier="standard",
+    rank=4,
+    docs_url="https://docs.kie.ai/suno-api/upload-and-extend-audio",
+    recommended_for=(
+        "continue uploaded audio",
+        "longer arrangements",
+        "custom uploaded continuation",
+    ),
+    api_family="suno_upload_extend",
+    provider_id_verified=True,
+    schema_verified=True,
+    enabled_for_submission=True,
+    tested_live=False,
+    contract_reviewed_at="2026-08-17",
+)
+
+
 KLING_3_MOTION_MODEL = ModelSpec(
     slug="kling-3-motion-control",
     provider_model="kling-3.0/motion-control",
@@ -209,6 +244,7 @@ def _active_models() -> tuple[ModelSpec, ...]:
             SUNO_V5_MODEL,
             SUNO_V5_EXTEND_MODEL,
             SUNO_V5_UPLOAD_COVER_MODEL,
+            SUNO_V5_UPLOAD_EXTEND_MODEL,
             KLING_3_MOTION_MODEL,
         )
     )

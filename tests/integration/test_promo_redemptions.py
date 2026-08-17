@@ -3,12 +3,12 @@ import os
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import delete, func, select
+from sqlalchemy import func, select, update
 
 from foxgen.core.errors import SubmissionError
 from foxgen.infra.admin_models import PromoCode
 from foxgen.infra.billing_models import LedgerEntry, WalletAccount
-from foxgen.infra.database import Database, User
+from foxgen.infra.database import Database
 from foxgen.infra.promo_models import PromoRedemption
 from foxgen.infra.promos import SqlAlchemyPromoRedemptionService
 
@@ -94,19 +94,12 @@ async def test_promo_redemption_is_exactly_once_and_max_uses_is_atomic() -> None
             assert second_redemption is None
             assert promo is not None and promo.uses == 1
     finally:
+        # Successful promo redemption is financial history: redemption, wallet and
+        # ledger rows must remain immutable. Disable the random promo fixture so it
+        # cannot be selected by later tests while preserving its audit trail.
         async with database.session() as session:
             async with session.begin():
                 await session.execute(
-                    delete(PromoRedemption).where(PromoRedemption.promo_code == code)
+                    update(PromoCode).where(PromoCode.code == code).values(active=False)
                 )
-                await session.execute(
-                    delete(LedgerEntry).where(LedgerEntry.user_id.in_([first_user, second_user]))
-                )
-                await session.execute(
-                    delete(WalletAccount).where(
-                        WalletAccount.user_id.in_([first_user, second_user])
-                    )
-                )
-                await session.execute(delete(User).where(User.id.in_([first_user, second_user])))
-                await session.execute(delete(PromoCode).where(PromoCode.code == code))
         await database.close()

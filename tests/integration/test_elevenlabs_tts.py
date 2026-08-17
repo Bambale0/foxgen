@@ -2,7 +2,7 @@ import os
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import delete, func, select
+from sqlalchemy import func, select, update
 
 from foxgen.application.submissions import NoopSubmissionRateLimiter, SubmissionService
 from foxgen.core.errors import ErrorCode, SubmissionError
@@ -185,9 +185,12 @@ async def test_tts_price_wallet_reservation_and_outbox_are_exactly_once() -> Non
             assert reserve_entries[0].reserved_delta == 37
             assert len(outbox) == 1
     finally:
-        async with database.session() as session:
-            async with session.begin():
-                await session.execute(delete(User).where(User.id == user_id))
-                if price_id is not None:
-                    await session.execute(delete(ModelPrice).where(ModelPrice.id == price_id))
+        # The price snapshot is referenced by the durable reservation and must remain
+        # available for audit. Disable the fixture so later tests cannot select it.
+        if price_id is not None:
+            async with database.session() as session:
+                async with session.begin():
+                    await session.execute(
+                        update(ModelPrice).where(ModelPrice.id == price_id).values(enabled=False)
+                    )
         await database.close()
