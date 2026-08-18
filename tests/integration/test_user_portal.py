@@ -1,7 +1,7 @@
 import os
 
 import pytest
-from sqlalchemy import delete
+from sqlalchemy import delete, func, select
 
 from foxgen.core.errors import ErrorCode, SubmissionError
 from foxgen.infra.admin_models import (
@@ -25,11 +25,13 @@ async def test_user_portal_support_tariff_and_partner_invariants() -> None:
     service = SqlAlchemyUserPortalService(database)
     user_id = 910_000_089
     other_user_id = 910_000_090
-    tariff_version = 900_089
+    tariff_version: int | None = None
 
     try:
         async with database.session() as session:
             async with session.begin():
+                current_version = await session.scalar(select(func.max(TariffVersion.version)))
+                tariff_version = int(current_version or 0) + 1
                 session.add(User(id=other_user_id, username="portal-other"))
                 session.add(
                     TariffVersion(
@@ -150,7 +152,8 @@ async def test_user_portal_support_tariff_and_partner_invariants() -> None:
                     delete(PartnerProfile).where(PartnerProfile.user_id == user_id)
                 )
                 await session.execute(delete(User).where(User.id.in_((user_id, other_user_id))))
-                await session.execute(
-                    delete(TariffVersion).where(TariffVersion.version == tariff_version)
-                )
+                if tariff_version is not None:
+                    await session.execute(
+                        delete(TariffVersion).where(TariffVersion.version == tariff_version)
+                    )
         await database.close()

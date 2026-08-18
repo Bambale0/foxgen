@@ -1,14 +1,15 @@
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
-MINIAPP_RELEASE = "parity-v5"
+MINIAPP_RELEASE = "parity-v6"
+MINIAPP_RELEASE_QUERY_KEY = "release"
 
 
 def versioned_miniapp_url(url: str) -> str:
-    """Return the public Mini App URL with a release cache-buster."""
+    """Return the public Mini App URL with an explicit release cache-buster."""
 
     parts = urlsplit(url)
     query = dict(parse_qsl(parts.query, keep_blank_values=True))
-    query["v"] = MINIAPP_RELEASE
+    query[MINIAPP_RELEASE_QUERY_KEY] = MINIAPP_RELEASE
     return urlunsplit(
         (
             parts.scheme,

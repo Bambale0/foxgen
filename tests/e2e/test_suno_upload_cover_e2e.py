@@ -8,7 +8,7 @@ from uuid import UUID, uuid4
 
 import httpx
 import pytest
-from sqlalchemy import delete, select
+from sqlalchemy import select, update
 
 from foxgen.api.app import create_app
 from foxgen.api.miniapp_security import TelegramMiniAppUser, issue_miniapp_token
@@ -27,7 +27,6 @@ from foxgen.infra.database import (
     GenerationDelivery,
     MediaAsset,
     OutboxEvent,
-    User,
 )
 from foxgen.infra.input_media import LocalInputMediaStorage
 from foxgen.infra.repositories import SqlAlchemyGenerationRepository
@@ -355,9 +354,11 @@ async def test_happy_fox_owner_audio_cover_reaches_two_track_delivery() -> None:
             await provider_http.aclose()
 
     try:
+        # Preserve immutable owner audit history and disable only the test price fixture.
         async with database.session() as session:
             async with session.begin():
-                await session.execute(delete(User).where(User.id.in_([owner_id, foreign_id])))
-                await session.execute(delete(ModelPrice).where(ModelPrice.id == price.id))
+                await session.execute(
+                    update(ModelPrice).where(ModelPrice.id == price.id).values(enabled=False)
+                )
     finally:
         await database.close()

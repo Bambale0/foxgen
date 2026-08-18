@@ -5,7 +5,7 @@ from uuid import uuid4
 
 import httpx
 import pytest
-from sqlalchemy import delete, func, select
+from sqlalchemy import func, select
 
 from foxgen.admin.security import request_signature
 from foxgen.admin.services import AdminServices
@@ -15,7 +15,7 @@ from foxgen.core.config import Settings
 from foxgen.infra.admin_models import PromoCode
 from foxgen.infra.billing import SqlAlchemyBillingRepository
 from foxgen.infra.billing_models import LedgerEntry, WalletAccount
-from foxgen.infra.database import Database, User
+from foxgen.infra.database import Database
 from foxgen.infra.promo_models import PromoRedemption
 
 pytestmark = pytest.mark.skipif(
@@ -197,19 +197,7 @@ async def test_admin_created_promo_redeems_once_in_happy_fox_and_hits_max_uses()
             assert redemptions == 1
             assert promo_ledger == 1
     finally:
-        async with database.session() as session:
-            async with session.begin():
-                await session.execute(
-                    delete(PromoRedemption).where(PromoRedemption.promo_code == code)
-                )
-                await session.execute(
-                    delete(LedgerEntry).where(LedgerEntry.user_id.in_([first_user, second_user]))
-                )
-                await session.execute(
-                    delete(WalletAccount).where(
-                        WalletAccount.user_id.in_([first_user, second_user])
-                    )
-                )
-                await session.execute(delete(User).where(User.id.in_([first_user, second_user])))
-                await session.execute(delete(PromoCode).where(PromoCode.code == code))
+        # Ledger rows are deliberately append-only. The test uses unique promo and
+        # user identifiers, so preserving the complete audit trail is both isolated
+        # and consistent with production invariants.
         await database.close()

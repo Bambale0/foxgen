@@ -1,5 +1,6 @@
 const root = document.getElementById('app');
 const tg = window.Telegram?.WebApp ?? null;
+const API_TIMEOUT_MS = 10000;
 
 const SPECIAL_OPENERS = {
   'kling-3-motion-control': '[data-motion-open]',
@@ -19,7 +20,7 @@ const CATEGORY_META = {
 
 const state = {
   token: null,
-  bootstrap: null,
+  bootstrap: globalThis.__FOXGEN_BOOTSTRAP__ ?? null,
   loading: false,
   error: null,
   filter: 'all',
@@ -38,6 +39,21 @@ function esc(value) {
 
 function formatCredits(value) {
   return Number(value ?? 0).toLocaleString('ru-RU');
+}
+
+async function fetchBounded(input, options = {}) {
+  const controller = options.signal ? null : new AbortController();
+  const timeoutId = controller ? setTimeout(() => controller.abort(), API_TIMEOUT_MS) : null;
+  try {
+    return await fetch(input, controller ? { ...options, signal: controller.signal } : options);
+  } catch (error) {
+    if (error?.name === 'AbortError') {
+      throw new Error('Сервер Happy Fox отвечает слишком долго. Повтори попытку.');
+    }
+    throw error;
+  } finally {
+    if (timeoutId !== null) clearTimeout(timeoutId);
+  }
 }
 
 function priceMap() {
@@ -87,7 +103,7 @@ function minCategoryPrice(category) {
 async function authenticate(force = false) {
   if (state.token && !force) return state.token;
   if (!tg?.initData) throw new Error('Откройте Happy Fox внутри Telegram.');
-  const response = await fetch('/v1/miniapp/auth', {
+  const response = await fetchBounded('/v1/miniapp/auth', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ init_data: tg.initData }),
@@ -104,7 +120,7 @@ async function api(path, options = {}, retry = true) {
   const token = await authenticate(false);
   const headers = new Headers(options.headers ?? {});
   headers.set('Authorization', `Bearer ${token}`);
-  const response = await fetch(`/v1/miniapp${path}`, { ...options, headers });
+  const response = await fetchBounded(`/v1/miniapp${path}`, { ...options, headers });
   const data = response.status === 204 ? null : await response.json().catch(() => ({}));
   if (response.status === 401 && retry) {
     await authenticate(true);
@@ -379,7 +395,15 @@ function showCatalog() {
   queueMicrotask(() => renderCatalog(true));
 }
 
+function syncSharedBootstrap(value = globalThis.__FOXGEN_BOOTSTRAP__) {
+  if (!value || value === state.bootstrap) return;
+  state.bootstrap = value;
+  state.loading = false;
+  state.error = null;
+}
+
 function enhance() {
+  syncSharedBootstrap();
   enhanceBottomNav();
   if (state.community) {
     injectCommunityBack();
@@ -387,6 +411,11 @@ function enhance() {
   }
   renderCatalog(false);
 }
+
+window.addEventListener('foxgen:bootstrap', (event) => {
+  syncSharedBootstrap(event.detail);
+  renderCatalog(true);
+});
 
 root?.addEventListener(
   'click',

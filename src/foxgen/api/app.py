@@ -1,5 +1,6 @@
 import hashlib
 import json
+import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -10,6 +11,8 @@ from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, SecretStr, ValidationError
+from starlette.responses import Response
+from starlette.types import Scope
 
 from foxgen import __version__
 from foxgen.admin.availability import SqlAlchemyModelAvailabilityGuard
@@ -50,16 +53,16 @@ from foxgen.infra.input_media import LocalInputMediaStorage, input_media_content
 from foxgen.infra.media import S3MediaStorage
 from foxgen.infra.miniapp import SqlAlchemyMiniAppRepository
 from foxgen.infra.publications import SqlAlchemyPublicationRepository
+from foxgen.infra.rate_limit import RedisSubmissionRateLimiter
+from foxgen.infra.redis import RedisPool
 from foxgen.infra.reference_media import (
     ReferenceMediaDelivery,
     ReferenceMediaUrlSigner,
     S3ReferenceMediaReader,
 )
 from foxgen.infra.reference_memory import SqlAlchemyReferenceMemoryRepository
-from foxgen.infra.rate_limit import RedisSubmissionRateLimiter
-from foxgen.infra.redis import RedisPool
-from foxgen.infra.user_portal import SqlAlchemyUserPortalService
 from foxgen.infra.repositories import SqlAlchemyGenerationRepository
+from foxgen.infra.user_portal import SqlAlchemyUserPortalService
 from foxgen.providers.kie.contracts import contract_schema, validate_input
 from foxgen.providers.kie.registry import ModelRegistry
 from foxgen.providers.kie.webhooks import verify_kie_webhook
@@ -121,6 +124,30 @@ class KieWebhookPayload(BaseModel):
         if not value:
             raise ValueError("task id is missing")
         return value
+
+
+class MiniAppStaticFiles(StaticFiles):
+    """Serve the Mini App shell without allowing document-cache reuse."""
+
+    def file_response(
+        self,
+        full_path: str | os.PathLike[str],
+        stat_result: os.stat_result,
+        scope: Scope,
+        status_code: int = 200,
+    ) -> Response:
+        if Path(full_path).name == "index.html":
+            return FileResponse(
+                full_path,
+                status_code=status_code,
+                stat_result=stat_result,
+                headers={
+                    "Cache-Control": "no-store",
+                    "Pragma": "no-cache",
+                    "Expires": "0",
+                },
+            )
+        return super().file_response(full_path, stat_result, scope, status_code)
 
 
 def model_payload(item: Any, *, include_schema: bool = False) -> dict[str, Any]:
@@ -574,7 +601,7 @@ def create_app(
         miniapp_directory = Path(__file__).resolve().parents[1] / "miniapp_static"
         app.mount(
             "/mini-app",
-            StaticFiles(directory=miniapp_directory, html=True),
+            MiniAppStaticFiles(directory=miniapp_directory, html=True),
             name="happy-fox-miniapp",
         )
 
