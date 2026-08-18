@@ -1,9 +1,46 @@
+import os
 from datetime import datetime, timezone
 
 import pytest
+from sqlalchemy import update
 
-from foxgen.domain.models import GenerationStatus
+from foxgen.domain.models import GenerationStatus, OutboxStatus
 from foxgen.infra import billing_lifecycle_repository, lifecycle_repository
+from foxgen.infra.database import Database, OutboxEvent
+
+
+@pytest.fixture(autouse=True)
+async def isolate_cross_layer_outbox() -> None:
+    """Do not let durable outbox work from one E2E scenario leak into the next one."""
+
+    if os.getenv("FOXGEN_RUN_E2E") != "1":
+        return
+
+    database = Database(os.environ["FOXGEN_DATABASE_URL"])
+    try:
+        async with database.session() as session:
+            async with session.begin():
+                await session.execute(
+                    update(OutboxEvent)
+                    .where(
+                        OutboxEvent.status.in_(
+                            (
+                                OutboxStatus.PENDING.value,
+                                OutboxStatus.PROCESSING.value,
+                                OutboxStatus.RETRY_WAIT.value,
+                            )
+                        )
+                    )
+                    .values(
+                        status=OutboxStatus.COMPLETED.value,
+                        locked_at=None,
+                        worker_id=None,
+                        last_error=None,
+                        failure_class=None,
+                    )
+                )
+    finally:
+        await database.close()
 
 
 @pytest.fixture(autouse=True)
