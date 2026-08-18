@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - "src/foxgen/miniapp_static/**"
+      - "src/foxgen/bot/keyboards.py"
       - ".github/workflows/deploy-production.yml"
   workflow_run:
     workflows:
@@ -102,9 +103,10 @@ jobs:
           )
 
           test -s "$shell"
-          grep -Fq 'name="foxgen-miniapp-shell" content="parity-v3"' "$shell"
-          grep -Fq '/mini-app/product-home.css?v=parity-v3' "$shell"
-          grep -Fq '/mini-app/product-home.js?v=parity-v3' "$shell"
+          release=$(sed -n 's/.*name="foxgen-miniapp-shell" content="\([^"]*\)".*/\1/p' "$shell" | head -n1)
+          test -n "$release"
+          grep -Fq "/mini-app/product-home.css?v=${release}" "$shell"
+          grep -Fq "/mini-app/product-home.js?v=${release}" "$shell"
 
           for asset in "${assets[@]}"; do
             file="src/foxgen/miniapp_static/${asset}"
@@ -114,7 +116,7 @@ jobs:
 
           grep -Fq "label.textContent = 'Каталог'" src/foxgen/miniapp_static/product-home.js
           grep -Fq "Фото, видео, голос, музыка и Motion Control" src/foxgen/miniapp_static/product-home.js
-          echo "Mini App parity-v3 release gate passed for ${EXPECTED_SHA}"
+          echo "Mini App ${release} release gate passed for ${EXPECTED_SHA}"
 
       - name: Configure SSH
         shell: bash
