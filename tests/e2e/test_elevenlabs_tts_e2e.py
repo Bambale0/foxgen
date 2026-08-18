@@ -242,7 +242,7 @@ async def test_happy_fox_tts_paid_generation_archives_audio_and_delivers() -> No
                 json={"model_slug": MODEL_SLUG, "input": payload},
             )
             assert task.status_code == 202
-            assert task.json()["model_slug"] == MODEL_SLUG
+            assert task.json()["model"] == MODEL_SLUG
             assert task.json()["status"] == "queued"
             generation_id = task.json()["generation_id"]
 
