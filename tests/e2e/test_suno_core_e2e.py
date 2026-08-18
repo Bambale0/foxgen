@@ -1,7 +1,7 @@
 import hashlib
 import os
 import tempfile
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from uuid import UUID, uuid4
 
@@ -286,6 +286,7 @@ async def test_happy_fox_suno_generates_archives_and_delivers_two_tracks() -> No
         ]
         assert provider_router.families == ["suno"]
 
+        await lifecycle.schedule_next_poll(generation_id=generation_id, delay=timedelta())
         assert await worker.poll_once() == 1
         async with database.session() as session:
             processing = await session.get(Generation, generation_id)
@@ -293,6 +294,7 @@ async def test_happy_fox_suno_generates_archives_and_delivers_two_tracks() -> No
             assert processing.status == GenerationStatus.PROCESSING
             assert processing.status_reason == "provider_processing"
 
+        await lifecycle.schedule_next_poll(generation_id=generation_id, delay=timedelta())
         assert await worker.poll_once() == 1
         assert provider_router.families == ["suno", "suno", "suno"]
 
