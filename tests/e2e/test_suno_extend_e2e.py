@@ -114,6 +114,7 @@ def settings() -> Settings:
         miniapp_enabled=True,
         miniapp_jwt_secret=JWT_SECRET,
         task_submission_enabled=True,
+        kie_api_key="e2e-key",
         s3_bucket="foxgen-e2e",
         s3_region="us-east-1",
         s3_endpoint_url="http://127.0.0.1:9000",
