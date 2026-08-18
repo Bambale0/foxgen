@@ -15,8 +15,7 @@ def test_happy_fox_parity_runtime_is_loaded() -> None:
 
     assert f'<link rel="stylesheet" href="/mini-app/parity.css?v={MINIAPP_RELEASE}">' in html
     assert (
-        f'<script type="module" src="/mini-app/parity-app.js?v={MINIAPP_RELEASE}"></script>'
-        in html
+        f'<script type="module" src="/mini-app/parity-app.js?v={MINIAPP_RELEASE}"></script>' in html
     )
     assert '<script type="module" src="/mini-app/app.js' not in html
     assert "Happy Fox" in html
