@@ -3,17 +3,23 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from foxgen.miniapp_release import MINIAPP_RELEASE
+
 
 STATIC = Path("src/foxgen/miniapp_static")
 PARITY_SCRIPT = STATIC / "parity-app.js"
+PRODUCT_HOME_SCRIPT = STATIC / "product-home.js"
 
 
 def test_happy_fox_parity_runtime_is_loaded() -> None:
     html = (STATIC / "index.html").read_text(encoding="utf-8")
 
-    assert '<link rel="stylesheet" href="/mini-app/parity.css">' in html
-    assert '<script type="module" src="/mini-app/parity-app.js"></script>' in html
-    assert '<script type="module" src="/mini-app/app.js"></script>' not in html
+    assert f'<link rel="stylesheet" href="/mini-app/parity.css?v={MINIAPP_RELEASE}">' in html
+    assert (
+        f'<script type="module" src="/mini-app/parity-app.js?v={MINIAPP_RELEASE}"></script>'
+        in html
+    )
+    assert '<script type="module" src="/mini-app/app.js' not in html
     assert "Happy Fox" in html
     assert "FOXGEN" not in html
 
@@ -76,11 +82,10 @@ def test_frontend_exposes_social_reference_and_remix_parity() -> None:
         assert label in script
 
 
-def test_frontend_does_not_fake_unimplemented_payment_or_partner_flows() -> None:
+def test_frontend_does_not_expose_admin_billing_paths() -> None:
     script = PARITY_SCRIPT.read_text(encoding="utf-8")
 
     assert "Backend invoice flow в разработке" in script
-    assert "Backend epic ещё не завершён" in script
     assert 'data-action="topup"' not in script
     assert "/internal/admin" not in script
 
@@ -89,9 +94,9 @@ def test_parity_design_layer_is_loaded_and_grunge_is_restrained() -> None:
     html = (STATIC / "index.html").read_text(encoding="utf-8")
     css = (STATIC / "parity.css").read_text(encoding="utf-8")
 
-    assert '<link rel="stylesheet" href="/mini-app/app.css">' in html
-    assert '<link rel="stylesheet" href="/mini-app/studio.css">' in html
-    assert '<link rel="stylesheet" href="/mini-app/parity.css">' in html
+    assert f'<link rel="stylesheet" href="/mini-app/app.css?v={MINIAPP_RELEASE}">' in html
+    assert f'<link rel="stylesheet" href="/mini-app/studio.css?v={MINIAPP_RELEASE}">' in html
+    assert f'<link rel="stylesheet" href="/mini-app/parity.css?v={MINIAPP_RELEASE}">' in html
     assert "grunge-card" in css
     assert "grunge-lite" in css
 
@@ -120,3 +125,23 @@ def test_navigation_exposes_four_primary_product_surfaces() -> None:
     assert "['create','Создать'" in script
     assert "['works','Работы'" in script
     assert "['profile','Профиль'" in script
+
+
+def test_boot_renders_before_optional_feed_and_network_calls_are_bounded() -> None:
+    parity = PARITY_SCRIPT.read_text(encoding="utf-8")
+    product_home = PRODUCT_HOME_SCRIPT.read_text(encoding="utf-8")
+
+    init_start = parity.index("async function init()")
+    first_render = parity.index("render();", init_start)
+    background_feed = parity.index("void loadFeed(true)", init_start)
+
+    assert first_render < background_feed
+    assert "API_TIMEOUT_MS = 10000" in parity
+    assert "controller.abort()" in parity
+    assert "foxgen:bootstrap" in parity
+    assert "__FOXGEN_BOOTSTRAP__" in parity
+
+    assert "API_TIMEOUT_MS = 10000" in product_home
+    assert "fetchBounded" in product_home
+    assert "foxgen:bootstrap" in product_home
+    assert "__FOXGEN_BOOTSTRAP__" in product_home
