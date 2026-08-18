@@ -8,6 +8,7 @@ from foxgen.bot.catalog import (
     Product,
 )
 from foxgen.core.config import Settings, get_settings
+from foxgen.miniapp_release import versioned_miniapp_url
 
 
 def resolve_miniapp_url(settings: Settings | None = None) -> str | None:
@@ -17,11 +18,12 @@ def resolve_miniapp_url(settings: Settings | None = None) -> str | None:
     if not resolved.miniapp_enabled:
         return None
     if resolved.miniapp_public_url is not None:
-        return f"{str(resolved.miniapp_public_url).rstrip('/')}/"
+        base_url = f"{str(resolved.miniapp_public_url).rstrip('/')}/"
+        return versioned_miniapp_url(base_url)
     if resolved.kie_callback_base_url is None:
         return None
     base_url = str(resolved.kie_callback_base_url).rstrip("/")
-    return f"{base_url}/mini-app/"
+    return versioned_miniapp_url(f"{base_url}/mini-app/")
 
 
 def main_menu(*, miniapp_url: str | None = None) -> InlineKeyboardMarkup:

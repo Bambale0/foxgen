@@ -119,16 +119,34 @@ miniapp_enabled() {
   esac
 }
 
+miniapp_release() {
+  local shell release
+  shell="$APP_DIR/src/foxgen/miniapp_static/index.html"
+  [ -f "$shell" ] || fail "Mini App shell is missing"
+  release="$(sed -n 's/.*name="foxgen-miniapp-shell" content="\([^"]*\)".*/\1/p' "$shell" | head -n1)"
+  [ -n "$release" ] || fail "Mini App release marker is missing"
+  printf '%s\n' "$release"
+}
+
+append_miniapp_release() {
+  local url release separator
+  url="$1"
+  release="$(miniapp_release)"
+  separator='?'
+  [[ "$url" == *\?* ]] && separator='&'
+  printf '%s%sv=%s\n' "$url" "$separator" "$release"
+}
+
 resolved_miniapp_url() {
   local explicit base
   explicit="$(read_env_value FOXGEN_MINIAPP_PUBLIC_URL)"
   if [ -n "$explicit" ]; then
-    printf '%s/\n' "${explicit%/}"
+    append_miniapp_release "${explicit%/}/"
     return 0
   fi
   base="$(read_env_value FOXGEN_KIE_CALLBACK_BASE_URL)"
   [ -n "$base" ] || return 1
-  printf '%s/mini-app/\n' "${base%/}"
+  append_miniapp_release "${base%/}/mini-app/"
 }
 
 # Legacy production environments predate Happy Fox. This is the only credential
@@ -177,10 +195,6 @@ fi
 CURRENT_BRANCH="$(git branch --show-current)"
 [ "$CURRENT_BRANCH" = "main" ] || fail "repository must be on main, found: $CURRENT_BRANCH"
 
-# Production may contain tracked files manually copied from a newer commit while
-# HEAD is still old. Reconcile that drift only when the effective working-tree
-# content is already identical to the tested origin/main version. Unique server
-# edits remain a hard stop. Untracked files (including .env) are never touched.
 dirty_paths=()
 while IFS= read -r -d '' path; do
   dirty_paths+=("$path")
@@ -318,30 +332,36 @@ verify_live_bot_webapp_code() {
   docker exec "$bot_container" python -c '
 import foxgen.bot.app as app
 from foxgen.bot.keyboards import main_menu, resolve_miniapp_url
+from foxgen.miniapp_release import MINIAPP_RELEASE
 url = resolve_miniapp_url()
 button = main_menu().inline_keyboard[0][0]
 assert hasattr(app, "configure_miniapp_menu")
 assert url
+assert f"v={MINIAPP_RELEASE}" in url
 assert button.web_app is not None
+assert button.web_app.url == url
 assert button.callback_data is None
-' || fail "live bot image does not expose the Happy Fox WebApp entrypoint"
+' || fail "live bot image does not expose the current Happy Fox WebApp entrypoint"
 }
 
 verify_public_miniapp() {
-  local miniapp_url deadline remaining attempt_timeout
+  local miniapp_url expected_release deadline remaining attempt_timeout html
   miniapp_url="$1"
+  expected_release="$2"
   deadline=$((SECONDS + 30))
 
   while [ "$SECONDS" -lt "$deadline" ]; do
     remaining=$((deadline - SECONDS))
     attempt_timeout=$((remaining < 5 ? remaining : 5))
-    if curl --fail --silent --show-error --location --max-time "$attempt_timeout" "$miniapp_url" | \
-      grep -q 'Happy Fox'; then
+    if html="$(curl --fail --silent --show-error --location --max-time "$attempt_timeout" "$miniapp_url")" && \
+      grep -Fq "name=\"foxgen-miniapp-shell\" content=\"${expected_release}\"" <<<"$html" && \
+      grep -Fq "/mini-app/product-home.js?v=${expected_release}" <<<"$html" && \
+      grep -Fq "/mini-app/product-home.css?v=${expected_release}" <<<"$html"; then
       return 0
     fi
     [ "$SECONDS" -lt "$deadline" ] || break
     remaining=$((deadline - SECONDS))
-    log "public Happy Fox smoke not ready; ${remaining}s remain in the post-reload window"
+    log "public Happy Fox ${expected_release} smoke not ready; ${remaining}s remain in the post-reload window"
     sleep "$((remaining < 2 ? remaining : 2))"
   done
   return 1
@@ -363,7 +383,7 @@ verify_telegram_menu() {
 import json
 import os
 
-expected = os.environ["MINIAPP_URL"].rstrip("/") + "/"
+expected = os.environ["MINIAPP_URL"]
 payload = json.loads(os.environ["MENU_JSON"])
 if payload.get("ok") is not True:
     raise SystemExit(1)
@@ -372,7 +392,7 @@ if result.get("type") != "web_app":
     raise SystemExit(1)
 if result.get("text") != "Happy Fox":
     raise SystemExit(1)
-actual = ((result.get("web_app") or {}).get("url") or "").rstrip("/") + "/"
+actual = ((result.get("web_app") or {}).get("url") or "")
 if actual != expected:
     raise SystemExit(1)
 PY
@@ -423,13 +443,14 @@ curl \
   "http://127.0.0.1:${PUBLIC_PORT}/health/ready" >/dev/null
 
 if miniapp_enabled; then
+  MINIAPP_RELEASE="$(miniapp_release)"
   MINIAPP_URL="$(resolved_miniapp_url)" || fail "Mini App is enabled but no public URL is configured"
-  log "checking public Happy Fox Mini App with bounded post-reload retry"
-  verify_public_miniapp "$MINIAPP_URL" || \
-    fail "public Happy Fox Mini App did not become ready within 30s"
+  log "checking public Happy Fox Mini App release $MINIAPP_RELEASE with bounded post-reload retry"
+  verify_public_miniapp "$MINIAPP_URL" "$MINIAPP_RELEASE" || \
+    fail "public Happy Fox Mini App $MINIAPP_RELEASE did not become ready within 30s"
   verify_telegram_menu "$MINIAPP_URL" || \
-    fail "Telegram Happy Fox menu did not converge within 30s"
-  log "Happy Fox public WebApp and Telegram menu verified"
+    fail "Telegram Happy Fox menu did not converge to $MINIAPP_URL within 30s"
+  log "Happy Fox $MINIAPP_RELEASE public WebApp and Telegram menu verified"
 fi
 
 log "deployment completed: $PREVIOUS_SHA -> $DEPLOYED_SHA"

@@ -1,5 +1,7 @@
 from pathlib import Path
 
+from foxgen.miniapp_release import MINIAPP_RELEASE
+
 ROOT = Path(__file__).resolve().parents[1]
 INDEX = ROOT / "src" / "foxgen" / "miniapp_static" / "index.html"
 DEPLOY = ROOT / ".github" / "workflows" / "deploy-production.yml"
@@ -8,7 +10,7 @@ DEPLOY = ROOT / ".github" / "workflows" / "deploy-production.yml"
 def test_production_shell_loads_all_user_parity_modules() -> None:
     html = INDEX.read_text(encoding="utf-8")
 
-    assert 'name="foxgen-miniapp-shell" content="parity-v3"' in html
+    assert f'name="foxgen-miniapp-shell" content="{MINIAPP_RELEASE}"' in html
     for module in (
         "parity-app.js",
         "complete-menu.js",
@@ -24,13 +26,13 @@ def test_production_shell_loads_all_user_parity_modules() -> None:
         "promo-redeem.js",
         "product-home.js",
     ):
-        assert f"/mini-app/{module}?v=parity-v3" in html
+        assert f"/mini-app/{module}?v={MINIAPP_RELEASE}" in html
 
     for stylesheet in (
         "motion-control.css",
         "product-home.css",
     ):
-        assert f"/mini-app/{stylesheet}?v=parity-v3" in html
+        assert f"/mini-app/{stylesheet}?v={MINIAPP_RELEASE}" in html
 
     assert '<script type="module" src="/mini-app/app.js' not in html
 
