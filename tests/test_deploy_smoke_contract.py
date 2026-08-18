@@ -20,7 +20,7 @@ def test_deploy_verifies_exact_miniapp_release_and_catalog_assets() -> None:
     assert "miniapp_release()" in script
     assert "append_miniapp_release()" in script
     assert "foxgen-miniapp-shell" in script
-    assert '/mini-app/product-home.js?v=${expected_release}' in script
-    assert '/mini-app/product-home.css?v=${expected_release}' in script
+    assert "/mini-app/product-home.js?v=${expected_release}" in script
+    assert "/mini-app/product-home.css?v=${expected_release}" in script
     assert 'expected = os.environ["MINIAPP_URL"]' in script
     assert "if actual != expected:" in script
