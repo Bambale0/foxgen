@@ -134,7 +134,7 @@ append_miniapp_release() {
   release="$(miniapp_release)"
   separator='?'
   [[ "$url" == *\?* ]] && separator='&'
-  printf '%s%sv=%s\n' "$url" "$separator" "$release"
+  printf '%s%srelease=%s\n' "$url" "$separator" "$release"
 }
 
 resolved_miniapp_url() {
@@ -331,13 +331,14 @@ verify_live_bot_webapp_code() {
   [ -n "$bot_container" ] || fail "bot container is missing"
   docker exec "$bot_container" python -c '
 import foxgen.bot.app as app
+from urllib.parse import parse_qs, urlsplit
 from foxgen.bot.keyboards import main_menu, resolve_miniapp_url
-from foxgen.miniapp_release import MINIAPP_RELEASE
+from foxgen.miniapp_release import MINIAPP_RELEASE, MINIAPP_RELEASE_QUERY_KEY
 url = resolve_miniapp_url()
 button = main_menu().inline_keyboard[0][0]
 assert hasattr(app, "configure_miniapp_menu")
 assert url
-assert f"v={MINIAPP_RELEASE}" in url
+assert parse_qs(urlsplit(url).query).get(MINIAPP_RELEASE_QUERY_KEY) == [MINIAPP_RELEASE]
 assert button.web_app is not None
 assert button.web_app.url == url
 assert button.callback_data is None
@@ -345,20 +346,79 @@ assert button.callback_data is None
 }
 
 verify_public_miniapp() {
-  local miniapp_url expected_release deadline remaining attempt_timeout html
+  local miniapp_url expected_release deadline remaining attempt_timeout
+  local html headers_file html_file cache_control content_type product_home_url product_home_js
   miniapp_url="$1"
   expected_release="$2"
   deadline=$((SECONDS + 30))
+  product_home_url="$(
+    MINIAPP_URL="$miniapp_url" EXPECTED_RELEASE="$expected_release" python3 - <<'PY'
+import os
+from urllib.parse import urlencode, urlsplit, urlunsplit
+
+parts = urlsplit(os.environ["MINIAPP_URL"])
+query = urlencode({"v": os.environ["EXPECTED_RELEASE"]})
+print(urlunsplit((parts.scheme, parts.netloc, "/mini-app/product-home.js", query, "")))
+PY
+  )"
 
   while [ "$SECONDS" -lt "$deadline" ]; do
     remaining=$((deadline - SECONDS))
     attempt_timeout=$((remaining < 5 ? remaining : 5))
-    if html="$(curl --fail --silent --show-error --location --max-time "$attempt_timeout" "$miniapp_url")" && \
-      grep -Fq "name=\"foxgen-miniapp-shell\" content=\"${expected_release}\"" <<<"$html" && \
-      grep -Fq "/mini-app/product-home.js?v=${expected_release}" <<<"$html" && \
-      grep -Fq "/mini-app/product-home.css?v=${expected_release}" <<<"$html"; then
-      return 0
+    headers_file="$(mktemp)"
+    html_file="$(mktemp)"
+
+    if curl \
+      --fail \
+      --silent \
+      --show-error \
+      --location \
+      --max-time "$attempt_timeout" \
+      --dump-header "$headers_file" \
+      --output "$html_file" \
+      "$miniapp_url"; then
+      html="$(cat "$html_file")"
+      cache_control="$(
+        awk '
+          /^HTTP\// { value = "" }
+          tolower($0) ~ /^cache-control:/ {
+            line = $0
+            sub(/\r$/, "", line)
+            sub(/^[^:]+:[[:space:]]*/, "", line)
+            value = line
+          }
+          END { print value }
+        ' "$headers_file"
+      )"
+      content_type="$(
+        awk '
+          /^HTTP\// { value = "" }
+          tolower($0) ~ /^content-type:/ {
+            line = $0
+            sub(/\r$/, "", line)
+            sub(/^[^:]+:[[:space:]]*/, "", line)
+            value = line
+          }
+          END { print value }
+        ' "$headers_file"
+      )"
+
+      if [[ "${cache_control,,}" == *"no-store"* ]] && \
+        [[ "${content_type,,}" == text/html* ]] && \
+        grep -Fq "name=\"foxgen-miniapp-shell\" content=\"${expected_release}\"" <<<"$html" && \
+        grep -Fq "/mini-app/product-home.js?v=${expected_release}" <<<"$html" && \
+        grep -Fq "/mini-app/product-home.css?v=${expected_release}" <<<"$html" && \
+        product_home_js="$(
+          curl --fail --silent --show-error --location --max-time "$attempt_timeout" \
+            "$product_home_url"
+        )" && \
+        grep -Fq "Каталог" <<<"$product_home_js"; then
+        rm -f "$headers_file" "$html_file"
+        return 0
+      fi
     fi
+
+    rm -f "$headers_file" "$html_file"
     [ "$SECONDS" -lt "$deadline" ] || break
     remaining=$((deadline - SECONDS))
     log "public Happy Fox ${expected_release} smoke not ready; ${remaining}s remain in the post-reload window"
