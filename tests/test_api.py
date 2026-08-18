@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 
 from foxgen.api.app import create_app
 from foxgen.core.config import Settings
+from foxgen.miniapp_release import MINIAPP_RELEASE
 
 
 class FakeCallbackRecorder:
@@ -52,6 +53,20 @@ def test_liveness_and_catalog() -> None:
     assert live.json()["status"] == "ok"
     assert models.status_code == 200
     assert any(item["slug"] == "gpt-image-2" for item in models.json())
+
+
+def test_miniapp_html_shell_is_never_cacheable() -> None:
+    app = create_app(Settings(env="test"), manage_resources=False)
+
+    with TestClient(app) as client:
+        response = client.get(f"/mini-app/?release={MINIAPP_RELEASE}")
+
+    assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-store"
+    assert response.headers["pragma"] == "no-cache"
+    assert response.headers["expires"] == "0"
+    assert f'name="foxgen-miniapp-shell" content="{MINIAPP_RELEASE}"' in response.text
+    assert f"/mini-app/product-home.js?v={MINIAPP_RELEASE}" in response.text
 
 
 def test_kie_webhook_accepts_nested_task_id_persists_and_returns_200() -> None:
