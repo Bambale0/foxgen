@@ -287,7 +287,6 @@ async def test_owner_can_extend_stored_suno_track_and_foreign_user_cannot() -> N
     app = create_app(
         settings(),
         manage_resources=False,
-        database=database,
         submission_service=submission,
         billing_service=billing,
     )
@@ -365,7 +364,7 @@ async def test_owner_can_extend_stored_suno_track_and_foreign_user_cannot() -> N
             )
             assert extend.status_code == 202
             extend_generation_id = UUID(extend.json()["generation_id"])
-            assert extend.json()["model_slug"] == EXTEND_MODEL
+            assert extend.json()["model"] == EXTEND_MODEL
 
         assert await worker.run_once() == 1
         assert await worker.poll_once() == 1
