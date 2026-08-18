@@ -5,7 +5,6 @@ from pathlib import Path
 
 from foxgen.miniapp_release import MINIAPP_RELEASE
 
-
 STATIC = Path("src/foxgen/miniapp_static")
 PARITY_SCRIPT = STATIC / "parity-app.js"
 PRODUCT_HOME_SCRIPT = STATIC / "product-home.js"
