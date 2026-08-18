@@ -2,7 +2,7 @@ import hashlib
 import json
 import os
 import tempfile
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from uuid import uuid4
 
@@ -222,6 +222,7 @@ async def test_happy_fox_tts_paid_generation_archives_audio_and_delivers() -> No
         worker_id="tts-e2e-worker",
         batch_size=10,
         max_attempts=3,
+        poll_interval=timedelta(seconds=0),
     )
     generation_id = None
 
