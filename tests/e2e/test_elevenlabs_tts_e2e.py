@@ -4,7 +4,7 @@ import os
 import tempfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import httpx
 import pytest
@@ -250,6 +250,10 @@ async def test_happy_fox_tts_paid_generation_archives_audio_and_delivers() -> No
         assert await worker.run_once() >= 1
         target_posts = [body for body in provider_posts if body.get("input") == tts_payload()]
         assert len(target_posts) == 1
+        await lifecycle.schedule_next_poll(
+            generation_id=UUID(generation_id),
+            delay=timedelta(seconds=0),
+        )
         assert await worker.poll_once() >= 1
         assert await worker.run_once() >= 1
         assert await worker.run_once() >= 1
