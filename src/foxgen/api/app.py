@@ -53,16 +53,16 @@ from foxgen.infra.input_media import LocalInputMediaStorage, input_media_content
 from foxgen.infra.media import S3MediaStorage
 from foxgen.infra.miniapp import SqlAlchemyMiniAppRepository
 from foxgen.infra.publications import SqlAlchemyPublicationRepository
+from foxgen.infra.rate_limit import RedisSubmissionRateLimiter
+from foxgen.infra.redis import RedisPool
 from foxgen.infra.reference_media import (
     ReferenceMediaDelivery,
     ReferenceMediaUrlSigner,
     S3ReferenceMediaReader,
 )
 from foxgen.infra.reference_memory import SqlAlchemyReferenceMemoryRepository
-from foxgen.infra.rate_limit import RedisSubmissionRateLimiter
-from foxgen.infra.redis import RedisPool
-from foxgen.infra.user_portal import SqlAlchemyUserPortalService
 from foxgen.infra.repositories import SqlAlchemyGenerationRepository
+from foxgen.infra.user_portal import SqlAlchemyUserPortalService
 from foxgen.providers.kie.contracts import contract_schema, validate_input
 from foxgen.providers.kie.registry import ModelRegistry
 from foxgen.providers.kie.webhooks import verify_kie_webhook
