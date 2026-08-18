@@ -2,6 +2,7 @@ const root = document.getElementById('app');
 const picker = document.getElementById('media-picker');
 const tg = window.Telegram?.WebApp ?? null;
 
+const API_TIMEOUT_MS = 10000;
 const TERMINAL = new Set(['succeeded', 'failed', 'cancelled']);
 const ACTIVE = new Set(['queued','submitting','submitted','processing','submission_unknown','result_ready','storing_media','delivery_pending']);
 const MEDIA_FIELDS = new Set(['image_url','image_urls','image_input','input_urls','video_url','video_urls','audio_url','first_frame_url','last_frame_url','reference_image_urls','reference_video_urls','reference_audio_urls']);
@@ -56,6 +57,10 @@ function setupTelegram(){
 }
 function syncChrome(){try{tg?.setHeaderColor?.('#080808');tg?.setBackgroundColor?.('#070707');tg?.setBottomBarColor?.('#080808');}catch{}}
 function syncBack(){try{state.stack.length?tg?.BackButton?.show?.():tg?.BackButton?.hide?.();}catch{}}
+function publishBootstrap(){
+  globalThis.__FOXGEN_BOOTSTRAP__=state.bootstrap;
+  try{window.dispatchEvent(new CustomEvent('foxgen:bootstrap',{detail:state.bootstrap}));}catch{}
+}
 
 async function authenticate(){
   if(!state.initData)throw new Error('Откройте Happy Fox внутри Telegram.');
@@ -63,12 +68,22 @@ async function authenticate(){
   state.token=auth.access_token;
 }
 async function rawApi(path,options={}){
-  const response=await fetch(`/v1/miniapp${path}`,options);
-  if(response.status===204)return null;
-  const ct=response.headers.get('content-type')??'';
-  const data=ct.includes('application/json')?await response.json():await response.text();
-  if(!response.ok){const detail=typeof data==='object'?(data?.detail??data?.message??data?.error):data;const err=new Error(formatDetail(detail)||`HTTP ${response.status}`);err.status=response.status;err.payload=data;throw err;}
-  return data;
+  const controller=options.signal?null:new AbortController();
+  const timeoutId=controller?setTimeout(()=>controller.abort(),API_TIMEOUT_MS):null;
+  try{
+    const requestOptions=controller?{...options,signal:controller.signal}:options;
+    const response=await fetch(`/v1/miniapp${path}`,requestOptions);
+    if(response.status===204)return null;
+    const ct=response.headers.get('content-type')??'';
+    const data=ct.includes('application/json')?await response.json():await response.text();
+    if(!response.ok){const detail=typeof data==='object'?(data?.detail??data?.message??data?.error):data;const err=new Error(formatDetail(detail)||`HTTP ${response.status}`);err.status=response.status;err.payload=data;throw err;}
+    return data;
+  }catch(error){
+    if(error?.name==='AbortError')throw new Error('Сервер Happy Fox отвечает слишком долго. Повтори попытку.');
+    throw error;
+  }finally{
+    if(timeoutId!==null)clearTimeout(timeoutId);
+  }
 }
 async function api(path,options={},retryAuth=true){
   if(!state.token)throw new Error('Требуется авторизация Telegram.');
@@ -80,11 +95,25 @@ function formatDetail(detail){if(!detail)return '';if(typeof detail==='string')r
 async function init(){
   setupTelegram();
   try{
-    if(state.initData){await authenticate();state.bootstrap=await api('/bootstrap');state.models=state.bootstrap.models??[];state.works=[...(state.bootstrap.recent??[])];state.ledger=[...(state.bootstrap.ledger??[])];}
-    else{state.demo=true;state.bootstrap=structuredClone(DEMO);state.models=[];}
+    if(state.initData){
+      await authenticate();
+      state.bootstrap=await api('/bootstrap');
+      state.models=state.bootstrap.models??[];
+      state.works=[...(state.bootstrap.recent??[])];
+      state.ledger=[...(state.bootstrap.ledger??[])];
+    }else{
+      state.demo=true;
+      state.bootstrap=structuredClone(DEMO);
+      state.models=[];
+    }
+    publishBootstrap();
     await handleStartParam();
-    if(state.screen==='feed'&&!state.demo)await loadFeed(true);
     render();
+    if(state.screen==='feed'&&!state.demo){
+      void loadFeed(true)
+        .then(()=>{if(state.screen==='feed')render();})
+        .catch(error=>toast(`Сообщество временно недоступно: ${error?.message??error}`,'error'));
+    }
   }catch(error){renderFatal(error);}
 }
 
@@ -104,7 +133,7 @@ async function ensureScreenData(screen){try{if(screen==='feed')await loadFeed(fa
 
 async function loadFeed(reset=false){if(state.demo||state.feedBusy)return;if(!reset&&state.feed.length)return;state.feedBusy=true;try{const data=await api(`/feed?sort=${encodeURIComponent(state.feedSort)}&limit=20&offset=0`);state.feed=data.items??[];state.feedNext=data.next_offset;}finally{state.feedBusy=false;}}
 async function loadWorks(force=false){if(state.demo)return;if(!force&&state.works.length>=20)return;state.works=await api('/generations?limit=100');}
-async function loadWallet(){if(state.demo)return;const [b,p,l]=await Promise.all([api('/balance'),api('/prices'),api('/ledger?limit=200')]);state.bootstrap.balance=b;state.bootstrap.prices=p;state.ledger=l;}
+async function loadWallet(){if(state.demo)return;const [b,p,l]=await Promise.all([api('/balance'),api('/prices'),api('/ledger?limit=200')]);state.bootstrap.balance=b;state.bootstrap.prices=p;state.ledger=l;publishBootstrap();}
 async function loadOwnProfile(){if(state.demo)return;const [profile,pubs]=await Promise.all([api('/me/profile'),api('/me/publications?limit=50')]);state.ownProfile=profile;state.ownPublications=pubs.items??[];}
 async function loadReferences(){if(state.demo)return;state.references=await api('/reference-memory?limit=100');}
 async function loadTariff(){if(state.demo)return;state.portalBusy=true;try{state.tariff=await api('/tariff');}finally{state.portalBusy=false;}}
@@ -219,7 +248,6 @@ root.addEventListener('click',async event=>{
 root.addEventListener('input',event=>{const el=event.target;if(!el?.dataset?.field||!state.draft)return;let value=el.type==='checkbox'?el.checked:el.value;const schema=effectiveModel()?.input_schema?.properties?.[el.dataset.field];if(schema?.type==='number')value=value===''?null:Number(value);if(schema?.type==='integer')value=value===''?null:parseInt(value,10);state.draft.values[el.dataset.field]=value;});
 
 picker.addEventListener('change',async()=>{const file=picker.files?.[0];picker.value='';if(!file||!state.pickerPolicy)return;const policy=state.pickerPolicy;state.pickerPolicy=null;try{const uploaded=await uploadFile(file,policy.context);if(!uploaded)return;if(policy.context==='studio'){state.draft.uploads.push({...uploaded,source:'upload'});render();return;}if(policy.context==='memory'){if(uploaded.kind!=='image')throw new Error('В память можно сохранять только изображения.');await api('/reference-memory',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({storage_key:uploaded.storage_key})});await deleteUpload(uploaded);await loadReferences();toast('Референс сохранён');render();return;}if(policy.context==='quick'){const compatible=visibleUiModels().filter(m=>m.media_kind===(uploaded.kind==='image'?'image':'video')||m.media_kind==='video');const model=compatible[0]??visibleUiModels()[0];if(!model)throw new Error('Нет совместимой модели.');state.draft=newDraft(model);state.draft.uploads=[{...uploaded,source:'upload'}];if(model.media_kind==='video')state.draft.mediaMode=uploaded.kind==='image'?'first_frame':'references';nav('studio');}}catch(e){toast(e.message,'error');}});
-
 
 function portalValue(value){
   if(value===null||value===undefined||value==='')return '—';

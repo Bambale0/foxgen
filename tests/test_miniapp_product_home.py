@@ -2,6 +2,8 @@ import shutil
 import subprocess
 from pathlib import Path
 
+from foxgen.miniapp_release import MINIAPP_RELEASE
+
 ROOT = Path(__file__).resolve().parents[1]
 STATIC = ROOT / "src" / "foxgen" / "miniapp_static"
 HOME_JS = STATIC / "product-home.js"
@@ -12,8 +14,8 @@ INDEX = STATIC / "index.html"
 def test_catalog_home_is_loaded_by_production_shell() -> None:
     html = INDEX.read_text(encoding="utf-8")
 
-    assert "/mini-app/product-home.css?v=parity-v3" in html
-    assert "/mini-app/product-home.js?v=parity-v3" in html
+    assert f"/mini-app/product-home.css?v={MINIAPP_RELEASE}" in html
+    assert f"/mini-app/product-home.js?v={MINIAPP_RELEASE}" in html
     assert html.index("product-home.js") > html.index("motion-control.js")
 
 

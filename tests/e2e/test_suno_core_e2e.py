@@ -7,7 +7,7 @@ from uuid import UUID, uuid4
 
 import httpx
 import pytest
-from sqlalchemy import delete, select
+from sqlalchemy import select, update
 
 from foxgen.api.app import create_app
 from foxgen.api.miniapp_security import TelegramMiniAppUser, issue_miniapp_token
@@ -32,7 +32,6 @@ from foxgen.infra.database import (
     GenerationDelivery,
     MediaAsset,
     OutboxEvent,
-    User,
 )
 from foxgen.infra.repositories import SqlAlchemyGenerationRepository
 from foxgen.providers.kie.client import TaskCreated, TaskRecord
@@ -182,6 +181,7 @@ def settings() -> Settings:
         miniapp_enabled=True,
         miniapp_jwt_secret=JWT_SECRET,
         task_submission_enabled=True,
+        kie_api_key="e2e-key",
     )
 
 
@@ -273,7 +273,7 @@ async def test_happy_fox_suno_generates_archives_and_delivers_two_tracks() -> No
             )
             assert task.status_code == 202
             generation_id = UUID(task.json()["generation_id"])
-            assert task.json()["model_slug"] == MODEL_SLUG
+            assert task.json()["model"] == MODEL_SLUG
             assert task.json()["status"] == "queued"
 
         assert await worker.run_once() == 1
@@ -375,12 +375,11 @@ async def test_happy_fox_suno_generates_archives_and_delivers_two_tracks() -> No
             }
             assert all(str(item.status) == "completed" for item in outbox)
     finally:
+        # Keep the immutable billing/generation audit trail. Disable the price fixture
+        # so it cannot affect later tests while preserving reservation FK history.
         async with database.session() as session:
             async with session.begin():
-                if generation_id is not None:
-                    await session.execute(
-                        delete(OutboxEvent).where(OutboxEvent.aggregate_id == generation_id)
-                    )
-                await session.execute(delete(User).where(User.id == user_id))
-                await session.execute(delete(ModelPrice).where(ModelPrice.id == price.id))
+                await session.execute(
+                    update(ModelPrice).where(ModelPrice.id == price.id).values(enabled=False)
+                )
         await database.close()

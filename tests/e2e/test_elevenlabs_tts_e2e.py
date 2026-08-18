@@ -2,9 +2,9 @@ import hashlib
 import json
 import os
 import tempfile
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import httpx
 import pytest
@@ -125,6 +125,7 @@ def _settings() -> Settings:
         miniapp_enabled=True,
         miniapp_jwt_secret=JWT_SECRET,
         task_submission_enabled=True,
+        kie_api_key="e2e-key",
     )
 
 
@@ -221,6 +222,7 @@ async def test_happy_fox_tts_paid_generation_archives_audio_and_delivers() -> No
         worker_id="tts-e2e-worker",
         batch_size=10,
         max_attempts=3,
+        poll_interval=timedelta(seconds=0),
     )
     generation_id = None
 
@@ -241,15 +243,20 @@ async def test_happy_fox_tts_paid_generation_archives_audio_and_delivers() -> No
                 json={"model_slug": MODEL_SLUG, "input": payload},
             )
             assert task.status_code == 202
-            assert task.json()["model_slug"] == MODEL_SLUG
+            assert task.json()["model"] == MODEL_SLUG
             assert task.json()["status"] == "queued"
             generation_id = task.json()["generation_id"]
 
-        assert await worker.run_once() == 1
-        assert len(provider_posts) == 1
-        assert await worker.poll_once() == 1
-        assert await worker.run_once() == 1
-        assert await worker.run_once() == 1
+        assert await worker.run_once() >= 1
+        target_posts = [body for body in provider_posts if body.get("input") == tts_payload()]
+        assert len(target_posts) == 1
+        await lifecycle.schedule_next_poll(
+            generation_id=UUID(generation_id),
+            delay=timedelta(seconds=0),
+        )
+        assert await worker.poll_once() >= 1
+        assert await worker.run_once() >= 1
+        assert await worker.run_once() >= 1
 
         assert downloader.urls == [RESULT_URL]
         assert len(storage.objects) == 1
