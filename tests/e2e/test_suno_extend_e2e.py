@@ -8,7 +8,7 @@ from uuid import UUID, uuid4
 
 import httpx
 import pytest
-from sqlalchemy import delete, select
+from sqlalchemy import select, update
 
 from foxgen.api.app import create_app
 from foxgen.api.miniapp_security import TelegramMiniAppUser, issue_miniapp_token
@@ -32,7 +32,6 @@ from foxgen.infra.database import (
     GenerationDelivery,
     MediaAsset,
     OutboxEvent,
-    User,
 )
 from foxgen.infra.repositories import SqlAlchemyGenerationRepository
 from foxgen.providers.kie.client import KieClient
@@ -434,10 +433,12 @@ async def test_owner_can_extend_stored_suno_track_and_foreign_user_cannot() -> N
         assert len(sender.calls[1]["urls"]) == 2
     finally:
         await provider_http.aclose()
+        # Keep immutable audit rows and only disable the test price fixtures.
         async with database.session() as session:
             async with session.begin():
-                await session.execute(delete(User).where(User.id.in_([owner_id, foreign_id])))
                 await session.execute(
-                    delete(ModelPrice).where(ModelPrice.id.in_([core_price.id, extend_price.id]))
+                    update(ModelPrice)
+                    .where(ModelPrice.id.in_([core_price.id, extend_price.id]))
+                    .values(enabled=False)
                 )
         await database.close()
