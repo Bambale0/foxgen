@@ -273,7 +273,7 @@ async def test_happy_fox_suno_generates_archives_and_delivers_two_tracks() -> No
             )
             assert task.status_code == 202
             generation_id = UUID(task.json()["generation_id"])
-            assert task.json()["model_slug"] == MODEL_SLUG
+            assert task.json()["model"] == MODEL_SLUG
             assert task.json()["status"] == "queued"
 
         assert await worker.run_once() == 1
