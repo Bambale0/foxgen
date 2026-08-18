@@ -1,6 +1,12 @@
 name: Deploy production
 
 on:
+  push:
+    branches:
+      - main
+    paths:
+      - "src/foxgen/miniapp_static/**"
+      - ".github/workflows/deploy-production.yml"
   workflow_run:
     workflows:
       - CI
@@ -22,9 +28,10 @@ concurrency:
 
 jobs:
   deploy:
-    name: Deploy tested main commit
+    name: Deploy validated main commit
     if: >-
       ${{
+        github.event_name == 'push' ||
         github.event_name == 'workflow_dispatch' ||
         (
           github.event.workflow_run.conclusion == 'success' &&
@@ -65,11 +72,48 @@ jobs:
             exit 1
           }
 
-      - name: Check out tested commit
+      - name: Check out deployment commit
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           ref: ${{ env.EXPECTED_SHA }}
           fetch-depth: 1
+
+      - name: Validate Mini App release slice
+        if: github.event_name == 'push'
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          shell="src/foxgen/miniapp_static/index.html"
+          assets=(
+            parity-app.js
+            product-home.js
+            complete-menu.js
+            user-parity-hardening.js
+            user-parity-phase2.js
+            user-draft-recovery.js
+            tts-parity.js
+            suno-parity.js
+            suno-extend.js
+            suno-upload-cover.js
+            suno-upload-extend.js
+            motion-control.js
+            promo-redeem.js
+          )
+
+          test -s "$shell"
+          grep -Fq 'name="foxgen-miniapp-shell" content="parity-v3"' "$shell"
+          grep -Fq '/mini-app/product-home.css?v=parity-v3' "$shell"
+          grep -Fq '/mini-app/product-home.js?v=parity-v3' "$shell"
+
+          for asset in "${assets[@]}"; do
+            file="src/foxgen/miniapp_static/${asset}"
+            test -s "$file"
+            node --check "$file"
+          done
+
+          grep -Fq "label.textContent = 'Каталог'" src/foxgen/miniapp_static/product-home.js
+          grep -Fq "Фото, видео, голос, музыка и Motion Control" src/foxgen/miniapp_static/product-home.js
+          echo "Mini App parity-v3 release gate passed for ${EXPECTED_SHA}"
 
       - name: Configure SSH
         shell: bash
@@ -99,7 +143,7 @@ jobs:
             "$DEPLOY_USER@$DEPLOY_HOST" \
             "$remote_command"
 
-      - name: Deploy tested commit
+      - name: Deploy validated commit
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -127,6 +171,7 @@ jobs:
             echo "## FoxGen production deployment"
             echo
             echo "- Commit: \`${EXPECTED_SHA}\`"
+            echo "- Trigger: \`${{ github.event_name }}\`"
             echo "- Target: \`${DEPLOY_USER}@${DEPLOY_HOST}:${DEPLOY_PATH}\`"
             echo "- Compose: \`${DEPLOY_COMPOSE_FILE}\`"
           } >> "$GITHUB_STEP_SUMMARY"
