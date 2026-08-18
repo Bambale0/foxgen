@@ -181,6 +181,7 @@ def settings() -> Settings:
         miniapp_enabled=True,
         miniapp_jwt_secret=JWT_SECRET,
         task_submission_enabled=True,
+        kie_api_key="e2e-key",
     )
 
 
