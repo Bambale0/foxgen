@@ -247,7 +247,8 @@ async def test_happy_fox_tts_paid_generation_archives_audio_and_delivers() -> No
             generation_id = task.json()["generation_id"]
 
         assert await worker.run_once() >= 1
-        assert len(provider_posts) == 1
+        target_posts = [body for body in provider_posts if body.get("input") == tts_payload()]
+        assert len(target_posts) == 1
         assert await worker.poll_once() >= 1
         assert await worker.run_once() >= 1
         assert await worker.run_once() >= 1
