@@ -8,17 +8,43 @@ from foxgen.miniapp_release import MINIAPP_RELEASE
 STATIC = Path("src/foxgen/miniapp_static")
 PARITY_SCRIPT = STATIC / "parity-app.js"
 PRODUCT_HOME_SCRIPT = STATIC / "product-home.js"
+RUNTIME_LOADER = STATIC / "runtime-loader.js"
+BOOT_GUARD = STATIC / "boot-guard.js"
 
 
-def test_happy_fox_parity_runtime_is_loaded() -> None:
+def test_happy_fox_parity_runtime_is_loaded_through_compatibility_gate() -> None:
     html = (STATIC / "index.html").read_text(encoding="utf-8")
 
     assert f'<link rel="stylesheet" href="/mini-app/parity.css?v={MINIAPP_RELEASE}">' in html
-    assert f'<script defer src="/mini-app/parity-app.js?v={MINIAPP_RELEASE}"></script>' in html
+    assert f'data-parity-src="/mini-app/parity-app.js?v={MINIAPP_RELEASE}"' in html
+    assert f'data-legacy-src="/mini-app/app.js?v={MINIAPP_RELEASE}"' in html
+    assert f'<script src="/mini-app/runtime-loader.js?v={MINIAPP_RELEASE}"></script>' in html
+    assert f'<script src="/mini-app/enhancement-loader.js?v={MINIAPP_RELEASE}"></script>' in html
+    assert f'<script defer src="/mini-app/parity-app.js?v={MINIAPP_RELEASE}"></script>' not in html
     assert '<script type="module" src="/mini-app/parity-app.js' not in html
     assert '<script type="module" src="/mini-app/app.js' not in html
     assert "Happy Fox" in html
     assert "FOXGEN" not in html
+
+
+def test_runtime_loader_falls_back_for_legacy_telegram_webviews() -> None:
+    loader = RUNTIME_LOADER.read_text(encoding="utf-8")
+    guard = BOOT_GUARD.read_text(encoding="utf-8")
+
+    assert "String.prototype.replaceAll" in loader
+    assert "window.structuredClone" in loader
+    assert "new Function" in loader
+    assert "??=" in loader
+    assert "&&=" in loader
+    assert "data-legacy-src" in loader
+    assert "legacy=1" in loader
+
+    assert "__FOXGEN_BOOT_FAIL__" in guard
+    assert "Переключаем совместимый режим" in guard
+    assert "legacy=1" in guard
+    assert ".replaceAll(" not in guard
+    assert "?." not in guard
+    assert "??" not in guard
 
 
 def test_happy_fox_frontend_is_schema_driven_and_uses_user_safe_api() -> None:
