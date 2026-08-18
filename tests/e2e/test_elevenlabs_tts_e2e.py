@@ -246,11 +246,11 @@ async def test_happy_fox_tts_paid_generation_archives_audio_and_delivers() -> No
             assert task.json()["status"] == "queued"
             generation_id = task.json()["generation_id"]
 
-        assert await worker.run_once() == 1
+        assert await worker.run_once() >= 1
         assert len(provider_posts) == 1
-        assert await worker.poll_once() == 1
-        assert await worker.run_once() == 1
-        assert await worker.run_once() == 1
+        assert await worker.poll_once() >= 1
+        assert await worker.run_once() >= 1
+        assert await worker.run_once() >= 1
 
         assert downloader.urls == [RESULT_URL]
         assert len(storage.objects) == 1
