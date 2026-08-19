@@ -82,7 +82,10 @@ describe('Happy Fox Telegram deep-link navigation', () => {
 
   it('focuses the exact generation', async () => {
     renderApp('generation_gen-1')
-    expect(await screen.findByTestId('deep-link-generation')).toHaveTextContent('gen-1')
+    const detail = await screen.findByTestId('generation-detail')
+    expect(detail).toHaveTextContent('nano-banana-2')
+    expect(detail).toHaveTextContent('succeeded')
+    expect(detail).toHaveTextContent('neon fox')
     expect(apiMock.generation).toHaveBeenCalledWith('gen-1')
   })
 
