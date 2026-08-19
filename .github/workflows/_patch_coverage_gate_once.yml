@@ -1,0 +1,65 @@
+name: Patch repository coverage gate once
+
+on:
+  push:
+    branches:
+      - chore/repository-hygiene-20260819
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: chore/repository-hygiene-20260819
+      - name: Move coverage floor to full real-infrastructure suite
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          ci = Path('.github/workflows/ci.yml')
+          text = ci.read_text(encoding='utf-8')
+          old_quality = '''          pytest -q \\\n            --cov=foxgen \\\n            --cov-report=term-missing \\\n            --cov-report=xml:coverage.xml \\\n            2>&1 | tee pytest.log\n'''
+          new_quality = '''          pytest -q \\\n            --cov=foxgen \\\n            --cov-report=term-missing \\\n            --cov-report=xml:coverage.xml \\\n            --cov-fail-under=0 \\\n            2>&1 | tee pytest.log\n'''
+          if text.count(old_quality) != 1:
+              raise SystemExit('quality coverage command drifted; refusing broad edit')
+          text = text.replace(old_quality, new_quality, 1)
+
+          marker = '''      - name: API readiness smoke test\n        id: api_smoke\n'''
+          coverage = '''      - name: Repository coverage on real infrastructure\n        id: repository_coverage\n        run: |\n          set -o pipefail\n          pytest -q \\\n            --cov=foxgen \\\n            --cov-report=term-missing \\\n            --cov-report=xml:/tmp/foxgen-coverage.xml \\\n            2>&1 | tee /tmp/foxgen-coverage.log\n      - name: API readiness smoke test\n        id: api_smoke\n'''
+          if text.count(marker) != 1:
+              raise SystemExit('API smoke marker drifted; refusing broad edit')
+          text = text.replace(marker, coverage, 1)
+
+          old_diag = '''            /tmp/foxgen-e2e.log\n            /tmp/foxgen-e2e.xml\n            /tmp/foxgen-api.log\n'''
+          new_diag = '''            /tmp/foxgen-e2e.log\n            /tmp/foxgen-e2e.xml\n            /tmp/foxgen-coverage.log\n            /tmp/foxgen-coverage.xml\n            /tmp/foxgen-api.log\n'''
+          if text.count(old_diag) != 1:
+              raise SystemExit('diagnostic artifact list drifted; refusing broad edit')
+          ci.write_text(text.replace(old_diag, new_diag, 1), encoding='utf-8')
+
+          docs = Path('docs/testing-ci.md')
+          doc = docs.read_text(encoding='utf-8')
+          old = 'Coverage is configured in `pyproject.toml` with branch coverage and repository floor `fail_under = 55`. High-risk financial/provider paths still require explicit behavior, concurrency and cross-layer tests even when aggregate coverage passes.'
+          new = 'Coverage is configured in `pyproject.toml` with branch coverage and repository floor `fail_under = 55`. The quality job runs unit/contract tests with coverage as a diagnostic assertion gate, while the 55% repository floor is enforced by a second full-suite coverage pass in the real-infrastructure job with PostgreSQL/Redis plus integration and E2E enabled. High-risk financial/provider paths still require explicit behavior, concurrency and cross-layer tests even when aggregate coverage passes.'
+          if doc.count(old) != 1:
+              raise SystemExit('coverage documentation drifted; refusing broad edit')
+          doc = doc.replace(old, new, 1)
+          doc = doc.replace('- pytest with coverage/XML.\n', '- unit/contract pytest with coverage/XML diagnostics; test failures remain blocking.\n', 1)
+          doc = doc.replace('- required cross-layer E2E;\n- API readiness;\n', '- required cross-layer E2E;\n- full-suite repository coverage with the 55% floor;\n- API readiness;\n', 1)
+          doc = doc.replace('Infrastructure diagnostics upload integration logs/XML, E2E logs/XML and API logs.', 'Infrastructure diagnostics upload integration logs/XML, E2E logs/XML, full-suite coverage logs/XML and API logs.', 1)
+          docs.write_text(doc, encoding='utf-8')
+          PY
+          rm .github/workflows/_patch_coverage_gate_once.yml
+      - name: Commit coverage gate repair
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add .github/workflows/ci.yml docs/testing-ci.md .github/workflows/_patch_coverage_gate_once.yml
+          git commit -m 'ci: enforce coverage on full real-infrastructure suite'
+          git push origin HEAD:chore/repository-hygiene-20260819
