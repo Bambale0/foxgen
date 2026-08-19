@@ -25,7 +25,7 @@ def test_standard_suno_studio_is_backend_schema_driven() -> None:
     assert "normalizedType" in form
     assert "submitModel" in form
     assert "miniAppApi.validateModel(model.slug, input)" in context
-    assert "miniAppApi.createTask(model.slug, validated.input)" in context
+    assert "miniAppApi.createTask(model.slug, validated.input, sourcePublicationId)" in context
 
 
 def test_suno_browser_layer_has_no_direct_provider_credentials_or_request() -> None:
