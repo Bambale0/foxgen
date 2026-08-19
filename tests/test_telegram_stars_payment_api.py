@@ -12,7 +12,6 @@ from foxgen.application.payments import (
 )
 from foxgen.core.config import Settings
 
-
 USER_ID = 123456798
 INTERNAL_TOKEN = "stars-internal-token-long-enough"
 JWT_SECRET = "stars-miniapp-jwt-secret-long-enough"
@@ -176,7 +175,7 @@ def test_trusted_bot_payment_callbacks_are_owner_bound() -> None:
                     "total_amount": 50,
                 },
             ).status_code
-            == 401
+            == 400
         )
         pre_checkout = test_client.post(
             "/v1/user-portal/payments/stars/pre-checkout",

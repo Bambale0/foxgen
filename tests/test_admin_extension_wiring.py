@@ -18,6 +18,7 @@ from foxgen.bot.admin_extras import (
 )
 from foxgen.bot.app import register_runtime_routers
 from foxgen.core.config import Settings
+from tests.route_helpers import route_methods_by_path
 
 
 class FakePolicy:
@@ -92,9 +93,7 @@ def test_extension_routes_are_registered_with_expected_methods() -> None:
         manage_resources=False,
         admin_services=cast(Any, FakeAdminServices()),
     )
-    methods_by_path = {
-        route.path: set(route.methods or set()) for route in app.routes if hasattr(route, "methods")
-    }
+    methods_by_path = route_methods_by_path(app)
 
     expected = {
         "/internal/admin/admins": "GET",
@@ -189,8 +188,8 @@ def test_telegram_extension_router_precedes_product_and_shell_fallbacks() -> Non
         "foxgen-quick-start-wizard",
         "foxgen-reference-memory",
         "foxgen-generation-wizard",
-        "foxgen-quick-start",
-        "foxgen-generation",
+        "quick-start",
+        "generation-flows",
         "foxgen-shell",
     ]
 

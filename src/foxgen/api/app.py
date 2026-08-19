@@ -189,7 +189,10 @@ def validated_input_or_422(contract: str, payload: dict[str, Any]) -> dict[str, 
     try:
         return validate_input(contract, payload)
     except ValidationError as exc:
-        raise HTTPException(status_code=422, detail=exc.errors(include_url=False)) from exc
+        errors = exc.errors(include_url=False)
+        for error in errors:
+            error.pop("ctx", None)
+        raise HTTPException(status_code=422, detail=errors) from exc
 
 
 def _error_status(code: ErrorCode) -> int:

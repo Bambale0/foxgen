@@ -18,6 +18,7 @@ from foxgen.domain.models import GenerationStatus
 from foxgen.providers.kie.client import KieClient
 from foxgen.providers.kie.contracts import InputContract, validate_input
 from foxgen.providers.kie.suno_upload_extend import SunoUploadExtendClient
+from tests.route_helpers import route_paths
 
 
 @dataclass(frozen=True)
@@ -88,7 +89,7 @@ def custom_vocal_payload(storage_key: str = "inputs/42/source.mp3") -> dict[str,
 
 def test_upload_extend_routes_are_mounted_with_current_application() -> None:
     app = create_app(Settings(env="test"), manage_resources=False)
-    paths = {route.path for route in app.routes}
+    paths = route_paths(app)
 
     assert "/v1/user-portal/music/suno/upload-extend" in paths
     assert "/v1/miniapp/music/suno/upload-extend" in paths

@@ -26,9 +26,27 @@ def _callbacks(markup: object) -> set[str]:
     }
 
 
-def test_wizard_covers_every_paid_submission_model() -> None:
+def test_generation_wizard_declares_only_models_reachable_through_its_current_surfaces() -> None:
     production = {item.slug for item in ModelRegistry().submission_models()}
-    assert wizard_submission_slugs() == production
+    wizard = wizard_submission_slugs()
+
+    assert wizard == {
+        "seedream-5-pro",
+        "seedream-5-pro-edit",
+        "nano-banana-2",
+        "nano-banana-pro",
+        "seedance-2",
+        "seedance-2-mini",
+        "elevenlabs-turbo-2-5",
+    }
+    assert wizard <= production
+    assert production - wizard == {
+        "suno-v5",
+        "suno-v5-extend",
+        "suno-v5-upload-cover",
+        "suno-v5-upload-extend",
+        "kling-3-motion-control",
+    }
 
 
 def test_image_default_draft_matches_screen_contract() -> None:

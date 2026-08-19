@@ -1,16 +1,47 @@
+# Secrets and local environment
 .env
-.env.bak*
+.env.*
+!.env.example
+!deploy/production.env.example
+*.pem
+*.key
+
+# Python
 .venv/
+venv/
+env/
 __pycache__/
 *.py[cod]
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+.pyright/
+.tox/
+.nox/
 .coverage
+.coverage.*
+coverage.xml
 htmlcov/
 dist/
 build/
 *.egg-info/
+
+# Local runtime artifacts
+*.log
+*.pid
+*.sqlite
+*.sqlite3
+.cache/
+tmp/
+temp/
+
+# Frontend/tooling caches
+node_modules/
+
+# Editors and operating systems
 .idea/
 .vscode/
 .DS_Store
+Thumbs.db
+*.swp
+*.swo
