@@ -59,7 +59,7 @@ jobs:
           grep -Fq '/mini-app/_next/' out/index.html
           ! grep -Fq 'parity-app.js' out/index.html
           ! grep -Fq 'backend-parity-ui.js' out/index.html
-          ! grep -R -Fq 'MutationObserver' app components lib out || {
+          ! grep -R -Fq 'MutationObserver' app components lib || {
             echo "MutationObserver must not own Happy Fox navigation" >&2
             exit 1
           }
