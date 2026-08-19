@@ -3,7 +3,7 @@ import logging
 
 from aiogram import Bot, Dispatcher, F, Router
 from aiogram.client.default import DefaultBotProperties
-from aiogram.enums import ParseMode
+from aiogram.enums import ChatType, ParseMode
 from aiogram.filters import Command, CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.storage.base import BaseEventIsolation
@@ -55,6 +55,31 @@ async def clear_state_with_inputs(
     await state.clear()
 
 
+def private_chat_id(message: object) -> int | None:
+    """Return a Telegram private-chat id without assuming a concrete message stub shape."""
+
+    chat = getattr(message, "chat", None)
+    if chat is None or getattr(chat, "type", None) != ChatType.PRIVATE:
+        return None
+    chat_id = getattr(chat, "id", None)
+    return chat_id if isinstance(chat_id, int) else None
+
+
+async def converge_private_chat_miniapp_menu(
+    message: object,
+    bot: Bot | None,
+    settings: Settings | None,
+) -> None:
+    """Replace any stale per-chat Telegram menu override with the current Mini App release."""
+
+    if bot is None or settings is None:
+        return
+    chat_id = private_chat_id(message)
+    if chat_id is None:
+        return
+    await configure_miniapp_menu(bot, settings, chat_id=chat_id)
+
+
 @global_commands_router.message(CommandStart())
 @global_commands_router.message(Command("menu"))
 async def show_menu(
@@ -62,11 +87,14 @@ async def show_menu(
     state: FSMContext,
     input_media: TelegramInputMediaStorage,
     api_client: FoxGenApiClient | None = None,
+    bot: Bot | None = None,
+    settings: Settings | None = None,
 ) -> None:
     """Interrupt any active FSM draft, then dispatch a safe deep link or main menu."""
 
     await clear_state_with_inputs(state, input_media)
-    text = message.text or ""
+    await converge_private_chat_miniapp_menu(message, bot, settings)
+    text = getattr(message, "text", None) or ""
     payload = text.partition(" ")[2].strip() if text.startswith("/start") else ""
     if payload and api_client is not None:
         if await handle_start_payload(message, state, api_client, payload):
@@ -82,8 +110,12 @@ async def return_to_menu(
     callback: CallbackQuery,
     state: FSMContext,
     input_media: TelegramInputMediaStorage,
+    bot: Bot | None = None,
+    settings: Settings | None = None,
 ) -> None:
     await clear_state_with_inputs(state, input_media)
+    if callback.message is not None:
+        await converge_private_chat_miniapp_menu(callback.message, bot, settings)
     await safe_edit_callback_message(callback, "Главное меню", main_menu())
 
 
@@ -92,8 +124,12 @@ async def cancel_flow(
     callback: CallbackQuery,
     state: FSMContext,
     input_media: TelegramInputMediaStorage,
+    bot: Bot | None = None,
+    settings: Settings | None = None,
 ) -> None:
     await clear_state_with_inputs(state, input_media)
+    if callback.message is not None:
+        await converge_private_chat_miniapp_menu(callback.message, bot, settings)
     await safe_edit_callback_message(
         callback,
         "Действие отменено. Главное меню:",
@@ -216,7 +252,12 @@ def register_runtime_routers(dispatcher: Dispatcher) -> None:
     dispatcher.include_router(router)
 
 
-async def configure_miniapp_menu(bot: Bot, settings: Settings) -> None:
+async def configure_miniapp_menu(
+    bot: Bot,
+    settings: Settings,
+    *,
+    chat_id: int | None = None,
+) -> None:
     miniapp_url = resolve_miniapp_url(settings)
     if miniapp_url is None:
         logger.warning(
@@ -224,18 +265,23 @@ async def configure_miniapp_menu(bot: Bot, settings: Settings) -> None:
             extra={
                 "miniapp_enabled": settings.miniapp_enabled,
                 "kie_callback_base_url_configured": settings.kie_callback_base_url is not None,
+                "chat_id": chat_id,
             },
         )
         return
     try:
         await bot.set_chat_menu_button(
+            chat_id=chat_id,
             menu_button=MenuButtonWebApp(
                 text="Happy Fox",
                 web_app=WebAppInfo(url=miniapp_url),
-            )
+            ),
         )
     except Exception:
-        logger.exception("miniapp_chat_menu_configuration_failed")
+        logger.exception(
+            "miniapp_chat_menu_configuration_failed",
+            extra={"chat_id": chat_id},
+        )
 
 
 async def run(settings: Settings | None = None) -> None:
@@ -281,6 +327,7 @@ async def run(settings: Settings | None = None) -> None:
         api_client=api_client,
         admin_api_client=admin_api_client,
         input_media=input_media,
+        settings=resolved,
     )
     register_runtime_routers(dispatcher)
     bot = Bot(
