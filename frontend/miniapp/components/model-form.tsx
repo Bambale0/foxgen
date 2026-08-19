@@ -35,7 +35,7 @@ function enumValues(schema: JsonSchemaProperty) {
   return null
 }
 
-function initialInput(model: ModelDefinition) {
+function initialInput(model: ModelDefinition, seed: Record<string, unknown> = {}) {
   const result: Record<string, unknown> = { ...(model.defaults ?? {}) }
   for (const [name, schema] of Object.entries(model.input_schema?.properties ?? {})) {
     if (result[name] !== undefined) continue
@@ -43,7 +43,7 @@ function initialInput(model: ModelDefinition) {
     else if (normalizedType(schema) === 'boolean') result[name] = false
     else if (normalizedType(schema) === 'array') result[name] = []
   }
-  return result
+  return { ...result, ...seed }
 }
 
 function coerce(raw: string, schema: JsonSchemaProperty) {
@@ -61,8 +61,8 @@ function acceptFor(name: string) {
 }
 
 export function ModelForm({ model }: { model: ModelDefinition }) {
-  const { submitModel, selectModel, busy, bootstrap } = useApp()
-  const [input, setInput] = useState<Record<string, unknown>>(() => initialInput(model))
+  const { submitModel, selectModel, busy, bootstrap, draftInput } = useApp()
+  const [input, setInput] = useState<Record<string, unknown>>(() => initialInput(model, draftInput))
   const [uploading, setUploading] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const properties = useMemo(() => Object.entries(model.input_schema?.properties ?? {}), [model])
@@ -70,9 +70,9 @@ export function ModelForm({ model }: { model: ModelDefinition }) {
   const price = bootstrap?.prices.find((item) => item.model_slug === model.slug)?.amount_units ?? 0
 
   useEffect(() => {
-    setInput(initialInput(model))
+    setInput(initialInput(model, draftInput))
     setError(null)
-  }, [model])
+  }, [draftInput, model])
 
   function update(name: string, value: unknown) {
     setInput((current) => ({ ...current, [name]: value }))
@@ -107,6 +107,7 @@ export function ModelForm({ model }: { model: ModelDefinition }) {
         <button className="back" type="button" onClick={() => selectModel(null)}>‹</button>
         <div><span className="eyebrow">{model.family || model.media_kind}</span><h2 style={{ margin: '5px 0 0' }}>{model.title}</h2></div>
       </div>
+      {Object.keys(draftInput).length > 0 && <div className="notice" data-testid="remix-prefill">Remix: исходный промпт и совместимый медиа-референс перенесены в форму.</div>}
       {model.recommended_for?.length ? <div className="notice">Лучше всего: {model.recommended_for.join(' · ')}</div> : null}
       {properties.map(([name, schema]) => {
         const type = normalizedType(schema)
@@ -119,7 +120,7 @@ export function ModelForm({ model }: { model: ModelDefinition }) {
             <label className="form-field" key={name}>
               <span>{label}</span>
               <input type="file" accept={acceptFor(name)} disabled={uploading === name} onChange={(event) => { const file = event.target.files?.[0]; if (file) void upload(name, file) }} />
-              {display && <small style={{ color: '#8c8882', display: 'block', marginTop: 6 }}>Файл загружен ✓</small>}
+              {display && <small style={{ color: '#8c8882', display: 'block', marginTop: 6 }}>Референс выбран ✓</small>}
             </label>
           )
         }

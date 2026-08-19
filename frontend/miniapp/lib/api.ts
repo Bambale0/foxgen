@@ -6,7 +6,9 @@ import type {
   Generation,
   PartnerData,
   Publication,
+  PublicProfile,
   ReferenceItem,
+  RemixSource,
   StarPackage,
   SupportTicket,
   TariffData,
@@ -204,6 +206,24 @@ export class MiniAppApi {
     )
   }
 
+  publication(publicationId: string) {
+    return this.request<Publication>(`/publications/${encodeURIComponent(publicationId)}`)
+  }
+
+  remixSource(publicationId: string) {
+    return this.request<RemixSource>(`/publications/${encodeURIComponent(publicationId)}/remix`)
+  }
+
+  publicProfile(slug: string) {
+    return this.request<PublicProfile>(`/profiles/${encodeURIComponent(slug)}`)
+  }
+
+  profilePublications(slug: string, limit = 30, offset = 0) {
+    return this.request<{ items: Publication[]; next_offset: number | null }>(
+      `/profiles/${encodeURIComponent(slug)}/publications?limit=${limit}&offset=${offset}`,
+    )
+  }
+
   setLike(publicationId: string, liked: boolean) {
     return this.request<{ liked: boolean; likes_count: number }>(
       `/publications/${encodeURIComponent(publicationId)}/like`,
@@ -227,7 +247,7 @@ export class MiniAppApi {
   }
 
   ownProfile() {
-    return this.request<{ user_id: number; slug: string; display_name?: string | null; bio?: string | null }>('/me/profile')
+    return this.request<PublicProfile>('/me/profile')
   }
 
   updateProfile(payload: { slug: string; display_name?: string | null; bio?: string | null }) {
