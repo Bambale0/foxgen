@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ru">
+<html lang="ru" data-foxgen-catalog="booting">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
@@ -11,6 +11,11 @@
   <meta http-equiv="Pragma" content="no-cache">
   <title>Happy Fox</title>
   <script src="https://telegram.org/js/telegram-web-app.js?63"></script>
+  <style>
+    html:not([data-foxgen-catalog="ready"]):not([data-foxgen-catalog="failed"]) #app > main:not(.boot-screen):not(.boot-fallback) {
+      visibility: hidden;
+    }
+  </style>
   <link rel="stylesheet" href="/mini-app/app.css?v=parity-v10">
   <link rel="stylesheet" href="/mini-app/studio.css?v=parity-v10">
   <link rel="stylesheet" href="/mini-app/parity.css?v=parity-v10">
