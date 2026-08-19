@@ -397,10 +397,14 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  miniapp-browser-e2e:
+    name: Mini App browser E2E
+    uses: ./.github/workflows/miniapp-browser-e2e.yml
+
   container:
     name: container compose and vulnerability scan
     runs-on: ubuntu-24.04
-    needs: [quality, infrastructure, security, secrets]
+    needs: [quality, infrastructure, security, secrets, miniapp-browser-e2e]
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - name: Validate development Compose configuration
