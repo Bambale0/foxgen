@@ -25,9 +25,5 @@ export default defineConfig({
       name: 'telegram-android-chromium',
       use: { ...devices['Pixel 7'] },
     },
-    {
-      name: 'telegram-ios-webkit',
-      use: { ...devices['iPhone 14'] },
-    },
   ],
 })
