@@ -163,14 +163,6 @@ async def test_happy_fox_owner_audio_cover_reaches_two_track_delivery() -> None:
             if request.method == "POST" and request.url.path == "/api/v1/generate/upload-cover":
                 body = json.loads(request.content.decode())
                 provider_posts.append(body)
-                assert body["model"] == "V5"
-                assert body["customMode"] is True
-                assert body["instrumental"] is False
-                assert body["title"] == "Neon Cover"
-                assert str(body["uploadUrl"]).startswith(
-                    "https://foxgen.example.test/v1/input-media/"
-                )
-                assert "input_storage_key" not in body
                 return httpx.Response(200, json={"code": 200, "data": {"taskId": "cover-e2e-task"}})
             if request.method == "GET" and request.url.path == "/api/v1/generate/record-info":
                 assert request.url.params["taskId"] == "cover-e2e-task"
@@ -289,10 +281,24 @@ async def test_happy_fox_owner_audio_cover_reaches_two_track_delivery() -> None:
 
             assert await worker.run_once() == 1
             assert len(provider_posts) == 1
+            provider_body = provider_posts[0]
+            assert provider_body["model"] == "V5"
+            assert provider_body["customMode"] is True
+            assert provider_body["instrumental"] is False
+            assert provider_body["title"] == "Neon Cover"
+            assert str(provider_body["uploadUrl"]).startswith(
+                "https://foxgen.example.test/v1/input-media/"
+            )
+            assert "input_storage_key" not in provider_body
+
             async with database.session() as session:
                 submitted = await session.get(Generation, generation_id)
                 assert submitted is not None
-                assert submitted.status == GenerationStatus.SUBMITTED
+                assert submitted.status == GenerationStatus.SUBMITTED, (
+                    submitted.status,
+                    submitted.error_code,
+                    submitted.status_reason,
+                )
                 assert submitted.provider_task_id == "cover-e2e-task"
             await lifecycle.schedule_next_poll(generation_id=generation_id, delay=timedelta())
             assert await worker.poll_once() == 1
