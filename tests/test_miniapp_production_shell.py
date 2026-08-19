@@ -35,7 +35,7 @@ def test_docker_builds_react_frontend_and_removes_legacy_static_tree() -> None:
     assert "npm run build" in dockerfile
     assert "rm -rf ./src/foxgen/miniapp_static" in dockerfile
     assert "COPY --from=miniapp-build /build/frontend/miniapp/out/ ./src/foxgen/miniapp_static/" in dockerfile
-    assert f'content=\\"{MINIAPP_RELEASE}\\"' in dockerfile
+    assert f'name="foxgen-miniapp-shell" content="{MINIAPP_RELEASE}"' in dockerfile
     assert "parity-app.js" not in dockerfile
     assert "backend-parity-ui.js" not in dockerfile
 
