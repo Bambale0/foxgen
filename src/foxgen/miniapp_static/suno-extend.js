@@ -50,8 +50,10 @@ async function api(path, options = {}, retry = true) {
 }
 
 function price() {
-  const models = Array.isArray(bootstrap?.models) ? bootstrap.models : [];
-  return models.find((item) => item?.slug === EXTEND_SLUG)?.price ?? null;
+  const prices = Array.isArray(bootstrap?.prices) ? bootstrap.prices : [];
+  return (
+    prices.find((item) => item?.model_slug === EXTEND_SLUG && item?.enabled !== false) ?? null
+  );
 }
 
 function availableBalance() {
