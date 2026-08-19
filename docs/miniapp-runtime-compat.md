@@ -13,15 +13,18 @@ The release is versioned by `foxgen.miniapp_release.MINIAPP_RELEASE`. The exact 
 `index.html` starts the boot guard and runtime loader before optional enhancements:
 
 1. `boot-guard.js` — bounded startup watchdog plus a visible fatal/retry state.
-2. `runtime-loader.js` — installs narrowly scoped browser compatibility helpers, probes the WebView parser and loads the only supported core runtime, `parity-app.js`.
-3. `runtime-loader.js` then loads `product-home.js` as a mandatory core product layer, not as an optional enhancement.
-4. `enhancement-loader.js` waits for authenticated bootstrap and for `main[data-product-catalog="1"]`; only then may optional product modules load.
+2. `runtime-loader.js` — installs narrowly scoped browser compatibility helpers, probes the WebView baseline and loads the only supported core runtime, `parity-app.js`.
+3. The loader fetches the current runtime source and applies a tiny syntax compatibility transform for logical assignment operators (`??=` / `&&=`) when present. It does not substitute another application.
+4. `runtime-loader.js` then loads `product-home.js` as a mandatory core product layer, not as an optional enhancement.
+5. `enhancement-loader.js` waits for authenticated bootstrap and for `main[data-product-catalog="1"]`; only then may optional product modules load.
 
-There is no `app.js` compatibility runtime and no `legacy=1` redirect. If the Telegram WebView cannot parse the current runtime, Happy Fox fails closed with a clear update/retry message instead of opening an obsolete application.
+There is no `app.js` compatibility runtime and no `legacy=1` redirect. A Telegram WebView that supports the reviewed baseline gets the same current application, with only syntax-level compatibility normalization where required. A WebView below that baseline fails closed with a clear update/retry message instead of opening an obsolete application.
 
 ## Catalog-first boundary
 
 `product-home.js` is mandatory. The runtime manifest exposes it through `data-product-home-src`; loading it is part of successful core startup.
+
+Until the catalog reaches the ready state, `index.html` hides any intermediate core surface. This prevents the historical feed-first renderer inside the core from flashing as if it were a valid startup experience.
 
 The enhancement loader considers the Mini App ready only after the catalog marks the active main surface with `data-product-catalog="1"`. The document then receives `data-foxgen-catalog="ready"`.
 
@@ -30,11 +33,12 @@ If the catalog script cannot load or does not render within the bounded startup 
 ## Compatibility rules
 
 - `boot-guard.js` and `runtime-loader.js` remain classic scripts and avoid syntax that originally caused Telegram WebView parser failures.
-- The runtime loader may polyfill only browser primitives needed by the reviewed Mini App code (`String.prototype.replaceAll` and `structuredClone`). Business logic is never polyfilled in the browser.
+- The runtime loader may polyfill only browser primitives needed by the reviewed Mini App code (`String.prototype.replaceAll` and `structuredClone`) and normalize the two reviewed logical-assignment operators before executing the current source.
+- Business logic is never replaced or polyfilled in the browser.
 - Core authentication, prices, ownership, billing and generation validation remain server-authoritative.
 - `window.__FOXGEN_BOOTSTRAP__` / `foxgen:bootstrap` is the single browser bootstrap contract.
 - Optional enhancement failure may degrade only that isolated enhancement; it must not replace or downgrade the current catalog.
-- A WebView too old for the current runtime must show a clear unsupported-runtime error, not another product version.
+- A WebView too old for the current baseline must show a clear unsupported-runtime error, not another product version.
 
 ## Release and deployment gate
 
