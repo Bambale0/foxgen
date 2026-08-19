@@ -39,16 +39,28 @@ def test_production_shell_declares_core_fallback_and_all_user_parity_modules() -
     ):
         assert f"/mini-app/{stylesheet}?v={MINIAPP_RELEASE}" in html
 
-    assert f'<script src="/mini-app/boot-guard.js?v={MINIAPP_RELEASE}"></script>' in html
-    assert f'<script src="/mini-app/runtime-loader.js?v={MINIAPP_RELEASE}"></script>' in html
-    assert f'<script src="/mini-app/enhancement-loader.js?v={MINIAPP_RELEASE}"></script>' in html
-    assert f'data-parity-src="/mini-app/parity-app.js?v={MINIAPP_RELEASE}"' in html
-    assert f'data-legacy-src="/mini-app/app.js?v={MINIAPP_RELEASE}"' in html
-    assert f'<script defer src="/mini-app/parity-app.js?v={MINIAPP_RELEASE}"></script>' not in html
+    core_scripts = (
+        "boot-guard.js",
+        "runtime-loader.js",
+        "enhancement-loader.js",
+    )
+    for asset in core_scripts:
+        tag = f'<script src="/mini-app/{asset}?v={MINIAPP_RELEASE}"></script>'
+        assert tag in html
+
+    parity_src = f"/mini-app/parity-app.js?v={MINIAPP_RELEASE}"
+    legacy_src = f"/mini-app/app.js?v={MINIAPP_RELEASE}"
+    assert f'data-parity-src="{parity_src}"' in html
+    assert f'data-legacy-src="{legacy_src}"' in html
+
+    parity_defer = f'<script defer src="{parity_src}"></script>'
+    assert parity_defer not in html
     assert '<script type="module" src="/mini-app/parity-app.js' not in html
     assert '<script type="module" src="/mini-app/app.js' not in html
 
-    critical = f'<span data-module-src="/mini-app/product-home.js?v={MINIAPP_RELEASE}" data-critical-module="catalog"></span>'
+    product_home_url = f"/mini-app/product-home.js?v={MINIAPP_RELEASE}"
+    critical_attr = 'data-critical-module="catalog"'
+    critical = f'<span data-module-src="{product_home_url}" {critical_attr}></span>'
     assert critical in html
     assert html.index(critical) < html.index("complete-menu.js")
 
