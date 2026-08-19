@@ -45,7 +45,12 @@ async def isolate_cross_layer_outbox() -> None:
 
 @pytest.fixture(autouse=True)
 def make_provider_polling_immediately_due(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Keep production's 20s poll delay out of deterministic cross-layer E2E tests."""
+    """Keep production timing/origin defaults out of deterministic cross-layer E2E tests."""
+
+    # Settings.telegram_input_public_base_url is a computed property backed by
+    # internal_api_base_url (or kie_callback_base_url), not a model field. Pin the
+    # real backing setting so upload-cover/upload-extend assert the intended origin.
+    monkeypatch.setenv("FOXGEN_INTERNAL_API_BASE_URL", "https://foxgen.example.test")
 
     original_transition = lifecycle_repository.generation_transition_values
     original_list_pollable = lifecycle_repository.SqlAlchemyLifecycleRepository.list_pollable
