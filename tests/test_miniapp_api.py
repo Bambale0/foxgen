@@ -14,6 +14,7 @@ from foxgen.application.submissions import SubmissionReceipt
 from foxgen.core.config import Settings
 from foxgen.domain.models import GenerationStatus
 from foxgen.infra.miniapp import MiniAppGenerationSnapshot
+from foxgen.miniapp_release import MINIAPP_RELEASE
 
 BOT_TOKEN = "123456:test-miniapp-bot-token"
 JWT_SECRET = "miniapp-jwt-test-secret-that-is-long-enough"
@@ -205,7 +206,10 @@ def test_happy_fox_static_shell_is_packaged_and_public() -> None:
     assert "Happy Fox" in response.text
     assert "<title>Happy Fox</title>" in response.text
     assert "FOXGEN" not in response.text
-    assert "/mini-app/tts-parity.js" in response.text
+    assert f'name="foxgen-miniapp-shell" content="{MINIAPP_RELEASE}"' in response.text
+    assert "React Mini App" in response.text
+    assert "parity-app.js" not in response.text
+    assert "tts-parity.js" not in response.text
 
 
 def test_bootstrap_requires_jwt_and_is_bound_to_telegram_user() -> None:
