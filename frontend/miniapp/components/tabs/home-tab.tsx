@@ -3,11 +3,6 @@
 import { BookImage, CircleDollarSign, Headphones, Images, Newspaper, UsersRound } from 'lucide-react'
 import { useApp } from '@/lib/app-context'
 
-function modelPrice(slug: string, prices: ReturnType<typeof useApp>['bootstrap'] extends infer _ ? never : never) {
-  void prices
-  return 0
-}
-
 export function HomeTab() {
   const { bootstrap, generations, selectModel, setActiveTab, openWorkspace } = useApp()
   const models = bootstrap?.models ?? []
