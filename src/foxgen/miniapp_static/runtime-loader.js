@@ -87,51 +87,21 @@
         try {
           new Function(compiled)();
         } catch (error) {
-          throw new Error('parse/execute ' + marker + ': ' + (error && error.message ? error.message : String(error)));
+          throw new Error(
+            'parse/execute ' + marker + ': ' +
+            (error && error.message ? error.message : String(error))
+          );
         }
         if (typeof done === 'function') done();
       })
       .catch(function (error) {
         fatal(
-          'Не загрузился обязательный файл Happy Fox: ' +
+          'Не загрузился обязательный интерфейс Happy Fox: ' +
             source.split('/').pop() +
             '. ' +
             (error && error.message ? error.message : String(error))
         );
       });
-  }
-
-  function mountPendingAccountSurface() {
-    var root = document.getElementById('app');
-    var boot = root && root.querySelector ? root.querySelector('.boot-screen') : null;
-    if (!root || !boot) return;
-
-    root.innerHTML = [
-      '<main class="hf-page" data-bootstrap-pending="1">',
-      '<header class="hf-top">',
-      '<div class="hf-brand"><span class="hf-logo">🦊</span><div><strong>Happy <em>Fox</em></strong><small>AI CREATIVE STUDIO</small></div></div>',
-      '<div class="hf-top-actions"><button class="credit-pill" type="button" data-nav="wallet">0 <b>●</b></button></div>',
-      '</header>',
-      '<section class="hf-hero grunge-card">',
-      '<span class="stamp">COMMUNITY / LIVE</span>',
-      '<h1>Happy <i>Fox</i></h1>',
-      '<p>Подключаем Telegram-аккаунт и загружаем актуальный каталог.</p>',
-      '</section>',
-      '</main>',
-      '<nav class="hf-nav">',
-      '<button class="active" type="button" data-nav="feed"><span>▦</span><small>Каталог</small></button>',
-      '<button type="button" data-nav="create"><span>✦</span><small>Создать</small></button>',
-      '<button type="button" data-nav="works"><span>▦</span><small>Работы</small></button>',
-      '<button type="button" data-nav="profile"><span>◎</span><small>Профиль</small></button>',
-      '</nav>'
-    ].join('');
-  }
-
-  function publishCatalogRuntimeReady() {
-    window.__FOXGEN_CATALOG_RUNTIME_LOADED__ = true;
-    try {
-      window.dispatchEvent(new Event('foxgen:catalog-runtime-loaded'));
-    } catch (_) {}
   }
 
   installCompatibility();
@@ -144,28 +114,27 @@
 
   if (!supportsCurrentBaseline()) {
     document.documentElement.setAttribute('data-foxgen-runtime', 'unsupported');
-    fatal('Эта версия Telegram WebView слишком старая для актуального Happy Fox. Обновите Telegram и откройте Mini App снова.');
+    fatal(
+      'Эта версия Telegram WebView слишком старая для актуального Happy Fox. ' +
+      'Обновите Telegram и откройте Mini App снова.'
+    );
     return;
   }
 
   var paritySource = manifest.getAttribute('data-parity-src');
-  var catalogSource = manifest.getAttribute('data-product-home-src');
-  if (!paritySource || !catalogSource) {
+  if (!paritySource) {
     fatal('Не найден актуальный интерфейс Happy Fox.');
     return;
   }
 
   window.__FOXGEN_RUNTIME_KIND__ = 'parity';
   document.documentElement.setAttribute('data-foxgen-runtime', 'parity');
-  setPhase('Запускаем актуальный интерфейс…');
+  setPhase('Подключаем аккаунт и загружаем интерфейс…');
 
   loadCurrentSource(paritySource, 'parity', function () {
     window.__FOXGEN_CORE_LOADED__ = true;
-    setPhase('Готовим каталог…');
-    mountPendingAccountSurface();
-
-    loadCurrentSource(catalogSource, 'catalog', function () {
-      publishCatalogRuntimeReady();
-    });
+    try {
+      window.dispatchEvent(new Event('foxgen:core-loaded'));
+    } catch (_) {}
   });
 })();
