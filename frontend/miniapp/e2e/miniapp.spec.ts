@@ -194,7 +194,7 @@ test.describe('Happy Fox production browser E2E', () => {
     await page.getByTestId('remix-post-e2e').click()
     await expect(page.getByTestId('model-form')).toBeVisible()
     await expect(page.getByTestId('remix-prefill')).toBeVisible()
-    await expect(page.getByDisplayValue('cinematic orange fox')).toBeVisible()
+    await expect(page.getByRole('textbox', { name: /Промпт/ })).toHaveValue('cinematic orange fox')
     expect(pageErrors).toEqual([])
   })
 })
