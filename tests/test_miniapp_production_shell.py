@@ -53,6 +53,8 @@ def test_production_shell_declares_single_current_runtime_and_all_user_modules()
     assert "data-legacy-src" not in html
     assert "/mini-app/app.js" not in html
     assert 'data-critical-module="catalog"' not in html
+    assert 'data-foxgen-catalog="booting"' in html
+    assert "visibility: hidden" in html
 
     parity_defer = f'<script defer src="{parity_src}"></script>'
     assert parity_defer not in html
@@ -84,8 +86,10 @@ def test_runtime_loader_makes_current_catalog_mandatory() -> None:
     assert "String.prototype.replaceAll" in loader
     assert "window.structuredClone" in loader
     assert "new Function" in loader
-    assert "??=" in loader
-    assert "&&=" in loader
+    assert "transpileLogicalAssignments" in loader
+    assert "fetch(source, { cache: 'no-store' })" in loader
+    assert "compiled.indexOf('??=')" in loader
+    assert "compiled.indexOf('&&=')" in loader
     assert "data-product-home-src" in loader
     assert "data-legacy-src" not in loader
     assert "legacy=1" not in loader
@@ -97,8 +101,10 @@ def test_runtime_loader_makes_current_catalog_mandatory() -> None:
     assert "foxgen:bootstrap" in enhancements
     assert "data-critical-module" not in enhancements
     assert "data-foxgen-catalog" in enhancements
-    assert 'main[data-product-catalog="1"]' in enhancements
-    assert "waitForCatalog" in enhancements
+    assert "isCurrentSurfaceReady" in enhancements
+    assert "waitForCurrentSurface" in enhancements
+    assert "COMMUNITY / LIVE" in enhancements
+    assert 'main.getAttribute(\'data-product-catalog\') === \'1\'' in enhancements
     assert "showCriticalFailure" in enhancements
     assert "__FOXGEN_BOOT_FATAL__" in enhancements
     assert "loadOptionalModules(nodes)" in enhancements
