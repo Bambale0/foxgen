@@ -11,7 +11,7 @@ RUN npm run typecheck \
     && npm run build \
     && test -s out/index.html \
     && test -s out/happyfox-logo.webp \
-    && grep -Fq 'name="foxgen-miniapp-shell" content="parity-v15"' out/index.html \
+    && grep -Fq 'name="foxgen-miniapp-shell" content="parity-v16"' out/index.html \
     && grep -Fq '/mini-app/_next/' out/index.html
 
 FROM python:3.12.13-slim-bookworm AS runtime
