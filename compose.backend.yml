@@ -1,15 +1,15 @@
-name: ${COMPOSE_PROJECT_NAME:-banano-kling}
+name: ${COMPOSE_PROJECT_NAME:-foxgen-happyfox}
 
 services:
   bot:
-    image: ${BANANO_IMAGE:-banano-kling-bot:local}
+    image: ${HAPPYFOX_IMAGE:-foxgen-happyfox-bot:local}
     build:
       context: .
       dockerfile: Dockerfile
       args:
         VCS_REF: ${VCS_REF:-local}
         BUILD_DATE: ${BUILD_DATE:-local}
-    container_name: ${CONTAINER_NAME:-banano-kling-bot}
+    container_name: ${CONTAINER_NAME:-foxgen-happyfox-bot}
     network_mode: host
     restart: unless-stopped
     stop_grace_period: 30s
@@ -21,12 +21,13 @@ services:
         required: false
 
     environment:
+      PRODUCT_ID: happyfox
       BANANO_SKIP_PROJECT_ENV: "1"
       BANANO_LOG_TO_STDOUT: "1"
       WEBHOOK_BIND_HOST: "127.0.0.1"
       WEBHOOK_PORT: ${WEBHOOK_PORT:-1888}
       DATABASE_PATH: ${DATABASE_PATH:-/app/data/bot.db}
-      MINI_APP_URL: ${MINI_APP_URL:-https://cdn.chillcreative.ru/mini-app/}
+      MINI_APP_URL: ${MINI_APP_URL:?MINI_APP_URL must be set for HappyFox}
 
     volumes:
       - ./data:/app/data
