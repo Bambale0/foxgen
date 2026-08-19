@@ -2,8 +2,8 @@
   'use strict';
 
   var started = false;
-  var catalogReady = false;
-  var CATALOG_RENDER_TIMEOUT_MS = 3000;
+  var surfaceReady = false;
+  var CURRENT_SURFACE_TIMEOUT_MS = 3000;
 
   function logError(message, detail) {
     if (window.console && typeof window.console.error === 'function') {
@@ -12,7 +12,7 @@
   }
 
   function showCriticalFailure(detail) {
-    var message = 'Не удалось запустить актуальный каталог Happy Fox.';
+    var message = 'Не удалось запустить актуальный интерфейс Happy Fox.';
     document.documentElement.setAttribute('data-foxgen-catalog', 'failed');
     logError(message, detail);
 
@@ -24,7 +24,7 @@
     var main = document.querySelector('#app main.hf-page');
     if (!main) return;
     main.innerHTML = '<section class="product-home-error" data-catalog-load-failure="1">' +
-      '<strong>Каталог временно не загрузился</strong>' +
+      '<strong>Интерфейс временно не загрузился</strong>' +
       '<p>Старая версия интерфейса не используется. Перезапустите Mini App.</p>' +
       '<button type="button" data-catalog-reload>Перезапустить</button></section>';
     var reload = main.querySelector('[data-catalog-reload]');
@@ -52,19 +52,33 @@
     }
   }
 
-  function waitForCatalog(nodes) {
-    var deadline = Date.now() + CATALOG_RENDER_TIMEOUT_MS;
+  function isCurrentSurfaceReady() {
+    var main = document.querySelector('#app main.hf-page');
+    var stamp;
+
+    if (!main || main.classList.contains('boot-fallback')) return false;
+    if (main.getAttribute('data-product-catalog') === '1') return true;
+
+    stamp = main.querySelector('.hf-hero .stamp');
+    if (stamp && String(stamp.textContent || '').trim() === 'COMMUNITY / LIVE') {
+      return false;
+    }
+
+    return true;
+  }
+
+  function waitForCurrentSurface(nodes) {
+    var deadline = Date.now() + CURRENT_SURFACE_TIMEOUT_MS;
 
     function check() {
-      var main = document.querySelector('#app main[data-product-catalog="1"]');
-      if (main) {
-        catalogReady = true;
+      if (isCurrentSurfaceReady()) {
+        surfaceReady = true;
         document.documentElement.setAttribute('data-foxgen-catalog', 'ready');
         loadOptionalModules(nodes);
         return;
       }
       if (Date.now() >= deadline) {
-        showCriticalFailure('product-home.js render timeout');
+        showCriticalFailure('current product surface readiness timeout');
         return;
       }
       window.setTimeout(check, 50);
@@ -84,7 +98,7 @@
     started = true;
     document.documentElement.setAttribute('data-foxgen-catalog', 'loading');
     nodes = manifest.querySelectorAll('[data-module-src]');
-    waitForCatalog(nodes);
+    waitForCurrentSurface(nodes);
   }
 
   window.addEventListener('foxgen:bootstrap', loadEnhancements);
@@ -95,8 +109,8 @@
 
   window.setTimeout(function () {
     var status = document.documentElement.getAttribute('data-foxgen-catalog');
-    if (started && !catalogReady && status !== 'failed') {
-      showCriticalFailure('catalog readiness timeout');
+    if (started && !surfaceReady && status !== 'failed') {
+      showCriticalFailure('current product surface timeout');
     }
   }, 12000);
 })();
