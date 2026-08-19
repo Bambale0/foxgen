@@ -57,13 +57,13 @@ async function installTelegramBridge(page: Page, startParam = '') {
   }, { rawInitData: initData, rawStartParam: startParam })
 }
 
-async function openLiveMiniApp(page: Page, startParam = '') {
+async function openLiveMiniApp(page: Page, startParam = '', expectedTestId = 'screen-home') {
   const pageErrors: string[] = []
   page.on('pageerror', (error) => pageErrors.push(error.message))
   await installTelegramBridge(page, startParam)
   await page.goto('./')
   await expect.poll(async () => page.evaluate(() => window.Telegram?.WebApp?.initData?.length ?? 0)).toBeGreaterThan(0)
-  await expect(page.getByTestId('screen-home')).toBeVisible()
+  await expect(page.getByTestId(expectedTestId)).toBeVisible()
   await expect(page.getByTestId('happyfox-logo')).toBeVisible()
   expect(pageErrors).toEqual([])
   return pageErrors
@@ -103,6 +103,13 @@ test.describe('Happy Fox production browser E2E', () => {
     expect(await modelCards.count()).toBeGreaterThan(0)
     await modelCards.first().click()
     await expect(page.getByTestId('model-form').or(page.getByTestId('special-model-form'))).toBeVisible()
+    expect(pageErrors).toEqual([])
+  })
+
+  test('resolves a Telegram model start_param into the real create form', async ({ page }) => {
+    const pageErrors = await openLiveMiniApp(page, 'model_seedream-5-pro', 'model-form')
+    await expect(page.getByText('Seedream 5 Pro')).toBeVisible()
+    await expect(page.getByTestId('screen-create')).toBeVisible()
     expect(pageErrors).toEqual([])
   })
 
