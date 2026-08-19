@@ -1,0 +1,36 @@
+# Telegram Bot Framework
+aiogram>=3.0.0
+
+# Async HTTP Client
+aiohttp>=3.8.0
+requests>=2.31.0
+
+# Database
+aiosqlite>=0.19.0
+
+# Google Gemini API
+google-genai>=0.3.0
+Pillow>=10.0.0
+pillow-heif>=0.18.0,<2
+
+# Environment variables (optional, for .env support)
+python-dotenv>=1.0.0
+pydantic>=2.0.0
+
+# Type hints
+typing-extensions>=4.0.0
+
+# FreeKassa payments use aiohttp + stdlib signatures (no vendor SDK)
+
+# Optional (face detection for improved frontal crops)
+# Installing face_recognition requires dlib and system build deps (cmake, boost).
+# On Debian/Ubuntu you may need: apt install build-essential cmake libboost-all-dev
+# Then install the package:
+# pip install face_recognition
+# If you cannot build dlib, skip this — the service will fall back to center-crop.
+
+# Redis cache / FSM storage
+redis>=5.0.0
+
+# PostgreSQL runtime / migration
+psycopg[binary]>=3.2.0

@@ -1,0 +1,4 @@
+fix: add referral notification for ref_ deeplink and success logging for purchase notifications
+
+- Added _notify_partner_if_new_referral() call in ref_ block (was missing, present in feed_/remix_/posts_)
+- Added success logger.info when referral purchase notification is sent

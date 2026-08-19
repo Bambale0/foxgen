@@ -1,107 +1,174 @@
-# FoxGen documentation
+# Документация NEUROMIX
 
-This directory documents the executable state of FoxGen on `main`. Source code, tests and migrations remain authoritative when a mismatch is discovered; documentation must then be corrected in the same change.
+Этот каталог содержит документацию DEV- и production-контуров репозитория `Bambale0/banano_kling`.
 
-## Start here
-
-| Document | Purpose |
-|---|---|
-| [`../README.md`](../README.md) | Product/runtime overview and quick start |
-| [`development.md`](development.md) | Local setup, Compose, migrations and debugging |
-| [`architecture.md`](architecture.md) | Service boundaries, durable pipelines and safety invariants |
-| [`database-schema.md`](database-schema.md) | PostgreSQL table/state/constraint map |
-| [`configuration.md`](configuration.md) | Complete configuration groups and production rules |
-| [`api-reference.md`](api-reference.md) | Core, public Mini App, billing/generation and signed internal-admin HTTP surface |
-| [`miniapp.md`](miniapp.md) | Happy Fox public Telegram Mini App UX, auth, API and media boundaries |
-| [`miniapp-user-parity-hardening.md`](miniapp-user-parity-hardening.md) | Multi-result media, playback, publish/unpublish and real Stars affordance hardening for Happy Fox |
-| [`telegram-flows.md`](telegram-flows.md) | User Telegram flows, Quick Start, FSM and `/admin` shell |
-| [`model-matrix.md`](model-matrix.md) | KIE model readiness and contract policy |
-| [`suno-core.md`](suno-core.md) | Suno V5 dedicated API routing, simple/custom contract, multi-track archive and E2E |
-| [`suno-extend.md`](suno-extend.md) | Owner-bound Suno V5 Extend source/API/DB guard, UX and E2E runbook |
-| [`suno-upload-cover.md`](suno-upload-cover.md) | Owner-bound Suno V5 Upload & Cover private-input/provider-URL boundary, UX and E2E runbook |
-| [`kling-motion-control.md`](kling-motion-control.md) | Kling 3.0 Motion Control private-input, pre-billing media validation, provider routing and Happy Fox runbook |
-| [`billing.md`](billing.md) | Pricing, wallet, immutable ledger and settlement |
-| [`telegram-stars-payments.md`](telegram-stars-payments.md) | User `XTR` top-up/refund, durable payment evidence and CREDIT settlement |
-| [`user-promos.md`](user-promos.md) | Owner-scoped promo redemption, max-use concurrency and immutable bonus CREDIT |
-| [`generation-operations.md`](generation-operations.md) | Status/cancel/operator resolution for durable generations |
-| [`postprocessing-reconciliation.md`](postprocessing-reconciliation.md) | Retry/dead-letter/media/delivery reconciliation |
-| [`input-media-lifecycle.md`](input-media-lifecycle.md) | Telegram/Mini App input object lifecycle and cleanup requirements |
-| [`minio-lifecycle-runbook.md`](minio-lifecycle-runbook.md) | Compose MinIO lifecycle bootstrap, verification and recovery |
-| [`admin-capability-matrix.md`](admin-capability-matrix.md) | Admin capability/domain/transport matrix |
-| [`admin-control-plane.md`](admin-control-plane.md) | Admin security, HMAC, RBAC, extensions, workers and rollout |
-| [`security.md`](security.md) | Consolidated trust boundaries and prohibited shortcuts |
-| [`testing-ci.md`](testing-ci.md) | Reproducible CI, real infrastructure and cross-layer E2E gates |
-| [`release-checklist.md`](release-checklist.md) | Pre-merge, pre-deploy and post-deploy checklist |
-| [`production-deploy.md`](production-deploy.md) | Exact-SHA production deployment workflow |
-| [`github-environment-setup.md`](github-environment-setup.md) | GitHub `production` Environment setup |
-| [`operations-runbook.md`](operations-runbook.md) | Day-2 operations, smoke checks and incident handling |
-| [`known-limitations.md`](known-limitations.md) | Current executable production limitations when any are known |
-| [`state-gap-audit.md`](state-gap-audit.md) | Historical state-gap audit with current completion status |
-| [`documentation-policy.md`](documentation-policy.md) | Documentation source-of-truth and maintenance rules |
-
-## Scope boundary
-
-The public Telegram Mini App is implemented as the **Happy Fox** transport surface at `/mini-app/` with owner-scoped `/v1/miniapp/*` APIs. It reuses existing application/domain services for generation, billing, payments and promo redemption rather than duplicating business logic. The backend-only admin operator web remains a separate private operator surface.
-
-## Current production architecture
+## Ветки и release flow
 
 ```text
-Telegram bot -----------+
-                        |
-Happy Fox Mini App -----+--> FastAPI
-                        |    |  |  \
-Trusted services -------+    |  |   +--> signed internal admin control plane
-                             |  +------> provider callback intake
-                             +---------> shared paid generation / wallet boundaries
-                                |
-                                v
-                            PostgreSQL <----> foxgen-worker
-                                |                 |
-                                |                 +--> KIE Market / routed Suno API families
-                                |                 +--> archive/delivery
-                                |                 +--> admin/payment/support jobs
-                                |
-                             Redis             S3-compatible storage
-                             FSM/locks         private media
+feature/* -> PR в dev -> автодеплой DEV-бота -> ручной smoke
+          -> PR dev -> tanyapi -> автодеплой production
 ```
 
-## Durable state ownership
+- `dev` — источник DEV-бота и DEV Mini App;
+- `tanyapi` — единственный источник production-бота и production Mini App;
+- `main` не участвует в deploy NEUROMIX.
 
-PostgreSQL is the source of truth for generations, billing, user payment orders/events/refunds, promo definitions/redemptions, outbox/inbox events, media metadata, delivery, administrative commands/audit, support, campaigns, tariffs and runtime admin data. Telegram Stars payment evidence is persisted before wallet settlement; promo redemption persists the wallet credit, immutable ledger movement, redemption and usage counter in one transaction. Redis is intentionally non-authoritative for business state: it stores Telegram FSM data, per-key event isolation and rate/lock data. S3-compatible storage stores private input/result bytes.
+Главный документ по новому процессу: [development-deployment.md](development-deployment.md).
 
-The Happy Fox browser holds only a short-lived Telegram-derived JWT and short-lived media capabilities. It never receives internal API, KIE, admin, Telegram-bot or S3 credentials and never supplies monetary reward values.
+## Как пользоваться документацией
 
-Storage provisioning is infrastructure-owned: repository Compose provisions bundled MinIO through `minio-init`; application request/worker code never creates buckets; external S3-compatible deployments pre-provision a private bucket and equivalent temporary-input lifecycle.
+Для разработки и выпуска:
 
-## Safety invariants shared by all docs
+1. [development-deployment.md](development-deployment.md) — отдельный DEV-бот, secrets, серверы, autodeploy и promotion `dev -> tanyapi`;
+2. [../README.md](../README.md) — что это за система и где находится production;
+3. [production_auto_deploy.md](production_auto_deploy.md) — production autodeploy строго из `tanyapi`;
+4. [production-deployment.md](production-deployment.md) — первичное production-развёртывание и полный deploy;
+5. [runbook.md](runbook.md) — ежедневные команды оператора;
+6. [troubleshooting.md](troubleshooting.md) — диагностика ошибок;
+7. [architecture.md](architecture.md) — устройство системы и потоки данных.
 
-1. Billable provider submission is never blindly retried after an ambiguous external response.
-2. Telegram send/refund ambiguity is not guessed away automatically.
-3. Money changes use integer units, an immutable ledger and transactional idempotency.
-4. A Telegram Stars `successful_payment` is recorded by charge ID before CREDIT settlement; duplicate charge/update processing cannot create a second credit.
-5. Promo reward amount comes only from the locked server-side promo definition; `(promo_code, user_id)` and its ledger key are unique.
-6. Paid admission fails closed when authentication, price, balance, model readiness or runtime availability is invalid.
-7. Administrative writes are server-authorized, audited and idempotent; destructive/expensive operations require confirmation.
-8. Admin HTTP is backend-only, network allowlisted and signed over exact raw request bytes.
-9. User/provider media remains private; public clients never receive storage credentials.
-10. Happy Fox validates Telegram `initData` server-side and uses owner-scoped APIs with short-lived JWT/media URLs.
-11. Production deployment is gated by CI and deploys an exact tested `main` SHA.
-12. An existing source module/branch is not documented as active until it is wired/merged and covered by runtime tests.
-13. Specific privileged/financial routes must stay ahead of generic route/callback fallbacks when matching order affects reachability.
-14. Compose-managed MinIO must verify the prefix-scoped temporary `inputs/` lifecycle and bundled stale-multipart cleanup prerequisites before API, worker and bot startup.
-15. Application media execution must not opportunistically provision S3 infrastructure.
-16. Dedicated provider API families are selected from reviewed `ModelSpec.api_family`; worker code must not infer provider routing from arbitrary model-name strings.
-17. Multi-result providers must preserve every canonical billable result while filtering non-result artwork/stream helper URLs before generic media archival.
-18. Source-bound generation such as Suno Extend must re-verify owner/source identity before paid admission and retain a durable database guard against generic-transport bypass.
-19. Upload-bound generation such as Suno Upload & Cover must persist only an owner-scoped private storage key; a short-lived provider URL is resolved server-side immediately before provider submission.
-20. Motion/reference products that depend on private source media must validate storage ownership and media limits before paid admission and resolve provider URLs only inside the worker immediately before submission.
+Для изменения frontend:
 
-## Known limitations are first-class documentation
+1. [../frontend/miniapp-v0/README.md](../frontend/miniapp-v0/README.md);
+2. [miniapp-frontend-deployment.md](miniapp-frontend-deployment.md);
+3. [development-deployment.md](development-deployment.md) для отдельного DEV profile/domain;
+4. [branding.md](branding.md).
 
-`known-limitations.md` is retained even when no entry is currently listed. Add a limitation there whenever executable/configuration state could otherwise be mistaken for a completed production behavior, and remove it in the same PR that lands the tested fix.
+Для media-домена:
 
-## How to update documentation
+1. [../ops/media/README.md](../ops/media/README.md);
+2. `scripts/deploy_media_origin.sh`;
+3. `scripts/check_media_delivery.sh`.
 
-When code changes, update documentation by behavior area rather than adding an isolated note. Remove obsolete roadmap language. For schema/financial changes, update architecture/schema/billing/API/testing docs and rollback notes. For user promo changes, keep `user-promos.md`, `billing.md`, `api-reference.md`, `database-schema.md`, `miniapp.md`, `testing-ci.md` and limitation status synchronized. For new provider API families or source-bound provider operations, document the routing boundary, ownership checks, exact model/input contract, result normalization and E2E in a focused runbook. For new admin capability, update capability matrix/API/runbook. For new configuration, update `configuration.md` plus env examples. For Happy Fox changes, keep Mini App/security/user-facing behavior synchronized.
+## Основные документы
 
-Review [`documentation-policy.md`](documentation-policy.md) and [`../AGENTS.md`](../AGENTS.md) for maintenance rules.
+| Документ | Для кого | Что содержит |
+| --- | --- | --- |
+| [development-deployment.md](development-deployment.md) | разработчик, DevOps, владелец | DEV-бот, ветка `dev`, environment secrets, автодеплой и выпуск в `tanyapi` |
+| [architecture.md](architecture.md) | разработчик, интегратор | компоненты, topology, auth, storage, API и media flows |
+| [production_auto_deploy.md](production_auto_deploy.md) | разработчик, DevOps | promotion `dev -> tanyapi` и production autodeploy |
+| [production-deployment.md](production-deployment.md) | DevOps, владелец проекта | DNS, backend, frontend, media, SSL, Cloudflare, smoke tests и rollback |
+| [miniapp-frontend-deployment.md](miniapp-frontend-deployment.md) | frontend/DevOps | `cdn.sh`, remote profile, build, release, cache overlap и npm troubleshooting |
+| [environment.md](environment.md) | разработчик, DevOps | env-переменные, обязательность, значения и правила хранения секретов |
+| [runbook.md](runbook.md) | оператор | restart, status, logs, health, backup и routine checks |
+| [troubleshooting.md](troubleshooting.md) | оператор, разработчик | симптомы, причины, команды диагностики и безопасные действия |
+| [branding.md](branding.md) | frontend, контент, QA | пользовательский бренд NEUROMIX и допустимые технические имена |
+| [roadmap.md](roadmap.md) | продукт, разработчик | задачи и приоритеты, если документ актуализирован под текущий код |
+| [tracemap.md](tracemap.md) | разработчик | индекс пользовательских и технических потоков |
+| [migration.md](migration.md) | DevOps, backend | backfill, repair и data migration scripts |
+| [postgres-migration.md](postgres-migration.md) | backend, DevOps | перенос и проверка PostgreSQL runtime |
+| [zero-downtime-migration.md](zero-downtime-migration.md) | DevOps | перенос backend runtime без длительной остановки |
+
+## Production topology
+
+```text
+cdn.chillcreative.ru (91.200.84.187)
+  ├── /mini-app/             -> статический Next.js export
+  └── /mini-app/api/*        -> HTTPS proxy на tanyapi.chillcreative.ru
+
+tanyapi.chillcreative.ru (144.76.188.75)
+  ├── Telegram webhook production-бота
+  ├── Mini App API
+  ├── provider/payment webhooks
+  └── aiohttp runtime за локальным Nginx
+
+media.chillcreative.ru (Cloudflare -> 144.76.188.75)
+  └── /uploads/*             -> Nginx -> bind mount -> static/uploads
+```
+
+Production topology относится только к ветке `tanyapi`. DEV domains, paths и credentials задаются GitHub environment `development` и DEV server `.env`; они не должны использовать production bot token, database или media root.
+
+## Владение документами
+
+### Операционные документы
+
+Должны обновляться при изменении:
+
+- DEV/production branch policy;
+- production-доменов или IP;
+- DEV-доменов или deploy paths;
+- systemd service;
+- путей проекта;
+- Nginx topology;
+- Cloudflare rules;
+- deploy scripts;
+- env-переменных;
+- frontend build process.
+
+К этой группе относятся:
+
+- `README.md`;
+- `docs/development-deployment.md`;
+- `docs/architecture.md`;
+- `docs/production_auto_deploy.md`;
+- `docs/production-deployment.md`;
+- `docs/miniapp-frontend-deployment.md`;
+- `docs/environment.md`;
+- `docs/runbook.md`;
+- `docs/troubleshooting.md`;
+- `ops/media/README.md`;
+- `frontend/miniapp-v0/README.md`.
+
+### Provider reference docs
+
+Файлы про отдельные внешние API могут быть снимками документации провайдера и не всегда отражают текущую реализацию. Например:
+
+- `kling_api*.md`;
+- `kie_ai_integration.md`;
+- `veo_api.md`;
+- `motion_control_api.md`;
+- `tbank_api.md`;
+- `crypto_api.md`.
+
+Если reference-документ конфликтует с runtime, приоритет имеют:
+
+1. `bot/services/*`;
+2. `bot/main.py` и `bot/miniapp.py`;
+3. `bot/config.py`;
+4. `tests/*`;
+5. фактический ответ провайдера в безопасно очищенных логах.
+
+## Legacy-материалы
+
+В репозитории могут оставаться:
+
+- старые домены;
+- старые IP;
+- backup-файлы;
+- historical tracemap;
+- старое название Banano/Banana;
+- старые схемы прямого доступа к backend port;
+- старые упоминания deploy из `main`.
+
+Они не должны использоваться для production-действий без сверки с `development-deployment.md`, `production_auto_deploy.md` и текущими workflows.
+
+## Правила обновления документации
+
+При изменении инфраструктуры в одном pull request или серии связанных коммитов обновить:
+
+- branch/release flow;
+- topology в `README.md` и `architecture.md`;
+- команды deploy в соответствующем runbook;
+- env-reference, если добавлена или изменена переменная;
+- troubleshooting, если появился новый класс ошибки;
+- rollback-процедуру;
+- фактический результат проверки в описании изменения, но не временные логи и секреты.
+
+## Минимальный documentation review перед релизом
+
+- feature PR направлен в `dev`;
+- DEV exact SHA автоматически задеплоен;
+- DEV Telegram smoke пройден;
+- release PR направлен `dev -> tanyapi`;
+- production workflow слушает только `tanyapi`;
+- `main` не указан как production branch;
+- DEV и production bot tokens различаются;
+- DEV и production databases/storage различаются;
+- все пользовательские заголовки используют NEUROMIX;
+- production frontend указан как `cdn.chillcreative.ru`;
+- production backend указан как `tanyapi.chillcreative.ru`;
+- production media указан как `media.chillcreative.ru`;
+- нет рекомендаций открывать `:1888` в интернет;
+- нет реальных токенов, паролей и содержимого `.env`;
+- deploy и rollback команды проверены на синтаксические ошибки;
+- различаются ожидаемый `401` без Telegram `initData` и настоящий отказ backend.

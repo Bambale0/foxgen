@@ -1,0 +1,42 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3 -m py_compile bot/handlers/generation.py)",
+      "Bash(python3 -m py_compile bot/handlers/common.py)",
+      "Bash(python3 -m py_compile bot/handlers/admin.py)",
+      "Bash(python3 -m py_compile bot/database.py bot/services/preset_manager.py bot/quality_pricing.py bot/handlers/generation.py)",
+      "Bash(python3 -c ' *)",
+      "Bash(python3 -m py_compile bot/database.py bot/services/preset_manager.py bot/quality_pricing.py bot/handlers/generation.py bot/handlers/common.py bot/handlers/admin.py)",
+      "Bash(python3 -c \"import py_compile; py_compile.compile\\('bot/miniapp.py'\\); print\\('OK'\\)\")",
+      "Bash(python3 -c \"import py_compile; py_compile.compile\\('bot/miniapp.py'\\); print\\('miniapp.py OK'\\)\")",
+      "Bash(npx tsc *)",
+      "Bash(npm run *)",
+      "Bash(npm --version)",
+      "Bash(NEXT_EXPORT=1 npm run build)",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('bot/handlers/generation.py'\\).read\\(\\)\\); print\\('OK'\\)\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('bot/handlers/generation.py'\\).read\\(\\)\\); print\\('generation.py OK'\\)\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('bot/keyboards.py'\\).read\\(\\)\\); print\\('keyboards.py OK'\\)\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('bot/keyboards.py'\\).read\\(\\)\\); print\\('OK'\\)\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('bot/miniapp.py'\\).read\\(\\)\\); print\\('OK'\\)\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('bot/handlers/common.py'\\).read\\(\\)\\); print\\('OK'\\)\")",
+      "Bash(xargs rm *)",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('bot/handlers/admin.py'\\).read\\(\\)\\); print\\('admin.py OK'\\)\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('bot/handlers/payments.py'\\).read\\(\\)\\); print\\('payments.py OK'\\)\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('bot/database.py'\\).read\\(\\)\\); print\\('database.py OK'\\)\")",
+      "Bash(sed -n '370,400p' /root/banano_kling/bot/handlers/payments.py)",
+      "Bash(sed -n '440,460p' /root/banano_kling/bot/handlers/payments.py)",
+      "Bash(python -c \"from bot.keyboards import get_payment_method_keyboard; print\\('OK'\\)\")",
+      "Bash(python -c \"from bot.handlers import admin, common, generation, payments; print\\('All handlers OK'\\)\")",
+      "Bash(python -c \"import json; d=json.load\\(open\\('/root/banano_kling/data/price.json'\\)\\); print\\(json.dumps\\({k:v for k,v in d.items\\(\\) if 'motion' in k.lower\\(\\)}, indent=2\\)\\)\")",
+      "Bash(python3 -c \"import json; d=json.load\\(open\\('/root/banano_kling/data/price.json'\\)\\); print\\(list\\(d.keys\\(\\)\\)\\)\")",
+      "Bash(python3 -c \"import json; d=json.load\\(open\\('/root/banano_kling/data/price.json'\\)\\); cr=d['costs_reference']; print\\(list\\(cr.keys\\(\\)\\)\\)\")",
+      "Bash(python3 -c \"import json; d=json.load\\(open\\('/root/banano_kling/data/price.json'\\)\\); vm=d['costs_reference']['video_models']; print\\(json.dumps\\({k:v for k,v in vm.items\\(\\)}, indent=2\\)\\)\")",
+      "Bash(python3 -c \"import json; d=json.load\\(open\\('/root/banano_kling/data/price.json'\\)\\); lk=d['costs_reference']['legacy_keys']; print\\(json.dumps\\({k:v for k,v in lk.items\\(\\) if 'motion' in k.lower\\(\\) or 'v26' in k.lower\\(\\)}, indent=2\\)\\)\")",
+      "Bash(python3 -c \"from bot.handlers import generation; from bot.keyboards import get_motion_control_model_keyboard; print\\('OK'\\)\")",
+      "Bash(xargs ls *)",
+      "Bash(EXPORT=true npm run build)",
+      "Bash(bash restart.sh)",
+      "Bash(xargs stat *)"
+    ]
+  }
+}

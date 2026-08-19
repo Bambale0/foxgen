@@ -1,0 +1,96 @@
+# LLaMA-Factory Compatible Model Registry
+# auto-generated from bot configuration
+# Last updated: 2026-05-09
+
+## Image Generation Models
+
+### Nano Banana Pro (`banana_pro`)
+- **Description**: Universal quality image model
+- **Ratios**: 1:1, 16:9, 9:16, 4:3, 3:4, 3:2, 2:3
+- **Max references**: 9
+- **Requires reference**: No
+
+### Nano Banana 2 (`banana_2`)
+- **Description**: New version with better detail and colors
+- **Ratios**: 1:1, 16:9, 9:16, 4:3, 3:4, 3:2, 2:3
+- **Max references**: 9
+- **Requires reference**: No
+
+### Seedream 4.5 Edit (`seedream_edit`)
+- **Description**: Strong edit from source images
+- **Ratios**: 1:1, 9:16, 16:9, 3:4, 4:3, 2:3, 3:2, 21:9
+- **Max references**: 9
+- **Requires reference**: Yes
+
+### GPT Image 2 (`flux_pro`)
+- **Description**: Detailed generation and soft img2img
+- **Ratios**: auto, 1:1, 9:16, 16:9, 3:4, 4:3, 2:3
+- **Max references**: 9
+- **Requires reference**: No
+
+### Grok Imagine (`grok_imagine_i2i`)
+- **Description**: I2I scenario for vivid transformations
+- **Ratios**: 1:1, 16:9, 9:16, 4:3, 3:4, 3:2, 2:3
+- **Max references**: 9
+- **Requires reference**: Yes
+
+### Wan 2.7 Pro (`wan_27`)
+- **Description**: Generation and editing via Wan 2.7
+- **Ratios**: 1:1, 16:9, 9:16, 4:3, 3:4, 21:9
+- **Max references**: 9
+- **Requires reference**: No
+
+### Nano Banana (`nanobanana`)
+- **Description**: Fast budget model for everyday tasks
+- **Ratios**: 1:1, 16:9, 9:16, 4:3, 3:4
+- **Max references**: 9
+- **Requires reference**: No
+
+## Video Generation Models
+
+### Kling 3.0 (`v3_pro`)
+- **Description**: Flagship video mode
+- **Durations**: 5 sec, 10 sec, 15 sec
+- **Ratios**: 16:9, 9:16, 1:1
+- **Supported types**: text, imgtxt, video
+- **Max image refs**: 9
+- **Max video refs**: 9
+
+### Kling v3 (`v3_std`)
+- **Description**: Faster and cheaper for everyday video
+- **Durations**: 5 sec, 10 sec, 15 sec
+- **Ratios**: 16:9, 9:16, 1:1
+- **Supported types**: text, imgtxt, video
+- **Max image refs**: 9
+- **Max video refs**: 9
+
+### Kling 2.5 Turbo Pro (`v26_pro`)
+- **Description**: Good for image-to-video
+- **Durations**: 5 sec, 10 sec
+- **Ratios**: 16:9, 9:16, 1:1
+- **Supported types**: text, imgtxt
+- **Max image refs**: 9
+- **Max video refs**: 9
+- **CFG Scale**: Yes
+- **Negative prompt**: Yes
+
+### Grok Imagine Video (`grok_imagine`)
+- **Description**: Long videos from photos
+- **Durations**: 6 sec, 10 sec, 20 sec, 30 sec
+- **Ratios**: 16:9, 9:16, 1:1, 3:2, 2:3
+- **Supported types**: imgtxt
+- **Max image refs**: 9
+- **Max video refs**: 9
+- **Grok modes**: normal, fun, spicy
+
+### Kling Glow (`glow`)
+- **Description**: Cost-effective for long videos
+- **Durations**: 5 sec, 10 sec, 15 sec
+- **Ratios**: 16:9, 9:16, 1:1
+- **Supported types**: text, video
+- **Max image refs**: 9
+- **Max video refs**: 9
+
+## Removed Models
+
+- **OpenRouter** (`openrouter/free`) - removed 2026-05-09 (not needed for OpenClaw integration)
