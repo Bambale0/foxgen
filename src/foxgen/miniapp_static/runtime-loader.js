@@ -45,25 +45,60 @@
     }
   }
 
-  function supportsCurrentRuntime() {
+  function supportsCurrentBaseline() {
     try {
-      new Function('var a = null; a ??= 1; var b = true; b &&= false; return a === 1 && b === false;');
+      new Function('var a = null; var f = async function () { return a?.x ?? 1; }; return f;');
       return true;
     } catch (_) {
       return false;
     }
   }
 
-  function appendCoreScript(source, marker, onload) {
-    var script = document.createElement('script');
-    script.src = source;
-    script.async = false;
-    script.setAttribute('data-foxgen-core-runtime', marker);
-    script.onload = onload;
-    script.onerror = function () {
-      fatal('Не загрузился обязательный файл Happy Fox: ' + source.split('/').pop());
-    };
-    document.body.appendChild(script);
+  function transpileLogicalAssignments(source) {
+    var output = String(source || '');
+
+    output = output.replace(
+      /([A-Za-z_$][A-Za-z0-9_$]*(?:\.[A-Za-z_$][A-Za-z0-9_$]*)*)\?\?=([^;]+);/g,
+      function (_, target, expression) {
+        return target + ' = (' + target + ' == null ? (' + expression + ') : ' + target + ');';
+      }
+    );
+    output = output.replace(
+      /([A-Za-z_$][A-Za-z0-9_$]*(?:\.[A-Za-z_$][A-Za-z0-9_$]*)*)&&=([^;]+);/g,
+      function (_, target, expression) {
+        return target + ' = ' + target + ' && (' + expression + ');';
+      }
+    );
+
+    return output;
+  }
+
+  function loadCurrentSource(source, marker, done) {
+    fetch(source, { cache: 'no-store' })
+      .then(function (response) {
+        if (!response.ok) throw new Error('HTTP ' + response.status);
+        return response.text();
+      })
+      .then(function (text) {
+        var compiled = transpileLogicalAssignments(text);
+        if (compiled.indexOf('??=') >= 0 || compiled.indexOf('&&=') >= 0) {
+          throw new Error('unsupported logical assignment remained after compatibility transform');
+        }
+        try {
+          new Function(compiled)();
+        } catch (error) {
+          throw new Error('parse/execute ' + marker + ': ' + (error && error.message ? error.message : String(error)));
+        }
+        if (typeof done === 'function') done();
+      })
+      .catch(function (error) {
+        fatal(
+          'Не загрузился обязательный файл Happy Fox: ' +
+            source.split('/').pop() +
+            '. ' +
+            (error && error.message ? error.message : String(error))
+        );
+      });
   }
 
   installCompatibility();
@@ -74,7 +109,7 @@
     return;
   }
 
-  if (!supportsCurrentRuntime()) {
+  if (!supportsCurrentBaseline()) {
     document.documentElement.setAttribute('data-foxgen-runtime', 'unsupported');
     fatal('Эта версия Telegram WebView слишком старая для актуального Happy Fox. Обновите Telegram и откройте Mini App снова.');
     return;
@@ -91,11 +126,11 @@
   document.documentElement.setAttribute('data-foxgen-runtime', 'parity');
   setPhase('Запускаем актуальный интерфейс…');
 
-  appendCoreScript(paritySource, 'parity', function () {
+  loadCurrentSource(paritySource, 'parity', function () {
     window.__FOXGEN_CORE_LOADED__ = true;
     setPhase('Подключаем каталог моделей…');
 
-    appendCoreScript(catalogSource, 'catalog', function () {
+    loadCurrentSource(catalogSource, 'catalog', function () {
       window.__FOXGEN_CATALOG_RUNTIME_LOADED__ = true;
       setPhase('Подключаем аккаунт…');
     });
