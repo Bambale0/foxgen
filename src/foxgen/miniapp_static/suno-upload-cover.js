@@ -100,8 +100,9 @@ function syncFields() {
 
 async function quote() {
   const data = await api('/bootstrap');
-  const model = (data?.models ?? []).find((item) => item?.slug === MODEL);
-  const price = model?.price;
+  const price = (data?.prices ?? []).find(
+    (item) => item?.model_slug === MODEL && item?.enabled !== false,
+  );
   const available = Number(data?.balance?.available_units ?? 0);
   if (!price || Number(price.amount_units) <= 0) {
     return {ok: false, text: 'Цена Suno V5 Cover не опубликована.'};
