@@ -48,6 +48,10 @@ def test_production_shell_declares_core_fallback_and_all_user_parity_modules() -
     assert '<script type="module" src="/mini-app/parity-app.js' not in html
     assert '<script type="module" src="/mini-app/app.js' not in html
 
+    critical = f'<span data-module-src="/mini-app/product-home.js?v={MINIAPP_RELEASE}" data-critical-module="catalog"></span>'
+    assert critical in html
+    assert html.index(critical) < html.index("complete-menu.js")
+
 
 def test_production_boot_guard_has_bounded_legacy_safe_failure_state() -> None:
     guard = (STATIC / "boot-guard.js").read_text(encoding="utf-8")
@@ -64,7 +68,7 @@ def test_production_boot_guard_has_bounded_legacy_safe_failure_state() -> None:
     assert "??" not in guard
 
 
-def test_runtime_loader_polyfills_and_gates_newer_javascript_syntax() -> None:
+def test_runtime_loader_keeps_catalog_available_in_compat_mode() -> None:
     loader = (STATIC / "runtime-loader.js").read_text(encoding="utf-8")
     enhancements = (STATIC / "enhancement-loader.js").read_text(encoding="utf-8")
 
@@ -77,8 +81,11 @@ def test_runtime_loader_polyfills_and_gates_newer_javascript_syntax() -> None:
     assert "__FOXGEN_RUNTIME_KIND__" in loader
 
     assert "foxgen:bootstrap" in enhancements
-    assert "__FOXGEN_RUNTIME_KIND__ === 'legacy'" in enhancements
-    assert "data-module-src" in enhancements
+    assert "__FOXGEN_RUNTIME_KIND__ === 'legacy'" not in enhancements
+    assert "data-critical-module" in enhancements
+    assert "data-foxgen-catalog" in enhancements
+    assert "showCriticalFailure" in enhancements
+    assert "loadOptionalModules" in enhancements
 
 
 def test_production_deploy_is_not_silently_disabled_after_green_main_ci() -> None:
