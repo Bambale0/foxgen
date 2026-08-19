@@ -133,8 +133,31 @@ export interface Publication {
   comments_count: number
   remix_count: number
   liked_by_viewer: boolean
+  source_publication_id?: string | null
   created_at: string
   media?: Array<{ url: string; content_type: string }>
+}
+
+export interface PublicProfile {
+  user_id: number
+  slug: string
+  display_name?: string | null
+  bio?: string | null
+}
+
+export interface PublicProfileView {
+  profile: PublicProfile
+  publications: Publication[]
+}
+
+export interface RemixSource {
+  publication_id: string
+  generation_id: string
+  author_slug: string
+  model_slug: string
+  media_kind: string
+  prompt?: string | null
+  media: Array<{ url: string; content_type: string }>
 }
 
 export interface ReferenceItem {
