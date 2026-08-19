@@ -35,6 +35,7 @@ command -v git >/dev/null 2>&1 || fail "git is not installed"
 command -v docker >/dev/null 2>&1 || fail "docker is not installed"
 command -v flock >/dev/null 2>&1 || fail "flock is not installed"
 command -v curl >/dev/null 2>&1 || fail "curl is not installed"
+command -v python3 >/dev/null 2>&1 || fail "python3 is required for deployment smoke checks"
 docker compose version >/dev/null 2>&1 || fail "docker compose plugin is unavailable"
 
 exec 9>"$LOCK_FILE"
@@ -120,10 +121,10 @@ miniapp_enabled() {
 }
 
 miniapp_release() {
-  local shell release
-  shell="$APP_DIR/src/foxgen/miniapp_static/index.html"
-  [ -f "$shell" ] || fail "Mini App shell is missing"
-  release="$(sed -n 's/.*name="foxgen-miniapp-shell" content="\([^"]*\)".*/\1/p' "$shell" | head -n1)"
+  local release_file release
+  release_file="$APP_DIR/src/foxgen/miniapp_release.py"
+  [ -f "$release_file" ] || fail "Mini App release module is missing"
+  release="$(sed -n 's/^MINIAPP_RELEASE = "\([^"]*\)"/\1/p' "$release_file" | head -n1)"
   [ -n "$release" ] || fail "Mini App release marker is missing"
   printf '%s\n' "$release"
 }
@@ -149,8 +150,6 @@ resolved_miniapp_url() {
   append_miniapp_release "${base%/}/mini-app/"
 }
 
-# Legacy production environments predate Happy Fox. This is the only credential
-# deploy is allowed to create automatically, and only once while holding the lock.
 bootstrap_miniapp_jwt_secret
 
 for required_key in \
@@ -172,8 +171,7 @@ for required_key in \
   require_env_value "$required_key"
 done
 
-[ "$(read_env_value FOXGEN_ENV)" = "production" ] || \
-  fail "FOXGEN_ENV must be production"
+[ "$(read_env_value FOXGEN_ENV)" = "production" ] || fail "FOXGEN_ENV must be production"
 [ "$(read_env_value FOXGEN_POSTGRES_PASSWORD)" != "foxgen" ] || \
   fail "FOXGEN_POSTGRES_PASSWORD must not use the development password"
 [ "$(read_env_value FOXGEN_S3_SECRET_ACCESS_KEY)" != "foxgen-development-secret" ] || \
@@ -287,8 +285,7 @@ assert_service_image() {
   container_id="$(compose ps -q "$service")"
   [ -n "$container_id" ] || fail "$service container is missing"
   image="$(docker inspect --format '{{.Config.Image}}' "$container_id")"
-  [ "$image" = "$EXPECTED_IMAGE" ] || \
-    fail "$service is running $image instead of tested $EXPECTED_IMAGE"
+  [ "$image" = "$EXPECTED_IMAGE" ] || fail "$service is running $image instead of tested $EXPECTED_IMAGE"
 }
 
 reload_local_https_ingress() {
@@ -347,31 +344,17 @@ assert button.callback_data is None
 
 verify_public_miniapp() {
   local miniapp_url expected_release deadline remaining attempt_timeout
-  local html headers_file html_file cache_control content_type parity_url backend_ui_url
-  local parity_js backend_ui_js
+  local headers_file html_file cache_control content_type asset_path asset_url asset_file
   miniapp_url="$1"
   expected_release="$2"
   deadline=$((SECONDS + 30))
-
-  mapfile -t asset_urls < <(
-    MINIAPP_URL="$miniapp_url" EXPECTED_RELEASE="$expected_release" python3 - <<'PY'
-import os
-from urllib.parse import urlencode, urlsplit, urlunsplit
-
-parts = urlsplit(os.environ["MINIAPP_URL"])
-query = urlencode({"v": os.environ["EXPECTED_RELEASE"]})
-for path in ("/mini-app/parity-app.js", "/mini-app/backend-parity-ui.js"):
-    print(urlunsplit((parts.scheme, parts.netloc, path, query, "")))
-PY
-  )
-  parity_url="${asset_urls[0]}"
-  backend_ui_url="${asset_urls[1]}"
 
   while [ "$SECONDS" -lt "$deadline" ]; do
     remaining=$((deadline - SECONDS))
     attempt_timeout=$((remaining < 5 ? remaining : 5))
     headers_file="$(mktemp)"
     html_file="$(mktemp)"
+    asset_file="$(mktemp)"
 
     if curl \
       --fail \
@@ -382,7 +365,6 @@ PY
       --dump-header "$headers_file" \
       --output "$html_file" \
       "$miniapp_url"; then
-      html="$(cat "$html_file")"
       cache_control="$(
         awk '
           /^HTTP\// { value = "" }
@@ -407,28 +389,39 @@ PY
           END { print value }
         ' "$headers_file"
       )"
+      asset_path="$(grep -oE 'src="/mini-app/_next/[^"]+\.js[^"]*"' "$html_file" | head -n1 | sed 's/^src="//;s/"$//' || true)"
 
       if [[ "${cache_control,,}" == *"no-store"* ]] && \
         [[ "${content_type,,}" == text/html* ]] && \
-        grep -Fq "name=\"foxgen-miniapp-shell\" content=\"${expected_release}\"" <<<"$html" && \
-        grep -Fq "/mini-app/parity-app.js?v=${expected_release}" <<<"$html" && \
-        grep -Fq "/mini-app/backend-parity-ui.js?v=${expected_release}" <<<"$html" && \
-        grep -Fq "/mini-app/backend-parity.css?v=${expected_release}" <<<"$html" && \
-        ! grep -Fq "product-home" <<<"$html" && \
-        parity_js="$(curl --fail --silent --show-error --location --max-time "$attempt_timeout" "$parity_url")" && \
-        backend_ui_js="$(curl --fail --silent --show-error --location --max-time "$attempt_timeout" "$backend_ui_url")" && \
-        grep -Fq "API_TIMEOUT_MS = 10000" <<<"$parity_js" && \
-        grep -Fq "Все модели" <<<"$backend_ui_js" && \
-        grep -Fq "Весь функционал" <<<"$backend_ui_js"; then
-        rm -f "$headers_file" "$html_file"
-        return 0
+        grep -Fq "name=\"foxgen-miniapp-shell\" content=\"${expected_release}\"" "$html_file" && \
+        grep -Fq '/mini-app/_next/' "$html_file" && \
+        ! grep -Fq 'parity-app.js' "$html_file" && \
+        ! grep -Fq 'backend-parity-ui.js' "$html_file" && \
+        [ -n "$asset_path" ]; then
+        asset_url="$(MINIAPP_URL="$miniapp_url" ASSET_PATH="$asset_path" python3 - <<'PY'
+import os
+from urllib.parse import urljoin
+print(urljoin(os.environ["MINIAPP_URL"], os.environ["ASSET_PATH"]))
+PY
+        )"
+        if curl \
+          --fail \
+          --silent \
+          --show-error \
+          --location \
+          --max-time "$attempt_timeout" \
+          --output "$asset_file" \
+          "$asset_url" && [ -s "$asset_file" ]; then
+          rm -f "$headers_file" "$html_file" "$asset_file"
+          return 0
+        fi
       fi
     fi
 
-    rm -f "$headers_file" "$html_file"
+    rm -f "$headers_file" "$html_file" "$asset_file"
     [ "$SECONDS" -lt "$deadline" ] || break
     remaining=$((deadline - SECONDS))
-    log "public Happy Fox ${expected_release} smoke not ready; ${remaining}s remain in the post-reload window"
+    log "public Happy Fox ${expected_release} React smoke not ready; ${remaining}s remain"
     sleep "$((remaining < 2 ? remaining : 2))"
   done
   return 1
@@ -512,12 +505,12 @@ curl \
 if miniapp_enabled; then
   MINIAPP_RELEASE="$(miniapp_release)"
   MINIAPP_URL="$(resolved_miniapp_url)" || fail "Mini App is enabled but no public URL is configured"
-  log "checking public Happy Fox Mini App release $MINIAPP_RELEASE with bounded post-reload retry"
+  log "checking public Happy Fox React Mini App release $MINIAPP_RELEASE"
   verify_public_miniapp "$MINIAPP_URL" "$MINIAPP_RELEASE" || \
-    fail "public Happy Fox Mini App $MINIAPP_RELEASE did not become ready within 30s"
+    fail "public Happy Fox React Mini App $MINIAPP_RELEASE did not become ready within 30s"
   verify_telegram_menu "$MINIAPP_URL" || \
     fail "Telegram Happy Fox menu did not converge to $MINIAPP_URL within 30s"
-  log "Happy Fox $MINIAPP_RELEASE public WebApp and Telegram menu verified"
+  log "Happy Fox $MINIAPP_RELEASE React WebApp and Telegram menu verified"
 fi
 
 log "deployment completed: $PREVIOUS_SHA -> $DEPLOYED_SHA"
