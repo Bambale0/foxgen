@@ -34,7 +34,7 @@ def test_deploy_smokes_exact_happy_fox_release_and_telegram_menu() -> None:
     assert '[[ "${cache_control,,}" == *"no-store"* ]]' in script
     assert 'name=\\"foxgen-miniapp-shell\\" content=\\"${expected_release}\\"' in script
     assert "/mini-app/product-home.js" in script
-    assert "label.textContent = 'Каталог'" in script
+    assert 'grep -Fq "Каталог" <<<"$product_home_js"' in script
     assert "getChatMenuButton" in script
     assert 'result.get("type") != "web_app"' in script
     assert 'result.get("text") != "Happy Fox"' in script

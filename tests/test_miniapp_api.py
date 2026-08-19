@@ -15,7 +15,6 @@ from foxgen.core.config import Settings
 from foxgen.domain.models import GenerationStatus
 from foxgen.infra.miniapp import MiniAppGenerationSnapshot
 
-
 BOT_TOKEN = "123456:test-miniapp-bot-token"
 JWT_SECRET = "miniapp-jwt-test-secret-that-is-long-enough"
 USER_ID = 424242
@@ -113,6 +112,7 @@ class FakeSubmissionService:
         model_slug: str,
         input_data: dict[str, object],
         idempotency_key: str,
+        source_publication_id: UUID | None = None,
     ) -> SubmissionReceipt:
         self.calls.append(
             {
@@ -121,6 +121,7 @@ class FakeSubmissionService:
                 "model_slug": model_slug,
                 "input_data": input_data,
                 "idempotency_key": idempotency_key,
+                "source_publication_id": source_publication_id,
             }
         )
         return SubmissionReceipt(
@@ -240,7 +241,12 @@ def test_bootstrap_exposes_tts_as_schema_driven_audio_product() -> None:
     tts = next(item for item in body["models"] if item["slug"] == "elevenlabs-turbo-2-5")
     assert tts["media_kind"] == "audio"
     assert tts["capabilities"] == ["text_to_speech"]
-    assert tts["price"] == {"amount_units": 42, "currency": "CREDIT", "version": 1}
+    tts_price = next(
+        item for item in body["prices"] if item["model_slug"] == "elevenlabs-turbo-2-5"
+    )
+    assert tts_price["amount_units"] == 42
+    assert tts_price["currency"] == "CREDIT"
+    assert tts_price["version"] == 1
     schema = tts["input_schema"]
     assert schema["additionalProperties"] is False
     assert set(schema["required"]) == {"text", "voice"}
@@ -286,6 +292,7 @@ def test_paid_miniapp_task_reuses_submission_service_and_user_identity() -> None
                 "nsfw_checker": False,
             },
             "idempotency_key": f"miniapp:{IDEMPOTENCY_KEY}",
+            "source_publication_id": None,
         }
     ]
 
@@ -329,6 +336,7 @@ def test_paid_miniapp_tts_reuses_same_submission_service() -> None:
         "model_slug": "elevenlabs-turbo-2-5",
         "input_data": payload,
         "idempotency_key": "miniapp:tts-miniapp-001",
+        "source_publication_id": None,
     }
 
 

@@ -5,7 +5,6 @@ from foxgen.api.miniapp_security import TelegramMiniAppUser, issue_miniapp_token
 from foxgen.application.promos import PromoRedemptionResult
 from foxgen.core.config import Settings
 
-
 USER_ID = 123456899
 INTERNAL_TOKEN = "promo-internal-token-long-enough"
 JWT_SECRET = "promo-miniapp-jwt-secret-long-enough"
@@ -105,6 +104,6 @@ def test_trusted_bot_promo_redeem_requires_owner_header() -> None:
             json={"code": "FOX500"},
         )
 
-    assert missing_owner.status_code == 401
+    assert missing_owner.status_code == 400
     assert response.status_code == 200
     assert service.calls == [(USER_ID, "promo_user", "FOX500")]

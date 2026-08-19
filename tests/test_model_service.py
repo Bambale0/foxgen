@@ -2,6 +2,7 @@ from collections.abc import Mapping
 
 import pytest
 
+from foxgen.core.errors import ErrorCode, SubmissionError
 from foxgen.providers.kie.client import TaskCreated
 from foxgen.providers.kie.service import KieModelService
 
@@ -52,18 +53,18 @@ async def test_service_submits_exact_seedance_mini_provider_model() -> None:
 
 
 @pytest.mark.asyncio
-async def test_service_submits_exact_seedream_45_provider_model() -> None:
+async def test_service_rejects_catalog_only_seedream_45_before_provider_call() -> None:
     client = FakeTaskClient()
     service = KieModelService(client)
 
-    await service.submit(
-        model_slug="seedream-4-5",
-        input_data={"prompt": "Premium product shot of a watch"},
-    )
+    with pytest.raises(SubmissionError) as error:
+        await service.submit(
+            model_slug="seedream-4-5",
+            input_data={"prompt": "Premium product shot of a watch"},
+        )
 
-    assert client.calls[0][0] == "seedream/4.5-text-to-image"
-    assert client.calls[0][1]["quality"] == "basic"
-    assert "output_format" not in client.calls[0][1]
+    assert error.value.code == ErrorCode.AUTHORIZATION
+    assert client.calls == []
 
 
 @pytest.mark.asyncio

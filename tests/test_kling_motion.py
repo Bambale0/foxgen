@@ -19,6 +19,7 @@ from foxgen.providers.kie.client import KieClient
 from foxgen.providers.kie.contracts import InputContract, validate_input
 from foxgen.providers.kie.motion import KlingMotionClient
 from foxgen.providers.kie.registry import ModelRegistry
+from tests.route_helpers import route_paths
 
 
 def _box(kind: bytes, payload: bytes) -> bytes:
@@ -271,7 +272,7 @@ async def test_provider_resolves_fresh_urls_without_leaking_storage_keys(tmp_pat
 
 def test_product_routes_are_mounted_in_application() -> None:
     app = create_app(Settings(env="test"), manage_resources=False)
-    paths = {route.path for route in app.routes}
+    paths = route_paths(app)
 
     assert "/v1/miniapp/motion/kling" in paths
     assert "/v1/miniapp/motion/kling/inputs/image" in paths

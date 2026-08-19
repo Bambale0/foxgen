@@ -1,0 +1,28 @@
+* text=auto
+
+# Keep executable/runtime text deterministic across Windows and Linux.
+*.py text eol=lf
+*.sh text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.toml text eol=lf
+*.ini text eol=lf
+*.md text eol=lf
+Dockerfile text eol=lf
+Makefile text eol=lf
+
+# Binary assets must never be line-ending normalized.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.mp3 binary
+*.wav binary
+*.mp4 binary
+*.mov binary
+*.zip binary

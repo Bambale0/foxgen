@@ -87,6 +87,8 @@ def test_registry_separates_catalog_models_from_submission_models() -> None:
         "suno-v5",
         "suno-v5-extend",
         "suno-v5-upload-cover",
+        "suno-v5-upload-extend",
+        "kling-3-motion-control",
     }
     assert all(item.provider_id_verified for item in enabled)
     assert all(item.schema_verified for item in enabled)

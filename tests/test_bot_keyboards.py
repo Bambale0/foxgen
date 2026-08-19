@@ -35,17 +35,19 @@ def test_launch_button_is_hidden_until_quote_and_balance_are_valid() -> None:
     assert "draft:refresh" not in allowed
 
 
-def test_main_menu_matches_approved_product_sketch_with_quick_start() -> None:
+def test_main_menu_matches_current_product_surface_with_quick_start() -> None:
     assert _rows(main_menu()) == [
         [("🦊 Happy Fox Mini App", "miniapp:unavailable")],
+        [("🌐 Лента", "feed:open"), ("👤 Профиль", "feed:profile:me")],
+        [("📣 Опубликовать генерацию", "feed:publish:start")],
         [("Быстрый запуск", "quick:start")],
         [
             ("Создать видео", "create:video"),
-            ("Создать озвучку (голос)", "planned:voice"),
+            ("Создать озвучку (голос)", "create:voice"),
         ],
         [
             ("Создать фото", "create:image"),
-            ("Создать музыку (песню)", "planned:music"),
+            ("Создать музыку (песню)", "create:music"),
         ],
         [
             ("Motion Control", "planned:motion"),
@@ -77,10 +79,20 @@ def test_main_menu_renders_real_webapp_button_when_public_url_is_available() -> 
     assert button.web_app.url == "https://fox.example.com/mini-app/"
 
 
-def test_main_menu_exposes_quick_image_video_and_balance_actions() -> None:
+def test_main_menu_exposes_live_creation_feed_and_balance_actions() -> None:
     callbacks = _callbacks(main_menu())
 
-    assert {"quick:start", "create:image", "create:video", "account:balance"} <= callbacks
+    assert {
+        "quick:start",
+        "create:image",
+        "create:video",
+        "create:voice",
+        "create:music",
+        "feed:open",
+        "feed:profile:me",
+        "feed:publish:start",
+        "account:balance",
+    } <= callbacks
 
 
 def test_reference_choice_keeps_photo_and_video_actions_visible() -> None:

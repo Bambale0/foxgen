@@ -17,7 +17,6 @@ from foxgen.core.config import Settings
 from foxgen.domain.models import GenerationStatus
 from foxgen.infra.miniapp import MiniAppGenerationSnapshot
 
-
 BOT_TOKEN = "123456:expanded-miniapp-token"
 JWT_SECRET = "expanded-miniapp-jwt-secret-long-enough"
 USER_ID = 515151
@@ -102,8 +101,9 @@ class Submission:
         model_slug: str,
         input_data: dict[str, object],
         idempotency_key: str,
+        source_publication_id: UUID | None = None,
     ) -> SubmissionReceipt:
-        del user_id, username, input_data, idempotency_key
+        del user_id, username, input_data, idempotency_key, source_publication_id
         return SubmissionReceipt(
             generation_id=uuid4(),
             model_slug=model_slug,
@@ -183,6 +183,12 @@ def test_model_catalog_exposes_schema_and_only_submission_models() -> None:
         "nano-banana-pro",
         "seedance-2",
         "seedance-2-mini",
+        "elevenlabs-turbo-2-5",
+        "suno-v5",
+        "suno-v5-extend",
+        "suno-v5-upload-cover",
+        "suno-v5-upload-extend",
+        "kling-3-motion-control",
     }
     for item in models:
         assert item["enabled"] is True
@@ -247,7 +253,12 @@ def test_bootstrap_advertises_frontend_runtime_limits_and_features() -> None:
 
     assert response.status_code == 200
     body = response.json()
-    assert body["features"] == {"task_submission": True, "input_media": True}
+    assert body["features"] == {
+        "task_submission": True,
+        "input_media": True,
+        "feed": True,
+        "reference_memory": True,
+    }
     assert body["limits"]["generation_history_max"] == 100
     assert body["limits"]["ledger_history_max"] == 200
     assert body["limits"]["input_media_max_bytes"] > 0
