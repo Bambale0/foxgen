@@ -1,3 +1,5 @@
+import shutil
+import subprocess
 from pathlib import Path
 
 from foxgen.miniapp_release import MINIAPP_RELEASE
@@ -135,6 +137,28 @@ def test_backend_parity_ui_exposes_all_primary_user_domains() -> None:
     assert "/publications/${encodeURIComponent(scope)}" in ui
     assert "repeat(6" in css
     assert ".complete-tool.is-planned" in css
+
+
+def test_changed_production_javascript_parses_when_node_is_available() -> None:
+    node = shutil.which("node")
+    if node is None:
+        return
+
+    for asset in (
+        "runtime-loader.js",
+        "enhancement-loader.js",
+        "backend-parity-ui.js",
+        "suno-extend.js",
+        "suno-upload-cover.js",
+    ):
+        result = subprocess.run(
+            [node, "--check", str(STATIC / asset)],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert result.returncode == 0, f"{asset}: {result.stderr}"
 
 
 def test_production_deploy_is_not_silently_disabled_after_green_main_ci() -> None:
