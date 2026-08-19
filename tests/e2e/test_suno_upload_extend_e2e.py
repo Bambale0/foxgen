@@ -2,7 +2,7 @@ import hashlib
 import json
 import os
 import tempfile
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from uuid import UUID, uuid4
 
@@ -291,6 +291,12 @@ async def test_happy_fox_owner_audio_upload_extend_reaches_two_track_delivery() 
 
             assert await worker.run_once() == 1
             assert len(provider_posts) == 1
+            async with database.session() as session:
+                submitted = await session.get(Generation, generation_id)
+                assert submitted is not None
+                assert submitted.status == GenerationStatus.SUBMITTED
+                assert submitted.provider_task_id == "upload-extend-e2e-task"
+            await lifecycle.schedule_next_poll(generation_id=generation_id, delay=timedelta())
             assert await worker.poll_once() == 1
             assert await worker.run_once() == 1
             assert await worker.run_once() == 1
