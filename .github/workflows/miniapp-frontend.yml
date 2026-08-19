@@ -56,7 +56,7 @@ jobs:
           set -Eeuo pipefail
           test -s out/index.html
           test -s out/happyfox-logo.webp
-          grep -Fq 'name="foxgen-miniapp-shell" content="parity-v14"' out/index.html
+          grep -Fq 'name="foxgen-miniapp-shell" content="parity-v15"' out/index.html
           grep -Fq '/mini-app/_next/' out/index.html
           ! grep -Fq 'parity-app.js' out/index.html
           ! grep -Fq 'backend-parity-ui.js' out/index.html
