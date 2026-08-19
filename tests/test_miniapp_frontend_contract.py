@@ -63,7 +63,8 @@ def test_catalog_and_forms_are_backend_schema_driven() -> None:
     assert "uploadInput" in form
     assert "submitModel" in form
     assert "miniAppApi.validateModel(model.slug, input)" in context
-    assert "miniAppApi.createTask(model.slug, validated.input)" in context
+    assert "miniAppApi.createTask(model.slug, validated.input, sourcePublicationId)" in context
+    assert "sourcePublicationId" in context
 
     for marker in (
         "/models/${encodeURIComponent(modelSlug)}/validate",
