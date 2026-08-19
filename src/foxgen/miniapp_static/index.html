@@ -1,23 +1,28 @@
 <!doctype html>
-<html lang="ru">
+<html lang="ru" data-foxgen-catalog="booting">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#080808">
   <meta name="color-scheme" content="dark">
   <meta name="description" content="Happy Fox — AI-студия, каталог моделей, генерации, работы и творческий профиль прямо в Telegram">
-  <meta name="foxgen-miniapp-shell" content="parity-v9">
+  <meta name="foxgen-miniapp-shell" content="parity-v10">
   <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <title>Happy Fox</title>
   <script src="https://telegram.org/js/telegram-web-app.js?63"></script>
-  <link rel="stylesheet" href="/mini-app/app.css?v=parity-v9">
-  <link rel="stylesheet" href="/mini-app/studio.css?v=parity-v9">
-  <link rel="stylesheet" href="/mini-app/parity.css?v=parity-v9">
-  <link rel="stylesheet" href="/mini-app/complete-menu.css?v=parity-v9">
-  <link rel="stylesheet" href="/mini-app/motion-control.css?v=parity-v9">
-  <link rel="stylesheet" href="/mini-app/promo-redeem.css?v=parity-v9">
-  <link rel="stylesheet" href="/mini-app/product-home.css?v=parity-v9">
+  <style>
+    html:not([data-foxgen-catalog="ready"]):not([data-foxgen-catalog="failed"]) #app > main:not(.boot-screen):not(.boot-fallback) {
+      visibility: hidden;
+    }
+  </style>
+  <link rel="stylesheet" href="/mini-app/app.css?v=parity-v10">
+  <link rel="stylesheet" href="/mini-app/studio.css?v=parity-v10">
+  <link rel="stylesheet" href="/mini-app/parity.css?v=parity-v10">
+  <link rel="stylesheet" href="/mini-app/complete-menu.css?v=parity-v10">
+  <link rel="stylesheet" href="/mini-app/motion-control.css?v=parity-v10">
+  <link rel="stylesheet" href="/mini-app/promo-redeem.css?v=parity-v10">
+  <link rel="stylesheet" href="/mini-app/product-home.css?v=parity-v10">
 </head>
 <body>
   <div id="app" class="app-shell" aria-live="polite">
@@ -45,27 +50,26 @@
   <div
     id="foxgen-runtime-manifest"
     hidden
-    data-parity-src="/mini-app/parity-app.js?v=parity-v9"
-    data-legacy-src="/mini-app/app.js?v=parity-v9"
+    data-parity-src="/mini-app/parity-app.js?v=parity-v10"
+    data-product-home-src="/mini-app/product-home.js?v=parity-v10"
   ></div>
   <div id="foxgen-enhancement-manifest" hidden>
-    <span data-module-src="/mini-app/product-home.js?v=parity-v9" data-critical-module="catalog"></span>
-    <span data-module-src="/mini-app/complete-menu.js?v=parity-v9"></span>
-    <span data-module-src="/mini-app/user-parity-hardening.js?v=parity-v9"></span>
-    <span data-module-src="/mini-app/user-parity-phase2.js?v=parity-v9"></span>
-    <span data-module-src="/mini-app/user-draft-recovery.js?v=parity-v9"></span>
-    <span data-module-src="/mini-app/tts-parity.js?v=parity-v9"></span>
-    <span data-module-src="/mini-app/suno-parity.js?v=parity-v9"></span>
-    <span data-module-src="/mini-app/suno-extend.js?v=parity-v9"></span>
-    <span data-module-src="/mini-app/suno-upload-cover.js?v=parity-v9"></span>
-    <span data-module-src="/mini-app/suno-upload-extend.js?v=parity-v9"></span>
-    <span data-module-src="/mini-app/motion-control.js?v=parity-v9"></span>
-    <span data-module-src="/mini-app/promo-redeem.js?v=parity-v9"></span>
+    <span data-module-src="/mini-app/complete-menu.js?v=parity-v10"></span>
+    <span data-module-src="/mini-app/user-parity-hardening.js?v=parity-v10"></span>
+    <span data-module-src="/mini-app/user-parity-phase2.js?v=parity-v10"></span>
+    <span data-module-src="/mini-app/user-draft-recovery.js?v=parity-v10"></span>
+    <span data-module-src="/mini-app/tts-parity.js?v=parity-v10"></span>
+    <span data-module-src="/mini-app/suno-parity.js?v=parity-v10"></span>
+    <span data-module-src="/mini-app/suno-extend.js?v=parity-v10"></span>
+    <span data-module-src="/mini-app/suno-upload-cover.js?v=parity-v10"></span>
+    <span data-module-src="/mini-app/suno-upload-extend.js?v=parity-v10"></span>
+    <span data-module-src="/mini-app/motion-control.js?v=parity-v10"></span>
+    <span data-module-src="/mini-app/promo-redeem.js?v=parity-v10"></span>
   </div>
 
-  <script src="/mini-app/boot-guard.js?v=parity-v9"></script>
-  <script src="/mini-app/runtime-loader.js?v=parity-v9"></script>
-  <script src="/mini-app/menu-recovery.js?v=parity-v9"></script>
-  <script src="/mini-app/enhancement-loader.js?v=parity-v9"></script>
+  <script src="/mini-app/boot-guard.js?v=parity-v10"></script>
+  <script src="/mini-app/runtime-loader.js?v=parity-v10"></script>
+  <script src="/mini-app/menu-recovery.js?v=parity-v10"></script>
+  <script src="/mini-app/enhancement-loader.js?v=parity-v10"></script>
 </body>
 </html>

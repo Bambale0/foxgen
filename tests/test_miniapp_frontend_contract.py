@@ -13,22 +13,23 @@ ENHANCEMENT_LOADER = STATIC / "enhancement-loader.js"
 BOOT_GUARD = STATIC / "boot-guard.js"
 
 
-def test_happy_fox_parity_runtime_is_loaded_through_compatibility_gate() -> None:
+def test_happy_fox_current_runtime_and_catalog_are_mandatory_core_assets() -> None:
     html = (STATIC / "index.html").read_text(encoding="utf-8")
 
     assert f'<link rel="stylesheet" href="/mini-app/parity.css?v={MINIAPP_RELEASE}">' in html
     assert f'data-parity-src="/mini-app/parity-app.js?v={MINIAPP_RELEASE}"' in html
-    assert f'data-legacy-src="/mini-app/app.js?v={MINIAPP_RELEASE}"' in html
+    assert f'data-product-home-src="/mini-app/product-home.js?v={MINIAPP_RELEASE}"' in html
     assert f'<script src="/mini-app/runtime-loader.js?v={MINIAPP_RELEASE}"></script>' in html
     assert f'<script src="/mini-app/enhancement-loader.js?v={MINIAPP_RELEASE}"></script>' in html
+    assert "data-legacy-src" not in html
+    assert "/mini-app/app.js" not in html
     assert f'<script defer src="/mini-app/parity-app.js?v={MINIAPP_RELEASE}"></script>' not in html
     assert '<script type="module" src="/mini-app/parity-app.js' not in html
-    assert '<script type="module" src="/mini-app/app.js' not in html
     assert "Happy Fox" in html
     assert "FOXGEN" not in html
 
 
-def test_runtime_loader_falls_back_without_downgrading_product_experience() -> None:
+def test_runtime_fails_closed_instead_of_downgrading_to_old_app() -> None:
     loader = RUNTIME_LOADER.read_text(encoding="utf-8")
     enhancements = ENHANCEMENT_LOADER.read_text(encoding="utf-8")
     guard = BOOT_GUARD.read_text(encoding="utf-8")
@@ -39,19 +40,24 @@ def test_runtime_loader_falls_back_without_downgrading_product_experience() -> N
     assert "new Function" in loader
     assert "??=" in loader
     assert "&&=" in loader
-    assert "data-legacy-src" in loader
-    assert "legacy=1" in loader
+    assert "data-product-home-src" in loader
+    assert "data-legacy-src" not in loader
+    assert "legacy=1" not in loader
+    assert "__FOXGEN_BOOT_FATAL__" in loader
+    assert "__FOXGEN_CATALOG_RUNTIME_LOADED__" in loader
 
-    assert "__FOXGEN_RUNTIME_KIND__ === 'legacy'" not in enhancements
-    assert 'data-critical-module="catalog"' in html
-    assert html.index("product-home.js") < html.index("complete-menu.js")
-    assert "data-critical-module" in enhancements
+    assert 'data-critical-module="catalog"' not in html
+    assert html.index("data-product-home-src") < html.index("complete-menu.js")
+    assert "data-critical-module" not in enhancements
     assert "data-foxgen-catalog" in enhancements
     assert "showCriticalFailure" in enhancements
+    assert "__FOXGEN_BOOT_FATAL__" in enhancements
 
     assert "__FOXGEN_BOOT_FAIL__" in guard
-    assert "Переключаем совместимый режим" in guard
-    assert "legacy=1" in guard
+    assert "__FOXGEN_BOOT_FATAL__" in guard
+    assert "legacy=1" not in guard
+    assert "location.replace" not in guard
+    assert "совместимый режим" not in guard
     assert ".replaceAll(" not in guard
     assert "?." not in guard
     assert "??" not in guard
