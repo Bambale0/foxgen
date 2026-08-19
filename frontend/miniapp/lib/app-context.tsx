@@ -57,6 +57,8 @@ interface AppContextValue {
   selectModel: (model: ModelDefinition | null, options?: ModelSelectionOptions) => void
   openWorkspace: (workspace: WorkspaceId) => void
   closeWorkspace: () => void
+  openGeneration: (id: string) => Promise<void>
+  clearGenerationFocus: () => void
   refreshBootstrap: () => Promise<void>
   refreshGenerations: () => Promise<void>
   refreshFeed: (sort?: string) => Promise<void>
@@ -85,6 +87,10 @@ function setupTelegram() {
   } catch {
     // Telegram bridge is optional in browser tests.
   }
+}
+
+function upsertGeneration(rows: Generation[], generation: Generation) {
+  return [generation, ...rows.filter((item) => item.id !== generation.id)]
 }
 
 export function AppProvider({ children }: { children: ReactNode }) {
@@ -146,7 +152,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (intent.kind === 'generation') {
           const generation = await miniAppApi.generation(intent.value)
           setFocusedGeneration(generation)
-          setGenerations((current) => [generation, ...current.filter((item) => item.id !== generation.id)])
+          setGenerations((current) => upsertGeneration(current, generation))
           return
         }
 
@@ -217,9 +223,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setFocusedPublication(null)
   }, [])
 
+  const openGeneration = useCallback(async (id: string) => {
+    const generation = await miniAppApi.generation(id)
+    setFocusedGeneration(generation)
+    setGenerations((current) => upsertGeneration(current, generation))
+  }, [])
+
+  const clearGenerationFocus = useCallback(() => setFocusedGeneration(null), [])
+
   const refreshGenerations = useCallback(async () => {
     const rows = await miniAppApi.generations(100)
     setGenerations(rows)
+    setFocusedGeneration((current) => {
+      if (!current) return current
+      return rows.find((item) => item.id === current.id) ?? current
+    })
   }, [])
 
   const refreshFeed = useCallback(async (sort = 'recent') => {
@@ -285,8 +303,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const cancelGeneration = useCallback(async (id: string) => {
     const generation = await miniAppApi.cancelGeneration(id)
     setFocusedGeneration((current) => (current?.id === generation.id ? generation : current))
-    await refreshGenerations()
-  }, [refreshGenerations])
+    setGenerations((current) => upsertGeneration(current, generation))
+  }, [])
 
   const publishGeneration = useCallback(async (id: string, scope: 'feed' | 'profile') => {
     await miniAppApi.publish(id, scope)
@@ -329,6 +347,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     selectModel,
     openWorkspace,
     closeWorkspace,
+    openGeneration,
+    clearGenerationFocus,
     refreshBootstrap,
     refreshGenerations,
     refreshFeed,
@@ -361,6 +381,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     selectModel,
     openWorkspace,
     closeWorkspace,
+    openGeneration,
+    clearGenerationFocus,
     refreshBootstrap,
     refreshGenerations,
     refreshFeed,
