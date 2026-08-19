@@ -48,7 +48,7 @@ function messageFromPayload(payload: unknown, fallback: string): string {
 
 async function fetchJson(path: string, init: RequestInit = {}, timeoutMs = TIMEOUT_MS) {
   const controller = new AbortController()
-  const timer = window.setTimeout(() => controller.abort(), timeoutMs)
+  const timer = globalThis.setTimeout(() => controller.abort(), timeoutMs)
   try {
     const response = await fetch(path, { ...init, signal: controller.signal })
     const contentType = response.headers.get('content-type') ?? ''
@@ -67,7 +67,7 @@ async function fetchJson(path: string, init: RequestInit = {}, timeoutMs = TIMEO
     }
     throw error
   } finally {
-    window.clearTimeout(timer)
+    globalThis.clearTimeout(timer)
   }
 }
 
@@ -76,10 +76,12 @@ function randomId() {
 }
 
 export function telegramInitData(): string {
+  if (typeof window === 'undefined') return ''
   return window.Telegram?.WebApp?.initData ?? ''
 }
 
 export function telegramStartParam(): string {
+  if (typeof window === 'undefined') return ''
   return (
     window.Telegram?.WebApp?.initDataUnsafe?.start_param ??
     new URLSearchParams(window.location.search).get('tgWebAppStartParam') ??
@@ -89,25 +91,31 @@ export function telegramStartParam(): string {
 
 export class MiniAppApi {
   private token: string | null = null
-  private initData: string
+  private initData: string | null
 
-  constructor(initData = telegramInitData()) {
-    this.initData = initData
+  constructor(initData?: string) {
+    this.initData = initData ?? null
   }
 
   get authenticated() {
     return Boolean(this.token)
   }
 
+  private currentInitData() {
+    if (this.initData === null) this.initData = telegramInitData()
+    return this.initData
+  }
+
   async authenticate(force = false): Promise<AuthResponse> {
     if (this.token && !force) {
       return { access_token: this.token, token_type: 'bearer', expires_in: 0, user: { id: 0 } }
     }
-    if (!this.initData) throw new ApiError('Откройте Happy Fox внутри Telegram.', 401)
+    const initData = this.currentInitData()
+    if (!initData) throw new ApiError('Откройте Happy Fox внутри Telegram.', 401)
     const payload = (await fetchJson(`${API_BASE}/auth`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ init_data: this.initData }),
+      body: JSON.stringify({ init_data: initData }),
     })) as AuthResponse
     this.token = payload.access_token
     return payload
