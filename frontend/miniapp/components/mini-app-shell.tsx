@@ -5,6 +5,8 @@ import { AppProvider, useApp } from '@/lib/app-context'
 import { TabNav } from './tab-nav'
 import { WorkspaceSheet } from './workspace-sheet'
 
+const BRAND_LOGO_SRC = '/mini-app/happyfox-logo.webp'
+
 function TopBar() {
   const { bootstrap, openWorkspace } = useApp()
   const user = bootstrap?.user
@@ -12,7 +14,15 @@ function TopBar() {
   return (
     <header className="topbar">
       <div className="brand">
-        <div className="brand-mark" aria-hidden="true">🦊</div>
+        <div className="brand-mark" aria-hidden="true">
+          <img
+            className="brand-logo-mark"
+            data-testid="happyfox-logo"
+            src={BRAND_LOGO_SRC}
+            alt=""
+            draggable={false}
+          />
+        </div>
         <div className="brand-copy">
           <strong>Happy <span>Fox</span></strong>
           <small>AI CREATIVE STUDIO</small>
@@ -37,6 +47,14 @@ function TopBar() {
   )
 }
 
+function BrandLoader({ compact = false }: { compact?: boolean }) {
+  return (
+    <div className={`brand-loader${compact ? ' compact' : ''}`} aria-hidden="true">
+      <img src={BRAND_LOGO_SRC} alt="" draggable={false} />
+    </div>
+  )
+}
+
 function Body({ children }: { children: ReactNode }) {
   const { mode, error, refreshBootstrap } = useApp()
 
@@ -44,7 +62,7 @@ function Body({ children }: { children: ReactNode }) {
     return (
       <div className="loader-page" data-testid="miniapp-loading">
         <div>
-          <div className="fox-loader">🦊</div>
+          <BrandLoader />
           <h2>Happy Fox</h2>
           <p>Подключаем Telegram и загружаем модели…</p>
         </div>
@@ -56,7 +74,7 @@ function Body({ children }: { children: ReactNode }) {
     return (
       <main className="fatal" data-testid="miniapp-error">
         <div className="form-card">
-          <div className="fox-loader">🦊</div>
+          <BrandLoader compact />
           <h1>{mode === 'locked' ? 'Откройте Happy Fox в Telegram' : 'Не удалось загрузить Happy Fox'}</h1>
           <p>{error}</p>
           <button className="primary" type="button" onClick={() => void refreshBootstrap()}>

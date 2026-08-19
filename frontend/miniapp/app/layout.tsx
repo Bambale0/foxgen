@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next'
 import './globals.css'
+import './brand.css'
 
 export const metadata: Metadata = {
   title: 'Happy Fox',
@@ -20,7 +21,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="ru">
       <head>
-        <meta name="foxgen-miniapp-shell" content="parity-v13" />
+        <meta name="foxgen-miniapp-shell" content="parity-v14" />
         <meta httpEquiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
         <meta httpEquiv="Pragma" content="no-cache" />
         <script src="https://telegram.org/js/telegram-web-app.js?63" />
