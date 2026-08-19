@@ -347,20 +347,25 @@ assert button.callback_data is None
 
 verify_public_miniapp() {
   local miniapp_url expected_release deadline remaining attempt_timeout
-  local html headers_file html_file cache_control content_type product_home_url product_home_js
+  local html headers_file html_file cache_control content_type parity_url backend_ui_url
+  local parity_js backend_ui_js
   miniapp_url="$1"
   expected_release="$2"
   deadline=$((SECONDS + 30))
-  product_home_url="$(
+
+  mapfile -t asset_urls < <(
     MINIAPP_URL="$miniapp_url" EXPECTED_RELEASE="$expected_release" python3 - <<'PY'
 import os
 from urllib.parse import urlencode, urlsplit, urlunsplit
 
 parts = urlsplit(os.environ["MINIAPP_URL"])
 query = urlencode({"v": os.environ["EXPECTED_RELEASE"]})
-print(urlunsplit((parts.scheme, parts.netloc, "/mini-app/product-home.js", query, "")))
+for path in ("/mini-app/parity-app.js", "/mini-app/backend-parity-ui.js"):
+    print(urlunsplit((parts.scheme, parts.netloc, path, query, "")))
 PY
-  )"
+  )
+  parity_url="${asset_urls[0]}"
+  backend_ui_url="${asset_urls[1]}"
 
   while [ "$SECONDS" -lt "$deadline" ]; do
     remaining=$((deadline - SECONDS))
@@ -406,13 +411,15 @@ PY
       if [[ "${cache_control,,}" == *"no-store"* ]] && \
         [[ "${content_type,,}" == text/html* ]] && \
         grep -Fq "name=\"foxgen-miniapp-shell\" content=\"${expected_release}\"" <<<"$html" && \
-        grep -Fq "/mini-app/product-home.js?v=${expected_release}" <<<"$html" && \
-        grep -Fq "/mini-app/product-home.css?v=${expected_release}" <<<"$html" && \
-        product_home_js="$(
-          curl --fail --silent --show-error --location --max-time "$attempt_timeout" \
-            "$product_home_url"
-        )" && \
-        grep -Fq "Каталог" <<<"$product_home_js"; then
+        grep -Fq "/mini-app/parity-app.js?v=${expected_release}" <<<"$html" && \
+        grep -Fq "/mini-app/backend-parity-ui.js?v=${expected_release}" <<<"$html" && \
+        grep -Fq "/mini-app/backend-parity.css?v=${expected_release}" <<<"$html" && \
+        ! grep -Fq "product-home" <<<"$html" && \
+        parity_js="$(curl --fail --silent --show-error --location --max-time "$attempt_timeout" "$parity_url")" && \
+        backend_ui_js="$(curl --fail --silent --show-error --location --max-time "$attempt_timeout" "$backend_ui_url")" && \
+        grep -Fq "API_TIMEOUT_MS = 10000" <<<"$parity_js" && \
+        grep -Fq "Все модели" <<<"$backend_ui_js" && \
+        grep -Fq "Весь функционал" <<<"$backend_ui_js"; then
         rm -f "$headers_file" "$html_file"
         return 0
       fi

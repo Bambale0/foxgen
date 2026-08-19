@@ -1,3 +1,5 @@
+import shutil
+import subprocess
 from pathlib import Path
 
 from foxgen.miniapp_release import MINIAPP_RELEASE
@@ -8,7 +10,7 @@ INDEX = STATIC / "index.html"
 DEPLOY = ROOT / ".github" / "workflows" / "deploy-production.yml"
 
 
-def test_production_shell_declares_single_current_runtime_and_all_user_modules() -> None:
+def test_production_shell_declares_one_core_runtime_and_all_backend_modules() -> None:
     html = INDEX.read_text(encoding="utf-8")
 
     assert f'name="foxgen-miniapp-shell" content="{MINIAPP_RELEASE}"' in html
@@ -17,7 +19,6 @@ def test_production_shell_declares_single_current_runtime_and_all_user_modules()
         "runtime-loader.js",
         "enhancement-loader.js",
         "parity-app.js",
-        "product-home.js",
         "complete-menu.js",
         "user-parity-hardening.js",
         "user-parity-phase2.js",
@@ -29,37 +30,33 @@ def test_production_shell_declares_single_current_runtime_and_all_user_modules()
         "suno-upload-extend.js",
         "motion-control.js",
         "promo-redeem.js",
+        "backend-parity-ui.js",
+        "backend-parity-guard.js",
     ):
         assert f"/mini-app/{asset}?v={MINIAPP_RELEASE}" in html
 
     for stylesheet in (
+        "app.css",
+        "studio.css",
+        "parity.css",
+        "complete-menu.css",
         "motion-control.css",
-        "product-home.css",
+        "promo-redeem.css",
+        "backend-parity.css",
     ):
         assert f"/mini-app/{stylesheet}?v={MINIAPP_RELEASE}" in html
 
-    for asset in (
-        "boot-guard.js",
-        "runtime-loader.js",
-        "enhancement-loader.js",
-    ):
-        tag = f'<script src="/mini-app/{asset}?v={MINIAPP_RELEASE}"></script>'
-        assert tag in html
-
     parity_src = f"/mini-app/parity-app.js?v={MINIAPP_RELEASE}"
-    product_home_src = f"/mini-app/product-home.js?v={MINIAPP_RELEASE}"
     assert f'data-parity-src="{parity_src}"' in html
-    assert f'data-product-home-src="{product_home_src}"' in html
-    assert "data-legacy-src" not in html
+    assert html.index("backend-parity-ui.js") < html.index("backend-parity-guard.js")
+    assert "data-product-home-src" not in html
+    assert "product-home.js" not in html
+    assert "product-home.css" not in html
     assert "/mini-app/app.js" not in html
-    assert 'data-critical-module="catalog"' not in html
-    assert 'data-foxgen-catalog="booting"' in html
-    assert "visibility: hidden" in html
-
-    parity_defer = f'<script defer src="{parity_src}"></script>'
-    assert parity_defer not in html
-    assert '<script type="module" src="/mini-app/parity-app.js' not in html
-    assert html.index("data-product-home-src") < html.index("complete-menu.js")
+    assert "visibility: hidden" not in html
+    assert 'data-foxgen-catalog="booting"' not in html
+    assert not (STATIC / "product-home.js").exists()
+    assert not (STATIC / "product-home.css").exists()
 
 
 def test_production_boot_guard_fails_closed_without_stale_runtime_redirect() -> None:
@@ -79,9 +76,8 @@ def test_production_boot_guard_fails_closed_without_stale_runtime_redirect() -> 
     assert "??" not in guard
 
 
-def test_runtime_loader_makes_current_catalog_mandatory() -> None:
+def test_runtime_loader_requires_only_the_real_parity_core() -> None:
     loader = (STATIC / "runtime-loader.js").read_text(encoding="utf-8")
-    enhancements = (STATIC / "enhancement-loader.js").read_text(encoding="utf-8")
 
     assert "String.prototype.replaceAll" in loader
     assert "window.structuredClone" in loader
@@ -90,55 +86,93 @@ def test_runtime_loader_makes_current_catalog_mandatory() -> None:
     assert "fetch(source, { cache: 'no-store' })" in loader
     assert "compiled.indexOf('??=')" in loader
     assert "compiled.indexOf('&&=')" in loader
-    assert "data-product-home-src" in loader
+    assert "data-parity-src" in loader
+    assert "data-product-home-src" not in loader
+    assert "mountPendingAccountSurface" not in loader
+    assert "catalog-runtime-loaded" not in loader
     assert "data-legacy-src" not in loader
     assert "legacy=1" not in loader
     assert "__FOXGEN_RUNTIME_KIND__ = 'parity'" in loader
+    assert "__FOXGEN_CORE_LOADED__" in loader
+    assert "foxgen:core-loaded" in loader
     assert "__FOXGEN_BOOT_FATAL__" in loader
-    assert "__FOXGEN_CATALOG_RUNTIME_LOADED__" in loader
-    assert "слишком старая" in loader
-
-    assert "mountPendingAccountSurface" in loader
-    assert 'data-bootstrap-pending="1"' in loader
-    assert "Подключаем Telegram-аккаунт" in loader
-    assert "foxgen:catalog-runtime-loaded" in loader
-    assert "Подключаем аккаунт…" not in loader
-
-    assert "foxgen:bootstrap" in enhancements
-    assert "foxgen:catalog-runtime-loaded" in enhancements
-    assert "data-critical-module" not in enhancements
-    assert "data-foxgen-catalog" in enhancements
-    assert "isCurrentSurfaceReady" in enhancements
-    assert "waitForCurrentSurface" in enhancements
-    assert "CURRENT_SURFACE_TIMEOUT_MS = 12000" in enhancements
-    assert "COMMUNITY / LIVE" in enhancements
-    assert "main.getAttribute('data-product-catalog') === '1'" in enhancements
-    assert "bootstrapReady" in enhancements
-    assert "maybeLoadOptionalModules" in enhancements
-    assert "showCriticalFailure" in enhancements
-    assert "__FOXGEN_BOOT_FATAL__" in enhancements
-    assert "loadOptionalModules(optionalNodes)" in enhancements
 
 
-def test_current_catalog_can_appear_before_account_bootstrap_finishes() -> None:
-    loader = (STATIC / "runtime-loader.js").read_text(encoding="utf-8")
+def test_enhancements_cannot_hide_or_block_the_core_application() -> None:
     enhancements = (STATIC / "enhancement-loader.js").read_text(encoding="utf-8")
 
-    mount_index = loader.index("mountPendingAccountSurface();")
-    catalog_load_index = loader.index("loadCurrentSource(catalogSource")
-    event_index = loader.index("publishCatalogRuntimeReady();")
-    assert mount_index < catalog_load_index < event_index
+    assert "foxgen:bootstrap" in enhancements
+    assert "loadSequentially" in enhancements
+    assert "optional enhancement failed to load" in enhancements
+    assert "data-foxgen-enhancements" in enhancements
+    assert "surfaceReady" not in enhancements
+    assert "CURRENT_SURFACE_TIMEOUT_MS" not in enhancements
+    assert "data-foxgen-catalog" not in enhancements
+    assert "showCriticalFailure" not in enhancements
+    assert "__FOXGEN_BOOT_FATAL__" not in enhancements
 
-    assert (
-        "window.addEventListener('foxgen:catalog-runtime-loaded', loadEnhancements);"
-        in enhancements
-    )
-    assert "surfaceReady = true" in enhancements
-    assert "document.documentElement.setAttribute('data-foxgen-catalog', 'ready')" in enhancements
-    assert (
-        "if (optionalLoaded || !surfaceReady || !bootstrapReady || !optionalNodes) return;"
-        in enhancements
-    )
+
+def test_backend_parity_ui_exposes_all_primary_user_domains() -> None:
+    ui = (STATIC / "backend-parity-ui.js").read_text(encoding="utf-8")
+    css = (STATIC / "backend-parity.css").read_text(encoding="utf-8")
+
+    for label in ("Главная", "Модели", "Создать", "Работы", "Баланс", "Профиль"):
+        assert label in ui
+    for domain in (
+        "Сообщество",
+        "Референсы",
+        "Тарифы",
+        "Партнёры",
+        "Поддержка",
+        "Все модели",
+    ):
+        assert domain in ui
+    for slug in (
+        "suno-v5-extend",
+        "suno-v5-upload-cover",
+        "suno-v5-upload-extend",
+        "kling-3-motion-control",
+    ):
+        assert slug in ui
+    assert "/me/publications?limit=50" in ui
+    assert "method: 'DELETE'" in ui
+    assert "/publications/${encodeURIComponent(scope)}" in ui
+    assert "repeat(6" in css
+    assert ".complete-tool.is-planned" in css
+
+
+def test_custom_home_and_models_survive_late_core_renders() -> None:
+    guard = (STATIC / "backend-parity-guard.js").read_text(encoding="utf-8")
+
+    assert "desiredSurface" in guard
+    assert "data-backend-surface" in guard
+    assert "data-backend-nav" in guard
+    assert "target.closest('[data-nav]')" in guard
+    assert "MutationObserver" in guard
+    assert "requestSurface(desiredSurface)" in guard
+
+
+def test_changed_production_javascript_parses_when_node_is_available() -> None:
+    node = shutil.which("node")
+    if node is None:
+        return
+
+    for asset in (
+        "runtime-loader.js",
+        "enhancement-loader.js",
+        "backend-parity-ui.js",
+        "backend-parity-guard.js",
+        "suno-extend.js",
+        "suno-upload-cover.js",
+    ):
+        result = subprocess.run(
+            [node, "--check", str(STATIC / asset)],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert result.returncode == 0, f"{asset}: {result.stderr}"
 
 
 def test_production_deploy_is_not_silently_disabled_after_green_main_ci() -> None:

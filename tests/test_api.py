@@ -66,7 +66,9 @@ def test_miniapp_html_shell_is_never_cacheable() -> None:
     assert response.headers["pragma"] == "no-cache"
     assert response.headers["expires"] == "0"
     assert f'name="foxgen-miniapp-shell" content="{MINIAPP_RELEASE}"' in response.text
-    assert f"/mini-app/product-home.js?v={MINIAPP_RELEASE}" in response.text
+    assert f"/mini-app/parity-app.js?v={MINIAPP_RELEASE}" in response.text
+    assert f"/mini-app/backend-parity-ui.js?v={MINIAPP_RELEASE}" in response.text
+    assert "product-home" not in response.text
 
 
 def test_kie_webhook_accepts_nested_task_id_persists_and_returns_200() -> None:
