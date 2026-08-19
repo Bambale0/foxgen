@@ -114,32 +114,33 @@ export function ModelForm({ model }: { model: ModelDefinition }) {
         const values = enumValues(schema)
         const value = input[name]
         const label = `${titleOf(name, schema)}${required.has(name) ? ' *' : ''}`
+        const testId = `field-${name}`
         if (MEDIA_FIELDS.has(name)) {
           const display = Array.isArray(value) ? value.join('\n') : String(value ?? '')
           return (
             <label className="form-field" key={name}>
               <span>{label}</span>
-              <input type="file" accept={acceptFor(name)} disabled={uploading === name} onChange={(event) => { const file = event.target.files?.[0]; if (file) void upload(name, file) }} />
+              <input data-testid={testId} type="file" accept={acceptFor(name)} disabled={uploading === name} onChange={(event) => { const file = event.target.files?.[0]; if (file) void upload(name, file) }} />
               {display && <small style={{ color: '#8c8882', display: 'block', marginTop: 6 }}>Референс выбран ✓</small>}
             </label>
           )
         }
         if (type === 'boolean') {
-          return <label className="form-field checkbox" key={name}><input type="checkbox" checked={Boolean(value)} onChange={(event) => update(name, event.target.checked)} /><span>{label}</span></label>
+          return <label className="form-field checkbox" key={name}><input data-testid={testId} type="checkbox" checked={Boolean(value)} onChange={(event) => update(name, event.target.checked)} /><span>{label}</span></label>
         }
         if (values) {
           return (
-            <label className="form-field" key={name}><span>{label}</span><select value={String(value ?? '')} onChange={(event) => update(name, coerce(event.target.value, schema))}><option value="">Выберите…</option>{values.map((item) => <option key={String(item)} value={String(item)}>{String(item)}</option>)}</select></label>
+            <label className="form-field" key={name}><span>{label}</span><select data-testid={testId} value={String(value ?? '')} onChange={(event) => update(name, coerce(event.target.value, schema))}><option value="">Выберите…</option>{values.map((item) => <option key={String(item)} value={String(item)}>{String(item)}</option>)}</select></label>
           )
         }
         if (type === 'array') {
-          return <label className="form-field" key={name}><span>{label}</span><textarea value={Array.isArray(value) ? value.join('\n') : ''} onChange={(event) => update(name, coerce(event.target.value, schema))} placeholder="По одному значению на строку" /></label>
+          return <label className="form-field" key={name}><span>{label}</span><textarea data-testid={testId} value={Array.isArray(value) ? value.join('\n') : ''} onChange={(event) => update(name, coerce(event.target.value, schema))} placeholder="По одному значению на строку" /></label>
         }
         const longText = name.includes('prompt') || name.includes('description') || Number(schema.maxLength ?? 0) > 250
         if (longText) {
-          return <label className="form-field" key={name}><span>{label}</span><textarea value={String(value ?? '')} maxLength={schema.maxLength} onChange={(event) => update(name, event.target.value)} placeholder={schema.description} /></label>
+          return <label className="form-field" key={name}><span>{label}</span><textarea data-testid={testId} value={String(value ?? '')} maxLength={schema.maxLength} onChange={(event) => update(name, event.target.value)} placeholder={schema.description} /></label>
         }
-        return <label className="form-field" key={name}><span>{label}</span><input type={type === 'integer' || type === 'number' ? 'number' : 'text'} min={schema.minimum} max={schema.maximum} value={String(value ?? '')} onChange={(event) => update(name, coerce(event.target.value, schema))} placeholder={schema.description} /></label>
+        return <label className="form-field" key={name}><span>{label}</span><input data-testid={testId} type={type === 'integer' || type === 'number' ? 'number' : 'text'} min={schema.minimum} max={schema.maximum} value={String(value ?? '')} onChange={(event) => update(name, coerce(event.target.value, schema))} placeholder={schema.description} /></label>
       })}
       {error && <div className="notice error">{error}</div>}
       <button className="primary" type="button" disabled={busy || Boolean(uploading)} onClick={() => void submit()}>
