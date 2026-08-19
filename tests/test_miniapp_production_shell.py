@@ -96,8 +96,10 @@ def test_runtime_loader_keeps_catalog_available_in_compat_mode() -> None:
     assert "__FOXGEN_RUNTIME_KIND__ === 'legacy'" not in enhancements
     assert "data-critical-module" in enhancements
     assert "data-foxgen-catalog" in enhancements
+    assert 'main[data-product-catalog="1"]' in enhancements
+    assert "waitForCatalog" in enhancements
     assert "showCriticalFailure" in enhancements
-    assert "loadOptionalModules" in enhancements
+    assert "if (ready) loadOptionalModules(nodes);" in enhancements
 
 
 def test_production_deploy_is_not_silently_disabled_after_green_main_ci() -> None:
