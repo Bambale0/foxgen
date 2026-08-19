@@ -19,14 +19,17 @@ def _rows(markup: object) -> list[list[tuple[str, str | None]]]:
     return [[(button.text, button.callback_data) for button in row] for row in keyboard]
 
 
-def test_image_reference_screen_matches_compact_v7_kate_layout() -> None:
+def test_image_reference_screen_matches_current_compact_layout() -> None:
     assert _rows(image_reference_keyboard(count=0, max_count=14)) == [
         [("Загружено: 0/14", "gw:i:refs:status")],
         [
             ("⏭ Пропустить", "gw:i:refs:skip"),
             ("✅ Продолжить", "gw:i:refs:done"),
         ],
-        [("🔄 Перезагрузить", "gw:i:refs:clear")],
+        [
+            ("📚 Память реф", "gw:i:refs:memory"),
+            ("🔄 Перезагрузить", "gw:i:refs:clear"),
+        ],
         [("⬅️ Назад", "gw:back")],
     ]
 
@@ -66,7 +69,7 @@ def test_video_reference_screen_uses_scenario_specific_live_limit() -> None:
     assert video_media_max_count(data) == 6
 
 
-def test_required_video_media_keeps_continue_visible_and_reloadable() -> None:
+def test_required_video_media_keeps_memory_continue_and_reload_visible() -> None:
     rows = _rows(
         video_media_keyboard(
             generation_type=VideoGenerationType.FIRST_LAST,
@@ -79,6 +82,9 @@ def test_required_video_media_keeps_continue_visible_and_reloadable() -> None:
     assert rows == [
         [("Загружено: 0/2", "gw:v:media:status")],
         [("✅ Продолжить", "gw:v:media:done")],
-        [("🔄 Перезагрузить", "gw:v:media:clear")],
+        [
+            ("📚 Память реф", "gw:v:media:memory"),
+            ("🔄 Перезагрузить", "gw:v:media:clear"),
+        ],
         [("⬅️ Назад", "gw:back")],
     ]
