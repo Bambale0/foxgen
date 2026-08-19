@@ -1,0 +1,3 @@
+Deploy the current tanyapi Mini App frontend to the standalone CDN and verify
+that the live JavaScript bundle contains the 5-banana welcome copy and no
+stale 15-banana welcome copy.

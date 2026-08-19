@@ -1,47 +1,107 @@
-# Secrets and local environment
+# Python
+claw/
+memory/
+.agents/
+
+.vibeskills
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+*.pyc
+# Virtual Environment
+venv/
+ENV/
+env/
+.venv/
+logs
+# Environment variables / Secrets
 .env
 .env.*
 !.env.example
-!deploy/production.env.example
-*.pem
-*.key
-
-# Python
-.venv/
+*.env.local
 venv/
-env/
-__pycache__/
-*.py[cod]
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
-.pyright/
-.tox/
-.nox/
-.coverage
-.coverage.*
-coverage.xml
-htmlcov/
-dist/
-build/
-*.egg-info/
-
-# Local runtime artifacts
-*.log
-*.pid
+# Database
+*.db
+*.db-wal
+*.db-shm
 *.sqlite
 *.sqlite3
+backups/
+tests/
+!tests/
+tests/*
+!tests/live/
+tests/live/*
+!tests/live/test_kie_live_smoke.py
+# Logs
+logs/
+*.log
+reports/
+
+# Cache
 .cache/
-tmp/
-temp/
+.pytest_cache/
+.mypy_cache/
 
-# Frontend/tooling caches
-node_modules/
-
-# Editors and operating systems
+# IDE
 .idea/
 .vscode/
-.DS_Store
-Thumbs.db
 *.swp
 *.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Bot specific
+bot.pid
+*.pid
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+tmp_*.py
+*.bak
+*.bak_*
+*.bak2
+
+# Static uploads (generated content)
+static/
+static/uploads/
+*.conf0
+gpt.txt
+
+ObsidianCodexVault/
+.env.postgres
+!frontend/miniapp-v0/lib
+
+# Vibe governance artifacts
+outputs/runtime/
+# Vibe artifacts
+outputs/
+docs/requirements/
+docs/plans/
+
+# Claw tools (cloned from https://github.com/Bambale0/claw)
+claw/
+claw-tools/
+/root/claw-tools

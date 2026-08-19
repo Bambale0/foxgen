@@ -1,0 +1,2 @@
+trigger=miniapp-video-continuity-2026-08-16
+purpose=cancel stale CI/deploy runs from intermediate commits before deploying the final Mini App repeat, link and trends repair
