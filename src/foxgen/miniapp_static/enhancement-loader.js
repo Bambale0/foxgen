@@ -3,7 +3,10 @@
 
   var started = false;
   var surfaceReady = false;
-  var CURRENT_SURFACE_TIMEOUT_MS = 3000;
+  var bootstrapReady = Boolean(window.__FOXGEN_BOOTSTRAP__);
+  var optionalLoaded = false;
+  var optionalNodes = null;
+  var CURRENT_SURFACE_TIMEOUT_MS = 12000;
 
   function logError(message, detail) {
     if (window.console && typeof window.console.error === 'function') {
@@ -52,6 +55,12 @@
     }
   }
 
+  function maybeLoadOptionalModules() {
+    if (optionalLoaded || !surfaceReady || !bootstrapReady || !optionalNodes) return;
+    optionalLoaded = true;
+    loadOptionalModules(optionalNodes);
+  }
+
   function isCurrentSurfaceReady() {
     var main = document.querySelector('#app main.hf-page');
     var stamp;
@@ -67,14 +76,14 @@
     return true;
   }
 
-  function waitForCurrentSurface(nodes) {
+  function waitForCurrentSurface() {
     var deadline = Date.now() + CURRENT_SURFACE_TIMEOUT_MS;
 
     function check() {
       if (isCurrentSurfaceReady()) {
         surfaceReady = true;
         document.documentElement.setAttribute('data-foxgen-catalog', 'ready');
-        loadOptionalModules(nodes);
+        maybeLoadOptionalModules();
         return;
       }
       if (Date.now() >= deadline) {
@@ -89,7 +98,6 @@
 
   function loadEnhancements() {
     var manifest;
-    var nodes;
 
     if (started) return;
     manifest = document.getElementById('foxgen-enhancement-manifest');
@@ -97,13 +105,21 @@
 
     started = true;
     document.documentElement.setAttribute('data-foxgen-catalog', 'loading');
-    nodes = manifest.querySelectorAll('[data-module-src]');
-    waitForCurrentSurface(nodes);
+    optionalNodes = manifest.querySelectorAll('[data-module-src]');
+    waitForCurrentSurface();
   }
 
-  window.addEventListener('foxgen:bootstrap', loadEnhancements);
+  window.addEventListener('foxgen:catalog-runtime-loaded', loadEnhancements);
+  window.addEventListener('foxgen:bootstrap', function () {
+    bootstrapReady = true;
+    if (!started) loadEnhancements();
+    maybeLoadOptionalModules();
+  });
 
-  if (window.__FOXGEN_BOOTSTRAP__) {
+  if (window.__FOXGEN_CATALOG_RUNTIME_LOADED__) {
+    loadEnhancements();
+  } else if (window.__FOXGEN_BOOTSTRAP__) {
+    bootstrapReady = true;
     loadEnhancements();
   }
 
@@ -112,5 +128,5 @@
     if (started && !surfaceReady && status !== 'failed') {
       showCriticalFailure('current product surface timeout');
     }
-  }, 12000);
+  }, 15000);
 })();
