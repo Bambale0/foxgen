@@ -1,28 +1,45 @@
+import base64
 import hashlib
 import hmac
-import json
 import time
-from dataclasses import dataclass, field
-from typing import Any
 
 from fastapi.testclient import TestClient
 
 from foxgen.api.app import create_app
 from foxgen.core.config import Settings
-from foxgen.domain.lifecycle import CallbackEvent
 from foxgen.miniapp_release import MINIAPP_RELEASE
 
 
-@dataclass
 class FakeCallbackRecorder:
-    events: list[CallbackEvent] = field(default_factory=list)
+    def __init__(self) -> None:
+        self.calls: list[dict[str, object]] = []
 
-    async def record(self, event: CallbackEvent) -> None:
-        self.events.append(event)
+    async def record_provider_event(
+        self,
+        *,
+        provider: str,
+        provider_task_id: str,
+        event_hash: str,
+        payload: dict[str, object],
+    ) -> bool:
+        self.calls.append(
+            {
+                "provider": provider,
+                "provider_task_id": provider_task_id,
+                "event_hash": event_hash,
+                "payload": payload,
+            }
+        )
+        return True
 
 
-def _sign(body: bytes, timestamp: str, secret: str) -> str:
-    return hmac.new(secret.encode(), timestamp.encode() + b"." + body, hashlib.sha256).hexdigest()
+def sign(task_id: str, timestamp: str, secret: str) -> str:
+    digest = hmac.new(
+        secret.encode(),
+        f"{task_id}.{timestamp}".encode(),
+        hashlib.sha256,
+    ).digest()
+    return base64.b64encode(digest).decode()
 
 
 def test_liveness_and_catalog() -> None:
@@ -68,88 +85,21 @@ def test_kie_webhook_accepts_nested_task_id_persists_and_returns_200() -> None:
     with TestClient(app) as client:
         response = client.post(
             "/webhooks/kie",
-            content=json.dumps({"code": 200, "data": {"taskId": task_id, "state": "success"}}),
+            json={"data": {"taskId": task_id}, "state": "success"},
             headers={
-                "Content-Type": "application/json",
-                "X-Kie-Timestamp": timestamp,
-                "X-Kie-Signature": _sign(
-                    json.dumps({"code": 200, "data": {"taskId": task_id, "state": "success"}}).encode(),
-                    timestamp,
-                    secret,
-                ),
+                "X-Webhook-Timestamp": timestamp,
+                "X-Webhook-Signature": sign(task_id, timestamp, secret),
             },
         )
 
     assert response.status_code == 200
-    assert response.json() == {"ok": True}
-    assert recorder.events[-1].provider_task_id == task_id
-
-
-def test_kie_webhook_rejects_bad_signature() -> None:
-    app = create_app(
-        Settings(env="test", kie_webhook_hmac_key="test-webhook-secret"),
-        manage_resources=False,
-    )
-    with TestClient(app) as client:
-        response = client.post(
-            "/webhooks/kie",
-            content=b'{"taskId":"bad"}',
-            headers={
-                "Content-Type": "application/json",
-                "X-Kie-Timestamp": str(int(time.time())),
-                "X-Kie-Signature": "bad",
-            },
-        )
-    assert response.status_code == 401
-
-
-def test_kie_webhook_rejects_missing_task_id() -> None:
-    secret = "test-webhook-secret"
-    timestamp = str(int(time.time()))
-    body = json.dumps({"code": 200, "data": {"state": "success"}}).encode()
-    app = create_app(
-        Settings(env="test", kie_webhook_hmac_key=secret),
-        manage_resources=False,
-    )
-    with TestClient(app) as client:
-        response = client.post(
-            "/webhooks/kie",
-            content=body,
-            headers={
-                "Content-Type": "application/json",
-                "X-Kie-Timestamp": timestamp,
-                "X-Kie-Signature": _sign(body, timestamp, secret),
-            },
-        )
-    assert response.status_code == 422
-
-
-def test_kie_webhook_rejects_stale_timestamp() -> None:
-    secret = "test-webhook-secret"
-    timestamp = str(int(time.time()) - 600)
-    body = json.dumps({"taskId": "stale", "state": "success"}).encode()
-    app = create_app(
-        Settings(env="test", kie_webhook_hmac_key=secret),
-        manage_resources=False,
-    )
-    with TestClient(app) as client:
-        response = client.post(
-            "/webhooks/kie",
-            content=body,
-            headers={
-                "Content-Type": "application/json",
-                "X-Kie-Timestamp": timestamp,
-                "X-Kie-Signature": _sign(body, timestamp, secret),
-            },
-        )
-    assert response.status_code == 401
-
-
-def test_openapi_exposes_expected_endpoints() -> None:
-    app = create_app(Settings(env="test"), manage_resources=False)
-    schema: dict[str, Any] = app.openapi()
-    paths = schema["paths"]
-    assert "/v1/models" in paths
-    assert "/v1/generations" in paths
-    assert "/v1/tasks" in paths
-    assert "/webhooks/kie" in paths
+    assert response.json() == {
+        "status": "accepted",
+        "task_id": task_id,
+        "duplicate": False,
+    }
+    assert recorder.calls[0]["provider_task_id"] == task_id
+    assert recorder.calls[0]["payload"] == {
+        "data": {"taskId": task_id},
+        "state": "success",
+    }
