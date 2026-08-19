@@ -47,6 +47,7 @@ class StubCallback:
 
 class StubMessage:
     def __init__(self) -> None:
+        self.text: str | None = None
         self.answers: list[tuple[str, dict[str, Any]]] = []
 
     async def answer(self, text: str, **kwargs: Any) -> None:

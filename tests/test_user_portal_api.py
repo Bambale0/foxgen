@@ -16,7 +16,6 @@ from foxgen.application.user_portal import (
 )
 from foxgen.core.config import Settings
 
-
 USER_ID = 123456789
 JWT_SECRET = "portal-miniapp-jwt-secret-long-enough"
 INTERNAL_TOKEN = "portal-internal-token-long-enough"
@@ -132,9 +131,14 @@ class FakePortalService:
         return (self.withdrawal,)
 
     async def request_partner_withdrawal(
-        self, *, user_id: int, amount_units: int, destination: str
+        self,
+        *,
+        user_id: int,
+        amount_units: int,
+        destination: str,
+        idempotency_key: str,
     ) -> PartnerWithdrawalSnapshot:
-        del amount_units, destination
+        del amount_units, destination, idempotency_key
         self.user_ids.append(user_id)
         return self.withdrawal
 
@@ -211,9 +215,10 @@ def test_miniapp_support_tariff_and_partner_are_owner_scoped() -> None:
         )
         partner = test_client.get("/v1/miniapp/partner", headers=miniapp_headers())
         joined = test_client.post("/v1/miniapp/partner/join", headers=miniapp_headers())
+        withdrawal_headers = {**miniapp_headers(), "Idempotency-Key": "test-key"}
         withdrawal = test_client.post(
             "/v1/miniapp/partner/withdrawals",
-            headers=miniapp_headers(),
+            headers=withdrawal_headers,
             json={"amount_units": 100, "destination": "SBP:+79990000000"},
         )
 
@@ -237,7 +242,7 @@ def test_internal_portal_uses_trusted_user_header_and_rejects_missing_identity()
                 "/v1/user-portal/support",
                 headers={"Authorization": f"Bearer {INTERNAL_TOKEN}"},
             ).status_code
-            == 401
+            == 400
         )
         response = test_client.get("/v1/user-portal/support", headers=internal_headers())
 

@@ -23,7 +23,6 @@ from foxgen.bot.generation_draft import (
 from foxgen.bot.generation_keyboards import image_reference_keyboard, video_media_keyboard
 from foxgen.core.errors import SubmissionError
 
-
 ASSET_ID = UUID("11111111-1111-1111-1111-111111111111")
 NOW = datetime(2026, 8, 15, tzinfo=timezone.utc)
 
@@ -138,13 +137,18 @@ class FakeRepository:
         return self.asset
 
     async def get_delete_pending(self, asset_id: UUID) -> ReferenceAssetSnapshot | None:
-        if self.delete_pending and asset_id == self.asset.id:
+        if (
+            self.delete_pending
+            and self.asset.status == "delete_pending"
+            and asset_id == self.asset.id
+        ):
             return self.asset
         return None
 
     async def mark_deleted(self, asset_id: UUID) -> None:
         assert asset_id == self.asset.id
         self.deleted = True
+        self.delete_pending = False
         self.asset = replace(self.asset, status="deleted")
 
 
