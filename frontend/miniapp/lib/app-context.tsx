@@ -11,12 +11,14 @@ import {
   type ReactNode,
 } from 'react'
 import { ApiError, miniAppApi, telegramStartParam } from './api'
+import { parseDeepLinkIntent, remixInputSeed, tabForDeepLink } from './deep-links'
 import type {
   BootstrapResponse,
   Generation,
   ModelDefinition,
   PartnerData,
   Publication,
+  PublicProfileView,
   ReferenceItem,
   StarPackage,
   SupportTicket,
@@ -27,15 +29,24 @@ import type {
 
 type AppMode = 'loading' | 'live' | 'locked' | 'error'
 
+type ModelSelectionOptions = {
+  input?: Record<string, unknown>
+  sourcePublicationId?: string | null
+}
+
 interface AppContextValue {
   mode: AppMode
   error: string | null
   bootstrap: BootstrapResponse | null
   activeTab: TabId
   selectedModel: ModelDefinition | null
+  draftInput: Record<string, unknown>
   activeWorkspace: WorkspaceId
   generations: Generation[]
+  focusedGeneration: Generation | null
   feed: Publication[]
+  focusedPublication: Publication | null
+  publicProfileView: PublicProfileView | null
   references: ReferenceItem[]
   tariff: TariffData | null
   supportTickets: SupportTicket[]
@@ -43,7 +54,7 @@ interface AppContextValue {
   starPackages: StarPackage[]
   busy: boolean
   setActiveTab: (tab: TabId) => void
-  selectModel: (model: ModelDefinition | null) => void
+  selectModel: (model: ModelDefinition | null, options?: ModelSelectionOptions) => void
   openWorkspace: (workspace: WorkspaceId) => void
   closeWorkspace: () => void
   refreshBootstrap: () => Promise<void>
@@ -76,24 +87,20 @@ function setupTelegram() {
   }
 }
 
-function startTabFromParam(param: string): TabId | null {
-  if (!param) return null
-  if (param.startsWith('model_')) return 'create'
-  if (param.startsWith('generation_')) return 'works'
-  if (param.startsWith('profile_')) return 'profile'
-  if (param.startsWith('post_') || param.startsWith('remix_')) return 'services'
-  return null
-}
-
 export function AppProvider({ children }: { children: ReactNode }) {
   const [mode, setMode] = useState<AppMode>('loading')
   const [error, setError] = useState<string | null>(null)
   const [bootstrap, setBootstrap] = useState<BootstrapResponse | null>(null)
   const [activeTab, setActiveTabState] = useState<TabId>('home')
   const [selectedModel, setSelectedModel] = useState<ModelDefinition | null>(null)
+  const [draftInput, setDraftInput] = useState<Record<string, unknown>>({})
+  const [sourcePublicationId, setSourcePublicationId] = useState<string | null>(null)
   const [activeWorkspace, setActiveWorkspace] = useState<WorkspaceId>(null)
   const [generations, setGenerations] = useState<Generation[]>([])
+  const [focusedGeneration, setFocusedGeneration] = useState<Generation | null>(null)
   const [feed, setFeed] = useState<Publication[]>([])
+  const [focusedPublication, setFocusedPublication] = useState<Publication | null>(null)
+  const [publicProfileView, setPublicProfileView] = useState<PublicProfileView | null>(null)
   const [references, setReferences] = useState<ReferenceItem[]>([])
   const [tariff, setTariff] = useState<TariffData | null>(null)
   const [supportTickets, setSupportTickets] = useState<SupportTicket[]>([])
@@ -119,18 +126,54 @@ export function AppProvider({ children }: { children: ReactNode }) {
     booted.current = true
     setupTelegram()
     const startParam = telegramStartParam()
-    const tab = startTabFromParam(startParam)
-    if (tab) setActiveTabState(tab)
+    const intent = parseDeepLinkIntent(startParam)
+    if (intent) setActiveTabState(tabForDeepLink(intent))
+
     void (async () => {
       try {
         await miniAppApi.authenticate()
         const data = await miniAppApi.bootstrap()
         applyBootstrap(data)
-        if (startParam.startsWith('model_')) {
-          const slug = startParam.slice(6)
-          const model = data.models.find((item) => item.slug === slug || item.ui_key === slug)
-          if (model) setSelectedModel(model)
+        if (!intent) return
+
+        if (intent.kind === 'model') {
+          const model = data.models.find((item) => item.slug === intent.value || item.ui_key === intent.value)
+          if (!model) throw new Error('Модель из ссылки недоступна.')
+          setSelectedModel(model)
+          return
         }
+
+        if (intent.kind === 'generation') {
+          const generation = await miniAppApi.generation(intent.value)
+          setFocusedGeneration(generation)
+          setGenerations((current) => [generation, ...current.filter((item) => item.id !== generation.id)])
+          return
+        }
+
+        if (intent.kind === 'profile') {
+          const [profile, publications] = await Promise.all([
+            miniAppApi.publicProfile(intent.value),
+            miniAppApi.profilePublications(intent.value, 30, 0),
+          ])
+          setPublicProfileView({ profile, publications: publications.items })
+          return
+        }
+
+        if (intent.kind === 'post') {
+          const publication = await miniAppApi.publication(intent.value)
+          setFocusedPublication(publication)
+          setFeed([publication])
+          setActiveWorkspace('feed')
+          return
+        }
+
+        const source = await miniAppApi.remixSource(intent.value)
+        const model = data.models.find((item) => item.slug === source.model_slug || item.ui_key === source.model_slug)
+        if (!model) throw new Error('Модель исходной публикации сейчас недоступна для Remix.')
+        setDraftInput(remixInputSeed(model, source))
+        setSourcePublicationId(source.publication_id)
+        setSelectedModel(model)
+        setActiveTabState('create')
       } catch (reason) {
         const message = messageOf(reason)
         setError(message)
@@ -142,7 +185,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const setActiveTab = useCallback((tab: TabId) => {
     setActiveWorkspace(null)
     setActiveTabState(tab)
-    if (tab !== 'create') setSelectedModel(null)
+    if (tab !== 'create') {
+      setSelectedModel(null)
+      setDraftInput({})
+      setSourcePublicationId(null)
+    }
+    if (tab !== 'works') setFocusedGeneration(null)
+    if (tab !== 'profile') setPublicProfileView(null)
+    if (tab !== 'services') setFocusedPublication(null)
     try {
       window.Telegram?.WebApp?.HapticFeedback?.impactOccurred?.('light')
     } catch {
@@ -150,16 +200,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  const selectModel = useCallback((model: ModelDefinition | null) => {
+  const selectModel = useCallback((model: ModelDefinition | null, options?: ModelSelectionOptions) => {
     setSelectedModel(model)
+    setDraftInput(model ? (options?.input ?? {}) : {})
+    setSourcePublicationId(model ? (options?.sourcePublicationId ?? null) : null)
     if (model) setActiveTabState('create')
   }, [])
 
   const openWorkspace = useCallback((workspace: WorkspaceId) => {
+    if (workspace !== 'feed') setFocusedPublication(null)
     setActiveWorkspace(workspace)
   }, [])
 
-  const closeWorkspace = useCallback(() => setActiveWorkspace(null), [])
+  const closeWorkspace = useCallback(() => {
+    setActiveWorkspace(null)
+    setFocusedPublication(null)
+  }, [])
 
   const refreshGenerations = useCallback(async () => {
     const rows = await miniAppApi.generations(100)
@@ -169,6 +225,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const refreshFeed = useCallback(async (sort = 'recent') => {
     const data = await miniAppApi.feed(sort, 30, 0)
     setFeed(data.items)
+    setFocusedPublication(null)
   }, [])
 
   const refreshReferences = useCallback(async () => {
@@ -189,7 +246,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setBootstrap((current) => (current ? { ...current, balance, prices, ledger } : current))
         setStarPackages(packages.items)
       } else if (workspace === 'feed') {
-        await refreshFeed()
+        if (!focusedPublication) await refreshFeed()
       } else if (workspace === 'references') {
         await refreshReferences()
       } else if (workspace === 'tariff') {
@@ -202,7 +259,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } finally {
       setBusy(false)
     }
-  }, [refreshFeed, refreshReferences])
+  }, [focusedPublication, refreshFeed, refreshReferences])
 
   useEffect(() => {
     if (!activeWorkspace || mode !== 'live') return
@@ -213,18 +270,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setBusy(true)
     try {
       const validated = await miniAppApi.validateModel(model.slug, input)
-      const receipt = await miniAppApi.createTask(model.slug, validated.input)
+      const receipt = await miniAppApi.createTask(model.slug, validated.input, sourcePublicationId)
       await refreshGenerations()
       setActiveTabState('works')
       setSelectedModel(null)
+      setDraftInput({})
+      setSourcePublicationId(null)
       return receipt.generation_id
     } finally {
       setBusy(false)
     }
-  }, [refreshGenerations])
+  }, [refreshGenerations, sourcePublicationId])
 
   const cancelGeneration = useCallback(async (id: string) => {
-    await miniAppApi.cancelGeneration(id)
+    const generation = await miniAppApi.cancelGeneration(id)
+    setFocusedGeneration((current) => (current?.id === generation.id ? generation : current))
     await refreshGenerations()
   }, [refreshGenerations])
 
@@ -252,9 +312,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     bootstrap,
     activeTab,
     selectedModel,
+    draftInput,
     activeWorkspace,
     generations,
+    focusedGeneration,
     feed,
+    focusedPublication,
+    publicProfileView,
     references,
     tariff,
     supportTickets,
@@ -280,9 +344,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     bootstrap,
     activeTab,
     selectedModel,
+    draftInput,
     activeWorkspace,
     generations,
+    focusedGeneration,
     feed,
+    focusedPublication,
+    publicProfileView,
     references,
     tariff,
     supportTickets,
