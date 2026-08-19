@@ -16,7 +16,7 @@ def test_catalog_home_is_loaded_by_production_shell() -> None:
 
     assert f"/mini-app/product-home.css?v={MINIAPP_RELEASE}" in html
     assert f"/mini-app/product-home.js?v={MINIAPP_RELEASE}" in html
-    assert html.index("product-home.js") > html.index("motion-control.js")
+    assert html.index("product-home.js") < html.index("motion-control.js")
 
 
 def test_catalog_home_replaces_feed_tab_without_removing_community() -> None:
