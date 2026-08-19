@@ -48,7 +48,7 @@ jobs:
   browser-e2e:
     name: browser-e2e
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 15
     services:
       postgres:
         image: postgres:17-alpine
@@ -98,7 +98,7 @@ jobs:
         working-directory: frontend/miniapp
         run: |
           npm install --no-audit --no-fund
-          npx playwright install --with-deps chromium webkit
+          npx playwright install --with-deps chromium
 
       - name: Build production Mini App export
         working-directory: frontend/miniapp
