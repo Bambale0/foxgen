@@ -48,7 +48,11 @@ package-dir = {"" = "src"}
 where = ["src"]
 
 [tool.setuptools.package-data]
-foxgen = ["miniapp_static/*.html", "miniapp_static/*.css", "miniapp_static/*.js"]
+foxgen = [
+  "miniapp_static/*",
+  "miniapp_static/**/*",
+  "miniapp_static/**/**/*",
+]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

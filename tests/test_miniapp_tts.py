@@ -1,38 +1,40 @@
 from pathlib import Path
 
-
-MINIAPP = Path(__file__).resolve().parents[1] / "src" / "foxgen" / "miniapp_static"
-
-
-def test_tts_parity_layer_is_loaded_and_uses_backend_model_identity() -> None:
-    html = (MINIAPP / "index.html").read_text(encoding="utf-8")
-    script = (MINIAPP / "tts-parity.js").read_text(encoding="utf-8")
-
-    assert "/mini-app/tts-parity.js" in html
-    assert "elevenlabs-turbo-2-5" in script
-    assert "ElevenLabs Turbo 2.5" in script
-    assert "data-model" in script
-    assert "Аудио" in script
+ROOT = Path(__file__).resolve().parents[1]
+FRONTEND = ROOT / "frontend" / "miniapp"
 
 
-def test_voice_launcher_becomes_real_but_studio_remains_schema_driven() -> None:
-    script = (MINIAPP / "tts-parity.js").read_text(encoding="utf-8")
+def test_tts_is_rendered_from_backend_model_registry() -> None:
+    models = (FRONTEND / "components" / "tabs" / "models-tab.tsx").read_text(encoding="utf-8")
+    create = (FRONTEND / "components" / "tabs" / "create-tab.tsx").read_text(encoding="utf-8")
 
-    assert '[data-complete-tool="voice"]' in script
-    assert "button.disabled = false" in script
-    assert "data-submit" in script
-    assert "Цена не опубликована" in script
-    assert "schema-card label" in script
-    assert "Voice ID" in script
-    assert "Скорость" in script
+    assert "bootstrap?.models" in models
+    assert "item.media_kind === 'audio'" in create
+    assert "selectModel(model)" in models
+    assert "selectModel(model)" in create
+
+
+def test_voice_studio_remains_schema_driven() -> None:
+    form = (FRONTEND / "components" / "model-form.tsx").read_text(encoding="utf-8")
+    context = (FRONTEND / "lib" / "app-context.tsx").read_text(encoding="utf-8")
+
+    assert "model.input_schema?.properties" in form
+    assert "model.input_schema?.required" in form
+    assert "enumValues" in form
+    assert "normalizedType" in form
+    assert "submitModel" in form
+    assert "miniAppApi.validateModel(model.slug, input)" in context
+    assert "miniAppApi.createTask(model.slug, validated.input)" in context
 
 
 def test_tts_browser_layer_has_no_provider_secret_or_direct_kie_request() -> None:
-    script = (MINIAPP / "tts-parity.js").read_text(encoding="utf-8")
-    lowered = script.lower()
+    source = "\n".join(
+        (
+            (FRONTEND / "components" / "model-form.tsx").read_text(encoding="utf-8"),
+            (FRONTEND / "lib" / "api.ts").read_text(encoding="utf-8"),
+        )
+    ).lower()
 
-    assert "api.kie.ai" not in lowered
-    assert "authorization" not in lowered
-    assert "kie_api_key" not in lowered
-    assert "bearer " not in lowered
-    assert "createtask" not in lowered
+    assert "api.kie.ai" not in source
+    assert "kie_api_key" not in source
+    assert "/api/v1/generate" not in source
