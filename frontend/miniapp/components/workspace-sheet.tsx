@@ -9,8 +9,41 @@ function fmt(value: unknown) {
 }
 
 function BalanceWorkspace() {
-  const { bootstrap, starPackages, openStarInvoice, busy } = useApp()
+  const { bootstrap, starPackages, openStarInvoice, busy, refreshBootstrap } = useApp()
   const balance = bootstrap?.balance
+  const [promo, setPromo] = useState('')
+  const [promoBusy, setPromoBusy] = useState(false)
+  const [promoStatus, setPromoStatus] = useState<string | null>(null)
+
+  async function redeemPromo() {
+    const code = promo.trim()
+    if (!code) {
+      setPromoStatus('Введите промокод.')
+      return
+    }
+    setPromoBusy(true)
+    setPromoStatus('Проверяю промокод…')
+    try {
+      const result = await miniAppApi.request<{
+        reward_units: number
+        available_units: number
+        replayed: boolean
+      }>('/promos/redeem', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code }),
+      })
+      setPromoStatus(
+        `${result.replayed ? 'Промокод уже был активирован.' : 'Промокод активирован.'} +${fmt(result.reward_units)} CREDIT · баланс ${fmt(result.available_units)} CREDIT`,
+      )
+      await refreshBootstrap()
+    } catch (reason) {
+      setPromoStatus(reason instanceof Error ? reason.message : 'Не удалось активировать промокод.')
+    } finally {
+      setPromoBusy(false)
+    }
+  }
+
   return (
     <>
       <div className="hero">
@@ -35,6 +68,24 @@ function BalanceWorkspace() {
           ))}
           {!starPackages.length && <div className="empty">Пакеты Stars сейчас недоступны.</div>}
         </div>
+      </section>
+      <section className="section form-card" data-testid="promo-redeem">
+        <div className="section-head"><h2>Промокод</h2></div>
+        <label className="form-field">
+          <span>Код</span>
+          <input
+            value={promo}
+            maxLength={64}
+            autoComplete="off"
+            spellCheck={false}
+            placeholder="Введите код"
+            onChange={(event) => setPromo(event.target.value)}
+          />
+        </label>
+        {promoStatus && <div className="notice">{promoStatus}</div>}
+        <button className="primary" type="button" disabled={promoBusy} onClick={() => void redeemPromo()}>
+          {promoBusy ? 'Проверяем…' : 'Активировать'}
+        </button>
       </section>
       <section className="section">
         <div className="section-head"><h2>Последние операции</h2></div>
