@@ -3,6 +3,7 @@
 
   var started = false;
   var catalogReady = false;
+  var CATALOG_RENDER_TIMEOUT_MS = 3000;
 
   function logError(message, detail) {
     if (window.console && typeof window.console.error === 'function') {
@@ -40,6 +41,28 @@
     });
   }
 
+  function waitForCatalog(done) {
+    var deadline = Date.now() + CATALOG_RENDER_TIMEOUT_MS;
+
+    function check() {
+      var main = document.querySelector('#app main[data-product-catalog="1"]');
+      if (main) {
+        catalogReady = true;
+        document.documentElement.setAttribute('data-foxgen-catalog', 'ready');
+        if (typeof done === 'function') done(true);
+        return;
+      }
+      if (Date.now() >= deadline) {
+        showCriticalFailure('product-home.js render timeout');
+        if (typeof done === 'function') done(false);
+        return;
+      }
+      window.setTimeout(check, 50);
+    }
+
+    check();
+  }
+
   function appendModule(source, critical, done) {
     var script = document.createElement('script');
     script.type = 'module';
@@ -49,8 +72,8 @@
 
     script.onload = function () {
       if (critical) {
-        catalogReady = true;
-        document.documentElement.setAttribute('data-foxgen-catalog', 'ready');
+        waitForCatalog(done);
+        return;
       }
       if (typeof done === 'function') done(true);
     };
@@ -92,19 +115,17 @@
 
     if (!critical) {
       showCriticalFailure('product-home.js');
-      loadOptionalModules(nodes);
       return;
     }
 
     source = critical.getAttribute('data-module-src');
     if (!source) {
       showCriticalFailure('product-home.js');
-      loadOptionalModules(nodes);
       return;
     }
 
-    appendModule(source, true, function () {
-      loadOptionalModules(nodes);
+    appendModule(source, true, function (ready) {
+      if (ready) loadOptionalModules(nodes);
     });
   }
 
@@ -115,7 +136,8 @@
   }
 
   window.setTimeout(function () {
-    if (started && !catalogReady && document.documentElement.getAttribute('data-foxgen-catalog') !== 'failed') {
+    var status = document.documentElement.getAttribute('data-foxgen-catalog');
+    if (started && !catalogReady && status !== 'failed') {
       showCriticalFailure('product-home.js timeout');
     }
   }, 12000);
