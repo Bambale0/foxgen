@@ -2,11 +2,11 @@ import os
 from datetime import datetime, timedelta, timezone
 
 import pytest
-from sqlalchemy import update
+from sqlalchemy import func, update
 
 from foxgen.domain.models import GenerationStatus, OutboxStatus
 from foxgen.infra import billing_lifecycle_repository, lifecycle_repository
-from foxgen.infra.database import Database, OutboxEvent
+from foxgen.infra.database import Database, Generation, OutboxEvent
 
 
 @pytest.fixture(autouse=True)
@@ -47,18 +47,40 @@ async def isolate_cross_layer_outbox() -> None:
 def make_provider_polling_immediately_due(monkeypatch: pytest.MonkeyPatch) -> None:
     """Keep production's 20s poll delay out of deterministic cross-layer E2E tests."""
 
-    original = lifecycle_repository.generation_transition_values
+    original_transition = lifecycle_repository.generation_transition_values
+    original_list_pollable = lifecycle_repository.SqlAlchemyLifecycleRepository.list_pollable
 
     def immediate_transition_values(**kwargs: object) -> dict[str, object]:
-        values = original(**kwargs)  # type: ignore[arg-type]
+        values = original_transition(**kwargs)  # type: ignore[arg-type]
         if kwargs.get("target") in {
             GenerationStatus.SUBMITTED,
             GenerationStatus.PROCESSING,
         }:
-            # Put the poll deadline safely in the past. Using runner "now" can still
-            # be microscopically ahead of PostgreSQL NOW() on a fast CI transition.
             values["next_poll_at"] = datetime.now(timezone.utc) - timedelta(seconds=1)
         return values
+
+    async def immediate_list_pollable(
+        repository: lifecycle_repository.SqlAlchemyLifecycleRepository,
+        limit: int,
+    ) -> tuple[object, ...]:
+        # Some E2E submission paths retain the production poll timestamp before
+        # reaching the shared repository. Force only test rows due immediately,
+        # then exercise the real list_pollable query unchanged.
+        async with repository._database.session() as session:
+            async with session.begin():
+                await session.execute(
+                    update(Generation)
+                    .where(
+                        Generation.status.in_(
+                            (
+                                GenerationStatus.SUBMITTED.value,
+                                GenerationStatus.PROCESSING.value,
+                            )
+                        )
+                    )
+                    .values(next_poll_at=func.now())
+                )
+        return await original_list_pollable(repository, limit)  # type: ignore[return-value]
 
     monkeypatch.setattr(
         lifecycle_repository,
@@ -69,4 +91,9 @@ def make_provider_polling_immediately_due(monkeypatch: pytest.MonkeyPatch) -> No
         billing_lifecycle_repository,
         "generation_transition_values",
         immediate_transition_values,
+    )
+    monkeypatch.setattr(
+        lifecycle_repository.SqlAlchemyLifecycleRepository,
+        "list_pollable",
+        immediate_list_pollable,
     )
