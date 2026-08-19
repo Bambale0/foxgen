@@ -3,7 +3,7 @@
 import { useEffect, type ReactNode } from 'react'
 import { AppProvider, useApp } from '@/lib/app-context'
 import { TabNav } from './tab-nav'
-import { WorkspaceSheet } from './workspace-sheet'
+import { WorkspaceRouter } from './workspace-router'
 
 const BRAND_LOGO_SRC = '/mini-app/happyfox-logo.webp'
 
@@ -92,7 +92,7 @@ function Body({ children }: { children: ReactNode }) {
         {children}
       </div>
       <TabNav />
-      <WorkspaceSheet />
+      <WorkspaceRouter />
     </div>
   )
 }
