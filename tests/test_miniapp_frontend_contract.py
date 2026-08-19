@@ -9,6 +9,7 @@ STATIC = Path("src/foxgen/miniapp_static")
 PARITY_SCRIPT = STATIC / "parity-app.js"
 PRODUCT_HOME_SCRIPT = STATIC / "product-home.js"
 RUNTIME_LOADER = STATIC / "runtime-loader.js"
+ENHANCEMENT_LOADER = STATIC / "enhancement-loader.js"
 BOOT_GUARD = STATIC / "boot-guard.js"
 
 
@@ -27,9 +28,11 @@ def test_happy_fox_parity_runtime_is_loaded_through_compatibility_gate() -> None
     assert "FOXGEN" not in html
 
 
-def test_runtime_loader_falls_back_for_legacy_telegram_webviews() -> None:
+def test_runtime_loader_falls_back_without_downgrading_product_experience() -> None:
     loader = RUNTIME_LOADER.read_text(encoding="utf-8")
+    enhancements = ENHANCEMENT_LOADER.read_text(encoding="utf-8")
     guard = BOOT_GUARD.read_text(encoding="utf-8")
+    html = (STATIC / "index.html").read_text(encoding="utf-8")
 
     assert "String.prototype.replaceAll" in loader
     assert "window.structuredClone" in loader
@@ -38,6 +41,13 @@ def test_runtime_loader_falls_back_for_legacy_telegram_webviews() -> None:
     assert "&&=" in loader
     assert "data-legacy-src" in loader
     assert "legacy=1" in loader
+
+    assert "__FOXGEN_RUNTIME_KIND__ === 'legacy'" not in enhancements
+    assert 'data-critical-module="catalog"' in html
+    assert html.index("product-home.js") < html.index("complete-menu.js")
+    assert "data-critical-module" in enhancements
+    assert "data-foxgen-catalog" in enhancements
+    assert "showCriticalFailure" in enhancements
 
     assert "__FOXGEN_BOOT_FAIL__" in guard
     assert "Переключаем совместимый режим" in guard
