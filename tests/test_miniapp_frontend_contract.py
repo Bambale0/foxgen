@@ -17,9 +17,11 @@ def test_happy_fox_current_runtime_and_backend_ui_are_production_assets() -> Non
     html = (STATIC / "index.html").read_text(encoding="utf-8")
 
     assert f'<link rel="stylesheet" href="/mini-app/parity.css?v={MINIAPP_RELEASE}">' in html
-    assert f'<link rel="stylesheet" href="/mini-app/backend-parity.css?v={MINIAPP_RELEASE}">' in html
+    assert (
+        f'<link rel="stylesheet" href="/mini-app/backend-parity.css?v={MINIAPP_RELEASE}">' in html
+    )
     assert f'data-parity-src="/mini-app/parity-app.js?v={MINIAPP_RELEASE}"' in html
-    assert f'/mini-app/backend-parity-ui.js?v={MINIAPP_RELEASE}' in html
+    assert f"/mini-app/backend-parity-ui.js?v={MINIAPP_RELEASE}" in html
     assert f'<script src="/mini-app/runtime-loader.js?v={MINIAPP_RELEASE}"></script>' in html
     assert f'<script src="/mini-app/enhancement-loader.js?v={MINIAPP_RELEASE}"></script>' in html
     assert "data-product-home-src" not in html
@@ -142,7 +144,9 @@ def test_parity_design_layer_is_loaded_and_grunge_is_restrained() -> None:
     assert f'<link rel="stylesheet" href="/mini-app/app.css?v={MINIAPP_RELEASE}">' in html
     assert f'<link rel="stylesheet" href="/mini-app/studio.css?v={MINIAPP_RELEASE}">' in html
     assert f'<link rel="stylesheet" href="/mini-app/parity.css?v={MINIAPP_RELEASE}">' in html
-    assert f'<link rel="stylesheet" href="/mini-app/backend-parity.css?v={MINIAPP_RELEASE}">' in html
+    assert (
+        f'<link rel="stylesheet" href="/mini-app/backend-parity.css?v={MINIAPP_RELEASE}">' in html
+    )
     assert "grunge-card" in css
     assert "grunge-lite" in css
 
