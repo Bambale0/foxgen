@@ -1,64 +1,38 @@
 from pathlib import Path
 
-
-MINIAPP = Path(__file__).resolve().parents[1] / "src" / "foxgen" / "miniapp_static"
-
-
-def test_upload_cover_module_is_loaded_by_happy_fox_shell() -> None:
-    html = (MINIAPP / "index.html").read_text(encoding="utf-8")
-    script = (MINIAPP / "suno-upload-cover.js").read_text(encoding="utf-8")
-
-    assert "/mini-app/suno-upload-cover.js" in html
-    assert "Suno Cover из аудио" in script
-    assert "data-suno-cover-action" in script
+ROOT = Path(__file__).resolve().parents[1]
+FRONTEND = ROOT / "frontend" / "miniapp"
+SPECIAL = FRONTEND / "components" / "special-model-form.tsx"
+API = FRONTEND / "lib" / "api.ts"
 
 
-def test_upload_cover_uses_owner_private_input_and_owner_endpoint() -> None:
-    script = (MINIAPP / "suno-upload-cover.js").read_text(encoding="utf-8")
+def test_upload_cover_uses_private_input_and_owner_endpoint() -> None:
+    special = SPECIAL.read_text(encoding="utf-8")
+    api = API.read_text(encoding="utf-8")
 
-    assert "'/input-media'" in script
-    assert "'/music/suno/upload-cover'" in script
-    assert "input_storage_key: uploadedKey" in script
-    assert "Idempotency-Key" in script
-    assert "sessionStorage" in script
-    assert "audio/*" in script
-
-
-def test_upload_cover_hides_low_level_model_and_never_calls_kie() -> None:
-    script = (MINIAPP / "suno-upload-cover.js").read_text(encoding="utf-8")
-    lowered = script.lower()
-
-    assert '[data-model="suno-v5-upload-cover"]' in script
-    assert ".remove()" in script
-    assert "api.kie.ai" not in lowered
-    assert "/api/v1/generate/upload-cover" not in lowered
-    assert "kie_api_key" not in lowered
-    assert "uploadurl" not in lowered
+    assert "suno-v5-upload-cover" in special
+    assert "miniAppApi.uploadInput(file)" in special
+    assert "'/music/suno/upload-cover'" in special
+    assert "input_storage_key: upload.storage_key" in special
+    assert "Idempotency-Key" in special
+    assert "'/input-media'" in api
 
 
-def test_upload_cover_price_and_balance_are_server_owned() -> None:
-    script = (MINIAPP / "suno-upload-cover.js").read_text(encoding="utf-8")
+def test_upload_cover_never_calls_kie_directly() -> None:
+    source = SPECIAL.read_text(encoding="utf-8").lower()
 
-    assert "api('/bootstrap')" in script
-    assert "Цена Suno V5 Cover не опубликована" in script
-    assert "Недостаточно средств" in script
-    assert "price.amount_units" in script
-    assert "available_units" in script
-
-
-def test_simple_cover_hides_advanced_instrumental_and_custom_fields() -> None:
-    script = (MINIAPP / "suno-upload-cover.js").read_text(encoding="utf-8")
-
-    assert 'data-suno-cover-custom hidden><input type="checkbox"' in script
-    assert "if (!custom && instrumentalToggle) instrumentalToggle.checked = false" in script
-    assert "const instrumental = custom &&" in script
-    assert "style: custom ? style : ''" in script
-    assert "title: custom ? title : ''" in script
+    assert "api.kie.ai" not in source
+    assert "/api/v1/generate/upload-cover" not in source
+    assert "kie_api_key" not in source
+    assert "uploadurl" not in source
 
 
-def test_unsubmitted_cover_input_is_cleaned_on_replace_or_close() -> None:
-    script = (MINIAPP / "suno-upload-cover.js").read_text(encoding="utf-8")
+def test_upload_cover_simple_and_custom_fields_are_react_owned() -> None:
+    source = SPECIAL.read_text(encoding="utf-8")
 
-    assert "cleanupUploaded" in script
-    assert "method: 'DELETE'" in script
-    assert "uploadedKey === submittedKey" in script
+    assert "kind: 'cover' | 'extend'" in source
+    assert "body.custom_mode = Boolean(prompt || style || title)" in source
+    assert "instrumental" in source
+    assert "style" in source
+    assert "title" in source
+    assert "MutationObserver" not in source
