@@ -98,16 +98,41 @@ def test_runtime_loader_makes_current_catalog_mandatory() -> None:
     assert "__FOXGEN_CATALOG_RUNTIME_LOADED__" in loader
     assert "слишком старая" in loader
 
+    assert "mountPendingAccountSurface" in loader
+    assert 'data-bootstrap-pending="1"' in loader
+    assert "Подключаем Telegram-аккаунт" in loader
+    assert "foxgen:catalog-runtime-loaded" in loader
+    assert "Подключаем аккаунт…" not in loader
+
     assert "foxgen:bootstrap" in enhancements
+    assert "foxgen:catalog-runtime-loaded" in enhancements
     assert "data-critical-module" not in enhancements
     assert "data-foxgen-catalog" in enhancements
     assert "isCurrentSurfaceReady" in enhancements
     assert "waitForCurrentSurface" in enhancements
+    assert "CURRENT_SURFACE_TIMEOUT_MS = 12000" in enhancements
     assert "COMMUNITY / LIVE" in enhancements
     assert "main.getAttribute('data-product-catalog') === '1'" in enhancements
+    assert "bootstrapReady" in enhancements
+    assert "maybeLoadOptionalModules" in enhancements
     assert "showCriticalFailure" in enhancements
     assert "__FOXGEN_BOOT_FATAL__" in enhancements
-    assert "loadOptionalModules(nodes)" in enhancements
+    assert "loadOptionalModules(optionalNodes)" in enhancements
+
+
+def test_current_catalog_can_appear_before_account_bootstrap_finishes() -> None:
+    loader = (STATIC / "runtime-loader.js").read_text(encoding="utf-8")
+    enhancements = (STATIC / "enhancement-loader.js").read_text(encoding="utf-8")
+
+    mount_index = loader.index("mountPendingAccountSurface();")
+    catalog_load_index = loader.index("loadCurrentSource(catalogSource")
+    event_index = loader.index("publishCatalogRuntimeReady();")
+    assert mount_index < catalog_load_index < event_index
+
+    assert "window.addEventListener('foxgen:catalog-runtime-loaded', loadEnhancements);" in enhancements
+    assert "surfaceReady = true" in enhancements
+    assert "document.documentElement.setAttribute('data-foxgen-catalog', 'ready')" in enhancements
+    assert "if (optionalLoaded || !surfaceReady || !bootstrapReady || !optionalNodes) return;" in enhancements
 
 
 def test_production_deploy_is_not_silently_disabled_after_green_main_ci() -> None:
