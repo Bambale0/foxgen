@@ -31,6 +31,7 @@ def test_production_shell_declares_one_core_runtime_and_all_backend_modules() ->
         "motion-control.js",
         "promo-redeem.js",
         "backend-parity-ui.js",
+        "backend-parity-guard.js",
     ):
         assert f"/mini-app/{asset}?v={MINIAPP_RELEASE}" in html
 
@@ -47,6 +48,7 @@ def test_production_shell_declares_one_core_runtime_and_all_backend_modules() ->
 
     parity_src = f"/mini-app/parity-app.js?v={MINIAPP_RELEASE}"
     assert f'data-parity-src="{parity_src}"' in html
+    assert html.index("backend-parity-ui.js") < html.index("backend-parity-guard.js")
     assert "data-product-home-src" not in html
     assert "product-home.js" not in html
     assert "product-home.css" not in html
@@ -139,6 +141,17 @@ def test_backend_parity_ui_exposes_all_primary_user_domains() -> None:
     assert ".complete-tool.is-planned" in css
 
 
+def test_custom_home_and_models_survive_late_core_renders() -> None:
+    guard = (STATIC / "backend-parity-guard.js").read_text(encoding="utf-8")
+
+    assert "desiredSurface" in guard
+    assert "data-backend-surface" in guard
+    assert "data-backend-nav" in guard
+    assert "target.closest('[data-nav]')" in guard
+    assert "MutationObserver" in guard
+    assert "requestSurface(desiredSurface)" in guard
+
+
 def test_changed_production_javascript_parses_when_node_is_available() -> None:
     node = shutil.which("node")
     if node is None:
@@ -148,6 +161,7 @@ def test_changed_production_javascript_parses_when_node_is_available() -> None:
         "runtime-loader.js",
         "enhancement-loader.js",
         "backend-parity-ui.js",
+        "backend-parity-guard.js",
         "suno-extend.js",
         "suno-upload-cover.js",
     ):
