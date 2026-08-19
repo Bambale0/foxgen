@@ -29,6 +29,12 @@ function telegramInitData(startParam = '') {
 
 async function installTelegramBridge(page: Page, startParam = '') {
   const initData = telegramInitData(startParam)
+  // In deterministic application E2E we own the Telegram bridge. The real remote SDK
+  // would replace window.Telegram while running outside Telegram and erase our signed
+  // initData. The real SDK/native bridge remains covered by the later staging WebView smoke.
+  await page.route('https://telegram.org/js/telegram-web-app.js**', async (route) => {
+    await route.fulfill({ status: 200, contentType: 'application/javascript', body: '' })
+  })
   await page.addInitScript(({ rawInitData, rawStartParam }) => {
     const noop = () => undefined
     ;(window as unknown as { Telegram: unknown }).Telegram = {
@@ -56,6 +62,7 @@ async function openLiveMiniApp(page: Page, startParam = '') {
   page.on('pageerror', (error) => pageErrors.push(error.message))
   await installTelegramBridge(page, startParam)
   await page.goto('./')
+  await expect.poll(async () => page.evaluate(() => window.Telegram?.WebApp?.initData?.length ?? 0)).toBeGreaterThan(0)
   await expect(page.getByTestId('screen-home')).toBeVisible()
   await expect(page.getByTestId('happyfox-logo')).toBeVisible()
   expect(pageErrors).toEqual([])
