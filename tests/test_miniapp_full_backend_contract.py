@@ -8,11 +8,7 @@ STATIC = ROOT / "src" / "foxgen" / "miniapp_static"
 
 def test_backend_model_catalog_is_dynamic_and_covers_every_submission_model() -> None:
     registry = ModelRegistry()
-    enabled = {
-        item.slug
-        for item in registry.list()
-        if item.enabled_for_submission
-    }
+    enabled = {item.slug for item in registry.list() if item.enabled_for_submission}
 
     assert enabled == set(SUBMISSION_MODEL_SLUGS)
 
