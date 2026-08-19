@@ -10,7 +10,11 @@
     if (node) node.textContent = message;
   }
 
-  function fail(message) {
+  function fatal(message) {
+    if (typeof window.__FOXGEN_BOOT_FATAL__ === 'function') {
+      window.__FOXGEN_BOOT_FATAL__(message);
+      return;
+    }
     if (typeof window.__FOXGEN_BOOT_FAIL__ === 'function') {
       window.__FOXGEN_BOOT_FAIL__(message);
       return;
@@ -41,49 +45,94 @@
     }
   }
 
-  function supportsParitySyntax() {
+  function supportsCurrentBaseline() {
     try {
-      new Function('var a = null; a ??= 1; var b = true; b &&= false; return a === 1 && b === false;');
+      new Function('var a = null; var f = async function () { return a?.x ?? 1; }; return f;');
       return true;
     } catch (_) {
       return false;
     }
   }
 
-  function requestedLegacyMode() {
-    return /(?:[?&])legacy=1(?:&|$)/.test(window.location.search || '');
+  function transpileLogicalAssignments(source) {
+    var output = String(source || '');
+
+    output = output.replace(
+      /([A-Za-z_$][A-Za-z0-9_$]*(?:\.[A-Za-z_$][A-Za-z0-9_$]*)*)\?\?=([^;]+);/g,
+      function (_, target, expression) {
+        return target + ' = (' + target + ' == null ? (' + expression + ') : ' + target + ');';
+      }
+    );
+    output = output.replace(
+      /([A-Za-z_$][A-Za-z0-9_$]*(?:\.[A-Za-z_$][A-Za-z0-9_$]*)*)&&=([^;]+);/g,
+      function (_, target, expression) {
+        return target + ' = ' + target + ' && (' + expression + ');';
+      }
+    );
+
+    return output;
+  }
+
+  function loadCurrentSource(source, marker, done) {
+    fetch(source, { cache: 'no-store' })
+      .then(function (response) {
+        if (!response.ok) throw new Error('HTTP ' + response.status);
+        return response.text();
+      })
+      .then(function (text) {
+        var compiled = transpileLogicalAssignments(text);
+        if (compiled.indexOf('??=') >= 0 || compiled.indexOf('&&=') >= 0) {
+          throw new Error('unsupported logical assignment remained after compatibility transform');
+        }
+        try {
+          new Function(compiled)();
+        } catch (error) {
+          throw new Error('parse/execute ' + marker + ': ' + (error && error.message ? error.message : String(error)));
+        }
+        if (typeof done === 'function') done();
+      })
+      .catch(function (error) {
+        fatal(
+          'Не загрузился обязательный файл Happy Fox: ' +
+            source.split('/').pop() +
+            '. ' +
+            (error && error.message ? error.message : String(error))
+        );
+      });
   }
 
   installCompatibility();
 
   var manifest = document.getElementById('foxgen-runtime-manifest');
   if (!manifest) {
-    fail('Не найден runtime manifest Happy Fox.');
+    fatal('Не найден runtime manifest Happy Fox.');
     return;
   }
 
-  var paritySupported = supportsParitySyntax();
-  var legacy = requestedLegacyMode() || !paritySupported;
-  var source = manifest.getAttribute(legacy ? 'data-legacy-src' : 'data-parity-src');
-  if (!source) {
-    fail('Не найден файл интерфейса Happy Fox.');
+  if (!supportsCurrentBaseline()) {
+    document.documentElement.setAttribute('data-foxgen-runtime', 'unsupported');
+    fatal('Эта версия Telegram WebView слишком старая для актуального Happy Fox. Обновите Telegram и откройте Mini App снова.');
     return;
   }
 
-  window.__FOXGEN_RUNTIME_KIND__ = legacy ? 'legacy' : 'parity';
-  document.documentElement.setAttribute('data-foxgen-runtime', window.__FOXGEN_RUNTIME_KIND__);
-  setPhase(legacy ? 'Запускаем совместимый режим…' : 'Запускаем интерфейс…');
+  var paritySource = manifest.getAttribute('data-parity-src');
+  var catalogSource = manifest.getAttribute('data-product-home-src');
+  if (!paritySource || !catalogSource) {
+    fatal('Не найден актуальный интерфейс Happy Fox.');
+    return;
+  }
 
-  var script = document.createElement('script');
-  script.src = source;
-  script.async = false;
-  script.setAttribute('data-foxgen-core-runtime', window.__FOXGEN_RUNTIME_KIND__);
-  script.onload = function () {
+  window.__FOXGEN_RUNTIME_KIND__ = 'parity';
+  document.documentElement.setAttribute('data-foxgen-runtime', 'parity');
+  setPhase('Запускаем актуальный интерфейс…');
+
+  loadCurrentSource(paritySource, 'parity', function () {
     window.__FOXGEN_CORE_LOADED__ = true;
-    setPhase('Подключаем аккаунт…');
-  };
-  script.onerror = function () {
-    fail('Не загрузился основной файл интерфейса: ' + source.split('/').pop());
-  };
-  document.body.appendChild(script);
+    setPhase('Подключаем каталог моделей…');
+
+    loadCurrentSource(catalogSource, 'catalog', function () {
+      window.__FOXGEN_CATALOG_RUNTIME_LOADED__ = true;
+      setPhase('Подключаем аккаунт…');
+    });
+  });
 })();
