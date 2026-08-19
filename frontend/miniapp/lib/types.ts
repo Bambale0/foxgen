@@ -138,6 +138,15 @@ export interface Publication {
   media?: Array<{ url: string; content_type: string }>
 }
 
+export interface PublicationComment {
+  id: string
+  publication_id: string
+  surface: 'feed' | 'profile' | string
+  author: PublicationAuthor
+  body: string
+  created_at: string
+}
+
 export interface PublicProfile {
   user_id: number
   slug: string
