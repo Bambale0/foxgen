@@ -51,6 +51,7 @@ def test_bottom_navigation_changes_react_state_directly() -> None:
 def test_catalog_and_forms_are_backend_schema_driven() -> None:
     models = read(COMPONENTS / "tabs" / "models-tab.tsx")
     form = read(COMPONENTS / "model-form.tsx")
+    context = read(LIB / "app-context.tsx")
     api = read(LIB / "api.ts")
 
     assert "bootstrap?.models" in models
@@ -60,8 +61,9 @@ def test_catalog_and_forms_are_backend_schema_driven() -> None:
     assert "model.defaults" in form
     assert "MEDIA_FIELDS" in form
     assert "uploadInput" in form
-    assert "validateModel" in form
     assert "submitModel" in form
+    assert "miniAppApi.validateModel(model.slug, input)" in context
+    assert "miniAppApi.createTask(model.slug, validated.input)" in context
 
     for marker in (
         "/models/${encodeURIComponent(modelSlug)}/validate",
