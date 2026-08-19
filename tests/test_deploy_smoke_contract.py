@@ -14,20 +14,22 @@ def test_deploy_retries_happy_fox_smokes_after_nginx_reload() -> None:
     assert "curl --fail" in script
 
 
-def test_deploy_verifies_exact_miniapp_release_catalog_and_http_cache_policy() -> None:
+def test_deploy_verifies_exact_miniapp_release_and_http_cache_policy() -> None:
     script = Path("scripts/deploy-production.sh").read_text(encoding="utf-8")
 
     assert "miniapp_release()" in script
     assert "append_miniapp_release()" in script
     assert "release=%s" in script
     assert "foxgen-miniapp-shell" in script
-    assert "/mini-app/product-home.js" in script
-    assert "/mini-app/product-home.js?v=${expected_release}" in script
-    assert "/mini-app/product-home.css?v=${expected_release}" in script
+    assert "/mini-app/parity-app.js" in script
+    assert "/mini-app/backend-parity-ui.js" in script
+    assert "/mini-app/backend-parity.css?v=${expected_release}" in script
+    assert "product-home" in script  # negative smoke guard: obsolete overlay must not reappear
     assert "--dump-header" in script
     assert '[[ "${cache_control,,}" == *"no-store"* ]]' in script
     assert '[[ "${content_type,,}" == text/html* ]]' in script
-    assert 'grep -Fq "Каталог" <<<"$product_home_js"' in script
+    assert 'grep -Fq "Все модели" <<<"$backend_ui_js"' in script
+    assert 'grep -Fq "Весь функционал" <<<"$backend_ui_js"' in script
     assert 'expected = os.environ["MINIAPP_URL"]' in script
     assert "if actual != expected:" in script
 
