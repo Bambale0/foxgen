@@ -55,6 +55,12 @@ function renderApp() {
 describe('Happy Fox primary navigation', () => {
   beforeEach(() => vi.clearAllMocks())
 
+  it('renders the uploaded HappyFox brand asset in the live shell', async () => {
+    renderApp()
+    await screen.findByTestId('screen-home')
+    expect(screen.getByTestId('happyfox-logo')).toHaveAttribute('src', '/mini-app/happyfox-logo.webp')
+  })
+
   it('changes every primary tab by direct React state', async () => {
     const user = userEvent.setup()
     renderApp()
