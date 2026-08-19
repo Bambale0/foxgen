@@ -35,7 +35,8 @@ COPY alembic.ini ./
 
 RUN python -m pip install --requirement requirements.lock \
     && python -m pip install --no-deps . \
-    && python -m pip check
+    && python -m pip check \
+    && python -c 'from pathlib import Path; import foxgen; root=Path(foxgen.__file__).parent/"miniapp_static"; assert (root/"index.html").is_file(); assert any((root/"_next"/"static").rglob("*.js")); print(f"packaged Mini App assets: {root}")'
 
 USER foxgen
 
