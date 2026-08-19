@@ -121,4 +121,80 @@ test.describe('Happy Fox production browser E2E', () => {
     await expect(page.getByText('BALANCE / LIVE')).toBeVisible()
     expect(pageErrors).toEqual([])
   })
+
+  test('comments on a publication and opens Remix from the rendered feed', async ({ page }) => {
+    const publication = {
+      id: 'post-e2e',
+      generation_id: 'generation-e2e',
+      author: { user_id: 7, slug: 'fox_author', display_name: 'Fox Author' },
+      scope: 'feed',
+      active: true,
+      model_slug: 'seedream-5-pro',
+      media_kind: 'image',
+      prompt: 'cinematic orange fox',
+      prompt_actions_allowed: true,
+      likes_count: 2,
+      comments_count: 1,
+      remix_count: 3,
+      liked_by_viewer: false,
+      source_publication_id: null,
+      created_at: '2026-08-20T00:00:00Z',
+      media: [],
+    }
+
+    await page.route('**/v1/miniapp/feed?**', async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ items: [publication], next_offset: null }) })
+    })
+    await page.route('**/v1/miniapp/publications/post-e2e/comments**', async (route) => {
+      if (route.request().method() === 'POST') {
+        const payload = route.request().postDataJSON() as { body: string }
+        await route.fulfill({
+          status: 201,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            id: 'comment-new', publication_id: 'post-e2e', surface: 'feed',
+            author: { user_id: 987654321, slug: 'happyfox_e2e', display_name: 'Happy Fox' },
+            body: payload.body, created_at: '2026-08-20T00:02:00Z',
+          }),
+        })
+        return
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ items: [{
+          id: 'comment-old', publication_id: 'post-e2e', surface: 'feed',
+          author: { user_id: 7, slug: 'fox_author', display_name: 'Fox Author' },
+          body: 'Первый комментарий', created_at: '2026-08-20T00:01:00Z',
+        }] }),
+      })
+    })
+    await page.route('**/v1/miniapp/publications/post-e2e/remix', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          publication_id: 'post-e2e', generation_id: 'generation-e2e', author_slug: 'fox_author',
+          model_slug: 'seedream-5-pro', media_kind: 'image', prompt: 'cinematic orange fox', media: [],
+        }),
+      })
+    })
+
+    const pageErrors = await openLiveMiniApp(page)
+    await page.getByTestId('tab-services').click()
+    await page.getByTestId('service-feed').click()
+    await expect(page.getByTestId('publication-post-e2e')).toBeVisible()
+
+    await page.getByTestId('comments-post-e2e').click()
+    await expect(page.getByText('Первый комментарий')).toBeVisible()
+    await page.getByPlaceholder('Напишите комментарий').fill('Browser E2E комментарий')
+    await page.getByRole('button', { name: 'Отправить комментарий' }).click()
+    await expect(page.getByText('Browser E2E комментарий')).toBeVisible()
+
+    await page.getByTestId('remix-post-e2e').click()
+    await expect(page.getByTestId('model-form')).toBeVisible()
+    await expect(page.getByTestId('remix-prefill')).toBeVisible()
+    await expect(page.getByDisplayValue('cinematic orange fox')).toBeVisible()
+    expect(pageErrors).toEqual([])
+  })
 })
