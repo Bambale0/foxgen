@@ -3,17 +3,21 @@ from pathlib import Path
 from foxgen.miniapp_release import MINIAPP_RELEASE
 
 ROOT = Path(__file__).resolve().parents[1]
-INDEX = ROOT / "src" / "foxgen" / "miniapp_static" / "index.html"
+STATIC = ROOT / "src" / "foxgen" / "miniapp_static"
+INDEX = STATIC / "index.html"
 DEPLOY = ROOT / ".github" / "workflows" / "deploy-production.yml"
 
 
-def test_production_shell_loads_all_user_parity_modules() -> None:
+def test_production_shell_declares_core_fallback_and_all_user_parity_modules() -> None:
     html = INDEX.read_text(encoding="utf-8")
 
     assert f'name="foxgen-miniapp-shell" content="{MINIAPP_RELEASE}"' in html
-    for module in (
+    for asset in (
         "boot-guard.js",
+        "runtime-loader.js",
+        "enhancement-loader.js",
         "parity-app.js",
+        "app.js",
         "complete-menu.js",
         "user-parity-hardening.js",
         "user-parity-phase2.js",
@@ -27,7 +31,7 @@ def test_production_shell_loads_all_user_parity_modules() -> None:
         "promo-redeem.js",
         "product-home.js",
     ):
-        assert f"/mini-app/{module}?v={MINIAPP_RELEASE}" in html
+        assert f"/mini-app/{asset}?v={MINIAPP_RELEASE}" in html
 
     for stylesheet in (
         "motion-control.css",
@@ -35,21 +39,46 @@ def test_production_shell_loads_all_user_parity_modules() -> None:
     ):
         assert f"/mini-app/{stylesheet}?v={MINIAPP_RELEASE}" in html
 
-    assert f'<script defer src="/mini-app/parity-app.js?v={MINIAPP_RELEASE}"></script>' in html
     assert f'<script src="/mini-app/boot-guard.js?v={MINIAPP_RELEASE}"></script>' in html
+    assert f'<script src="/mini-app/runtime-loader.js?v={MINIAPP_RELEASE}"></script>' in html
+    assert f'<script src="/mini-app/enhancement-loader.js?v={MINIAPP_RELEASE}"></script>' in html
+    assert f'data-parity-src="/mini-app/parity-app.js?v={MINIAPP_RELEASE}"' in html
+    assert f'data-legacy-src="/mini-app/app.js?v={MINIAPP_RELEASE}"' in html
+    assert f'<script defer src="/mini-app/parity-app.js?v={MINIAPP_RELEASE}"></script>' not in html
     assert '<script type="module" src="/mini-app/parity-app.js' not in html
     assert '<script type="module" src="/mini-app/app.js' not in html
 
 
-def test_production_boot_guard_has_bounded_failure_state() -> None:
-    guard = (ROOT / "src" / "foxgen" / "miniapp_static" / "boot-guard.js").read_text(
-        encoding="utf-8"
-    )
+def test_production_boot_guard_has_bounded_legacy_safe_failure_state() -> None:
+    guard = (STATIC / "boot-guard.js").read_text(encoding="utf-8")
 
     assert "BOOT_TIMEOUT_MS = 15000" in guard
     assert "Happy Fox не запустился" in guard
     assert "data-boot-retry" in guard
     assert "unhandledrejection" in guard
+    assert "__FOXGEN_BOOT_FAIL__" in guard
+    assert "legacy=1" in guard
+    assert "Переключаем совместимый режим" in guard
+    assert ".replaceAll(" not in guard
+    assert "?." not in guard
+    assert "??" not in guard
+
+
+def test_runtime_loader_polyfills_and_gates_newer_javascript_syntax() -> None:
+    loader = (STATIC / "runtime-loader.js").read_text(encoding="utf-8")
+    enhancements = (STATIC / "enhancement-loader.js").read_text(encoding="utf-8")
+
+    assert "String.prototype.replaceAll" in loader
+    assert "window.structuredClone" in loader
+    assert "new Function" in loader
+    assert "??=" in loader
+    assert "&&=" in loader
+    assert "data-legacy-src" in loader
+    assert "__FOXGEN_RUNTIME_KIND__" in loader
+
+    assert "foxgen:bootstrap" in enhancements
+    assert "__FOXGEN_RUNTIME_KIND__ === 'legacy'" in enhancements
+    assert "data-module-src" in enhancements
 
 
 def test_production_deploy_is_not_silently_disabled_after_green_main_ci() -> None:
