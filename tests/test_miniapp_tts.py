@@ -24,7 +24,7 @@ def test_voice_studio_remains_schema_driven() -> None:
     assert "normalizedType" in form
     assert "submitModel" in form
     assert "miniAppApi.validateModel(model.slug, input)" in context
-    assert "miniAppApi.createTask(model.slug, validated.input)" in context
+    assert "miniAppApi.createTask(model.slug, validated.input, sourcePublicationId)" in context
 
 
 def test_tts_browser_layer_has_no_provider_secret_or_direct_kie_request() -> None:
