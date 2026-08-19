@@ -1,202 +1,134 @@
-from __future__ import annotations
-
-import re
 from pathlib import Path
 
 from foxgen.miniapp_release import MINIAPP_RELEASE
 
-STATIC = Path("src/foxgen/miniapp_static")
-PARITY_SCRIPT = STATIC / "parity-app.js"
-BACKEND_UI_SCRIPT = STATIC / "backend-parity-ui.js"
-RUNTIME_LOADER = STATIC / "runtime-loader.js"
-ENHANCEMENT_LOADER = STATIC / "enhancement-loader.js"
-BOOT_GUARD = STATIC / "boot-guard.js"
+ROOT = Path(__file__).resolve().parents[1]
+FRONTEND = ROOT / "frontend" / "miniapp"
+COMPONENTS = FRONTEND / "components"
+LIB = FRONTEND / "lib"
 
 
-def test_happy_fox_current_runtime_and_backend_ui_are_production_assets() -> None:
-    html = (STATIC / "index.html").read_text(encoding="utf-8")
-
-    assert f'<link rel="stylesheet" href="/mini-app/parity.css?v={MINIAPP_RELEASE}">' in html
-    assert (
-        f'<link rel="stylesheet" href="/mini-app/backend-parity.css?v={MINIAPP_RELEASE}">' in html
-    )
-    assert f'data-parity-src="/mini-app/parity-app.js?v={MINIAPP_RELEASE}"' in html
-    assert f"/mini-app/backend-parity-ui.js?v={MINIAPP_RELEASE}" in html
-    assert f'<script src="/mini-app/runtime-loader.js?v={MINIAPP_RELEASE}"></script>' in html
-    assert f'<script src="/mini-app/enhancement-loader.js?v={MINIAPP_RELEASE}"></script>' in html
-    assert "data-product-home-src" not in html
-    assert "product-home" not in html
-    assert "data-legacy-src" not in html
-    assert "/mini-app/app.js" not in html
-    assert f'<script defer src="/mini-app/parity-app.js?v={MINIAPP_RELEASE}"></script>' not in html
-    assert '<script type="module" src="/mini-app/parity-app.js' not in html
-    assert "Happy Fox" in html
-    assert "FOXGEN" not in html
+def read(path: Path) -> str:
+    return path.read_text(encoding="utf-8")
 
 
-def test_runtime_fails_closed_instead_of_downgrading_or_hiding_core() -> None:
-    loader = RUNTIME_LOADER.read_text(encoding="utf-8")
-    enhancements = ENHANCEMENT_LOADER.read_text(encoding="utf-8")
-    guard = BOOT_GUARD.read_text(encoding="utf-8")
-    html = (STATIC / "index.html").read_text(encoding="utf-8")
+def test_happy_fox_uses_one_state_driven_application_shell() -> None:
+    page = read(FRONTEND / "app" / "page.tsx")
+    shell = read(COMPONENTS / "mini-app-shell.tsx")
+    context = read(LIB / "app-context.tsx")
 
-    assert "String.prototype.replaceAll" in loader
-    assert "window.structuredClone" in loader
-    assert "new Function" in loader
-    assert "??=" in loader
-    assert "&&=" in loader
-    assert "data-parity-src" in loader
-    assert "data-product-home-src" not in loader
-    assert "data-legacy-src" not in loader
-    assert "legacy=1" not in loader
-    assert "__FOXGEN_BOOT_FATAL__" in loader
-    assert "__FOXGEN_CORE_LOADED__" in loader
-    assert "foxgen:core-loaded" in loader
-
-    assert "visibility: hidden" not in html
-    assert "data-foxgen-catalog" not in html
-    assert "loadSequentially" in enhancements
-    assert "optional enhancement failed to load" in enhancements
-    assert "showCriticalFailure" not in enhancements
-    assert "__FOXGEN_BOOT_FATAL__" not in enhancements
-    assert "data-foxgen-catalog" not in enhancements
-
-    assert "__FOXGEN_BOOT_FAIL__" in guard
-    assert "__FOXGEN_BOOT_FATAL__" in guard
-    assert "legacy=1" not in guard
-    assert "location.replace" not in guard
-    assert "совместимый режим" not in guard
-    assert ".replaceAll(" not in guard
-    assert "?." not in guard
-    assert "??" not in guard
+    assert "<MiniAppShell>" in page
+    assert "<TabContent />" in page
+    assert "<AppProvider>" in shell
+    assert "<TabNav />" in shell
+    assert "<WorkspaceSheet />" in shell
+    assert "createContext" in context
+    assert "activeTab" in context
+    assert "selectedModel" in context
+    assert "activeWorkspace" in context
+    assert "MutationObserver" not in context
 
 
-def test_happy_fox_frontend_is_schema_driven_and_uses_user_safe_api() -> None:
-    script = PARITY_SCRIPT.read_text(encoding="utf-8")
+def test_bottom_navigation_changes_react_state_directly() -> None:
+    nav = read(COMPONENTS / "tab-nav.tsx")
+    content = read(COMPONENTS / "tab-content.tsx")
 
-    required_markers = (
-        "input_schema",
-        "MEDIA_FIELDS",
-        "/models/${encodeURIComponent(built.model.slug)}/validate",
-        "/generations?limit=100",
-        "/ledger?limit=200",
-        "api('/balance')",
-        "api('/prices')",
-        "api('/input-media'",
-        "Idempotency-Key",
-        "/cancel",
-        "reference_image_urls",
-        "reference_video_urls",
-        "reference_audio_urls",
-        "first_frame_url",
-        "last_frame_url",
-    )
-    for marker in required_markers:
-        assert marker in script
+    for tab in ("home", "models", "create", "works", "services", "profile"):
+        assert f"id: '{tab}'" in nav
+    for label in ("Главная", "Модели", "Создать", "Работы", "Сервисы", "Профиль"):
+        assert label in nav
 
-    assert "planned:mini_app" not in script
-    assert "balance-adjustments" not in script
-    assert "/internal/admin" not in script
+    assert "onClick={() => setActiveTab(tab.id)}" in nav
+    assert "button.click()" not in nav
+    assert "document.createElement" not in nav
+    assert "MutationObserver" not in nav
+
+    for screen in ("ModelsTab", "CreateTab", "WorksTab", "ServicesTab", "ProfileTab", "HomeTab"):
+        assert screen in content
+    assert "activeTab" in content
 
 
-def test_frontend_exposes_social_reference_and_remix_parity() -> None:
-    script = PARITY_SCRIPT.read_text(encoding="utf-8")
+def test_catalog_and_forms_are_backend_schema_driven() -> None:
+    models = read(COMPONENTS / "tabs" / "models-tab.tsx")
+    form = read(COMPONENTS / "model-form.tsx")
+    api = read(LIB / "api.ts")
+
+    assert "bootstrap?.models" in models
+    assert "bootstrap?.prices" in models
+    assert "model.input_schema?.properties" in form
+    assert "model.input_schema?.required" in form
+    assert "model.defaults" in form
+    assert "MEDIA_FIELDS" in form
+    assert "uploadInput" in form
+    assert "validateModel" in form
+    assert "submitModel" in form
 
     for marker in (
-        "api(`/feed?sort=",
-        "/publications/${id}",
-        "/comments?surface=",
-        "/like",
-        "/profiles/${encodeURIComponent(slug)}",
-        "api('/me/profile'",
-        "api('/me/publications",
-        "api('/reference-memory",
-        "/reference-memory/resolve",
-        "source_publication_id",
-        "start_param",
-        "tgWebAppStartParam",
+        "/models/${encodeURIComponent(modelSlug)}/validate",
+        "'/tasks'",
+        "'/input-media'",
+        "'/generations?limit=",
+        "'/balance'",
+        "'/prices'",
+        "'/ledger?limit=",
+        "Idempotency-Key",
     ):
-        assert marker in script
+        assert marker in api
 
-    for label in (
-        "Лента",
-        "Создать",
-        "Работы",
-        "Профиль",
-        "Память референсов",
-        "Ремикс",
+
+def test_user_facing_backend_domains_have_real_client_routes() -> None:
+    api = read(LIB / "api.ts")
+    workspace = read(COMPONENTS / "workspace-sheet.tsx")
+    profile = read(COMPONENTS / "tabs" / "profile-tab.tsx")
+    works = read(COMPONENTS / "tabs" / "works-tab.tsx")
+
+    for marker in (
+        "'/feed?sort=",
+        "/publications/${encodeURIComponent(publicationId)}/like",
+        "'/reference-memory?limit=",
+        "'/tariff'",
+        "'/support'",
+        "'/partner'",
+        "'/payments/stars/packages'",
+        "'/payments/stars/invoices'",
+        "'/me/profile'",
     ):
-        assert label in script
+        assert marker in api
+
+    assert "Сообщество" in workspace
+    assert "Референсы" in workspace
+    assert "Тарифы" in workspace
+    assert "Партнёры" in workspace
+    assert "Поддержка" in workspace
+    assert "Снять публикацию" in profile
+    assert "Отменить" in works
+    assert "В ленту" in works
+    assert "В профиль" in works
+    assert "/internal/admin" not in "\n".join((api, workspace, profile, works))
 
 
-def test_frontend_does_not_expose_admin_billing_paths() -> None:
-    script = PARITY_SCRIPT.read_text(encoding="utf-8")
+def test_private_input_models_use_dedicated_backend_workflows() -> None:
+    special = read(COMPONENTS / "special-model-form.tsx")
 
-    assert "Backend invoice flow в разработке" in script
-    assert 'data-action="topup"' not in script
-    assert "/internal/admin" not in script
-
-
-def test_parity_design_layer_is_loaded_and_grunge_is_restrained() -> None:
-    html = (STATIC / "index.html").read_text(encoding="utf-8")
-    css = (STATIC / "parity.css").read_text(encoding="utf-8")
-
-    assert f'<link rel="stylesheet" href="/mini-app/app.css?v={MINIAPP_RELEASE}">' in html
-    assert f'<link rel="stylesheet" href="/mini-app/studio.css?v={MINIAPP_RELEASE}">' in html
-    assert f'<link rel="stylesheet" href="/mini-app/parity.css?v={MINIAPP_RELEASE}">' in html
-    assert (
-        f'<link rel="stylesheet" href="/mini-app/backend-parity.css?v={MINIAPP_RELEASE}">' in html
-    )
-    assert "grunge-card" in css
-    assert "grunge-lite" in css
-
-    match = re.search(r"--grunge-opacity:\s*([0-9.]+)", css)
-    assert match is not None
-    assert float(match.group(1)) <= 0.30
-
-
-def test_navigation_exposes_six_primary_product_surfaces_and_all_core_screens() -> None:
-    parity = PARITY_SCRIPT.read_text(encoding="utf-8")
-    backend_ui = BACKEND_UI_SCRIPT.read_text(encoding="utf-8")
-
-    for screen in (
-        "feed",
-        "create",
-        "studio",
-        "works",
-        "profile",
-        "wallet",
-        "references",
-        "publication",
-        "publicProfile",
-        "generation",
-        "tariff",
-        "support",
-        "partner",
+    for slug in (
+        "kling-3-motion-control",
+        "suno-v5-extend",
+        "suno-v5-upload-cover",
+        "suno-v5-upload-extend",
     ):
-        assert screen in parity
+        assert slug in special
 
-    for label in ("Главная", "Модели", "Создать", "Работы", "Баланс", "Профиль"):
-        assert label in backend_ui
-    assert "repeat(6" in (STATIC / "backend-parity.css").read_text(encoding="utf-8")
+    for endpoint in (
+        "/motion/kling/inputs/",
+        "'/motion/kling'",
+        "'/music/suno/sources?limit=100'",
+        "'/music/suno/extend'",
+        "'/music/suno/upload-cover'",
+        "'/music/suno/upload-extend'",
+    ):
+        assert endpoint in special or endpoint in read(LIB / "api.ts")
 
 
-def test_boot_renders_before_optional_feed_and_network_calls_are_bounded() -> None:
-    parity = PARITY_SCRIPT.read_text(encoding="utf-8")
-    backend_ui = BACKEND_UI_SCRIPT.read_text(encoding="utf-8")
-    enhancements = ENHANCEMENT_LOADER.read_text(encoding="utf-8")
-
-    init_start = parity.index("async function init()")
-    first_render = parity.index("render();", init_start)
-    background_feed = parity.index("void loadFeed(true)", init_start)
-
-    assert first_render < background_feed
-    assert "API_TIMEOUT_MS = 10000" in parity
-    assert "controller.abort()" in parity
-    assert "foxgen:bootstrap" in parity
-    assert "__FOXGEN_BOOTSTRAP__" in parity
-
-    assert "window.addEventListener('foxgen:bootstrap'" in backend_ui
-    assert "bootstrap()?.models" in backend_ui
-    assert "bootstrap()?.prices" in backend_ui
-    assert "loadSequentially" in enhancements
+def test_release_marker_matches_bot_cache_buster() -> None:
+    layout = read(FRONTEND / "app" / "layout.tsx")
+    assert f'name="foxgen-miniapp-shell" content="{MINIAPP_RELEASE}"' in layout
