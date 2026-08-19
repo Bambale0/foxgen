@@ -5,11 +5,14 @@ on:
     branches:
       - main
     paths:
-      - "src/foxgen/miniapp_static/**"
+      - "frontend/miniapp/**"
       - "src/foxgen/miniapp_release.py"
       - "src/foxgen/api/app.py"
       - "src/foxgen/bot/keyboards.py"
+      - "Dockerfile"
+      - "pyproject.toml"
       - "scripts/deploy-production.sh"
+      - ".github/workflows/miniapp-frontend.yml"
       - ".github/workflows/deploy-production.yml"
   workflow_run:
     workflows:
@@ -83,55 +86,36 @@ jobs:
           ref: ${{ env.EXPECTED_SHA }}
           fetch-depth: 1
 
-      - name: Validate Mini App release slice
+      - name: Set up Node for Mini App validation
+        if: github.event_name == 'push'
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/miniapp/package.json
+
+      - name: Validate React Mini App release slice
         if: github.event_name == 'push'
         shell: bash
         run: |
           set -Eeuo pipefail
-          shell="src/foxgen/miniapp_static/index.html"
-          assets=(
-            boot-guard.js
-            runtime-loader.js
-            enhancement-loader.js
-            parity-app.js
-            complete-menu.js
-            user-parity-hardening.js
-            user-parity-phase2.js
-            user-draft-recovery.js
-            tts-parity.js
-            suno-parity.js
-            suno-extend.js
-            suno-upload-cover.js
-            suno-upload-extend.js
-            motion-control.js
-            promo-redeem.js
-            backend-parity-ui.js
-          )
+          cd frontend/miniapp
+          npm install --no-audit --no-fund
+          npm run typecheck
+          npm test
+          npm run build
 
+          shell="out/index.html"
           test -s "$shell"
-          release=$(sed -n 's/.*name="foxgen-miniapp-shell" content="\([^"]*\)".*/\1/p' "$shell" | head -n1)
-          test -n "$release"
-          python_release=$(PYTHONPATH=src python -c 'from foxgen.miniapp_release import MINIAPP_RELEASE; print(MINIAPP_RELEASE)')
-          test "$python_release" = "$release"
-          grep -Fq "/mini-app/parity-app.js?v=${release}" "$shell"
-          grep -Fq "/mini-app/backend-parity-ui.js?v=${release}" "$shell"
-          grep -Fq "/mini-app/backend-parity.css?v=${release}" "$shell"
-          ! grep -Fq "product-home" "$shell"
-          ! grep -Fq "visibility: hidden" "$shell"
-
-          for asset in "${assets[@]}"; do
-            file="src/foxgen/miniapp_static/${asset}"
-            test -s "$file"
-            node --check "$file"
-          done
-
-          grep -Fq "data-parity-src" "$shell"
-          grep -Fq "Все модели" src/foxgen/miniapp_static/backend-parity-ui.js
-          grep -Fq "Весь функционал" src/foxgen/miniapp_static/backend-parity-ui.js
-          grep -Fq "repeat(6" src/foxgen/miniapp_static/backend-parity.css
-          grep -Fq "API_TIMEOUT_MS = 10000" src/foxgen/miniapp_static/parity-app.js
-          grep -Fq "foxgen:bootstrap" src/foxgen/miniapp_static/enhancement-loader.js
-          echo "Mini App ${release} single-runtime backend parity gate passed for ${EXPECTED_SHA}"
+          python_release=$(cd ../.. && PYTHONPATH=src python -c 'from foxgen.miniapp_release import MINIAPP_RELEASE; print(MINIAPP_RELEASE)')
+          grep -Fq "name=\"foxgen-miniapp-shell\" content=\"${python_release}\"" "$shell"
+          grep -Fq '/mini-app/_next/' "$shell"
+          ! grep -Fq 'parity-app.js' "$shell"
+          ! grep -Fq 'backend-parity-ui.js' "$shell"
+          ! grep -R -Fq 'MutationObserver' app components lib
+          test -d out/_next/static
+          find out/_next/static -type f -name '*.js' -size +0c | grep -q .
+          echo "Mini App ${python_release} React/state-driven release gate passed for ${EXPECTED_SHA}"
 
       - name: Configure SSH
         shell: bash

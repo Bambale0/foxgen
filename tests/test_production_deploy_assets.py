@@ -12,8 +12,9 @@ def test_autodeploy_runs_for_main_miniapp_push_and_successful_main_ci() -> None:
 
     assert "push:" in workflow
     assert "branches:\n      - main" in workflow
-    assert '"src/foxgen/miniapp_static/**"' in workflow
+    assert '"frontend/miniapp/**"' in workflow
     assert '"src/foxgen/miniapp_release.py"' in workflow
+    assert '"Dockerfile"' in workflow
     assert "workflow_run:" in workflow
     assert "workflows:\n      - CI" in workflow
     assert "github.event.workflow_run.conclusion == 'success'" in workflow

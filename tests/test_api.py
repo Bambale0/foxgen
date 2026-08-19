@@ -66,8 +66,9 @@ def test_miniapp_html_shell_is_never_cacheable() -> None:
     assert response.headers["pragma"] == "no-cache"
     assert response.headers["expires"] == "0"
     assert f'name="foxgen-miniapp-shell" content="{MINIAPP_RELEASE}"' in response.text
-    assert f"/mini-app/parity-app.js?v={MINIAPP_RELEASE}" in response.text
-    assert f"/mini-app/backend-parity-ui.js?v={MINIAPP_RELEASE}" in response.text
+    assert "React Mini App" in response.text
+    assert "parity-app.js" not in response.text
+    assert "backend-parity-ui.js" not in response.text
     assert "product-home" not in response.text
 
 
