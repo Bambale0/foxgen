@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useApp } from '@/lib/app-context'
 
 const ACTIVE = new Set(['queued','submitting','submitted','processing','submission_unknown','result_ready','storing_media','delivery_pending'])
@@ -13,9 +13,14 @@ function Media({ url, contentType }: { url?: string; contentType?: string }) {
 }
 
 export function WorksTab() {
-  const { generations, refreshGenerations, cancelGeneration, publishGeneration } = useApp()
+  const { generations, focusedGeneration, refreshGenerations, cancelGeneration, publishGeneration } = useApp()
   const [error, setError] = useState<string | null>(null)
   useEffect(() => { void refreshGenerations().catch((reason) => setError(reason instanceof Error ? reason.message : String(reason))) }, [refreshGenerations])
+
+  const rows = useMemo(() => {
+    if (!focusedGeneration) return generations
+    return [focusedGeneration, ...generations.filter((item) => item.id !== focusedGeneration.id)]
+  }, [focusedGeneration, generations])
 
   return (
     <main className="page" data-testid="screen-works">
@@ -24,11 +29,16 @@ export function WorksTab() {
         <h1>Мои <span>работы</span></h1>
         <p>Статусы, результаты, отмена и публикация работают напрямую через backend.</p>
       </section>
+      {focusedGeneration && (
+        <div className="notice" data-testid="deep-link-generation">
+          Открыта работа из Telegram-ссылки · {focusedGeneration.id}
+        </div>
+      )}
       <section className="section">
         <div className="section-head"><h2>История</h2><button onClick={() => void refreshGenerations()}>Обновить ↻</button></div>
         {error && <div className="notice error">{error}</div>}
         <div className="list">
-          {generations.map((item) => (
+          {rows.map((item) => (
             <article className="work-card" key={item.id} data-testid={`generation-${item.id}`}>
               <div className="work-row">
                 <Media url={item.media?.[0]?.url} contentType={item.media?.[0]?.content_type} />
@@ -46,7 +56,7 @@ export function WorksTab() {
               </div>
             </article>
           ))}
-          {!generations.length && <div className="empty">Работ пока нет. Откройте «Создать» и выберите модель.</div>}
+          {!rows.length && <div className="empty">Работ пока нет. Откройте «Создать» и выберите модель.</div>}
         </div>
       </section>
     </main>
