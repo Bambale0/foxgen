@@ -1,5 +1,5 @@
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import pytest
 from sqlalchemy import update
@@ -55,7 +55,9 @@ def make_provider_polling_immediately_due(monkeypatch: pytest.MonkeyPatch) -> No
             GenerationStatus.SUBMITTED,
             GenerationStatus.PROCESSING,
         }:
-            values["next_poll_at"] = datetime.now(timezone.utc)
+            # Put the poll deadline safely in the past. Using runner "now" can still
+            # be microscopically ahead of PostgreSQL NOW() on a fast CI transition.
+            values["next_poll_at"] = datetime.now(timezone.utc) - timedelta(seconds=1)
         return values
 
     monkeypatch.setattr(
