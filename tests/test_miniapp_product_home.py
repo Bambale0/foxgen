@@ -6,49 +6,56 @@ from foxgen.miniapp_release import MINIAPP_RELEASE
 
 ROOT = Path(__file__).resolve().parents[1]
 STATIC = ROOT / "src" / "foxgen" / "miniapp_static"
-HOME_JS = STATIC / "product-home.js"
-HOME_CSS = STATIC / "product-home.css"
+HOME_JS = STATIC / "backend-parity-ui.js"
+HOME_CSS = STATIC / "backend-parity.css"
 INDEX = STATIC / "index.html"
 
 
-def test_catalog_home_is_loaded_by_production_shell() -> None:
+def test_backend_parity_home_is_loaded_by_production_shell() -> None:
     html = INDEX.read_text(encoding="utf-8")
 
-    assert f"/mini-app/product-home.css?v={MINIAPP_RELEASE}" in html
-    assert f"/mini-app/product-home.js?v={MINIAPP_RELEASE}" in html
-    assert html.index("product-home.js") < html.index("motion-control.js")
+    assert f"/mini-app/backend-parity.css?v={MINIAPP_RELEASE}" in html
+    assert f"/mini-app/backend-parity-ui.js?v={MINIAPP_RELEASE}" in html
+    assert html.index("backend-parity-ui.js") < html.index("motion-control.js")
+    assert "product-home" not in html
 
 
-def test_catalog_home_replaces_feed_tab_without_removing_community() -> None:
+def test_backend_parity_home_exposes_primary_and_secondary_user_domains() -> None:
     source = HOME_JS.read_text(encoding="utf-8")
 
-    assert "label.textContent = 'Каталог'" in source
-    assert "data-home-community" in source
-    assert "COMMUNITY / LIVE" in source
-    assert "AI CATALOG / LIVE" in source
-    assert "data-quick-start" in source
-    assert 'data-nav="create"' in source
-    assert 'data-nav="works"' in source
-    assert 'data-nav="wallet"' in source
-    assert 'data-nav="profile"' in source
+    for label in (
+        "Главная",
+        "Модели",
+        "Создать",
+        "Работы",
+        "Баланс",
+        "Профиль",
+        "Сообщество",
+        "Референсы",
+        "Тарифы",
+        "Партнёры",
+        "Поддержка",
+    ):
+        assert label in source
+    assert "Весь функционал" in source
 
 
-def test_catalog_home_routes_private_input_products_to_dedicated_flows() -> None:
+def test_backend_parity_home_routes_private_input_products_to_dedicated_flows() -> None:
     source = HOME_JS.read_text(encoding="utf-8")
 
     assert "'kling-3-motion-control': '[data-motion-open]'" in source
     assert "'suno-v5-extend': '[data-suno-extend-open]'" in source
     assert "'suno-v5-upload-cover': '[data-suno-cover-action]'" in source
     assert "'suno-v5-upload-extend': '[data-suno-upload-extend-action]'" in source
-    assert "data-home-special" in source
+    assert "SPECIAL_MODEL_OPENERS" in source
 
 
-def test_catalog_home_is_server_driven_and_does_not_embed_provider_secrets() -> None:
+def test_backend_parity_home_is_server_driven_and_does_not_embed_provider_secrets() -> None:
     source = HOME_JS.read_text(encoding="utf-8")
 
-    assert "api('/bootstrap')" in source
-    assert "bootstrap?.models" in source
-    assert "bootstrap?.prices" in source
+    assert "bootstrap()?.models" in source
+    assert "bootstrap()?.prices" in source
+    assert "data-backend-model" in source
     assert "api.kie.ai" not in source
     assert "KIE_API_KEY" not in source
     assert "internal_api_token" not in source
@@ -57,10 +64,11 @@ def test_catalog_home_is_server_driven_and_does_not_embed_provider_secrets() -> 
 def test_planned_tools_are_not_presented_as_primary_actions() -> None:
     css = HOME_CSS.read_text(encoding="utf-8")
 
-    assert ".complete-tool.is-planned{display:none}" in css
+    assert ".complete-tool.is-planned" in css
+    assert "display:none!important" in css
 
 
-def test_catalog_home_javascript_parses_when_node_is_available() -> None:
+def test_backend_parity_javascript_parses_when_node_is_available() -> None:
     node = shutil.which("node")
     if node is None:
         return

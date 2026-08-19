@@ -1,6 +1,5 @@
 from pathlib import Path
 
-
 MINIAPP = Path(__file__).resolve().parents[1] / "src" / "foxgen" / "miniapp_static"
 
 
@@ -40,7 +39,8 @@ def test_suno_extend_browser_never_calls_kie_or_supplies_price() -> None:
 def test_suno_extend_price_and_balance_are_backend_owned() -> None:
     script = (MINIAPP / "suno-extend.js").read_text(encoding="utf-8")
 
-    assert "bootstrap?.models" in script
+    assert "bootstrap?.prices" in script
+    assert "item?.model_slug === EXTEND_SLUG" in script
     assert "bootstrap?.balance?.available_units" in script
     assert "Цена Suno V5 Extend не опубликована" in script
     assert "Недостаточно средств" in script
