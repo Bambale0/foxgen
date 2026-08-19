@@ -4,7 +4,6 @@
   var BOOT_TIMEOUT_MS = 15000;
   var root = document.getElementById('app');
   var failed = false;
-  var fallbackStarted = false;
 
   function bootScreen() {
     if (!root || !root.querySelector) return null;
@@ -23,31 +22,13 @@
     return '';
   }
 
-  function hasLegacyFlag() {
-    return /(?:[?&])legacy=1(?:&|$)/.test(window.location.search || '');
-  }
-
-  function legacyUrl(url) {
-    var value = String(url || '');
-    var hash = '';
-    var hashIndex = value.indexOf('#');
-    var separator;
-
-    if (hasLegacyFlag()) return value;
-    if (hashIndex >= 0) {
-      hash = value.slice(hashIndex);
-      value = value.slice(0, hashIndex);
-    }
-    separator = value.indexOf('?') >= 0 ? '&' : '?';
-    return value + separator + 'legacy=1' + hash;
-  }
-
-  function showFailure(message) {
+  function showFailure(message, force) {
     var main;
     var errorText;
     var retry;
 
-    if (failed || !root || !bootScreen()) return;
+    if (failed || !root) return;
+    if (!force && !bootScreen()) return;
     failed = true;
     root.innerHTML = '';
 
@@ -78,35 +59,28 @@
     }
   }
 
-  function failOrFallback(message) {
-    if (!bootScreen()) return;
+  function fail(message) {
+    showFailure(message, false);
+  }
 
-    if (!hasLegacyFlag() && window.__FOXGEN_RUNTIME_KIND__ !== 'legacy') {
-      if (fallbackStarted) return;
-      fallbackStarted = true;
-      setPhase('Переключаем совместимый режим…');
-      window.setTimeout(function () {
-        window.location.replace(legacyUrl(window.location.href));
-      }, 250);
-      return;
-    }
-
-    showFailure(message);
+  function fatal(message) {
+    showFailure(message, true);
   }
 
   window.__FOXGEN_BOOT_PHASE__ = setPhase;
-  window.__FOXGEN_BOOT_FAIL__ = failOrFallback;
+  window.__FOXGEN_BOOT_FAIL__ = fail;
+  window.__FOXGEN_BOOT_FATAL__ = fatal;
 
   window.addEventListener(
     'error',
     function (event) {
       var asset = assetName(event && event.target);
       if (asset && asset.indexOf('/mini-app/') >= 0) {
-        failOrFallback('Не загрузился файл интерфейса: ' + asset.split('/').pop());
+        fail('Не загрузился файл интерфейса: ' + asset.split('/').pop());
         return;
       }
       if (bootScreen() && event && event.message) {
-        failOrFallback('Ошибка запуска: ' + event.message);
+        fail('Ошибка запуска: ' + event.message);
       }
     },
     true
@@ -118,12 +92,12 @@
     reason = event && event.reason;
     if (reason && reason.message) reason = reason.message;
     if (reason === undefined || reason === null || reason === '') reason = 'неизвестная ошибка';
-    failOrFallback('Ошибка запуска: ' + String(reason));
+    fail('Ошибка запуска: ' + String(reason));
   });
 
   window.setTimeout(function () {
     if (bootScreen()) {
-      failOrFallback('Запуск занял больше 15 секунд. Проверь соединение и попробуй ещё раз.');
+      fail('Запуск занял больше 15 секунд. Проверь соединение и попробуй ещё раз.');
     }
   }, BOOT_TIMEOUT_MS);
 })();
