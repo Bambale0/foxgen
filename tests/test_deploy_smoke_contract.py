@@ -7,7 +7,9 @@ def test_deploy_retries_happy_fox_smokes_after_nginx_reload() -> None:
     assert script.count("deadline=$((SECONDS + 30))") >= 2
     assert "attempt_timeout=$((remaining < 5 ? remaining : 5))" in script
     assert "for attempt in $(seq 1 15)" not in script
-    assert "public Happy Fox React Mini App $MINIAPP_RELEASE did not become ready within 30s" in script
+    assert (
+        "public Happy Fox React Mini App $MINIAPP_RELEASE did not become ready within 30s" in script
+    )
     assert "Telegram Happy Fox menu did not converge to $MINIAPP_URL within 30s" in script
     assert "assert_service_image" in script
     assert "verify_live_bot_webapp_code" in script
@@ -28,7 +30,7 @@ def test_deploy_verifies_exact_react_release_and_http_cache_policy() -> None:
     assert "--dump-header" in script
     assert '[[ "${cache_control,,}" == *"no-store"* ]]' in script
     assert '[[ "${content_type,,}" == text/html* ]]' in script
-    assert "[ -s \"$asset_file\" ]" in script
+    assert '[ -s "$asset_file" ]' in script
     assert "! grep -Fq 'parity-app.js'" in script
     assert "! grep -Fq 'backend-parity-ui.js'" in script
     assert 'expected = os.environ["MINIAPP_URL"]' in script
