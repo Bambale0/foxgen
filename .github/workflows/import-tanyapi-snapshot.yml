@@ -6,6 +6,9 @@ on:
       - migrate/tanyapi-core-20260820
     paths:
       - .github/workflows/import-tanyapi-snapshot.yml
+  pull_request:
+    branches:
+      - migrate/tanyapi-core-20260820
   workflow_dispatch:
 
 permissions:
