@@ -51,7 +51,13 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          rsync -a --delete --exclude='.git/' /tmp/tanyapi-source/ "$GITHUB_WORKSPACE/"
+          # Workflows are intentionally NOT imported. GitHub blocks GITHUB_TOKEN
+          # workflow mutations without a separate workflow scope, and HappyFox
+          # must not inherit NEUROMIX production deploy assumptions anyway.
+          rsync -a --delete \
+            --exclude='.git/' \
+            --exclude='.github/workflows/' \
+            /tmp/tanyapi-source/ "$GITHUB_WORKSPACE/"
           rm -rf "$GITHUB_WORKSPACE/.git/modules" || true
           cat > "$GITHUB_WORKSPACE/MIGRATION_SOURCE.md" <<EOF
           # HappyFox production-core migration
@@ -67,9 +73,10 @@ jobs:
           The original FoxGen code before this migration is preserved at:
           \`legacy/foxgen-pre-tanyapi-20260820\`.
 
-          Product-specific HappyFox branding, credentials, domains, database, Redis,
-          media namespace and deployment are layered in follow-up commits. Stable
-          provider/model identifiers are intentionally preserved.
+          GitHub workflows are intentionally not copied from NEUROMIX. FoxGen keeps
+          an isolated CI/deploy surface and receives HappyFox-specific workflows in
+          follow-up commits. Product-specific branding, credentials, domains,
+          database, Redis and media namespace are also layered separately.
           EOF
 
       - name: Verify imported tree contracts
@@ -78,13 +85,15 @@ jobs:
           set -Eeuo pipefail
           test -f bot/main.py
           test -f bot/miniapp.py
+          test -f bot/model_capabilities.py
           test -f frontend/miniapp-v0/package-lock.json
           test -f frontend/miniapp-v0/lib/app-context.tsx
-          test -f .github/workflows/ci.yml
-          test -f .github/workflows/miniapp-e2e.yml
           test -f Dockerfile
+          test -f compose.backend.yml
           grep -q 'production source of truth' README.md
           ! test -e src/foxgen
+          # FoxGen workflows must remain its own, not copied from tanyapi.
+          test -f .github/workflows/import-tanyapi-snapshot.yml
 
       - name: Commit imported snapshot to FoxGen
         shell: bash
@@ -98,5 +107,5 @@ jobs:
             exit 0
           fi
           git commit -m "chore: import proven tanyapi production core" \
-            -m "Source: Bambale0/banano_kling@${SOURCE_SHA}"
+            -m "Source: Bambale0/banano_kling@${SOURCE_SHA}; workflows intentionally isolated"
           git push origin "HEAD:${TARGET_BRANCH}"
