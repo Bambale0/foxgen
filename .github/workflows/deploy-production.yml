@@ -90,8 +90,10 @@ jobs:
           set -Eeuo pipefail
           shell="src/foxgen/miniapp_static/index.html"
           assets=(
+            boot-guard.js
+            runtime-loader.js
+            enhancement-loader.js
             parity-app.js
-            product-home.js
             complete-menu.js
             user-parity-hardening.js
             user-parity-phase2.js
@@ -103,6 +105,7 @@ jobs:
             suno-upload-extend.js
             motion-control.js
             promo-redeem.js
+            backend-parity-ui.js
           )
 
           test -s "$shell"
@@ -110,8 +113,11 @@ jobs:
           test -n "$release"
           python_release=$(PYTHONPATH=src python -c 'from foxgen.miniapp_release import MINIAPP_RELEASE; print(MINIAPP_RELEASE)')
           test "$python_release" = "$release"
-          grep -Fq "/mini-app/product-home.css?v=${release}" "$shell"
-          grep -Fq "/mini-app/product-home.js?v=${release}" "$shell"
+          grep -Fq "/mini-app/parity-app.js?v=${release}" "$shell"
+          grep -Fq "/mini-app/backend-parity-ui.js?v=${release}" "$shell"
+          grep -Fq "/mini-app/backend-parity.css?v=${release}" "$shell"
+          ! grep -Fq "product-home" "$shell"
+          ! grep -Fq "visibility: hidden" "$shell"
 
           for asset in "${assets[@]}"; do
             file="src/foxgen/miniapp_static/${asset}"
@@ -119,12 +125,13 @@ jobs:
             node --check "$file"
           done
 
-          grep -Fq "label.textContent = 'Каталог'" src/foxgen/miniapp_static/product-home.js
-          grep -Fq "Фото, видео, голос, музыка и Motion Control" src/foxgen/miniapp_static/product-home.js
+          grep -Fq "data-parity-src" "$shell"
+          grep -Fq "Все модели" src/foxgen/miniapp_static/backend-parity-ui.js
+          grep -Fq "Весь функционал" src/foxgen/miniapp_static/backend-parity-ui.js
+          grep -Fq "repeat(6" src/foxgen/miniapp_static/backend-parity.css
           grep -Fq "API_TIMEOUT_MS = 10000" src/foxgen/miniapp_static/parity-app.js
-          grep -Fq "void loadFeed(true)" src/foxgen/miniapp_static/parity-app.js
-          grep -Fq "foxgen:bootstrap" src/foxgen/miniapp_static/product-home.js
-          echo "Mini App ${release} release gate passed for ${EXPECTED_SHA}"
+          grep -Fq "foxgen:bootstrap" src/foxgen/miniapp_static/enhancement-loader.js
+          echo "Mini App ${release} single-runtime backend parity gate passed for ${EXPECTED_SHA}"
 
       - name: Configure SSH
         shell: bash
