@@ -67,10 +67,10 @@ def test_catalog_and_forms_are_backend_schema_driven() -> None:
         "/models/${encodeURIComponent(modelSlug)}/validate",
         "'/tasks'",
         "'/input-media'",
-        "'/generations?limit=",
+        "/generations?limit=${limit}",
         "'/balance'",
         "'/prices'",
-        "'/ledger?limit=",
+        "/ledger?limit=${limit}",
         "Idempotency-Key",
     ):
         assert marker in api
@@ -83,9 +83,9 @@ def test_user_facing_backend_domains_have_real_client_routes() -> None:
     works = read(COMPONENTS / "tabs" / "works-tab.tsx")
 
     for marker in (
-        "'/feed?sort=",
+        "/feed?sort=${encodeURIComponent(sort)}",
         "/publications/${encodeURIComponent(publicationId)}/like",
-        "'/reference-memory?limit=",
+        "/reference-memory?limit=${limit}",
         "'/tariff'",
         "'/support'",
         "'/partner'",
