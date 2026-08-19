@@ -1,0 +1,66 @@
+name: Mini App frontend
+
+on:
+  pull_request:
+    paths:
+      - "frontend/miniapp/**"
+      - "src/foxgen/miniapp_release.py"
+      - "Dockerfile"
+      - "pyproject.toml"
+      - "scripts/deploy-production.sh"
+      - ".github/workflows/miniapp-frontend.yml"
+      - ".github/workflows/deploy-production.yml"
+  push:
+    branches: [main]
+    paths:
+      - "frontend/miniapp/**"
+      - "src/foxgen/miniapp_release.py"
+      - "Dockerfile"
+      - "pyproject.toml"
+      - "scripts/deploy-production.sh"
+      - ".github/workflows/miniapp-frontend.yml"
+      - ".github/workflows/deploy-production.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: miniapp-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    name: React navigation, types and static export
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: frontend/miniapp
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/miniapp/package.json
+      - name: Install frontend dependencies
+        run: npm install --no-audit --no-fund
+      - name: Type check
+        run: npm run typecheck
+      - name: Component click tests
+        run: npm test
+      - name: Build static Mini App
+        run: npm run build
+      - name: Validate production export
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test -s out/index.html
+          grep -Fq 'name="foxgen-miniapp-shell" content="parity-v13"' out/index.html
+          grep -Fq '/mini-app/_next/' out/index.html
+          ! grep -Fq 'parity-app.js' out/index.html
+          ! grep -Fq 'backend-parity-ui.js' out/index.html
+          ! grep -R -Fq 'MutationObserver' app components lib out || {
+            echo "MutationObserver must not own Happy Fox navigation" >&2
+            exit 1
+          }
+          echo "State-driven Happy Fox static export validated."
