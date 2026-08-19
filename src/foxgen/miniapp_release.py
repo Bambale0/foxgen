@@ -1,6 +1,6 @@
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
-MINIAPP_RELEASE = "parity-v15"
+MINIAPP_RELEASE = "parity-v16"
 MINIAPP_RELEASE_QUERY_KEY = "release"
 
 

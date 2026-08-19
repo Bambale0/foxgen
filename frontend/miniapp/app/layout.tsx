@@ -21,7 +21,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="ru">
       <head>
-        <meta name="foxgen-miniapp-shell" content="parity-v15" />
+        <meta name="foxgen-miniapp-shell" content="parity-v16" />
         <meta httpEquiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
         <meta httpEquiv="Pragma" content="no-cache" />
         <script src="https://telegram.org/js/telegram-web-app.js?63" />
