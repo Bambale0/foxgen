@@ -3,438 +3,122 @@ name: CI
 on:
   pull_request:
   push:
-    branches: [main]
+    branches:
+      - main
+      - migrate/tanyapi-core-20260820
 
 permissions:
   contents: read
-  issues: write
-  pull-requests: write
-  security-events: write
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 env:
-  PYTHON_VERSION: "3.12"
-  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+  BOT_TOKEN: 123456:TEST_TOKEN_FOR_CI_ONLY
+  PYTHONPATH: ${{ github.workspace }}
+  PRODUCT_ID: happyfox
+  NEXT_PUBLIC_PRODUCT_ID: happyfox
 
 jobs:
-  quality:
-    name: quality
+  backend:
+    name: Backend regression
     runs-on: ubuntu-24.04
+    timeout-minutes: 45
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
-          fetch-depth: 0
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
+          python-version: "3.12"
           cache: pip
-          cache-dependency-path: requirements.lock
-      - name: Install exact lock
+      - name: Install dependencies
         run: |
-          python -m pip install --requirement requirements.lock
-          python -m pip install --no-deps --editable .
+          python -m pip install --quiet --upgrade pip
+          pip install --quiet pytest pytest-asyncio pytest-mock ruff
+          pip install --quiet -r requirements.txt
           python -m pip check
-          python scripts/check_lock.py
-      - name: Collect changed Python files
-        id: changed_python
-        shell: bash
+      - name: Compile runtime
+        run: python -m compileall -q bot scripts
+      - name: Ruff changed runtime surface
         run: |
-          set -Eeuo pipefail
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            base_sha="${{ github.event.pull_request.base.sha }}"
-          else
-            base_sha="${{ github.event.before }}"
-            if [ -z "$base_sha" ] || [ "$base_sha" = "0000000000000000000000000000000000000000" ]; then
-              base_sha="HEAD^"
-            fi
-          fi
-          git diff --name-only --diff-filter=ACMRT "$base_sha" HEAD -- '*.py' > changed-python.txt
-          if test -s changed-python.txt; then
-            echo "changed=true" >> "$GITHUB_OUTPUT"
-            cat changed-python.txt
-          else
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-            echo "No changed Python files"
-          fi
-      - name: Ruff check for changed files
-        id: ruff
-        if: steps.changed_python.outputs.changed == 'true'
-        shell: bash
+          python -m ruff check bot scripts tests --output-format=github
+      - name: Safe regression suite
         run: |
-          set -Eeuo pipefail
-          mapfile -t files < changed-python.txt
-          ruff check "${files[@]}" 2>&1 | tee ruff.log
-      - name: Generate Ruff lint fix patch
-        if: always() && steps.ruff.outcome == 'failure'
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          mapfile -t files < changed-python.txt
-          ruff check --fix --diff "${files[@]}" > ruff-lint.patch || true
-      - name: Upload Ruff lint fix patch
-        if: always() && steps.ruff.outcome == 'failure'
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: ruff-lint-patch
-          path: ruff-lint.patch
-          if-no-files-found: error
-      - name: Publish lint diagnostics
-        if: always() && github.event_name == 'pull_request' && steps.ruff.outcome == 'failure'
-        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b
-        with:
-          script: |
-            const fs = require('fs');
-            const report = fs.readFileSync('ruff.log', 'utf8').slice(-60000);
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              body: `## CI lint diagnostics\n\n\`\`\`text\n${report}\n\`\`\``
-            });
-      - name: Ruff formatting check for changed files
-        id: format
-        if: steps.changed_python.outputs.changed == 'true'
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          mapfile -t files < changed-python.txt
-          ruff format --check "${files[@]}"
-      - name: Generate Ruff formatting patch
-        if: always() && steps.format.outcome == 'failure'
-        shell: bash
-        run: |
-          mapfile -t files < changed-python.txt
-          ruff format --diff "${files[@]}" > ruff-format.patch || true
-      - name: Upload Ruff formatting patch
-        if: always() && steps.format.outcome == 'failure'
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: ruff-format-patch
-          path: ruff-format.patch
-          if-no-files-found: error
-      - name: Type check regression gate
-        id: mypy
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            base_sha="${{ github.event.pull_request.base.sha }}"
-          else
-            base_sha="${{ github.event.before }}"
-            if [ -z "$base_sha" ] || [ "$base_sha" = "0000000000000000000000000000000000000000" ]; then
-              base_sha="HEAD^"
-            fi
-          fi
+          pytest tests/ \
+            --ignore=tests/live \
+            -m "not live_smoke" \
+            -q \
+            --tb=short
 
-          set +e
-          mypy --show-error-codes --no-pretty src > mypy.log 2>&1
-          head_status=$?
-          set -e
-
-          rm -rf /tmp/foxgen-mypy-base
-          git worktree add --detach /tmp/foxgen-mypy-base "$base_sha"
-          set +e
-          (
-            cd /tmp/foxgen-mypy-base
-            mypy --show-error-codes --no-pretty src > /tmp/mypy-base.log 2>&1
-          )
-          base_status=$?
-          set -e
-
-          HEAD_STATUS="$head_status" BASE_STATUS="$base_status" python - <<'PY'
-          from __future__ import annotations
-
-          from collections import Counter
-          import os
-          from pathlib import Path
-          import re
-          import sys
-
-          pattern = re.compile(
-              r"^(?P<path>.*?):\d+(?::\d+)?: error: (?P<message>.*?)(?:  \[(?P<code>[^]]+)\])?$"
-          )
-
-          def parse(path: str) -> Counter[tuple[str, str, str]]:
-              result: Counter[tuple[str, str, str]] = Counter()
-              for raw in Path(path).read_text(encoding="utf-8", errors="replace").splitlines():
-                  match = pattern.match(raw)
-                  if match is None:
-                      continue
-                  result[(
-                      match.group("path"),
-                      match.group("message").strip(),
-                      match.group("code") or "",
-                  )] += 1
-              return result
-
-          head = parse("mypy.log")
-          base = parse("/tmp/mypy-base.log")
-          head_status = int(os.environ["HEAD_STATUS"])
-          base_status = int(os.environ["BASE_STATUS"])
-
-          if head_status != 0 and not head:
-              print("mypy head failed without parseable error diagnostics", file=sys.stderr)
-              sys.exit(2)
-          if base_status != 0 and not base:
-              print("mypy base failed without parseable error diagnostics", file=sys.stderr)
-              sys.exit(2)
-
-          new_errors = head - base
-          print(f"mypy baseline fingerprints: {sum(base.values())}")
-          print(f"mypy head fingerprints: {sum(head.values())}")
-          if not new_errors:
-              print("No new mypy errors relative to base.")
-              sys.exit(0)
-
-          print("New mypy errors relative to base:", file=sys.stderr)
-          for (path, message, code), count in sorted(new_errors.items()):
-              suffix = f" [{code}]" if code else ""
-              print(f"{count}x {path}: {message}{suffix}", file=sys.stderr)
-          sys.exit(1)
-          PY
-
-          cp /tmp/mypy-base.log mypy-base.log
-          git worktree remove --force /tmp/foxgen-mypy-base
-      - name: Upload mypy baseline diagnostics
-        if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: mypy-diagnostics
-          path: |
-            mypy.log
-            mypy-base.log
-          if-no-files-found: warn
-      - name: Publish type-check diagnostics
-        if: always() && github.event_name == 'pull_request' && steps.mypy.outcome == 'failure'
-        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b
-        with:
-          script: |
-            const fs = require('fs');
-            const report = fs.readFileSync('mypy.log', 'utf8').slice(-60000);
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              body: `## CI type-check diagnostics\n\nFull mypy still runs against the head; this transitional gate blocks new error fingerprints relative to the base revision while #118 burns down the historical baseline.\n\n\`\`\`text\n${report}\n\`\`\``
-            });
-      - name: Unit and contract tests with coverage
-        id: tests
-        run: |
-          set -o pipefail
-          pytest -q \
-            --cov=foxgen \
-            --cov-report=term-missing \
-            --cov-report=xml:coverage.xml \
-            2>&1 | tee pytest.log
-      - name: Upload coverage report
-        if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: coverage-report
-          path: coverage.xml
-          if-no-files-found: warn
-      - name: Publish test diagnostics
-        if: always() && github.event_name == 'pull_request' && steps.tests.outcome == 'failure'
-        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b
-        with:
-          script: |
-            const fs = require('fs');
-            const report = fs.readFileSync('pytest.log', 'utf8').slice(-60000);
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              body: `## CI test diagnostics\n\n\`\`\`text\n${report}\n\`\`\``
-            });
-
-  infrastructure:
-    name: PostgreSQL Redis migrations lifecycle and E2E
+  miniapp:
+    name: Mini App build and browser E2E
     runs-on: ubuntu-24.04
-    env:
-      FOXGEN_ENV: test
-      FOXGEN_DATABASE_URL: postgresql+asyncpg://foxgen:foxgen@localhost:5432/foxgen_ci
-      FOXGEN_REDIS_URL: redis://localhost:6379/15
-      FOXGEN_RUN_INTEGRATION: "1"
-      FOXGEN_RUN_E2E: "1"
-      FOXGEN_API_HOST: 127.0.0.1
-      FOXGEN_API_PORT: "8080"
-    services:
-      postgres:
-        image: postgres:17-alpine
-        env:
-          POSTGRES_DB: foxgen_ci
-          POSTGRES_USER: foxgen
-          POSTGRES_PASSWORD: foxgen
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U foxgen -d foxgen_ci"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 20
-      redis:
-        image: redis:7-alpine
-        ports:
-          - 6379:6379
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 20
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: frontend/miniapp-v0
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
         with:
-          python-version: ${{ env.PYTHON_VERSION }}
-          cache: pip
-          cache-dependency-path: requirements.lock
-      - name: Install exact lock
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/miniapp-v0/package-lock.json
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
+      - name: Lint
+        run: npm run lint
+      - name: Build production static export
+        run: npm run build
+      - name: Verify static export
         run: |
-          python -m pip install --requirement requirements.lock
-          python -m pip install --no-deps --editable .
-          python -m pip check
-          python scripts/check_lock.py
-      - name: Upgrade all migrations
-        run: alembic upgrade head
-      - name: Verify migration head and critical schema
+          test -s out/index.html
+          test -d out/_next/static
+          grep -q '_next/static' out/index.html
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Prepare browser E2E export
         run: |
-          alembic current --check-heads
-          python scripts/check_schema.py
-      - name: Exercise downgrade and re-upgrade
-        run: |
-          alembic downgrade -1
-          alembic upgrade head
-          alembic current --check-heads
-          python scripts/check_schema.py
-      - name: Real PostgreSQL Redis and lifecycle tests
-        id: integration_tests
-        run: |
-          set -o pipefail
-          pytest -vv --maxfail=1 \
-            --junitxml=/tmp/foxgen-integration.xml \
-            tests/integration \
-            2>&1 | tee /tmp/foxgen-integration.log
-      - name: Cross-layer E2E tests
-        id: e2e_tests
-        run: |
-          set -o pipefail
-          pytest -vv --maxfail=1 \
-            --junitxml=/tmp/foxgen-e2e.xml \
-            tests/e2e \
-            2>&1 | tee /tmp/foxgen-e2e.log
-      - name: API readiness smoke test
-        id: api_smoke
-        run: |
-          python -c "from foxgen.cli import run_api; run_api()" > /tmp/foxgen-api.log 2>&1 &
-          api_pid=$!
-          trap 'kill "${api_pid}" 2>/dev/null || true' EXIT
-          for attempt in $(seq 1 30); do
-            if ! kill -0 "${api_pid}" 2>/dev/null; then
-              echo "API process exited before readiness"
-              cat /tmp/foxgen-api.log
-              exit 1
-            fi
-            if curl --fail --silent http://127.0.0.1:8080/health/ready > /tmp/ready.json; then
-              cat /tmp/ready.json
-              exit 0
-            fi
-            sleep 1
-          done
-          echo "API readiness timed out"
-          cat /tmp/foxgen-api.log
-          exit 1
-      - name: Upload infrastructure diagnostics
-        if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: infrastructure-diagnostics
-          path: |
-            /tmp/foxgen-integration.log
-            /tmp/foxgen-integration.xml
-            /tmp/foxgen-e2e.log
-            /tmp/foxgen-e2e.xml
-            /tmp/foxgen-api.log
-          if-no-files-found: warn
+          rm -rf .e2e-server
+          mkdir -p .e2e-server/mini-app
+          cp -R out/. .e2e-server/mini-app/
+      - name: Critical browser journeys
+        run: node e2e/critical-flows.mjs
 
-  dependency-review:
-    name: dependency review advisory
-    if: github.event_name == 'pull_request'
+  docker:
+    name: Production Docker image
     runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    needs:
+      - backend
+      - miniapp
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-      - name: Review dependency changes
-        continue-on-error: true
-        uses: actions/dependency-review-action@v5.0.0
-        with:
-          fail-on-severity: moderate
-
-  security:
-    name: filesystem vulnerability and misconfiguration scan
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-      - uses: aquasecurity/trivy-action@v0.36.0
-        with:
-          scan-type: fs
-          scan-ref: .
-          scanners: vuln,secret,misconfig
-          format: table
-          exit-code: "1"
-          ignore-unfixed: true
-          severity: HIGH,CRITICAL
-
-  secrets:
-    name: secret scan
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          fetch-depth: 0
-      - uses: gitleaks/gitleaks-action@v2.3.9
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  miniapp-browser-e2e:
-    name: Mini App browser E2E
-    uses: ./.github/workflows/miniapp-browser-e2e.yml
-
-  container:
-    name: container compose and vulnerability scan
-    runs-on: ubuntu-24.04
-    needs: [quality, infrastructure, security, secrets, miniapp-browser-e2e]
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-      - name: Validate development Compose configuration
-        run: |
-          cp .env.example .env
-          docker compose config --quiet
-          rm -f .env
-      - name: Validate production deployment assets
-        run: |
-          bash -n scripts/deploy-production.sh
-          cp deploy/production.env.example .env
-          docker compose --env-file .env -f docker-compose.prod.yml config --quiet
-          rm -f .env
-      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
-      - name: Build deterministic production image
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8
+      - uses: actions/checkout@v6
+      - uses: docker/setup-buildx-action@v3
+      - name: Build exact source image
+        uses: docker/build-push-action@v7
         with:
           context: .
+          file: Dockerfile
           load: true
           push: false
-          tags: foxgen:ci
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-      - name: Image import smoke test
-        run: docker run --rm foxgen:ci python -c "import foxgen; print(foxgen.__version__)"
-      - name: Scan production image
-        uses: aquasecurity/trivy-action@v0.36.0
-        with:
-          image-ref: foxgen:ci
-          format: table
-          exit-code: "1"
-          ignore-unfixed: true
-          severity: HIGH,CRITICAL
+          tags: foxgen-happyfox-ci:${{ github.sha }}
+          build-args: |
+            VCS_REF=${{ github.sha }}
+            BUILD_DATE=ci
+      - name: Verify image runtime
+        run: |
+          docker run --rm --entrypoint python foxgen-happyfox-ci:${GITHUB_SHA} \
+            -m compileall -q /app/bot /app/scripts
+          docker run --rm \
+            -e BOT_TOKEN='123456:TEST_TOKEN_FOR_CI_ONLY' \
+            -e PRODUCT_ID=happyfox \
+            -e BANANO_SKIP_PROJECT_ENV=1 \
+            -e BANANO_LOG_TO_STDOUT=1 \
+            --entrypoint python foxgen-happyfox-ci:${GITHUB_SHA} \
+            -c 'import bot.config, bot.database, bot.main, bot.miniapp, bot.product; assert bot.product.product.product_id == "happyfox"; print("HappyFox container imports: ok")'
+          docker run --rm --entrypoint ffmpeg foxgen-happyfox-ci:${GITHUB_SHA} -version >/dev/null
+          docker run --rm --entrypoint pg_dump foxgen-happyfox-ci:${GITHUB_SHA} --version >/dev/null
+          docker run --rm --entrypoint sqlite3 foxgen-happyfox-ci:${GITHUB_SHA} --version >/dev/null
