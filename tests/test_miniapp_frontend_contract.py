@@ -15,13 +15,16 @@ def read(path: Path) -> str:
 def test_happy_fox_uses_one_state_driven_application_shell() -> None:
     page = read(FRONTEND / "app" / "page.tsx")
     shell = read(COMPONENTS / "mini-app-shell.tsx")
+    router = read(COMPONENTS / "workspace-router.tsx")
     context = read(LIB / "app-context.tsx")
 
     assert "<MiniAppShell>" in page
     assert "<TabContent />" in page
     assert "<AppProvider>" in shell
     assert "<TabNav />" in shell
-    assert "<WorkspaceSheet />" in shell
+    assert "<WorkspaceRouter />" in shell
+    assert "activeWorkspace" in router
+    assert "LegacyWorkspaceSheet" in router
     assert "createContext" in context
     assert "activeTab" in context
     assert "selectedModel" in context
@@ -82,6 +85,8 @@ def test_catalog_and_forms_are_backend_schema_driven() -> None:
 def test_user_facing_backend_domains_have_real_client_routes() -> None:
     api = read(LIB / "api.ts")
     workspace = read(COMPONENTS / "workspace-sheet.tsx")
+    workspace_router = read(COMPONENTS / "workspace-router.tsx")
+    social_api = read(LIB / "social-api.ts")
     profile = read(COMPONENTS / "tabs" / "profile-tab.tsx")
     works = read(COMPONENTS / "tabs" / "works-tab.tsx")
 
@@ -98,7 +103,10 @@ def test_user_facing_backend_domains_have_real_client_routes() -> None:
     ):
         assert marker in api
 
-    assert "Сообщество" in workspace
+    assert "/publications/${encodeURIComponent(publicationId)}/comments" in social_api
+    assert "miniAppApi.remixSource(item.id)" in workspace_router
+    assert "sourcePublicationId: source.publication_id" in workspace_router
+    assert "Сообщество" in workspace_router
     assert "Референсы" in workspace
     assert "Тарифы" in workspace
     assert "Партнёры" in workspace
@@ -107,7 +115,9 @@ def test_user_facing_backend_domains_have_real_client_routes() -> None:
     assert "Отменить" in works
     assert "В ленту" in works
     assert "В профиль" in works
-    assert "/internal/admin" not in "\n".join((api, workspace, profile, works))
+    assert "/internal/admin" not in "\n".join(
+        (api, workspace, workspace_router, social_api, profile, works)
+    )
 
 
 def test_private_input_models_use_dedicated_backend_workflows() -> None:
