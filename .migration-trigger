@@ -1,1 +1,2 @@
 trigger tanyapi source snapshot import into migration branch
+retry=2
