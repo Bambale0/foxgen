@@ -129,10 +129,16 @@ def test_current_catalog_can_appear_before_account_bootstrap_finishes() -> None:
     event_index = loader.index("publishCatalogRuntimeReady();")
     assert mount_index < catalog_load_index < event_index
 
-    assert "window.addEventListener('foxgen:catalog-runtime-loaded', loadEnhancements);" in enhancements
+    assert (
+        "window.addEventListener('foxgen:catalog-runtime-loaded', loadEnhancements);"
+        in enhancements
+    )
     assert "surfaceReady = true" in enhancements
     assert "document.documentElement.setAttribute('data-foxgen-catalog', 'ready')" in enhancements
-    assert "if (optionalLoaded || !surfaceReady || !bootstrapReady || !optionalNodes) return;" in enhancements
+    assert (
+        "if (optionalLoaded || !surfaceReady || !bootstrapReady || !optionalNodes) return;"
+        in enhancements
+    )
 
 
 def test_production_deploy_is_not_silently_disabled_after_green_main_ci() -> None:
