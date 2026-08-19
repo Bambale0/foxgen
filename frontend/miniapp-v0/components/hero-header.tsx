@@ -1,8 +1,9 @@
 'use client'
 
+import Image from 'next/image'
+import { Coins, RefreshCw, Wifi } from 'lucide-react'
 import { useApp } from '@/lib/app-context'
-import { Banana, RefreshCw, Wifi } from 'lucide-react'
-import { BRAND_NAME } from '@/lib/brand'
+import { BRAND_LOGO, BRAND_NAME } from '@/lib/brand'
 import { cn } from '@/lib/utils'
 
 export function HeroHeader() {
@@ -21,14 +22,26 @@ export function HeroHeader() {
     <header className="sticky top-0 z-40 bg-background/80 px-3 pb-2 pt-3 backdrop-blur-xl sm:px-4 lg:px-6">
       <div className="mx-auto w-full max-w-[1180px]">
         <div className="flex items-center justify-between gap-3 rounded-2xl border border-border/50 bg-card/55 px-3 py-2.5 shadow-lg shadow-background/30">
-          <div className="min-w-0">
-            <div className="truncate text-xs font-black tracking-[0.16em] text-gold">
-              {BRAND_NAME}
+          <div className="flex min-w-0 items-center gap-2.5">
+            <div className="relative h-9 w-9 shrink-0 overflow-hidden rounded-xl border border-gold/25 bg-gold/10">
+              <Image
+                src={BRAND_LOGO}
+                alt={`${BRAND_NAME} logo`}
+                fill
+                priority
+                sizes="36px"
+                className="object-cover"
+              />
             </div>
-            <div className="mt-0.5 inline-flex items-center gap-1.5 text-[10px] font-semibold text-success">
-              <Wifi className="h-3 w-3" />
-              <span>{mode === 'live' ? 'Онлайн' : 'Telegram'}</span>
-              <span className="h-1.5 w-1.5 rounded-full bg-success" />
+            <div className="min-w-0">
+              <div className="truncate text-xs font-black tracking-[0.16em] text-gold">
+                {BRAND_NAME}
+              </div>
+              <div className="mt-0.5 inline-flex items-center gap-1.5 text-[10px] font-semibold text-success">
+                <Wifi className="h-3 w-3" />
+                <span>{mode === 'live' ? 'Онлайн' : 'Telegram'}</span>
+                <span className="h-1.5 w-1.5 rounded-full bg-success" />
+              </div>
             </div>
           </div>
 
@@ -50,7 +63,7 @@ export function HeroHeader() {
               onClick={openBalance}
               className="inline-flex items-center gap-2 rounded-full border border-gold/25 bg-gold/10 px-3 py-1.5 transition-colors hover:bg-gold/15"
             >
-              <Banana className="h-4 w-4 text-gold" />
+              <Coins className="h-4 w-4 text-gold" />
               <span className="text-sm font-bold text-gold">{user.credits}</span>
             </button>
           </div>

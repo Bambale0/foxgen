@@ -1,1 +1,4 @@
-WELCOME_TEXT = "Привет 👋\n\nЯ <b>NEUROMIX</b> — самый выгодный и очень удобный бот для генерации изображений и видео.\n\n👇 Пользуйся текстовым вариантом генераций или открой приложение, чтобы начать творить 🚀"
+from bot.product import product
+
+
+WELCOME_TEXT = product.welcome_text
