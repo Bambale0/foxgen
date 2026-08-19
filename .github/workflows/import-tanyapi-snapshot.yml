@@ -1,0 +1,99 @@
+name: Import tanyapi snapshot into FoxGen
+
+on:
+  push:
+    branches:
+      - migrate/tanyapi-core-20260820
+    paths:
+      - .github/workflows/import-tanyapi-snapshot.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: foxgen-tanyapi-source-import
+  cancel-in-progress: false
+
+env:
+  SOURCE_REPOSITORY: Bambale0/banano_kling
+  SOURCE_SHA: 36f92a0504f849c0c591652a880410e33a1c89aa
+  TARGET_BRANCH: migrate/tanyapi-core-20260820
+
+jobs:
+  import:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout FoxGen migration branch
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ env.TARGET_BRANCH }}
+          fetch-depth: 0
+
+      - name: Fetch exact production source snapshot
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          rm -rf /tmp/tanyapi-source
+          git init -q /tmp/tanyapi-source
+          git -C /tmp/tanyapi-source remote add origin "https://github.com/${SOURCE_REPOSITORY}.git"
+          git -C /tmp/tanyapi-source fetch --depth=1 origin "$SOURCE_SHA"
+          git -C /tmp/tanyapi-source checkout --detach FETCH_HEAD
+          actual_sha="$(git -C /tmp/tanyapi-source rev-parse HEAD)"
+          test "$actual_sha" = "$SOURCE_SHA"
+          echo "Verified source SHA: $actual_sha"
+
+      - name: Replace FoxGen tree with tanyapi source snapshot
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          rsync -a --delete --exclude='.git/' /tmp/tanyapi-source/ "$GITHUB_WORKSPACE/"
+          rm -rf "$GITHUB_WORKSPACE/.git/modules" || true
+          cat > "$GITHUB_WORKSPACE/MIGRATION_SOURCE.md" <<EOF
+          # HappyFox production-core migration
+
+          FoxGen was re-based as a source snapshot from the proven production core:
+
+          - source repository: \`Bambale0/banano_kling\`
+          - source branch: \`tanyapi\`
+          - exact source SHA: \`${SOURCE_SHA}\`
+          - imported into: \`Bambale0/foxgen\`
+          - migration date: 2026-08-20
+
+          The original FoxGen code before this migration is preserved at:
+          \`legacy/foxgen-pre-tanyapi-20260820\`.
+
+          Product-specific HappyFox branding, credentials, domains, database, Redis,
+          media namespace and deployment are layered in follow-up commits. Stable
+          provider/model identifiers are intentionally preserved.
+          EOF
+
+      - name: Verify imported tree contracts
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test -f bot/main.py
+          test -f bot/miniapp.py
+          test -f frontend/miniapp-v0/package-lock.json
+          test -f frontend/miniapp-v0/lib/app-context.tsx
+          test -f .github/workflows/ci.yml
+          test -f .github/workflows/miniapp-e2e.yml
+          test -f Dockerfile
+          grep -q 'production source of truth' README.md
+          ! test -e src/foxgen
+
+      - name: Commit imported snapshot to FoxGen
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          if git diff --cached --quiet; then
+            echo 'No migration changes to commit'
+            exit 0
+          fi
+          git commit -m "chore: import proven tanyapi production core" \
+            -m "Source: Bambale0/banano_kling@${SOURCE_SHA}"
+          git push origin "HEAD:${TARGET_BRANCH}"
