@@ -104,7 +104,7 @@ def test_runtime_loader_makes_current_catalog_mandatory() -> None:
     assert "isCurrentSurfaceReady" in enhancements
     assert "waitForCurrentSurface" in enhancements
     assert "COMMUNITY / LIVE" in enhancements
-    assert 'main.getAttribute(\'data-product-catalog\') === \'1\'' in enhancements
+    assert "main.getAttribute('data-product-catalog') === '1'" in enhancements
     assert "showCriticalFailure" in enhancements
     assert "__FOXGEN_BOOT_FATAL__" in enhancements
     assert "loadOptionalModules(nodes)" in enhancements
