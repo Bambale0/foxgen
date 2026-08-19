@@ -195,7 +195,7 @@ test.describe('Happy Fox production browser E2E', () => {
     const form = page.getByTestId('model-form')
     await expect(form).toBeVisible()
     await expect(page.getByTestId('remix-prefill')).toBeVisible()
-    await expect(form.locator('label.form-field').filter({ hasText: 'Промпт' }).locator('textarea').first()).toHaveValue('cinematic orange fox')
+    await expect(form.getByTestId('field-prompt')).toHaveValue('cinematic orange fox')
     expect(pageErrors).toEqual([])
   })
 })
