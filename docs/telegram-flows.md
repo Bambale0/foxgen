@@ -11,7 +11,12 @@ The interrupt contract is:
 1. collect known temporary input keys;
 2. best-effort delete temporary files;
 3. clear Redis state/data;
-4. open the canonical main menu.
+4. refresh the private-chat Telegram menu button to the current versioned Happy Fox Mini App URL;
+5. open the canonical main menu.
+
+The bot also refreshes that private-chat menu override on explicit menu/cancel navigation. This is deliberate release convergence: a historical per-chat `setChatMenuButton` override must not keep an old WebApp URL after the default button moves to a newer Mini App release. Group/supergroup/channel updates never receive a per-chat WebApp override.
+
+The bot startup still configures the default `MenuButtonWebApp`; per-chat convergence happens only for private chats that interact with the bot, because Telegram does not expose an enumerable list of all historical private chats through this flow.
 
 Regression tests enumerate every declared product state so new screens cannot silently weaken this rule.
 
@@ -258,6 +263,7 @@ A Telegram/product change is incomplete unless tests preserve relevant contracts
 
 - every declared product state has a state contract;
 - `/start`/`/menu` can interrupt product drafts;
+- private `/start`/`/menu` converges stale per-chat WebApp menu overrides to the current release URL;
 - exact runtime router order;
 - stale/invalid/back behavior;
 - strict model payload validation before paid admission;
