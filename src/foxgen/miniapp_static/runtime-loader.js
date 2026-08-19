@@ -10,7 +10,11 @@
     if (node) node.textContent = message;
   }
 
-  function fail(message) {
+  function fatal(message) {
+    if (typeof window.__FOXGEN_BOOT_FATAL__ === 'function') {
+      window.__FOXGEN_BOOT_FATAL__(message);
+      return;
+    }
     if (typeof window.__FOXGEN_BOOT_FAIL__ === 'function') {
       window.__FOXGEN_BOOT_FAIL__(message);
       return;
@@ -41,7 +45,7 @@
     }
   }
 
-  function supportsParitySyntax() {
+  function supportsCurrentRuntime() {
     try {
       new Function('var a = null; a ??= 1; var b = true; b &&= false; return a === 1 && b === false;');
       return true;
@@ -50,40 +54,50 @@
     }
   }
 
-  function requestedLegacyMode() {
-    return /(?:[?&])legacy=1(?:&|$)/.test(window.location.search || '');
+  function appendCoreScript(source, marker, onload) {
+    var script = document.createElement('script');
+    script.src = source;
+    script.async = false;
+    script.setAttribute('data-foxgen-core-runtime', marker);
+    script.onload = onload;
+    script.onerror = function () {
+      fatal('Не загрузился обязательный файл Happy Fox: ' + source.split('/').pop());
+    };
+    document.body.appendChild(script);
   }
 
   installCompatibility();
 
   var manifest = document.getElementById('foxgen-runtime-manifest');
   if (!manifest) {
-    fail('Не найден runtime manifest Happy Fox.');
+    fatal('Не найден runtime manifest Happy Fox.');
     return;
   }
 
-  var paritySupported = supportsParitySyntax();
-  var legacy = requestedLegacyMode() || !paritySupported;
-  var source = manifest.getAttribute(legacy ? 'data-legacy-src' : 'data-parity-src');
-  if (!source) {
-    fail('Не найден файл интерфейса Happy Fox.');
+  if (!supportsCurrentRuntime()) {
+    document.documentElement.setAttribute('data-foxgen-runtime', 'unsupported');
+    fatal('Эта версия Telegram WebView слишком старая для актуального Happy Fox. Обновите Telegram и откройте Mini App снова.');
     return;
   }
 
-  window.__FOXGEN_RUNTIME_KIND__ = legacy ? 'legacy' : 'parity';
-  document.documentElement.setAttribute('data-foxgen-runtime', window.__FOXGEN_RUNTIME_KIND__);
-  setPhase(legacy ? 'Запускаем совместимый режим…' : 'Запускаем интерфейс…');
+  var paritySource = manifest.getAttribute('data-parity-src');
+  var catalogSource = manifest.getAttribute('data-product-home-src');
+  if (!paritySource || !catalogSource) {
+    fatal('Не найден актуальный интерфейс Happy Fox.');
+    return;
+  }
 
-  var script = document.createElement('script');
-  script.src = source;
-  script.async = false;
-  script.setAttribute('data-foxgen-core-runtime', window.__FOXGEN_RUNTIME_KIND__);
-  script.onload = function () {
+  window.__FOXGEN_RUNTIME_KIND__ = 'parity';
+  document.documentElement.setAttribute('data-foxgen-runtime', 'parity');
+  setPhase('Запускаем актуальный интерфейс…');
+
+  appendCoreScript(paritySource, 'parity', function () {
     window.__FOXGEN_CORE_LOADED__ = true;
-    setPhase('Подключаем аккаунт…');
-  };
-  script.onerror = function () {
-    fail('Не загрузился основной файл интерфейса: ' + source.split('/').pop());
-  };
-  document.body.appendChild(script);
+    setPhase('Подключаем каталог моделей…');
+
+    appendCoreScript(catalogSource, 'catalog', function () {
+      window.__FOXGEN_CATALOG_RUNTIME_LOADED__ = true;
+      setPhase('Подключаем аккаунт…');
+    });
+  });
 })();
