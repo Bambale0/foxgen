@@ -66,6 +66,11 @@ class TestConfig:
         cfg = Config()
         assert cfg.WEBHOOK_BIND_HOST == "127.0.0.1"
 
+    def test_redis_prefix_default_is_happyfox_specific(self, monkeypatch):
+        monkeypatch.delenv("REDIS_PREFIX", raising=False)
+        cfg = Config()
+        assert cfg.REDIS_PREFIX == "foxgen_happyfox"
+
     def test_payment_provider_freekassa(self):
         cfg = Config()
         cfg.PAYMENT_PROVIDER = "freekassa"
@@ -114,11 +119,12 @@ class TestConfig:
         assert cfg.yookassa_notification_url == cfg.freekassa_notification_url
         assert cfg.YOOKASSA_RETURN_URL == cfg.FREEKASSA_RETURN_URL
 
-    def test_static_base_url_default(self):
+    def test_static_base_url_default_is_local(self):
         cfg = Config()
         cfg.STATIC_BASE_URL = ""
         cfg.WEBHOOK_HOST = ""
-        assert cfg.static_base_url == "https://dev.chillcreative.ru"
+        cfg.WEBHOOK_PORT = 8443
+        assert cfg.static_base_url == "http://127.0.0.1:8443"
 
     def test_static_base_url_webhook(self):
         cfg = Config()
