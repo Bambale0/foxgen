@@ -17,8 +17,17 @@ pillow-heif>=0.18.0,<2
 python-dotenv>=1.0.0
 pydantic>=2.0.0
 
-# YooKassa payments
-# Provider adapter uses HTTP API directly
+# Type hints
+typing-extensions>=4.0.0
+
+# Payment providers (YooKassa, FreeKassa) use aiohttp + stdlib primitives.
+
+# Optional (face detection for improved frontal crops)
+# Installing face_recognition requires dlib and system build deps (cmake, boost).
+# On Debian/Ubuntu you may need: apt install build-essential cmake libboost-all-dev
+# Then install the package:
+# pip install face_recognition
+# If you cannot build dlib, skip this — the service will fall back to center-crop.
 
 # Redis cache / FSM storage
 redis>=5.0.0
