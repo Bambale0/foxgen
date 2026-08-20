@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from scripts.prepare_happyfox_production import (
     build_runtime_values,
     mini_app_url_for_origin,
@@ -88,3 +90,40 @@ def test_empty_admin_ids_are_safe_and_do_not_block_production() -> None:
 
     assert "ADMIN_IDS" not in values
     assert validate(values) == []
+
+
+def test_compose_uses_existing_backend_network_and_runtime_overlay() -> None:
+    compose = Path("compose.backend.yml").read_text(encoding="utf-8")
+
+    assert ".env.happyfox.runtime" in compose
+    assert "network_mode: host" not in compose
+    assert "name: ${HAPPYFOX_BACKEND_NETWORK:-foxgen_backend}" in compose
+    assert "- api" in compose
+    assert 'WEBHOOK_PORT: "8080"' in compose
+
+
+def test_happyfox_deploy_stops_only_legacy_app_tier_and_has_public_rollback() -> None:
+    wrapper = Path("scripts/deploy_happyfox.sh").read_text(encoding="utf-8")
+    generic = Path("scripts/deploy_backend_docker.sh").read_text(encoding="utf-8")
+
+    for container in ("foxgen-api-1", "foxgen-bot-1", "foxgen-worker-1"):
+        assert container in wrapper
+    for infrastructure in ("foxgen-postgres-1", "foxgen-redis-1", "foxgen-minio-1"):
+        assert infrastructure not in wrapper
+
+    assert "rollback_legacy_app" in wrapper
+    assert "PUBLIC_HEALTH_OK" in wrapper
+    assert "HAPPYFOX_REVERSE_PROXY_CONTAINER" in wrapper
+    assert "restore_cutover_containers" in generic
+    assert "CUTOVER_RESTART_ON_FAILURE" in generic
+
+
+def test_production_workflow_prepares_runtime_before_strict_validation() -> None:
+    workflow = Path(".github/workflows/deploy-production.yml").read_text(encoding="utf-8")
+
+    prepare_index = workflow.index("prepare_happyfox_production.py")
+    runtime_validation_index = workflow.index(
+        ".env .env.happyfox.runtime .env.postgres"
+    )
+    assert prepare_index < runtime_validation_index
+    assert "docker network inspect" in workflow
