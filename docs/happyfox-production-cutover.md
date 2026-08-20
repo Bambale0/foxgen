@@ -12,7 +12,7 @@ Required separate values:
 
 - Telegram `BOT_TOKEN`;
 - public `WEBHOOK_HOST`;
-- `MINI_APP_URL` and `MINIAPP_FRONTEND_DOMAIN`;
+- `MINI_APP_URL`;
 - PostgreSQL database/user;
 - Redis DB/prefix (`foxgen_happyfox` recommended);
 - KIE/provider webhook secret;
@@ -21,30 +21,32 @@ Required separate values:
 - public media/static origin;
 - Telegram admin IDs.
 
+`MINIAPP_FRONTEND_DOMAIN` may be kept as a GitHub production variable, but it is not required for an already configured server. If omitted, the deployment resolves the hostname from the server-side `.env`, preferring `MINI_APP_URL` and retaining compatibility with the previous FoxGen `FOXGEN_MINIAPP_PUBLIC_URL` / callback URL configuration. The resolved hostname is still checked against the known NEUROMIX/Tanya domain deny-list before deployment.
+
 `python scripts/validate_happyfox_env.py .env .env.postgres` is a mandatory fail-closed preflight. It rejects known NEUROMIX/Tanya domains, SQLite production, a shared legacy Redis prefix, missing provider/webhook secrets and incomplete selected-payment-provider credentials.
 
 ## Server preparation
 
-The existing FoxGen production SSH target can be reused. Keep the checkout isolated at `/root/foxgen` (or the repository production variable `DEPLOY_PATH`).
+The existing FoxGen production SSH target can be reused. Keep the checkout at the repository production variable `DEPLOY_PATH` (the established environment may use a non-default path).
 
 1. Back up the previous FoxGen data and `.env`.
 2. Create a dedicated PostgreSQL database/user for HappyFox.
 3. Allocate a dedicated Redis database and set `REDIS_PREFIX=foxgen_happyfox`.
-4. Build `.env` from `.env.happyfox.example`; never copy the NEUROMIX `.env` wholesale.
+4. Migrate the server `.env` to the HappyFox runtime contract without replacing working production secrets blindly.
 5. Configure the HappyFox backend and Mini App DNS/TLS before the first deployment.
-6. Set the GitHub production variable `MINIAPP_FRONTEND_DOMAIN` to the HappyFox Mini App hostname only.
+6. Optionally set the GitHub production variable `MINIAPP_FRONTEND_DOMAIN`; otherwise ensure the public Mini App URL is present in the server `.env`.
 7. Run the validator before changing any running service.
 
 ## Deployment
 
 Production deployment is automatic. Every successful `CI` run triggered by a push to `main` starts `.github/workflows/deploy-production.yml` for that exact verified `main` SHA. Manual dispatch remains available for an explicitly requested `main` SHA.
 
-The deploy job still fails closed before touching production if required SSH secrets, deployment variables, the HappyFox Mini App domain, repository provenance, or the isolated runtime environment are invalid. This keeps automatic rollout enabled without weakening the HappyFox/NEUROMIX isolation rules.
+The deploy job fails closed before touching production if required SSH secrets, deployment variables, the resolved HappyFox Mini App domain, repository provenance, or the isolated runtime environment are invalid. Existing production SSH/environment configuration is reused instead of requiring duplicate GitHub variables.
 
 The remote deployment is intentionally split into two guarded wrappers:
 
 - `scripts/deploy_happyfox.sh` — validates product/data-plane isolation, then invokes the proven tanyapi Docker deployment lifecycle with HappyFox service/container identities;
-- `scripts/deploy_happyfox_miniapp.sh` — requires an explicit non-Tanya frontend domain, forces `NEXT_PUBLIC_PRODUCT_ID=happyfox`, and invokes the proven static Next.js deployment script.
+- `scripts/deploy_happyfox_miniapp.sh` — requires a resolved non-Tanya frontend domain, forces `NEXT_PUBLIC_PRODUCT_ID=happyfox`, and invokes the proven static Next.js deployment script.
 
 Expected runtime identities:
 
@@ -58,7 +60,7 @@ Expected runtime identities:
 After deploy:
 
 ```bash
-cd /root/foxgen
+cd "$DEPLOY_PATH"
 python scripts/validate_happyfox_env.py .env .env.postgres
 docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' foxgen-happyfox-bot
 curl -fsS "$WEBHOOK_HOST/health"
