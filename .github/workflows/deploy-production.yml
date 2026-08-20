@@ -224,6 +224,7 @@ jobs:
           git reset --hard "$EXPECTED_SHA"
           export PRODUCT_ID=happyfox
           export REDIS_PREFIX="${REDIS_PREFIX:-foxgen_happyfox}"
+          python3 scripts/report_happyfox_production_topology.py .env
           python3 scripts/validate_happyfox_env.py .env .env.postgres
 
           case "${MINIAPP_FRONTEND_DOMAIN,,}" in

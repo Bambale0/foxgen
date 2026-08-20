@@ -17,3 +17,4 @@
 ]
 "bot/handlers/seedance_25_chunk_upload.py" = ["BLE001"]
 "bot/handlers/seedance_25_public_release.py" = ["BLE001", "I001", "S110"]
+"scripts/report_happyfox_production_topology.py" = ["I001"]
