@@ -10,6 +10,19 @@ class ProductConfig:
     brand_name: str
     brand_description: str
     welcome_text: str
+    credit_name: str
+    credit_name_plural: str
+    credit_short: str
+    credit_emoji: str
+    support_contact: str
+
+    def credit_label(self, amount: float) -> str:
+        return self.credit_name if abs(amount) == 1 else self.credit_name_plural
+
+    def format_credits(self, amount: float) -> str:
+        value = float(amount)
+        rendered = str(int(value)) if value.is_integer() else f"{value:g}"
+        return f"{rendered} {self.credit_label(value)}"
 
 
 _PRODUCTS: dict[str, ProductConfig] = {
@@ -22,6 +35,11 @@ _PRODUCTS: dict[str, ProductConfig] = {
             "Я <b>HappyFox</b> — удобный AI-сервис для создания изображений, видео и другого контента.\n\n"
             "👇 Выбирай генерацию в боте или открывай приложение, чтобы начать."
         ),
+        credit_name="кредит",
+        credit_name_plural="кредитов",
+        credit_short="кр.",
+        credit_emoji="",
+        support_contact=os.getenv("SUPPORT_CONTACT", "").strip(),
     ),
     "neuromix": ProductConfig(
         product_id="neuromix",
@@ -32,6 +50,11 @@ _PRODUCTS: dict[str, ProductConfig] = {
             "Я <b>NEUROMIX</b> — самый выгодный и очень удобный бот для генерации изображений и видео.\n\n"
             "👇 Пользуйся текстовым вариантом генераций или открой приложение, чтобы начать творить 🚀"
         ),
+        credit_name="банан",
+        credit_name_plural="бананов",
+        credit_short="🍌",
+        credit_emoji="🍌",
+        support_contact=os.getenv("SUPPORT_CONTACT", "@only_tany").strip(),
     ),
 }
 
