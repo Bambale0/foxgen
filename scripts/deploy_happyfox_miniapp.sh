@@ -5,7 +5,7 @@ IFS=$'\n\t'
 : "${MINIAPP_FRONTEND_DOMAIN:?MINIAPP_FRONTEND_DOMAIN is required for HappyFox}"
 
 case "${MINIAPP_FRONTEND_DOMAIN,,}" in
-  *tanyapp*|*chillcreative.ru*|*neuromix*)
+  *tanyapi.chillcreative.ru*|*cdn.chillcreative.ru*|*media.chillcreative.ru*|*tanyapp*|*neuromix*|*only_tany*)
     echo "Refusing to deploy HappyFox Mini App to a NEUROMIX/Tanya domain: ${MINIAPP_FRONTEND_DOMAIN}" >&2
     exit 1
     ;;
