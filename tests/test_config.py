@@ -76,15 +76,34 @@ class TestConfig:
         cfg.PAYMENT_PROVIDER = "freekassa"
         assert cfg.payment_provider == "freekassa"
 
+    def test_payment_provider_yookassa(self):
+        cfg = Config()
+        cfg.PAYMENT_PROVIDER = "yookassa"
+        cfg.YOOKASSA_SHOP_ID = "shop123"
+        cfg.YOOKASSA_SECRET_KEY = "secret"
+        assert cfg.payment_provider == "yookassa"
+
     def test_payment_provider_fallback(self):
         cfg = Config()
         cfg.PAYMENT_PROVIDER = "invalid"
+        cfg.YOOKASSA_SHOP_ID = ""
+        cfg.YOOKASSA_SECRET_KEY = ""
         cfg.LAVA_API_KEY = ""
         assert cfg.payment_provider == "cryptobot"
 
-    def test_payment_provider_fallback_prefers_lava(self):
+    def test_payment_provider_fallback_prefers_yookassa(self):
         cfg = Config()
         cfg.PAYMENT_PROVIDER = "invalid"
+        cfg.YOOKASSA_SHOP_ID = "shop123"
+        cfg.YOOKASSA_SECRET_KEY = "secret"
+        cfg.LAVA_API_KEY = "lava-key"
+        assert cfg.payment_provider == "yookassa"
+
+    def test_payment_provider_fallback_prefers_lava_without_yookassa(self):
+        cfg = Config()
+        cfg.PAYMENT_PROVIDER = "invalid"
+        cfg.YOOKASSA_SHOP_ID = ""
+        cfg.YOOKASSA_SECRET_KEY = ""
         cfg.LAVA_API_KEY = "lava-key"
         assert cfg.payment_provider == "lava"
 
@@ -102,6 +121,18 @@ class TestConfig:
         cfg.FREEKASSA_SECRET_WORD_2 = ""
         assert cfg.has_freekassa is False
 
+    def test_has_yookassa_true(self):
+        cfg = Config()
+        cfg.YOOKASSA_SHOP_ID = "shop123"
+        cfg.YOOKASSA_SECRET_KEY = "secret"
+        assert cfg.has_yookassa is True
+
+    def test_has_yookassa_false(self):
+        cfg = Config()
+        cfg.YOOKASSA_SHOP_ID = "shop123"
+        cfg.YOOKASSA_SECRET_KEY = ""
+        assert cfg.has_yookassa is False
+
     def test_freekassa_notification_url(self):
         cfg = Config()
         cfg.WEBHOOK_HOST = "https://payments.example"
@@ -111,13 +142,14 @@ class TestConfig:
             == "https://payments.example/freekassa/webhook"
         )
 
-    def test_legacy_yookassa_alias_points_to_freekassa(self):
+    def test_yookassa_notification_url(self):
         cfg = Config()
         cfg.WEBHOOK_HOST = "https://payments.example"
-        cfg.FREEKASSA_WEBHOOK_PATH = "/freekassa/webhook"
-        cfg.FREEKASSA_RETURN_URL = "https://payments.example/mini-app/"
-        assert cfg.yookassa_notification_url == cfg.freekassa_notification_url
-        assert cfg.YOOKASSA_RETURN_URL == cfg.FREEKASSA_RETURN_URL
+        cfg.YOOKASSA_WEBHOOK_PATH = "yookassa/webhook"
+        assert (
+            cfg.yookassa_notification_url
+            == "https://payments.example/yookassa/webhook"
+        )
 
     def test_static_base_url_default_is_local(self):
         cfg = Config()

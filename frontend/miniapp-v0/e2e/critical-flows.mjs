@@ -29,8 +29,6 @@ const bootstrapPayload = {
       credits: 25,
       price_rub: 299,
       price_stars: 299,
-      lava_offer_id: 'offer-mini',
-      lava_currency: 'RUB',
       description: 'Тестовый пакет',
     },
   ],
@@ -192,7 +190,7 @@ try {
         contentType: 'application/json',
         body: JSON.stringify({
           ok: true,
-          provider: 'lava',
+          provider: 'yookassa',
           order_id: 'e2e-order',
           payment_id: 'e2e-payment',
           payment_url: 'https://pay.example/e2e',
@@ -271,18 +269,17 @@ try {
   })
   await page.getByText('Онлайн', { exact: true }).waitFor()
 
-  // Payment E2E: form email -> backend payload -> Telegram WebApp.openLink.
+  // Payment E2E: package -> YooKassa payload -> Telegram WebApp.openLink.
   await page.locator('header button').last().click()
-  await page.getByLabel('Почта для карты и СБП').fill('Buyer2026@Mail.ru')
-  await page.getByRole('button', { name: 'Карта / СБП', exact: true }).click()
+  await page.getByRole('button', { name: 'ЮKassa', exact: true }).click()
 
   await page.waitForFunction(() => (
     Array.isArray(window.__openedLinks)
       && window.__openedLinks.includes('https://pay.example/e2e')
   ))
 
-  assert.equal(paymentPayload?.provider, 'lava')
-  assert.equal(paymentPayload?.customer_email, 'buyer2026@mail.ru')
+  assert.equal(paymentPayload?.provider, 'yookassa')
+  assert.equal(paymentPayload?.customer_email, '')
   await page.getByRole('button', { name: 'Закрыть пополнение' }).click()
 
   // Trends E2E: server-side tag query + client-side filtering.

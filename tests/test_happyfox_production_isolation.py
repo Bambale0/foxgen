@@ -58,6 +58,46 @@ def test_selected_payment_provider_requires_its_secrets() -> None:
     assert "LAVA_WEBHOOK_SECRET is required for PAYMENT_PROVIDER=lava" in errors
 
 
+def test_yookassa_requires_shop_and_secret() -> None:
+    values = _valid_env()
+    values["PAYMENT_PROVIDER"] = "yookassa"
+
+    errors = validate(values)
+
+    assert "YOOKASSA_SHOP_ID is required for PAYMENT_PROVIDER=yookassa" in errors
+    assert "YOOKASSA_SECRET_KEY is required for PAYMENT_PROVIDER=yookassa" in errors
+
+
+def test_yookassa_valid_configuration_passes() -> None:
+    values = _valid_env()
+    values.update(
+        {
+            "PAYMENT_PROVIDER": "yookassa",
+            "YOOKASSA_SHOP_ID": "shop-123",
+            "YOOKASSA_SECRET_KEY": "secret",
+            "YOOKASSA_RETURN_URL": "https://app.happyfox.example/mini-app/",
+            "YOOKASSA_WEBHOOK_PATH": "/yookassa/webhook",
+        }
+    )
+
+    assert validate(values) == []
+
+
+def test_yookassa_rejects_insecure_return_url() -> None:
+    values = _valid_env()
+    values.update(
+        {
+            "PAYMENT_PROVIDER": "yookassa",
+            "YOOKASSA_SHOP_ID": "shop-123",
+            "YOOKASSA_SECRET_KEY": "secret",
+            "YOOKASSA_RETURN_URL": "http://app.happyfox.example/mini-app/",
+        }
+    )
+
+    errors = validate(values)
+    assert "YOOKASSA_RETURN_URL (or MINI_APP_URL fallback) must use https://" in errors
+
+
 def test_happyfox_deploy_wrapper_overrides_imported_neuromix_runtime_names() -> None:
     script = Path("scripts/deploy_happyfox.sh").read_text(encoding="utf-8")
 
