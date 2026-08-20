@@ -1,3 +1,4 @@
+# ruff: noqa: I001
 from __future__ import annotations
 
 import os
@@ -5,7 +6,7 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
-from urllib.parse import SplitResult, urlsplit, urlunsplit
+from urllib.parse import SplitResult, unquote, urlsplit, urlunsplit
 
 
 RUNTIME_ENV_NAME = ".env.happyfox.runtime"
@@ -193,20 +194,16 @@ def ensure_happyfox_database(
 def choose_redis_db(redis_container: str, legacy_url: str) -> int:
     parsed = urlsplit(legacy_url)
     docker_args = ["docker", "exec"]
-    password = parsed.password or ""
+    password = unquote(parsed.password or "")
     if password:
         docker_args.extend(["-e", f"REDISCLI_AUTH={password}"])
-    docker_args.extend(
-        [
-            redis_container,
-            "sh",
-            "-lc",
-            "for db in $(seq 1 15); do "
-            "size=$(redis-cli -n \"$db\" --raw DBSIZE 2>/dev/null) || exit 2; "
-            "if [ \"$size\" = 0 ]; then echo \"$db\"; exit 0; fi; "
-            "done; exit 3",
-        ]
+    redis_probe = (
+        "for db in $(seq 1 15); do "
+        "size=$(redis-cli -n \"$db\" --raw DBSIZE 2>/dev/null) || exit 2; "
+        "if [ \"$size\" = 0 ]; then echo \"$db\"; exit 0; fi; "
+        "done; exit 3"
     )
+    docker_args.extend([redis_container, "sh", "-lc", redis_probe])
     result = _run(docker_args)
     value = result.stdout.strip()
     if not value.isdigit() or not 1 <= int(value) <= 15:
@@ -313,6 +310,12 @@ def main() -> int:
     )
     redis_container = os.getenv("HAPPYFOX_REDIS_CONTAINER", DEFAULT_REDIS_CONTAINER)
 
+    if (
+        not database_name
+        or database_name[0].isdigit()
+        or not database_name.replace("_", "").isalnum()
+    ):
+        raise SystemExit("HAPPYFOX_DATABASE_NAME must be a simple SQL identifier")
     if not legacy_path.is_file():
         raise SystemExit("legacy production .env is missing")
     if not _container_exists(postgres_container):
