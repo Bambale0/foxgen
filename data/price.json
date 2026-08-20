@@ -1,37 +1,31 @@
 {
   "currency": "RUB",
-  "credit_name": "банан",
-  "credit_name_plural": "бананов",
-  "credit_emoji": "🍌",
-  "credit_value": "Чем больше 🍌 — тем дешевле генерация",
+  "credit_name": "кредит",
+  "credit_name_plural": "кредитов",
+  "credit_emoji": "",
+  "credit_value": "1 кредит = 10 ₽",
   "packages": [
     {
       "id": "mini",
-      "name": "🍌 Мини",
+      "name": "Мини",
       "credits": 15,
       "price_rub": 150,
-      "lava_offer_id": "57dec72c-1c16-45b5-aa14-c31cc8367e3c",
-      "lava_currency": "RUB",
       "bonus_credits": 0,
       "description": "Для пробы"
     },
     {
       "id": "start",
-      "name": "🍌 Старт",
+      "name": "Старт",
       "credits": 25,
       "price_rub": 250,
-      "lava_offer_id": "93849db8-dedf-4a2c-993e-94b150f0ea4c",
-      "lava_currency": "RUB",
       "bonus_credits": 0,
       "description": "Удобный старт"
     },
     {
       "id": "optimal",
-      "name": "🍌🍌 Оптимальный",
+      "name": "Оптимальный",
       "credits": 50,
       "price_rub": 500,
-      "lava_offer_id": "eedf87e4-dd1a-471d-b20d-7da9a80626de",
-      "lava_currency": "RUB",
       "bonus_credits": 0,
       "popular": true,
       "description": "Лучшее соотношение цена/количество",
@@ -39,33 +33,27 @@
     },
     {
       "id": "pro",
-      "name": "🍌🍌🍌 Про",
+      "name": "Про",
       "credits": 100,
       "price_rub": 1000,
-      "lava_offer_id": "5029c542-0fcb-4004-b39e-2fb9a704bf19",
-      "lava_currency": "RUB",
       "bonus_credits": 0,
       "description": "Для активных пользователей",
       "price_usd": 15.4
     },
     {
       "id": "studio",
-      "name": "🍌🍌🍌🍌 Студия",
+      "name": "Студия",
       "credits": 200,
       "price_rub": 1950,
-      "lava_offer_id": "6caa711c-8158-4f5e-92bf-ead43798a3a2",
-      "lava_currency": "RUB",
       "bonus_credits": 0,
       "description": "Для частой генерации",
       "price_usd": 29.5
     },
     {
       "id": "business",
-      "name": "🍌🍌🍌🍌🍌 Бизнес",
+      "name": "Бизнес",
       "credits": 500,
       "price_rub": 4900,
-      "lava_offer_id": "7b25ea02-c1c8-4f54-9a34-bacd41fcac26",
-      "lava_currency": "RUB",
       "bonus_credits": 0,
       "description": "Выгодно для регулярной работы",
       "price_usd": 75.0
@@ -324,11 +312,8 @@
       "4K": 7
     }
   },
-  "admin_ids": [
-    939259764,
-    339795159
-  ],
-  "support_contact": "@only_tany",
+  "admin_ids": [],
+  "support_contact": "",
   "partner_exchange": {
     "rub_per_credit": 10
   },
