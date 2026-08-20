@@ -160,7 +160,7 @@ class Config:
     # Database / Redis
     DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite:///bot.db")
     REDIS_URL: str = os.getenv("REDIS_URL", "redis://127.0.0.1:6379/0")
-    REDIS_PREFIX: str = os.getenv("REDIS_PREFIX", "banano_kling")
+    REDIS_PREFIX: str = os.getenv("REDIS_PREFIX", "foxgen_happyfox")
 
     # Cloudflare R2 Storage (S3-compatible)
     R2_ACCOUNT_ID: str = os.getenv("R2_ACCOUNT_ID", "")
@@ -323,7 +323,7 @@ class Config:
             return self.STATIC_BASE_URL.strip().rstrip("/")
         if (self.WEBHOOK_HOST or "").strip():
             return self.WEBHOOK_HOST.strip().rstrip("/")
-        return "https://dev.chillcreative.ru"
+        return f"http://127.0.0.1:{self.WEBHOOK_PORT}"
 
     @property
     def mini_app_url(self) -> str:
