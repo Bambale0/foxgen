@@ -68,11 +68,13 @@ def test_happyfox_deploy_wrapper_overrides_imported_neuromix_runtime_names() -> 
 
 def test_product_runtime_defaults_do_not_point_back_to_source_product() -> None:
     config = Path("bot/config.py").read_text(encoding="utf-8")
+    media_inputs = Path("bot/services/media_input_utils.py").read_text(encoding="utf-8")
     trend_api = Path("frontend/miniapp-v0/lib/trend-api.ts").read_text(encoding="utf-8")
     media_url = Path("frontend/miniapp-v0/lib/media-url.ts").read_text(encoding="utf-8")
 
     assert 'os.getenv("REDIS_PREFIX", "foxgen_happyfox")' in config
     assert "dev.chillcreative.ru" not in config
+    assert "tanyapi.chillcreative.ru" not in media_inputs
     assert "tanyapi.chillcreative.ru" not in trend_api
     assert "tanyapi.chillcreative.ru" not in media_url
     assert "tanyapp.chillcreative.ru" not in media_url
