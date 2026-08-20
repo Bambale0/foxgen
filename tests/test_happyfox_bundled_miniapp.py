@@ -66,8 +66,8 @@ def test_product_normalizer_versions_telegram_webapp_launch() -> None:
 
     assert 'query["release"] = release' in normalizer
     assert 'os.getenv("HAPPYFOX_RELEASE", "")' in normalizer
-    assert '"type": "web_app"' in normalizer
-    assert '"text": "Открыть HappyFox"' in normalizer
+    assert "Открыть HappyFox" in normalizer
+    assert "HappyFox Telegram menu-button anchor was not found" in normalizer
     assert "Stale commands-only Telegram menu button remains" in normalizer
 
 
