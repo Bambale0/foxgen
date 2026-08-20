@@ -16,15 +16,13 @@ class ProductConfig:
     credit_emoji: str
     support_contact: str
 
-    def credit_label(self, amount: float | int) -> str:
-        value = float(amount)
-        return self.credit_name if abs(value) == 1 else self.credit_name_plural
+    def credit_label(self, amount: float) -> str:
+        return self.credit_name if abs(amount) == 1 else self.credit_name_plural
 
-    def format_credits(self, amount: float | int, *, short: bool = False) -> str:
+    def format_credits(self, amount: float) -> str:
         value = float(amount)
         rendered = str(int(value)) if value.is_integer() else f"{value:g}"
-        suffix = self.credit_short if short else self.credit_label(value)
-        return f"{rendered} {suffix}"
+        return f"{rendered} {self.credit_label(value)}"
 
 
 _PRODUCTS: dict[str, ProductConfig] = {
