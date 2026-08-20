@@ -8,6 +8,7 @@ fails closed if an expected upstream anchor changes.
 from pathlib import Path
 
 COMMON_PATH = Path("bot/handlers/common.py")
+MINIAPP_PATH = Path("bot/miniapp.py")
 PAYMENTS_PATH = Path("bot/handlers/payments.py")
 PRESET_MANAGER_PATH = Path("bot/services/preset_manager.py")
 
@@ -15,6 +16,10 @@ PRODUCT_IMPORT = "from bot.product import product\n"
 PRODUCT_IMPORT_ANCHOR = "from bot.config import config\n"
 OLD_MAIN_MENU_BRAND = '        "🏠 <b>NEUROMIX</b>\\n"\n'
 NEW_MAIN_MENU_BRAND = '        f"🏠 <b>{html.escape(product.brand_name)}</b>\\n"\n'
+SUPPORT_CONTACT_EXPRESSION = (
+    'f"{html.escape(product.support_contact) if product.support_contact else '
+    "'через встроенную поддержку'}\""
+)
 
 
 def _ensure_import(text: str, *, anchor: str, import_line: str, context: str) -> str:
@@ -39,10 +44,42 @@ def _patch_common() -> None:
     elif NEW_MAIN_MENU_BRAND not in text:
         raise RuntimeError("HappyFox main-menu brand anchor was not found")
 
+    text = text.replace(
+        '"😕 Извини, я временно недоступен. Попробуй ещё раз позже или напиши в поддержку @only_tany"',
+        '"😕 Извини, я временно недоступен. Попробуй ещё раз позже или открой раздел поддержки."',
+    )
+    text = text.replace(
+        '"😕 Что-то пошло не так. Попробуй ещё раз или обратись в поддержку @only_tany"',
+        '"😕 Что-то пошло не так. Попробуй ещё раз или открой раздел поддержки."',
+    )
+    text = text.replace(
+        '        "@only_tany"\n',
+        f"        {SUPPORT_CONTACT_EXPRESSION}\n",
+    )
+
     if '🏠 <b>NEUROMIX</b>' in text:
         raise RuntimeError("Stale NEUROMIX main-menu brand remains")
+    if "@only_tany" in text:
+        raise RuntimeError("Stale Tanya support contact remains in Telegram runtime")
 
     COMMON_PATH.write_text(text, encoding="utf-8")
+
+
+def _patch_miniapp() -> None:
+    text = MINIAPP_PATH.read_text(encoding="utf-8")
+    text = _ensure_import(
+        text,
+        anchor=PRODUCT_IMPORT_ANCHOR,
+        import_line=PRODUCT_IMPORT,
+        context="HappyFox miniapp",
+    )
+    text = text.replace(
+        '        "@only_tany"\n',
+        f"        {SUPPORT_CONTACT_EXPRESSION}\n",
+    )
+    if "@only_tany" in text:
+        raise RuntimeError("Stale Tanya support contact remains in Mini App backend")
+    MINIAPP_PATH.write_text(text, encoding="utf-8")
 
 
 def _patch_preset_manager() -> None:
@@ -55,7 +92,7 @@ def _patch_preset_manager() -> None:
     )
 
     old = """        with open(self.price_path, \"r\", encoding=\"utf-8\") as f:\n            self._price_config = json.load(f)\n        self._admin_ids = self._price_config.get(\"admin_ids\", [])\n"""
-    new = """        with open(self.price_path, \"r\", encoding=\"utf-8\") as f:\n            self._price_config = json.load(f)\n\n        if product.product_id == \"happyfox\":\n            # Keep the proven numeric pricing/model table, but never expose or\n            # trust imported NEUROMIX/Tanya product-owned presentation/config.\n            self._price_config[\"credit_name\"] = product.credit_name\n            self._price_config[\"credit_name_plural\"] = product.credit_name_plural\n            self._price_config[\"credit_emoji\"] = product.credit_emoji\n            self._price_config[\"credit_value\"] = \"1 кредит = 10 ₽\"\n            self._price_config[\"support_contact\"] = product.support_contact\n            self._price_config[\"admin_ids\"] = list(config.admin_ids)\n\n            package_names = {\n                \"mini\": \"Мини\",\n                \"start\": \"Старт\",\n                \"optimal\": \"Оптимальный\",\n                \"pro\": \"Про\",\n                \"studio\": \"Студия\",\n                \"business\": \"Бизнес\",\n            }\n            for package in self._price_config.get(\"packages\", []):\n                package_id = str(package.get(\"id\") or \"\")\n                if package_id in package_names:\n                    package[\"name\"] = package_names[package_id]\n                # Imported Tanya offer IDs are product credentials. HappyFox\n                # resolves its Lava offers exclusively from environment config.\n                package.pop(\"lava_offer_id\", None)\n                package.pop(\"lava_currency\", None)\n\n        self._admin_ids = self._price_config.get(\"admin_ids\", [])\n"""
+    new = """        with open(self.price_path, \"r\", encoding=\"utf-8\") as f:\n            self._price_config = json.load(f)\n\n        if product.product_id == \"happyfox\":\n            # Keep the proven numeric pricing/model table, but never expose or\n            # trust imported source-product presentation/configuration.\n            self._price_config[\"credit_name\"] = product.credit_name\n            self._price_config[\"credit_name_plural\"] = product.credit_name_plural\n            self._price_config[\"credit_emoji\"] = product.credit_emoji\n            self._price_config[\"credit_value\"] = \"1 кредит = 10 ₽\"\n            self._price_config[\"support_contact\"] = product.support_contact\n            self._price_config[\"admin_ids\"] = list(config.admin_ids)\n\n            package_names = {\n                \"mini\": \"Мини\",\n                \"start\": \"Старт\",\n                \"optimal\": \"Оптимальный\",\n                \"pro\": \"Про\",\n                \"studio\": \"Студия\",\n                \"business\": \"Бизнес\",\n            }\n            for package in self._price_config.get(\"packages\", []):\n                package_id = str(package.get(\"id\") or \"\")\n                if package_id in package_names:\n                    package[\"name\"] = package_names[package_id]\n                # Imported payment offer IDs are product credentials. HappyFox\n                # resolves its Lava offers exclusively from environment config.\n                package.pop(\"lava_offer_id\", None)\n                package.pop(\"lava_currency\", None)\n\n        self._admin_ids = self._price_config.get(\"admin_ids\", [])\n"""
     if old in text:
         text = text.replace(old, new, 1)
     elif new not in text:
@@ -99,6 +136,7 @@ def _patch_payments() -> None:
 
 def main() -> None:
     _patch_common()
+    _patch_miniapp()
     _patch_preset_manager()
     _patch_payments()
 
