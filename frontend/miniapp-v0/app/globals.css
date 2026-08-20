@@ -4,37 +4,37 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --background: oklch(0.12 0.015 260);
-  --foreground: oklch(0.95 0.01 80);
-  --card: oklch(0.16 0.012 260);
-  --card-foreground: oklch(0.95 0.01 80);
-  --popover: oklch(0.14 0.015 260);
-  --popover-foreground: oklch(0.95 0.01 80);
-  --primary: oklch(0.78 0.14 75);
-  --primary-foreground: oklch(0.15 0.02 260);
-  --secondary: oklch(0.22 0.015 260);
-  --secondary-foreground: oklch(0.88 0.02 80);
-  --muted: oklch(0.20 0.012 260);
-  --muted-foreground: oklch(0.65 0.02 260);
-  --accent: oklch(0.65 0.12 220);
-  --accent-foreground: oklch(0.95 0.01 80);
-  --destructive: oklch(0.55 0.2 25);
-  --destructive-foreground: oklch(0.95 0.01 80);
-  --border: oklch(0.28 0.015 260);
-  --input: oklch(0.20 0.012 260);
-  --ring: oklch(0.78 0.14 75);
-  --chart-1: oklch(0.78 0.14 75);
-  --chart-2: oklch(0.65 0.12 220);
-  --chart-3: oklch(0.55 0.15 160);
-  --chart-4: oklch(0.70 0.10 300);
-  --chart-5: oklch(0.60 0.18 30);
+  --background: oklch(0.105 0.012 50);
+  --foreground: oklch(0.965 0.008 70);
+  --card: oklch(0.145 0.014 50);
+  --card-foreground: oklch(0.965 0.008 70);
+  --popover: oklch(0.135 0.014 50);
+  --popover-foreground: oklch(0.965 0.008 70);
+  --primary: oklch(0.72 0.19 48);
+  --primary-foreground: oklch(0.12 0.02 45);
+  --secondary: oklch(0.195 0.018 50);
+  --secondary-foreground: oklch(0.91 0.012 70);
+  --muted: oklch(0.18 0.014 50);
+  --muted-foreground: oklch(0.67 0.018 60);
+  --accent: oklch(0.66 0.20 38);
+  --accent-foreground: oklch(0.97 0.006 70);
+  --destructive: oklch(0.56 0.21 25);
+  --destructive-foreground: oklch(0.97 0.006 70);
+  --border: oklch(0.255 0.022 50);
+  --input: oklch(0.185 0.016 50);
+  --ring: oklch(0.72 0.19 48);
+  --chart-1: oklch(0.72 0.19 48);
+  --chart-2: oklch(0.66 0.20 38);
+  --chart-3: oklch(0.61 0.16 62);
+  --chart-4: oklch(0.57 0.14 28);
+  --chart-5: oklch(0.78 0.14 75);
   --radius: 1rem;
-  --gold: oklch(0.78 0.14 75);
-  --gold-muted: oklch(0.65 0.10 75);
-  --cyan: oklch(0.65 0.12 220);
-  --cyan-muted: oklch(0.50 0.08 220);
-  --success: oklch(0.60 0.15 155);
-  --success-foreground: oklch(0.95 0.01 80);
+  --gold: oklch(0.72 0.19 48);
+  --gold-muted: oklch(0.61 0.14 50);
+  --cyan: oklch(0.66 0.20 38);
+  --cyan-muted: oklch(0.52 0.12 42);
+  --success: oklch(0.62 0.15 150);
+  --success-foreground: oklch(0.97 0.006 70);
 }
 
 @theme inline {
@@ -87,7 +87,6 @@
   }
 }
 
-/* Custom scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -98,28 +97,26 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  background: oklch(0.35 0.015 260);
+  background: oklch(0.33 0.04 48);
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: oklch(0.45 0.015 260);
+  background: oklch(0.44 0.07 48);
 }
 
-/* Glass effect utilities */
 .glass {
-  background: oklch(0.18 0.012 260 / 0.6);
+  background: oklch(0.16 0.018 50 / 0.62);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
 }
 
 .glass-strong {
-  background: oklch(0.16 0.012 260 / 0.85);
+  background: oklch(0.14 0.018 50 / 0.88);
   backdrop-filter: blur(30px);
   -webkit-backdrop-filter: blur(30px);
 }
 
-/* Shimmer animation for loading states */
 @keyframes shimmer {
   0% {
     background-position: -200% 0;
@@ -132,15 +129,14 @@
 .shimmer {
   background: linear-gradient(
     90deg,
-    oklch(0.20 0.012 260) 0%,
-    oklch(0.28 0.015 260) 50%,
-    oklch(0.20 0.012 260) 100%
+    oklch(0.18 0.016 50) 0%,
+    oklch(0.27 0.035 48) 50%,
+    oklch(0.18 0.016 50) 100%
   );
   background-size: 200% 100%;
   animation: shimmer 1.5s ease-in-out infinite;
 }
 
-/* Pulse animation for pending status */
 @keyframes soft-pulse {
   0%, 100% {
     opacity: 1;
@@ -154,7 +150,6 @@
   animation: soft-pulse 2s ease-in-out infinite;
 }
 
-/* Floating animation */
 @keyframes float {
   0%, 100% {
     transform: translateY(0px);
@@ -168,18 +163,16 @@
   animation: float 3s ease-in-out infinite;
 }
 
-/* Glow effects */
 .glow-gold {
-  box-shadow: 0 0 20px oklch(0.78 0.14 75 / 0.3),
-              0 0 40px oklch(0.78 0.14 75 / 0.1);
+  box-shadow: 0 0 20px oklch(0.72 0.19 48 / 0.34),
+              0 0 44px oklch(0.66 0.20 38 / 0.13);
 }
 
 .glow-cyan {
-  box-shadow: 0 0 20px oklch(0.65 0.12 220 / 0.3),
-              0 0 40px oklch(0.65 0.12 220 / 0.1);
+  box-shadow: 0 0 20px oklch(0.66 0.20 38 / 0.3),
+              0 0 40px oklch(0.72 0.19 48 / 0.1);
 }
 
-/* Safe area for mobile */
 .safe-bottom {
   padding-bottom: max(env(safe-area-inset-bottom), 16px);
 }
