@@ -25,7 +25,7 @@ KEEP_BACKUPS="${KEEP_BACKUPS:-7}"
 RUN_NPM_AUDIT="${RUN_NPM_AUDIT:-1}"
 
 case "${FRONTEND_DOMAIN,,}" in
-  *tanyapp*|*chillcreative.ru*|*neuromix*)
+  *tanyapi.chillcreative.ru*|*cdn.chillcreative.ru*|*media.chillcreative.ru*|*tanyapp*|*neuromix*|*only_tany*)
     echo "Refusing source-product Mini App domain: ${FRONTEND_DOMAIN}" >&2
     exit 1
     ;;
