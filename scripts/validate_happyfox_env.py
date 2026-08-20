@@ -24,7 +24,6 @@ REQUIRED = (
     "KIE_AI_API_KEY",
     "KIE_AI_WEBHOOK_SECRET",
     "INTERNAL_API_SECRET",
-    "ADMIN_IDS",
 )
 
 LAVA_OFFER_KEYS = (
@@ -78,7 +77,9 @@ def validate(values: dict[str, str]) -> list[str]:
             errors.append(f"{key} is required")
 
     database_url = values.get("DATABASE_URL", "").strip().lower()
-    if database_url and not database_url.startswith(("postgresql://", "postgres://", "postgresql+asyncpg://")):
+    if database_url and not database_url.startswith(
+        ("postgresql://", "postgres://", "postgresql+asyncpg://")
+    ):
         errors.append("DATABASE_URL must point to PostgreSQL in production")
 
     redis_prefix = values.get("REDIS_PREFIX", "").strip().lower()
@@ -128,13 +129,17 @@ def validate(values: dict[str, str]) -> list[str]:
     else:
         for key in payment_requirements[payment_provider]:
             if not values.get(key, "").strip():
-                errors.append(f"{key} is required for PAYMENT_PROVIDER={payment_provider}")
+                errors.append(
+                    f"{key} is required for PAYMENT_PROVIDER={payment_provider}"
+                )
 
     return errors
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Validate isolated HappyFox production environment")
+    parser = argparse.ArgumentParser(
+        description="Validate isolated HappyFox production environment"
+    )
     parser.add_argument(
         "env_files",
         nargs="*",
