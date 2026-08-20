@@ -115,12 +115,17 @@ def test_active_pricing_source_contains_no_imported_product_credentials() -> Non
 
 def test_happyfox_miniapp_deploy_has_no_source_product_defaults() -> None:
     script = Path("scripts/deploy_miniapp_local.sh").read_text(encoding="utf-8")
+    wrapper = Path("scripts/deploy_happyfox_miniapp.sh").read_text(encoding="utf-8")
 
     assert 'MINIAPP_FRONTEND_DOMAIN:?MINIAPP_FRONTEND_DOMAIN is required' in script
     assert "/etc/foxgen-happyfox/profiles/" in script
     assert "/var/backups/foxgen-happyfox/" in script
     assert "DEFAULT_FRONTEND_DOMAIN" not in script
     assert "/etc/banano-miniapp/" not in script
+    assert "*chillcreative.ru*" not in script
+    assert "*chillcreative.ru*" not in wrapper
+    assert "tanyapi.chillcreative.ru" in script
+    assert "tanyapi.chillcreative.ru" in wrapper
 
 
 def test_production_deploy_runs_automatically_after_green_main_ci() -> None:
@@ -130,3 +135,15 @@ def test_production_deploy_runs_automatically_after_green_main_ci() -> None:
     assert "github.event.workflow_run.conclusion == 'success'" in workflow
     assert "github.event.workflow_run.event == 'push'" in workflow
     assert "github.event.workflow_run.head_branch == 'main'" in workflow
+
+
+def test_production_deploy_reuses_existing_server_domain_config() -> None:
+    workflow = Path(".github/workflows/deploy-production.yml").read_text(encoding="utf-8")
+
+    assert "Resolve HappyFox Mini App domain" in workflow
+    assert 'values.get("MINI_APP_URL"' not in workflow  # keys are iterated, not hard-coded lookups
+    assert '"MINI_APP_URL",' in workflow
+    assert '"FOXGEN_MINIAPP_PUBLIC_URL",' in workflow
+    assert '"FOXGEN_KIE_CALLBACK_BASE_URL",' in workflow
+    assert "Missing production variable MINIAPP_FRONTEND_DOMAIN" not in workflow
+    assert "target_url=\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"" in workflow
