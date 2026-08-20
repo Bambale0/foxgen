@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build and publish the Tanya Mini App on the production server itself.
+# Build and publish the HappyFox Mini App on the production server itself.
 # This script intentionally does not configure DNS, TLS or Nginx. It only
 # refreshes the already configured static Mini App web root for the exact
 # checked-out production commit.
@@ -15,32 +15,39 @@ exec </dev/null
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 EXPECTED_SHA="${1:-$(git -C "$PROJECT_DIR" rev-parse HEAD)}"
-DEFAULT_FRONTEND_DOMAIN="tanyapp.xn--e1aikcel5c5a.online"
-FRONTEND_DOMAIN="${MINIAPP_FRONTEND_DOMAIN:-$DEFAULT_FRONTEND_DOMAIN}"
-PROFILE_FILE="/etc/banano-miniapp/profiles/${FRONTEND_DOMAIN}.env"
+: "${MINIAPP_FRONTEND_DOMAIN:?MINIAPP_FRONTEND_DOMAIN is required}"
+FRONTEND_DOMAIN="$MINIAPP_FRONTEND_DOMAIN"
+PROFILE_FILE="/etc/foxgen-happyfox/profiles/${FRONTEND_DOMAIN}.env"
 WEB_ROOT="/var/www/${FRONTEND_DOMAIN}"
 MINIAPP_ROOT="${WEB_ROOT}/mini-app"
-BACKUP_ROOT="/var/backups/banano-miniapp/${FRONTEND_DOMAIN}"
+BACKUP_ROOT="/var/backups/foxgen-happyfox/${FRONTEND_DOMAIN}"
 KEEP_BACKUPS="${KEEP_BACKUPS:-7}"
 RUN_NPM_AUDIT="${RUN_NPM_AUDIT:-1}"
 
+case "${FRONTEND_DOMAIN,,}" in
+  *tanyapp*|*chillcreative.ru*|*neuromix*)
+    echo "Refusing source-product Mini App domain: ${FRONTEND_DOMAIN}" >&2
+    exit 1
+    ;;
+esac
+
 log() {
-  printf '[miniapp-local] %s\n' "$*"
+  printf '[happyfox-miniapp] %s\n' "$*"
 }
 
 die() {
-  printf '[miniapp-local] ERROR: %s\n' "$*" >&2
+  printf '[happyfox-miniapp] ERROR: %s\n' "$*" >&2
   exit 1
 }
 
 if [[ -f "$PROFILE_FILE" ]]; then
-  # Existing production profile owns only filesystem/runtime details. The
-  # public domain stays pinned above to prevent deploying a stale remote host.
+  # Existing HappyFox production profile owns only filesystem/runtime details.
+  # The public domain stays pinned above to prevent deploying a stale host.
   # shellcheck disable=SC1090
   source "$PROFILE_FILE"
   WEB_ROOT="${WEB_ROOT:-/var/www/${FRONTEND_DOMAIN}}"
   MINIAPP_ROOT="${MINIAPP_ROOT:-${WEB_ROOT}/mini-app}"
-  BACKUP_ROOT="${BACKUP_ROOT:-/var/backups/banano-miniapp/${FRONTEND_DOMAIN}}"
+  BACKUP_ROOT="${BACKUP_ROOT:-/var/backups/foxgen-happyfox/${FRONTEND_DOMAIN}}"
   KEEP_BACKUPS="${KEEP_BACKUPS:-7}"
   RUN_NPM_AUDIT="${RUN_NPM_AUDIT:-1}"
 fi

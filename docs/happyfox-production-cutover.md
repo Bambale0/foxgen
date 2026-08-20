@@ -37,7 +37,9 @@ The existing FoxGen production SSH target can be reused. Keep the checkout isola
 
 ## Deployment
 
-The GitHub workflow `.github/workflows/deploy-production.yml` deploys only a verified `main` SHA after `CI` succeeds (or an explicitly requested manual `main` SHA).
+Production deployment is deliberately **opt-in** while HappyFox infrastructure is being provisioned. Set the repository variable `ENABLE_PRODUCTION_DEPLOY=true` only after the isolated production secrets, variables, DNS/TLS, PostgreSQL, Redis and media origin are ready. Until then, `.github/workflows/deploy-production.yml` skips the deploy job instead of turning every healthy `main` build red because production credentials do not exist yet.
+
+After the gate is enabled, the workflow deploys only a verified `main` SHA after `CI` succeeds (or an explicitly requested manual `main` SHA). Manual dispatch is intentionally protected by the same opt-in gate.
 
 The remote deployment is intentionally split into two guarded wrappers:
 
@@ -73,4 +75,4 @@ Then open the HappyFox bot in Telegram and verify:
 6. Balance/payment surface uses the HappyFox account only.
 7. Feed/profile/support/partner surfaces load without NEUROMIX branding or URLs.
 
-Do not cut over DNS or bot menu to this build until the GitHub deployment status `foxgen/production-deploy` is successful for the intended exact SHA.
+Do not enable `ENABLE_PRODUCTION_DEPLOY`, cut over DNS, or point the bot menu at this build until the full isolated production configuration passes the validator and the intended exact SHA is ready for rollout.
