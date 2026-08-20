@@ -1,5 +1,7 @@
+import os
 from pathlib import Path
 
+from bot.env import _apply_runtime_defaults
 from scripts.canonicalize_happyfox_runtime import canonicalize
 
 
@@ -18,6 +20,33 @@ def test_runtime_canonicalizer_uses_happyfox_public_origin(tmp_path: Path) -> No
     assert result == "https://alena.chillcreative.ru/mini-app/"
     assert "MINI_APP_URL='https://alena.chillcreative.ru/mini-app/'" in content
     assert "old.example" not in content
+
+
+def test_runtime_defaults_preserve_explicit_happyfox_url(monkeypatch) -> None:
+    monkeypatch.setenv("WEBHOOK_HOST", "https://alena.chillcreative.ru")
+    monkeypatch.setenv("MINI_APP_URL", "https://app.happyfox.example/mini-app/")
+
+    _apply_runtime_defaults()
+
+    assert os.environ["MINI_APP_URL"] == "https://app.happyfox.example/mini-app/"
+
+
+def test_runtime_defaults_repair_source_product_url(monkeypatch) -> None:
+    monkeypatch.setenv("WEBHOOK_HOST", "https://alena.chillcreative.ru")
+    monkeypatch.setenv(
+        "MINI_APP_URL",
+        "https://tanyapp.xn--e1aikcel5c5a.online/mini-app/",
+    )
+
+    _apply_runtime_defaults()
+
+    assert os.environ["MINI_APP_URL"] == "https://alena.chillcreative.ru/mini-app/"
+
+
+def test_runtime_env_has_no_hardcoded_source_product_frontend() -> None:
+    source = Path("bot/env.py").read_text(encoding="utf-8")
+    assert "tanyapp.xn--" not in source
+    assert "DEFAULT_MINI_APP_URL" not in source
 
 
 def test_production_image_bundles_happyfox_static_export() -> None:
