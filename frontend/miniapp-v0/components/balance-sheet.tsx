@@ -3,7 +3,7 @@
 import type { ComponentType } from 'react'
 import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Banana, CreditCard, Gift, Loader2, Mail, Receipt, Sparkles, Star, X } from 'lucide-react'
+import { Coins, CreditCard, Gift, Loader2, Mail, Receipt, Sparkles, Star, X } from 'lucide-react'
 import { useApp } from '@/lib/app-context'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
@@ -101,7 +101,6 @@ export function BalanceSheet() {
 
     return new Promise<string>((resolve) => {
       try {
-        // Call through the WebApp object so Telegram keeps the native method context.
         webApp.openInvoice?.(url, (status) => resolve(status || 'unknown'))
       } catch {
         openExternalPayment(url)
@@ -128,7 +127,7 @@ export function BalanceSheet() {
         const status = await openTelegramInvoice(payment.invoice_url)
         if (status === 'paid') {
           toast.success('Оплата Stars прошла', {
-            description: `Начисляем ${payment.credits}🍌. Баланс обновится автоматически.`,
+            description: `Начисляем ${payment.credits} кредитов. Баланс обновится автоматически.`,
           })
           await refreshTasks()
         } else if (status === 'cancelled') {
@@ -171,7 +170,7 @@ export function BalanceSheet() {
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
             onClick={closeBalance}
-            className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm"
+            className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md"
           />
 
           <motion.div
@@ -179,18 +178,19 @@ export function BalanceSheet() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: '100%' }}
             transition={{ type: 'spring', damping: 28, stiffness: 280, mass: 0.8 }}
-            className="fixed bottom-0 left-0 right-0 z-50 max-h-[88vh] overflow-auto rounded-t-3xl border-t border-border/50 glass-strong safe-bottom"
+            className="glass-strong safe-bottom fixed bottom-0 left-0 right-0 z-50 max-h-[90vh] overflow-auto rounded-t-[30px] border-t border-gold/20 shadow-[0_-30px_90px_rgba(0,0,0,0.65)]"
           >
-            <div className="sticky top-0 z-10 bg-inherit px-5 pt-3 pb-3">
-              <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-border" />
-              <div className="flex items-center justify-between">
+            <div className="sticky top-0 z-10 bg-[#090909]/95 px-4 pb-3 pt-3 backdrop-blur-2xl sm:px-5">
+              <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-white/15" />
+              <div className="flex items-center justify-between gap-3">
                 <div>
-                  <p className="text-xs uppercase tracking-[0.18em] text-gold/80">Баланс и пакеты</p>
-                  <h2 className="font-serif text-xl font-semibold text-foreground">Пополнение баланса</h2>
+                  <p className="text-[9px] font-black uppercase tracking-[0.18em] text-gold">Баланс</p>
+                  <h2 className="mt-0.5 text-xl font-bold tracking-[-0.025em] text-foreground">Пополнение кредитов</h2>
                 </div>
                 <button
+                  type="button"
                   onClick={closeBalance}
-                  className="flex h-8 w-8 items-center justify-center rounded-full bg-secondary/80 transition-colors hover:bg-secondary"
+                  className="flex h-9 w-9 items-center justify-center rounded-full border border-white/[0.07] bg-white/[0.04] transition-colors hover:border-gold/25 hover:bg-gold/[0.08]"
                   aria-label="Закрыть пополнение"
                 >
                   <X className="h-4 w-4 text-muted-foreground" />
@@ -198,33 +198,33 @@ export function BalanceSheet() {
               </div>
             </div>
 
-            <div className="space-y-5 px-5 pb-6">
-              <div className="rounded-2xl border border-gold/20 bg-gold/10 p-4">
+            <div className="space-y-5 px-4 pb-7 sm:px-5">
+              <div className="fox-surface-accent rounded-[24px] p-4 sm:p-5">
                 <div className="flex items-center justify-between gap-4">
                   <div>
-                    <p className="text-sm text-muted-foreground">Доступно сейчас</p>
-                    <div className="mt-1 flex items-center gap-2">
-                      <Banana className="h-5 w-5 text-gold" />
-                      <span className="text-2xl font-semibold text-gold">{user.credits}</span>
+                    <p className="text-xs text-muted-foreground">Ваш баланс</p>
+                    <div className="mt-1 flex items-center gap-2.5">
+                      <Coins className="h-5 w-5 text-gold" />
+                      <span className="text-3xl font-black tabular-nums tracking-[-0.04em] text-foreground">{user.credits}</span>
                     </div>
-                    <p className="mt-2 text-xs text-muted-foreground">Welcome-бонус для новых пользователей: 5🍌</p>
+                    <p className="mt-2 text-[10px] text-muted-foreground">1 кредит = 10 ₽</p>
                   </div>
-                  <div className="rounded-2xl border border-cyan/20 bg-background/30 px-4 py-3 text-right">
-                    <p className="text-xs text-muted-foreground">Режим</p>
-                    <p className="text-sm font-medium text-foreground">{mode === 'live' ? 'Онлайн' : 'Telegram'}</p>
+                  <div className="rounded-2xl border border-gold/20 bg-black/25 px-4 py-3 text-right">
+                    <p className="text-[9px] uppercase tracking-[0.12em] text-muted-foreground">Статус</p>
+                    <p className="mt-1 text-sm font-bold text-foreground">{mode === 'live' ? 'Онлайн' : 'Telegram'}</p>
                   </div>
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-2.5">
                 <StatCard icon={Sparkles} label="Всего запусков" value={`${recentTasks.length}`} />
-                <StatCard icon={Receipt} label="Потрачено" value={`${totalSpent}🍌`} />
+                <StatCard icon={Receipt} label="Потрачено" value={`${totalSpent} кр.`} />
                 <StatCard icon={Gift} label="Фото" value={`${imageTasks}`} />
                 <StatCard icon={CreditCard} label="Видео" value={`${videoTasks}`} />
               </div>
 
               <label className="block space-y-2" htmlFor="payment-customer-email">
-                <span className="text-sm font-medium text-foreground">Почта для карты и СБП</span>
+                <span className="text-sm font-semibold text-foreground">Почта для карты и СБП</span>
                 <div className="relative">
                   <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                   <input
@@ -237,15 +237,15 @@ export function BalanceSheet() {
                     autoComplete="email"
                     inputMode="email"
                     className={cn(
-                      'h-11 w-full rounded-xl border bg-secondary/40 pl-10 pr-3 text-sm text-foreground outline-none',
+                      'h-12 w-full rounded-xl border bg-secondary/55 pl-10 pr-3 text-sm text-foreground outline-none transition-colors',
                       customerEmail && !customerEmailValid
                         ? 'border-destructive/60 focus:border-destructive'
-                        : 'border-border/50 focus:border-gold/50',
+                        : 'border-white/[0.07] focus:border-gold/45',
                     )}
                   />
                 </div>
-                <span className="block text-xs text-muted-foreground">
-                  Сохраним адрес в вашем аккаунте и автоматически подставим при следующих оплатах.
+                <span className="block text-[10px] leading-relaxed text-muted-foreground">
+                  Адрес сохраняется в аккаунте и подставляется при следующих оплатах.
                 </span>
                 {customerEmail && !customerEmailValid ? (
                   <span className="block text-xs text-destructive">Проверьте формат почты.</span>
@@ -253,14 +253,17 @@ export function BalanceSheet() {
               </label>
 
               <div>
-                <div className="mb-3 flex items-center justify-between">
-                  <h3 className="font-serif text-lg text-foreground">Пакеты бананов</h3>
-                  <span className="text-xs text-muted-foreground">Быстрый выбор пакета</span>
+                <div className="mb-3 flex items-end justify-between gap-3">
+                  <div>
+                    <p className="text-[9px] font-black uppercase tracking-[0.16em] text-gold">Пополнить баланс</p>
+                    <h3 className="mt-0.5 text-lg font-bold text-foreground">Пакеты кредитов</h3>
+                  </div>
+                  <span className="text-[10px] text-muted-foreground">Выберите пакет</span>
                 </div>
 
-                <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
                   {paymentPackages.map((pkg) => {
-                    const pricePerBanana = Math.round(pkg.price_rub / pkg.credits)
+                    const pricePerCredit = Math.round(pkg.price_rub / pkg.credits)
                     const starsPrice = pkg.price_stars ?? pkg.price_rub
                     const lavaConfigured = Boolean(pkg.lava_offer_id)
                     const starsLoading = loadingPayment === `${pkg.id}:telegram_stars`
@@ -269,64 +272,68 @@ export function BalanceSheet() {
                       <div
                         key={pkg.id}
                         className={cn(
-                          'rounded-2xl border p-4 transition-all duration-200',
+                          'relative overflow-hidden rounded-[20px] border p-3.5 transition-all duration-200',
                           pkg.popular
-                            ? 'border-gold/40 bg-gold/10'
-                            : 'border-border/50 bg-secondary/20'
+                            ? 'fox-surface-accent border-gold/45'
+                            : 'fox-surface border-white/[0.07]',
                         )}
                       >
-                        <div className="flex items-start justify-between gap-4">
+                        {pkg.popular && (
+                          <span className="absolute right-2 top-2 rounded-full border border-gold/35 bg-gold/[0.12] px-1.5 py-0.5 text-[8px] font-black uppercase tracking-[0.1em] text-gold">
+                            Хит
+                          </span>
+                        )}
+
+                        <div className="pr-8">
+                          <h4 className="text-sm font-bold text-foreground">{pkg.name}</h4>
+                          <p className="mt-1 line-clamp-2 min-h-[30px] text-[9px] leading-relaxed text-muted-foreground">{pkg.description}</p>
+                        </div>
+
+                        <div className="mt-4 flex items-end justify-between gap-2">
                           <div>
-                            <div className="flex items-center gap-2">
-                              <h4 className="text-base font-semibold text-foreground">{pkg.name}</h4>
-                              {pkg.popular && (
-                                <span className="rounded-full border border-gold/30 bg-gold/15 px-2 py-0.5 text-[10px] font-medium text-gold">
-                                  Popular
-                                </span>
-                              )}
+                            <div className="flex items-center gap-1.5 text-gold">
+                              <Coins className="h-3.5 w-3.5" />
+                              <span className="text-lg font-black tabular-nums">{pkg.credits}</span>
                             </div>
-                            <p className="mt-1 text-sm text-muted-foreground">{pkg.description}</p>
-                            <p className="mt-2 text-xs text-muted-foreground">
-                              {pkg.credits}🍌 • около {pricePerBanana}₽ за банан
-                            </p>
-                            <p className="mt-1 text-xs text-muted-foreground">
-                              Stars: {starsPrice}⭐
-                            </p>
+                            <p className="mt-0.5 text-[8px] text-muted-foreground">≈ {pricePerCredit} ₽ / кредит</p>
                           </div>
                           <div className="text-right">
-                            <p className="text-xl font-semibold text-foreground">{pkg.price_rub}₽</p>
-                            <p className="text-xs text-muted-foreground">{pkg.credits} бананов</p>
+                            <p className="text-sm font-black text-foreground">{pkg.price_rub} ₽</p>
+                            <p className="text-[8px] text-muted-foreground">{starsPrice} ⭐</p>
                           </div>
                         </div>
 
-                        <div className="mt-4 grid grid-cols-2 gap-2">
+                        <div className="mt-3 space-y-1.5">
                           <Button
                             onClick={() => handleTopup(pkg.id, 'lava')}
                             disabled={Boolean(loadingPayment)}
-                            className="col-span-2 w-full bg-gold text-primary-foreground hover:bg-gold/90"
+                            size="sm"
+                            className="w-full"
                           >
                             {lavaLoading ? (
-                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
                             ) : (
-                              <CreditCard className="mr-2 h-4 w-4" />
+                              <CreditCard className="h-3.5 w-3.5" />
                             )}
                             Карта / СБП
                           </Button>
                           <Button
                             onClick={() => handleTopup(pkg.id, 'telegram_stars')}
                             disabled={Boolean(loadingPayment)}
-                            className="col-span-2 w-full bg-secondary text-foreground hover:bg-secondary/80"
+                            variant="secondary"
+                            size="sm"
+                            className="w-full"
                           >
                             {starsLoading ? (
-                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
                             ) : (
-                              <Star className="mr-2 h-4 w-4" />
+                              <Star className="h-3.5 w-3.5" />
                             )}
                             Stars
                           </Button>
                           {lavaConfigured ? (
-                            <p className="col-span-2 px-1 text-center text-[11px] text-muted-foreground">
-                              Доступна оплата банковской картой и через СБП.
+                            <p className="px-1 pt-0.5 text-center text-[8px] text-muted-foreground">
+                              Карта и СБП доступны
                             </p>
                           ) : null}
                         </div>
@@ -336,17 +343,15 @@ export function BalanceSheet() {
                 </div>
               </div>
 
-              <div className="grid gap-3 md:grid-cols-2">
+              <div className="grid gap-2.5 md:grid-cols-2">
                 <Button
                   onClick={() => toast.success('Статистика обновлена', { description: 'Карточки выше показывают расходы, баланс и активность по задачам.' })}
                   variant="outline"
-                  className="border-border/50 bg-secondary/20 text-foreground hover:bg-secondary/40"
                 >
                   Обновить статистику
                 </Button>
                 <Button
                   onClick={() => handleTopup(paymentPackages[0]?.id || 'mini', 'lava')}
-                  className="bg-gold hover:bg-gold/90 text-primary-foreground"
                 >
                   Пополнить картой / СБП
                 </Button>
@@ -369,12 +374,12 @@ function StatCard({
   value: string
 }) {
   return (
-    <div className="rounded-2xl border border-border/50 bg-secondary/20 p-4">
-      <div className="mb-2 flex h-9 w-9 items-center justify-center rounded-xl bg-background/40">
-        <Icon className="h-4 w-4 text-gold" />
+    <div className="fox-surface rounded-[18px] p-3.5">
+      <div className="mb-2 flex h-8 w-8 items-center justify-center rounded-xl border border-gold/15 bg-gold/[0.07]">
+        <Icon className="h-3.5 w-3.5 text-gold" />
       </div>
-      <p className="text-xs text-muted-foreground">{label}</p>
-      <p className="mt-1 text-base font-semibold text-foreground">{value}</p>
+      <p className="text-[9px] text-muted-foreground">{label}</p>
+      <p className="mt-1 text-sm font-bold tabular-nums text-foreground">{value}</p>
     </div>
   )
 }

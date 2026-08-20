@@ -62,10 +62,15 @@ const telegramBootstrapScript = `
     if (webApp) {
       try { if (webApp.ready) webApp.ready(); } catch (e) {}
       try { if (webApp.expand) webApp.expand(); } catch (e) {}
+      try { if (webApp.setHeaderColor) webApp.setHeaderColor('#050505'); } catch (e) {}
+      try { if (webApp.setBackgroundColor) webApp.setBackgroundColor('#050505'); } catch (e) {}
+      try { if (webApp.setBottomBarColor) webApp.setBottomBarColor('#080808'); } catch (e) {}
     }
 
     postTelegramEvent('web_app_ready');
     postTelegramEvent('web_app_expand');
+    postTelegramEvent('web_app_set_header_color', { color: '#050505' });
+    postTelegramEvent('web_app_set_background_color', { color: '#050505' });
 
     if (attempts < 30) {
       window.setTimeout(markReady, 100);
@@ -94,7 +99,7 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
-  themeColor: '#1a1a2e',
+  themeColor: '#050505',
 }
 
 export default function RootLayout({

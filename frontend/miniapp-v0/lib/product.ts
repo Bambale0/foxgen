@@ -7,11 +7,15 @@ type ProductConfig = {
   brandLogo: string
 }
 
+const MINIAPP_BASE_PATH = String(process.env.NEXT_PUBLIC_MINIAPP_BASE_PATH || '/mini-app')
+  .trim()
+  .replace(/\/$/, '')
+
 const HAPPYFOX_PRODUCT: ProductConfig = {
   id: 'happyfox',
   brandName: 'HappyFox',
   brandDescription: 'HappyFox — создание фото, видео и AI-контента в Telegram',
-  brandLogo: '/happyfox-logo.webp',
+  brandLogo: `${MINIAPP_BASE_PATH}/happyfox-logo.webp`,
 }
 
 function resolveProductId(): ProductId {

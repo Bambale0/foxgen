@@ -1,6 +1,6 @@
 'use client'
 
-import { Image, Video, Sparkles, Bot } from 'lucide-react'
+import { ArrowUpRight, Bot, Image, Sparkles, Video } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface QuickActionGridProps {
@@ -12,10 +12,10 @@ interface QuickActionGridProps {
 }
 
 const actionStyles = [
-  'text-gold border-gold/30 bg-gold/10',
-  'text-cyan border-cyan/30 bg-cyan/10',
-  'text-purple-300 border-purple-400/25 bg-purple-500/10',
-  'text-emerald-300 border-emerald-400/25 bg-emerald-500/10',
+  'fox-surface-accent',
+  'fox-surface border-gold/20',
+  'fox-surface border-gold/15',
+  'fox-surface border-gold/15',
 ]
 
 export function QuickActionGrid({
@@ -27,32 +27,32 @@ export function QuickActionGrid({
   const items = [
     {
       label: 'Создать фото',
-      shortLabel: 'Фото',
+      description: 'Картинки, арты, редактирование',
       icon: Image,
       onClick: onPhotoClick,
     },
     {
       label: 'Создать видео',
-      shortLabel: 'Видео',
+      description: 'Динамичные сцены и анимация',
       icon: Video,
       onClick: onVideoClick,
     },
     {
       label: 'Оживить фото',
-      shortLabel: 'Оживить',
+      description: 'Motion и движение по референсу',
       icon: Sparkles,
       onClick: onMotionClick || onVideoClick,
     },
     {
-      label: 'Помощник',
-      shortLabel: 'Помощник',
+      label: 'AI-помощник',
+      description: 'Идея, промпт и быстрый старт',
       icon: Bot,
       onClick: onAssistantClick,
     },
   ]
 
   return (
-    <div className="grid grid-cols-4 gap-2 sm:gap-3 lg:mx-auto lg:max-w-[920px]">
+    <div className="grid grid-cols-2 gap-2.5 sm:gap-3 lg:mx-auto lg:max-w-[920px]">
       {items.map((item, index) => {
         const Icon = item.icon
 
@@ -62,17 +62,27 @@ export function QuickActionGrid({
             type="button"
             onClick={item.onClick}
             className={cn(
-              'group flex min-w-0 flex-col items-center gap-2 rounded-2xl py-3 text-center lg:py-2.5',
-              'transition-all duration-200 active:scale-95',
-              actionStyles[index]
+              'group relative min-w-0 overflow-hidden rounded-[22px] p-3.5 text-left sm:p-4',
+              'min-h-[132px] transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.985]',
+              actionStyles[index],
             )}
           >
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-current/20 bg-background/45 shadow-sm lg:h-10 lg:w-10">
-              <Icon className="h-5 w-5" />
+            <div className="absolute -right-8 -top-10 h-24 w-24 rounded-full bg-gold/[0.08] blur-2xl transition-opacity group-hover:opacity-100" />
+            <div className="relative flex h-full flex-col justify-between gap-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-gold/25 bg-gold/[0.09] text-gold shadow-[0_0_22px_rgba(255,106,0,0.08)]">
+                  <Icon className="h-5 w-5" />
+                </div>
+                <ArrowUpRight className="h-4 w-4 text-muted-foreground transition-all group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-gold" />
+              </div>
+
+              <div className="min-w-0">
+                <div className="text-sm font-bold text-foreground sm:text-[15px]">{item.label}</div>
+                <div className="mt-1 line-clamp-2 text-[10px] leading-relaxed text-muted-foreground sm:text-[11px]">
+                  {item.description}
+                </div>
+              </div>
             </div>
-            <span className="w-full truncate px-1 text-[11px] font-medium text-foreground sm:text-xs lg:text-[11px]">
-              {item.shortLabel}
-            </span>
           </button>
         )
       })}
