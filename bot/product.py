@@ -25,47 +25,30 @@ class ProductConfig:
         return f"{rendered} {self.credit_label(value)}"
 
 
-_PRODUCTS: dict[str, ProductConfig] = {
-    "happyfox": ProductConfig(
-        product_id="happyfox",
-        brand_name="HappyFox",
-        brand_description="HappyFox — создание фото, видео и AI-контента в Telegram",
-        welcome_text=(
-            "Привет 👋\n\n"
-            "Я <b>HappyFox</b> — удобный AI-сервис для создания изображений, видео и другого контента.\n\n"
-            "👇 Выбирай генерацию в боте или открывай приложение, чтобы начать."
-        ),
-        credit_name="кредит",
-        credit_name_plural="кредитов",
-        credit_short="кр.",
-        credit_emoji="",
-        support_contact=os.getenv("SUPPORT_CONTACT", "").strip(),
+HAPPYFOX_PRODUCT = ProductConfig(
+    product_id="happyfox",
+    brand_name="HappyFox",
+    brand_description="HappyFox — создание фото, видео и AI-контента в Telegram",
+    welcome_text=(
+        "Привет 👋\n\n"
+        "Я <b>HappyFox</b> — удобный AI-сервис для создания изображений, видео и другого контента.\n\n"
+        "👇 Выбирай генерацию в боте или открывай приложение, чтобы начать."
     ),
-    "neuromix": ProductConfig(
-        product_id="neuromix",
-        brand_name="NEUROMIX",
-        brand_description="NEUROMIX — студия генерации фото и видео с помощью AI",
-        welcome_text=(
-            "Привет 👋\n\n"
-            "Я <b>NEUROMIX</b> — самый выгодный и очень удобный бот для генерации изображений и видео.\n\n"
-            "👇 Пользуйся текстовым вариантом генераций или открой приложение, чтобы начать творить 🚀"
-        ),
-        credit_name="банан",
-        credit_name_plural="бананов",
-        credit_short="🍌",
-        credit_emoji="🍌",
-        support_contact=os.getenv("SUPPORT_CONTACT", "@only_tany").strip(),
-    ),
-}
+    credit_name="кредит",
+    credit_name_plural="кредитов",
+    credit_short="кр.",
+    credit_emoji="",
+    support_contact=os.getenv("SUPPORT_CONTACT", "").strip(),
+)
 
 
 def load_product_config() -> ProductConfig:
     product_id = os.getenv("PRODUCT_ID", "happyfox").strip().lower() or "happyfox"
-    try:
-        return _PRODUCTS[product_id]
-    except KeyError as exc:
-        supported = ", ".join(sorted(_PRODUCTS))
-        raise RuntimeError(f"Unsupported PRODUCT_ID={product_id!r}; expected one of: {supported}") from exc
+    if product_id != "happyfox":
+        raise RuntimeError(
+            f"Unsupported PRODUCT_ID={product_id!r}; Bambale0/foxgen is HappyFox-only"
+        )
+    return HAPPYFOX_PRODUCT
 
 
 product = load_product_config()
