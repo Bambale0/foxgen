@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { ExternalLink, LoaderCircle, Send } from 'lucide-react'
+import { ExternalLink, LoaderCircle, Send, Sparkles } from 'lucide-react'
 import {
   getApiBasePath,
   getRuntimeBotUsername,
@@ -142,14 +142,15 @@ export function TelegramOpenGate() {
 
   return (
     <main className="relative flex min-h-svh items-center justify-center overflow-hidden px-5 py-10">
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_35%,rgba(210,146,38,0.10),transparent_32%),radial-gradient(circle_at_50%_80%,rgba(40,74,120,0.10),transparent_45%)]" />
+      <div className="foxgen-shell-bg pointer-events-none absolute inset-0" />
 
-      <section className="relative w-full max-w-sm overflow-hidden rounded-[28px] border border-white/10 bg-card/80 p-7 shadow-2xl shadow-black/40 backdrop-blur-xl">
-        <div className="absolute inset-x-12 top-0 h-px bg-gradient-to-r from-transparent via-gold/70 to-transparent" />
+      <section className="fox-surface-accent relative w-full max-w-sm overflow-hidden rounded-[30px] p-7">
+        <div className="fox-accent-line absolute inset-x-12 top-0 h-px" />
+        <div className="pointer-events-none absolute -right-14 -top-14 h-44 w-44 rounded-full border border-gold/15" />
 
-        <div className="flex flex-col items-center text-center">
-          <div className="relative mb-7 flex h-24 w-24 items-center justify-center">
-            <div className="absolute inset-0 rounded-full border border-gold/15" />
+        <div className="relative flex flex-col items-center text-center">
+          <div className="relative mb-6 flex h-24 w-24 items-center justify-center">
+            <div className="absolute inset-0 rounded-full border border-gold/15 shadow-[0_0_44px_rgba(255,106,0,0.12)]" />
             <div className="absolute inset-2 rounded-full border border-dashed border-gold/25" />
             <div
               className={
@@ -158,29 +159,33 @@ export function TelegramOpenGate() {
                   : 'absolute inset-0 rounded-full border border-gold/25'
               }
             />
-            <div className="flex h-16 w-16 items-center justify-center rounded-full border border-gold/30 bg-gold/10 text-gold shadow-lg shadow-gold/10">
+            <div className="flex h-16 w-16 items-center justify-center rounded-full border border-gold/30 bg-gold/10 text-gold shadow-[0_0_28px_rgba(255,106,0,0.14)]">
               <Send className="h-7 w-7" />
             </div>
           </div>
 
-          <h1 className="text-2xl font-semibold tracking-[0.12em] text-foreground">
+          <div className="inline-flex items-center gap-1.5 rounded-full border border-gold/20 bg-gold/[0.07] px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.14em] text-gold">
+            <Sparkles className="h-3 w-3" />
+            Telegram Mini App
+          </div>
+          <h1 className="mt-3 text-2xl font-black uppercase tracking-[0.12em] text-foreground">
             {BRAND_NAME}
           </h1>
 
           {isConnecting ? (
             <>
-              <p className="mt-2 text-sm text-muted-foreground">Загружаем Mini App</p>
-              <div className="mt-7 h-1.5 w-full overflow-hidden rounded-full bg-white/5">
-                <div className="h-full w-1/2 animate-pulse rounded-full bg-gradient-to-r from-gold/60 via-gold to-gold/60" />
+              <p className="mt-2 text-xs text-muted-foreground">Подготавливаем вашу студию</p>
+              <div className="mt-6 h-1.5 w-full overflow-hidden rounded-full bg-white/[0.05]">
+                <div className="h-full w-1/2 animate-pulse rounded-full bg-gradient-to-r from-gold/45 via-gold to-gold/45 shadow-[0_0_14px_rgba(255,106,0,0.35)]" />
               </div>
             </>
           ) : (
             <>
-              <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                Продолжите через Telegram — без пароля
+              <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+                Войдите через Telegram, чтобы генерации, баланс и история работали в вашем аккаунте.
               </p>
 
-              <div className="mt-7 flex min-h-12 w-full items-center justify-center">
+              <div className="mt-6 flex min-h-12 w-full items-center justify-center">
                 {loginStatus === 'loading' ? (
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <LoaderCircle className="h-4 w-4 animate-spin text-gold" />
@@ -192,12 +197,12 @@ export function TelegramOpenGate() {
               </div>
 
               {!widgetReady && loginStatus === 'idle' ? (
-                <div className="mt-3 h-10 w-48 animate-pulse rounded-xl bg-white/5" />
+                <div className="mt-3 h-10 w-48 animate-pulse rounded-xl bg-white/[0.05]" />
               ) : null}
 
               {loginStatus === 'error' ? (
                 <div className="mt-5 w-full space-y-3">
-                  <p className="text-sm text-muted-foreground">Не получилось войти. Попробуйте ещё раз.</p>
+                  <p className="text-xs text-muted-foreground">Не получилось войти. Попробуйте открыть приложение напрямую.</p>
                   {telegramUrl ? (
                     <Button asChild variant="secondary" className="h-11 w-full rounded-xl">
                       <a href={telegramUrl} target="_blank" rel="noreferrer">
