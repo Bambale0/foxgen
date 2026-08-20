@@ -1,11 +1,12 @@
+# ruff: noqa: BLE001, DTZ003
 import base64
-from datetime import datetime
-from functools import lru_cache
 import io
 import mimetypes
 import os
 import uuid
-from typing import Iterable
+from collections.abc import Iterable
+from datetime import datetime
+from functools import lru_cache
 from urllib.parse import urlparse
 
 from PIL import Image, ImageOps
