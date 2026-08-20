@@ -31,7 +31,7 @@ export function HeroHeader() {
               </div>
               <div className="mt-0.5 inline-flex items-center gap-1.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                 <Wifi className="h-2.5 w-2.5 text-gold" />
-                <span>{mode === 'live' ? 'Mini App online' : 'Telegram mode'}</span>
+                <span>{mode === 'live' ? 'Онлайн' : 'Telegram'}</span>
               </div>
             </div>
           </div>
