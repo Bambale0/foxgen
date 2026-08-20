@@ -1,12 +1,9 @@
-#!/usr/bin/env python3
 """Print a secret-safe production topology report for HappyFox cutover.
 
 The report intentionally emits only environment key *names*, URL host metadata,
 and Docker container/network metadata. It never prints token/password values or
 full connection URLs.
 """
-
-from __future__ import annotations
 
 import subprocess
 import sys
