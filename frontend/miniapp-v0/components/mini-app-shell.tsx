@@ -26,6 +26,21 @@ interface MiniAppShellProps {
   children: ReactNode
 }
 
+type TelegramChromeBridge = {
+  ready?: () => void
+  expand?: () => void
+  setHeaderColor?: (color: string) => void
+  setBackgroundColor?: (color: string) => void
+  setBottomBarColor?: (color: string) => void
+}
+
+function getTelegramChromeBridge(): TelegramChromeBridge | null {
+  if (typeof window === 'undefined') return null
+  return ((window as Window & {
+    Telegram?: { WebApp?: TelegramChromeBridge }
+  }).Telegram?.WebApp || null)
+}
+
 function MiniAppBody({ children }: MiniAppShellProps) {
   const { state, activeWorkspace } = useApp()
   const isBootstrapping = state.isLoading
@@ -63,8 +78,7 @@ function MiniAppBody({ children }: MiniAppShellProps) {
 
 export function MiniAppShell({ children }: MiniAppShellProps) {
   useEffect(() => {
-    if (typeof window === 'undefined') return
-    const webApp = window.Telegram?.WebApp
+    const webApp = getTelegramChromeBridge()
     webApp?.ready?.()
     webApp?.expand?.()
     webApp?.setHeaderColor?.('#050505')
