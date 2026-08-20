@@ -13,6 +13,6 @@ export REDIS_PREFIX="${REDIS_PREFIX:-foxgen_happyfox}"
 
 cd "$PROJECT_DIR"
 
-python scripts/validate_happyfox_env.py .env .env.postgres
+python3 scripts/validate_happyfox_env.py .env .env.postgres
 
 exec bash scripts/deploy_backend_docker.sh "${1:-deploy}"
