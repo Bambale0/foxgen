@@ -56,6 +56,30 @@ def test_bootstrap_preserves_existing_current_runtime_values() -> None:
     assert values["REDIS_URL"].endswith("/7")
 
 
+def test_bootstrap_preserves_explicit_yookassa_configuration() -> None:
+    legacy = _legacy()
+    legacy.update(
+        {
+            "PAYMENT_PROVIDER": "yookassa",
+            "YOOKASSA_SHOP_ID": "shop-123",
+            "YOOKASSA_SECRET_KEY": "secret",
+        }
+    )
+    values = build_runtime_values(
+        legacy,
+        {},
+        database_name="happyfox",
+        redis_db=6,
+    )
+
+    assert values["PAYMENT_PROVIDER"] == "yookassa"
+    assert values["YOOKASSA_SHOP_ID"] == "shop-123"
+    assert values["YOOKASSA_SECRET_KEY"] == "secret"
+    assert values["YOOKASSA_WEBHOOK_PATH"] == "/yookassa/webhook"
+    assert values["YOOKASSA_RETURN_URL"] == values["MINI_APP_URL"]
+    assert validate(values) == []
+
+
 def test_database_url_normalizes_asyncpg_and_changes_database_only() -> None:
     result = postgres_url_for_database(
         "postgresql+asyncpg://foxgen:p%40ss@postgres:5432/foxgen?connect_timeout=5",
