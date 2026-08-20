@@ -69,17 +69,10 @@ jobs:
           : "${DEPLOY_USER:?Missing production variable DEPLOY_USER}"
           : "${DEPLOY_PORT:?Missing production variable DEPLOY_PORT}"
           : "${DEPLOY_PATH:?Missing production variable DEPLOY_PATH}"
-          : "${MINIAPP_FRONTEND_DOMAIN:?Missing production variable MINIAPP_FRONTEND_DOMAIN}"
           [[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]] || {
             echo "EXPECTED_SHA must be a full 40-character SHA" >&2
             exit 1
           }
-          case "${MINIAPP_FRONTEND_DOMAIN,,}" in
-            *tanyapp*|*chillcreative.ru*|*neuromix*)
-              echo "Refusing NEUROMIX/Tanya Mini App domain: ${MINIAPP_FRONTEND_DOMAIN}" >&2
-              exit 1
-              ;;
-          esac
 
       - name: Check out exact deployment commit
         uses: actions/checkout@v6
@@ -107,6 +100,92 @@ jobs:
           printf '%s\n' "$DEPLOY_KNOWN_HOSTS" | tr -d '\r' > "$HOME/.ssh/known_hosts"
           chmod 0600 "$HOME/.ssh/id_ed25519" "$HOME/.ssh/known_hosts"
           ssh-keygen -y -f "$HOME/.ssh/id_ed25519" >/dev/null
+
+      - name: Resolve HappyFox Mini App domain
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          resolved_domain="${MINIAPP_FRONTEND_DOMAIN:-}"
+          if [ -z "$resolved_domain" ]; then
+            printf -v quoted_path '%q' "$DEPLOY_PATH"
+            resolved_domain="$(
+              ssh \
+                -i "$HOME/.ssh/id_ed25519" \
+                -p "$DEPLOY_PORT" \
+                -o BatchMode=yes \
+                -o IdentitiesOnly=yes \
+                -o StrictHostKeyChecking=yes \
+                -o ConnectTimeout=15 \
+                "$DEPLOY_USER@$DEPLOY_HOST" \
+                "python3 - $quoted_path" <<'PY'
+          import sys
+          from pathlib import Path
+          from urllib.parse import urlparse
+
+          project_dir = Path(sys.argv[1])
+          env_path = project_dir / ".env"
+          if not env_path.is_file():
+              raise SystemExit(f"{env_path} is missing")
+
+          values: dict[str, str] = {}
+          for raw_line in env_path.read_text(encoding="utf-8").splitlines():
+              line = raw_line.strip()
+              if not line or line.startswith("#"):
+                  continue
+              if line.startswith("export "):
+                  line = line[7:].lstrip()
+              if "=" not in line:
+                  continue
+              key, value = line.split("=", 1)
+              value = value.strip()
+              if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+                  value = value[1:-1]
+              values[key.strip()] = value
+
+          direct = values.get("MINIAPP_FRONTEND_DOMAIN", "").strip()
+          if direct:
+              print(direct)
+              raise SystemExit(0)
+
+          for key in (
+              "MINI_APP_URL",
+              "FOXGEN_MINIAPP_PUBLIC_URL",
+              "WEBHOOK_HOST",
+              "FOXGEN_KIE_CALLBACK_BASE_URL",
+          ):
+              value = values.get(key, "").strip()
+              if not value:
+                  continue
+              host = urlparse(value).hostname
+              if host:
+                  print(host)
+                  raise SystemExit(0)
+
+          raise SystemExit(
+              "Could not resolve HappyFox Mini App domain from server .env; "
+              "set MINIAPP_FRONTEND_DOMAIN or MINI_APP_URL"
+          )
+          PY
+            )"
+          fi
+
+          resolved_domain="${resolved_domain//$'\r'/}"
+          resolved_domain="${resolved_domain//$'\n'/}"
+          : "${resolved_domain:?Unable to resolve HappyFox Mini App domain}"
+          [[ "$resolved_domain" =~ ^[A-Za-z0-9.-]+$ ]] || {
+            echo "Invalid HappyFox Mini App domain" >&2
+            exit 1
+          }
+
+          case "${resolved_domain,,}" in
+            *tanyapi.chillcreative.ru*|*cdn.chillcreative.ru*|*media.chillcreative.ru*|*tanyapp*|*neuromix*|*only_tany*)
+              echo "Refusing NEUROMIX/Tanya Mini App domain" >&2
+              exit 1
+              ;;
+          esac
+
+          echo "MINIAPP_FRONTEND_DOMAIN=${resolved_domain}" >> "$GITHUB_ENV"
 
       - name: Preflight isolated HappyFox runtime
         shell: bash
@@ -148,7 +227,7 @@ jobs:
           python scripts/validate_happyfox_env.py .env .env.postgres
 
           case "${MINIAPP_FRONTEND_DOMAIN,,}" in
-            *tanyapp*|*chillcreative.ru*|*neuromix*) exit 1 ;;
+            *tanyapi.chillcreative.ru*|*cdn.chillcreative.ru*|*media.chillcreative.ru*|*tanyapp*|*neuromix*|*only_tany*) exit 1 ;;
           esac
           REMOTE
 
@@ -239,7 +318,8 @@ jobs:
             "repos/${GITHUB_REPOSITORY}/statuses/${EXPECTED_SHA}" \
             -f state="$state" \
             -f context='foxgen/production-deploy' \
-            -f description="$description"
+            -f description="$description" \
+            -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
 
       - name: Remove SSH key
         if: always()
