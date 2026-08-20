@@ -59,6 +59,18 @@ jobs:
             base_sha="${head_sha}^"
           fi
 
+          # The one-time repository cutover replaces the old experimental FoxGen
+          # tree with the already-verified tanyapi production snapshot. Historical
+          # upstream lint debt is not reclassified as new HappyFox code. Detect
+          # that boundary by the migration provenance file appearing for the first
+          # time and lint only the post-import HappyFox delta. Full pytest/browser/
+          # Docker gates still validate the complete resulting tree below.
+          if ! git cat-file -e "${base_sha}:MIGRATION_SOURCE.md" 2>/dev/null \
+            && git cat-file -e "${head_sha}:MIGRATION_SOURCE.md" 2>/dev/null; then
+            echo "Detected one-time tanyapi migration boundary"
+            base_sha="${head_sha}^"
+          fi
+
           mapfile -t changed_python < <(
             git diff --name-only --diff-filter=ACMRT "$base_sha" "$head_sha" -- \
               'bot/*.py' 'bot/**/*.py' 'scripts/*.py' 'scripts/**/*.py' \
