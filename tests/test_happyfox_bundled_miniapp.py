@@ -56,6 +56,30 @@ def test_production_image_bundles_happyfox_static_export() -> None:
     assert "COPY --from=miniapp-builder" in dockerfile
     assert "/app/frontend/miniapp-v0/out" in dockerfile
     assert "revision.txt" in dockerfile
+    assert 'HAPPYFOX_RELEASE="${VCS_REF}"' in dockerfile
+
+
+def test_product_normalizer_versions_telegram_webapp_launch() -> None:
+    normalizer = Path("scripts/apply_happyfox_product_copy.py").read_text(
+        encoding="utf-8"
+    )
+
+    assert 'query["release"] = release' in normalizer
+    assert 'os.getenv("HAPPYFOX_RELEASE", "")' in normalizer
+    assert '"type": "web_app"' in normalizer
+    assert '"text": "Открыть HappyFox"' in normalizer
+    assert "Stale commands-only Telegram menu button remains" in normalizer
+
+
+def test_normalized_runtime_uses_versioned_webapp_menu() -> None:
+    keyboards = Path("bot/keyboards.py").read_text(encoding="utf-8")
+    main = Path("bot/main.py").read_text(encoding="utf-8")
+
+    assert 'os.getenv("HAPPYFOX_RELEASE", "")' in keyboards
+    assert 'query["release"] = release' in keyboards
+    assert '"type": "web_app"' in main
+    assert '"text": "Открыть HappyFox"' in main
+    assert '"type": "commands"' not in main
 
 
 def test_production_miniapp_wrapper_verifies_bundled_release() -> None:
