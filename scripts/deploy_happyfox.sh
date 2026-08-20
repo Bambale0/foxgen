@@ -29,13 +29,42 @@ require_value() {
   }
 }
 
-require_value BOT_TOKEN
-require_value MINI_APP_URL
+for key in \
+  BOT_TOKEN \
+  MINI_APP_URL \
+  WEBHOOK_HOST \
+  DATABASE_URL \
+  REDIS_URL \
+  REDIS_PREFIX \
+  KIE_AI_API_KEY; do
+  require_value "$key"
+done
 
 mini_app_url="$(read_env_value MINI_APP_URL)"
-case "$mini_app_url" in
-  *chillcreative.ru*|*tanyapi*|*neuromix*)
-    echo '[happyfox-deploy] ERROR: MINI_APP_URL points to a NEUROMIX/Tanya host' >&2
+webhook_host="$(read_env_value WEBHOOK_HOST)"
+database_url="$(read_env_value DATABASE_URL)"
+redis_prefix="$(read_env_value REDIS_PREFIX)"
+
+for product_url in "$mini_app_url" "$webhook_host"; do
+  case "$product_url" in
+    *cdn.chillcreative.ru*|*tanyapi.chillcreative.ru*|*tanyapp*|*neuromix*)
+      echo "[happyfox-deploy] ERROR: product URL points to a NEUROMIX/Tanya host: $product_url" >&2
+      exit 1
+      ;;
+  esac
+done
+
+case "$database_url" in
+  postgresql://*|postgres://*|postgresql+asyncpg://*) ;;
+  *)
+    echo '[happyfox-deploy] ERROR: HappyFox production requires PostgreSQL DATABASE_URL' >&2
+    exit 1
+    ;;
+esac
+
+case "$redis_prefix" in
+  banano_kling|neuromix|tanyapi|'')
+    echo '[happyfox-deploy] ERROR: REDIS_PREFIX must be isolated for HappyFox' >&2
     exit 1
     ;;
 esac
@@ -46,7 +75,7 @@ export SYSTEMD_SERVICE="${SYSTEMD_SERVICE:-foxgen-happyfox}"
 export CONTAINER_NAME="${CONTAINER_NAME:-foxgen-happyfox-bot}"
 export PRODUCT_ID=happyfox
 
-printf '[happyfox-deploy] project=%s action=%s container=%s service=%s\n' \
-  "$PROJECT_DIR" "$ACTION" "$CONTAINER_NAME" "$SYSTEMD_SERVICE"
+printf '[happyfox-deploy] project=%s action=%s container=%s service=%s redis_prefix=%s\n' \
+  "$PROJECT_DIR" "$ACTION" "$CONTAINER_NAME" "$SYSTEMD_SERVICE" "$redis_prefix"
 
 exec bash "$PROJECT_DIR/scripts/deploy_backend_docker.sh" "$ACTION"
