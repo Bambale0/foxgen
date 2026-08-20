@@ -1,4 +1,4 @@
-export type ProductId = 'happyfox' | 'neuromix'
+export type ProductId = 'happyfox'
 
 type ProductConfig = {
   id: ProductId
@@ -7,25 +7,22 @@ type ProductConfig = {
   brandLogo: string
 }
 
-const PRODUCTS: Record<ProductId, ProductConfig> = {
-  happyfox: {
-    id: 'happyfox',
-    brandName: 'HappyFox',
-    brandDescription: 'HappyFox — создание фото, видео и AI-контента в Telegram',
-    brandLogo: '/happyfox-logo.webp',
-  },
-  neuromix: {
-    id: 'neuromix',
-    brandName: 'NEUROMIX',
-    brandDescription: 'NEUROMIX — студия генерации фото и видео с помощью AI',
-    brandLogo: '/icon.svg',
-  },
+const HAPPYFOX_PRODUCT: ProductConfig = {
+  id: 'happyfox',
+  brandName: 'HappyFox',
+  brandDescription: 'HappyFox — создание фото, видео и AI-контента в Telegram',
+  brandLogo: '/happyfox-logo.webp',
 }
 
 function resolveProductId(): ProductId {
   const configured = String(process.env.NEXT_PUBLIC_PRODUCT_ID || 'happyfox').trim().toLowerCase()
-  if (configured === 'neuromix' || configured === 'happyfox') return configured
-  throw new Error(`Unsupported NEXT_PUBLIC_PRODUCT_ID=${configured}`)
+  if (configured !== 'happyfox') {
+    throw new Error(
+      `Unsupported NEXT_PUBLIC_PRODUCT_ID=${configured}; Bambale0/foxgen is HappyFox-only`,
+    )
+  }
+  return 'happyfox'
 }
 
-export const PRODUCT = PRODUCTS[resolveProductId()]
+resolveProductId()
+export const PRODUCT = HAPPYFOX_PRODUCT
