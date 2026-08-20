@@ -202,7 +202,7 @@ export function TelegramOpenGate() {
                     <Button asChild variant="secondary" className="h-11 w-full rounded-xl">
                       <a href={telegramUrl} target="_blank" rel="noreferrer">
                         <ExternalLink className="h-4 w-4" />
-                        Открыть NEUROMIX в Telegram
+                        Открыть {BRAND_NAME} в Telegram
                       </a>
                     </Button>
                   ) : null}
