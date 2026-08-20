@@ -1,7 +1,7 @@
-from bot.product import product
+import os
 
 
-SUPPORT_USERNAME = product.support_contact
+SUPPORT_USERNAME = os.getenv("SUPPORT_CONTACT", "").strip()
 SUPPORT_URL = (
     f"https://t.me/{SUPPORT_USERNAME.lstrip('@')}"
     if SUPPORT_USERNAME.startswith("@")
