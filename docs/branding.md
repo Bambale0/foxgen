@@ -1,192 +1,161 @@
-# Бренд NEUROMIX
+# Бренд HappyFox
 
-## 1. Основное правило
+## Основное правило
 
-Пользовательский бренд продукта во всех интерфейсах и пользовательской документации:
+Пользовательский бренд продукта во всех интерфейсах, сообщениях бота и актуальной документации:
 
 ```text
-NEUROMIX
+HappyFox
 ```
 
-Не использовать как название продукта:
+Не показывать пользователю как название продукта:
 
-- Banano Studio;
-- Banana Studio;
-- Banano AI Studio;
-- Banana AI;
+- NEUROMIX;
+- Banano Studio / Banana Studio;
 - Banano Kling;
-- Banana Boom;
-- внутреннее имя репозитория.
+- внутреннее имя production-core;
+- технические `banano_*` identifiers.
 
-## 2. Где NEUROMIX обязателен
+Исключение — официальные названия AI-моделей, например `Nano Banana` и `Nano Banana Pro`.
 
-- browser `<title>`;
-- Next.js metadata/application name;
-- загрузчик Mini App;
-- Telegram/browser auth gate;
-- основной header;
-- error screens;
-- welcome copy бота;
-- пользовательские инструкции;
-- public screenshots и marketing materials;
-- название продукта в README и release notes.
+## Sources of truth
 
-## 3. Единый frontend source
-
-Источник имени бренда:
+Frontend:
 
 ```text
+frontend/miniapp-v0/lib/product.ts
 frontend/miniapp-v0/lib/brand.ts
+frontend/miniapp-v0/public/happyfox-logo.webp
 ```
 
-Компоненты должны импортировать `BRAND_NAME` и `BRAND_DESCRIPTION`, а не создавать собственные строки.
+Backend:
 
-Пример:
-
-```ts
-import { BRAND_NAME } from '@/lib/brand'
+```text
+bot/product.py
 ```
 
-## 4. Названия моделей не являются брендом продукта
+Компоненты должны использовать `BRAND_NAME`, `BRAND_DESCRIPTION` и `BRAND_LOGO`, а не дублировать имя продукта строковыми литералами.
+
+## Logo / palette
+
+- основной фон: почти чёрный;
+- основной акцент: фирменный оранжевый;
+- вторичный акцент: тёплый orange/red;
+- зелёный используется только для success/online states;
+- холодный cyan не используется как отдельный брендовый акцент;
+- logo не перекрашивать и не искажать пропорции.
+
+Глобальные frontend tokens находятся в:
+
+```text
+frontend/miniapp-v0/app/globals.css
+```
+
+## AI model names
 
 Не переименовывать provider/model names:
 
-- Nano Banana;
-- Nano Banana Pro;
+- Nano Banana / Nano Banana Pro;
 - Kling;
 - Veo;
 - Grok Imagine;
 - Seedream;
 - Seedance;
 - GPT Image;
-- Gemini.
+- Gemini;
+- Wan.
 
 Правильно:
 
 ```text
-NEUROMIX
+HappyFox
 Модель: Nano Banana Pro
 ```
 
 Неправильно:
 
 ```text
-Модель: NEUROMIX Pro
+HappyFox Banana Pro
 ```
 
-## 5. Legacy technical identifiers
+## Legacy technical identifiers
 
-В коде и инфраструктуре могут оставаться:
+Для совместимости внутри production-core могут оставаться:
 
-- repository `banano_kling`;
-- systemd service `banano-kling.service`;
-- Redis prefix `banano_kling`;
-- log path `banano-miniapp-cdn.log`;
 - env flags `BANANO_*`;
-- internal function names с `banana`/`banano`;
-- callback IDs и database enum values.
+- callback IDs;
+- database enum values;
+- provider/model keys;
+- Python module/function names с `banana`/`banano`.
 
-Они могут сохраняться для backward compatibility. Не показывать их пользователю как название продукта.
+Они не являются пользовательским брендом и не должны появляться в UI/copy. Runtime infrastructure нового продукта использует отдельные идентификаторы:
 
-Переименование technical identifiers выполняется отдельной migration-задачей с анализом:
+```text
+Docker project: foxgen-happyfox
+container:      foxgen-happyfox-bot
+service:        foxgen-happyfox
+Redis prefix:   foxgen_happyfox
+```
 
-- systemd units;
-- Redis keys;
-- database values;
-- callbacks/deep links;
-- deploy profiles;
-- monitoring;
-- backups;
-- external integrations.
+## User-facing surfaces
 
-## 6. Заголовки экранов
+HappyFox должен использоваться в:
 
-Главный брендовый заголовок должен включать NEUROMIX или отображаться рядом с постоянным header NEUROMIX.
+- browser title / metadata;
+- loader;
+- sticky Mini App header;
+- welcome copy Telegram-бота;
+- auth/error screens, когда отображается product name;
+- README/release notes;
+- public screenshots/marketing materials.
 
-Примеры:
+Функциональные заголовки можно оставлять короткими: `Создать фото`, `Создать видео`, `Работы`, `Лента`, `Профиль`.
 
-- `NEUROMIX`;
-- `NEUROMIX загружается`;
-- `Добро пожаловать в NEUROMIX`;
-- `NEUROMIX — фото и видео с AI`.
+## Tone of voice
 
-Функциональные заголовки внутри уже брендированного приложения могут быть короткими:
-
-- `Создать фото`;
-- `Создать видео`;
-- `Ваши работы`;
-- `Тренды`;
-- `Профиль`.
-
-Не требуется добавлять NEUROMIX к каждой кнопке.
-
-## 7. Tone of voice
-
-- понятно и без технического мусора;
-- действие пользователя видно сразу;
-- не обещать результат, который зависит от внешнего provider;
+- коротко и понятно;
+- сначала действие пользователя, затем детали;
+- не показывать provider/internal terminology без необходимости;
 - ошибки объяснять человеческим языком;
-- технический код ошибки можно показывать вторичной строкой;
-- не использовать старый «банановый» нейминг в пользовательском тексте, если это не название модели.
+- не обещать успех, если результат зависит от внешнего AI-provider;
+- technical error/correlation id можно показывать вторичной строкой.
 
-## 8. Loader
+## Loader / auth gate
 
-Loader должен:
+Loader:
 
-- сразу показывать NEUROMIX;
-- сообщать, что загружается приложение/данные Telegram;
-- не обвинять пользователя;
-- не показывать auth gate до завершения проверки initData;
-- иметь доступный `role=status`, `aria-live` и `aria-busy`.
+- сразу показывает HappyFox logo/name;
+- вызывает Telegram ready/expand согласно runtime contract;
+- сообщает, что получает данные Telegram;
+- имеет `role=status`, `aria-live`, `aria-busy`.
 
-## 9. Browser auth gate
+Browser auth gate:
 
-Gate вне Telegram:
-
-- содержит бренд NEUROMIX;
+- использует HappyFox;
 - объясняет вход через Telegram;
-- не называется Banana/Banano;
-- после ошибки предлагает повтор или открытие в Telegram;
-- не раскрывает детали signature validation.
+- не раскрывает детали signature/HMAC validation;
+- предлагает повторный вход/открытие через Telegram после recoverable error.
 
-## 10. QA checklist бренда
+## QA
 
-После frontend build:
+Перед релизом:
 
 ```bash
 cd frontend/miniapp-v0
-npm run build
+NEXT_PUBLIC_PRODUCT_ID=happyfox npm run build
 
-grep -RniE 'Banano AI Studio|Banana Studio|Banano Studio|Banano Kling' \
-  app components lib out \
-  || true
+test -s out/happyfox-logo.webp
+grep -q 'HappyFox' out/index.html
 ```
 
-Результаты нужно классифицировать:
+Также проверять user-facing runtime на старые бренды. Допустимые совпадения `NEUROMIX` могут оставаться только в migration/history/explicit compatibility config и не должны попадать в HappyFox UI.
 
-- user-facing text — исправить;
-- technical identifier — допустим при обосновании;
-- provider model `Nano Banana` — не менять.
+## Repository
 
-Проверить публичный title:
-
-```bash
-curl -fsS https://cdn.chillcreative.ru/mini-app/ \
-  | grep -o '<title>[^<]*</title>'
-```
-
-Ожидается:
-
-```html
-<title>NEUROMIX</title>
-```
-
-## 11. Документация
-
-Заголовки актуальных пользовательских и production-документов должны использовать NEUROMIX. Исторические provider docs и internal filenames можно не переименовывать, если переименование сломает ссылки или историю.
-
-При упоминании репозитория использовать формулировку:
+Актуальная формулировка:
 
 ```text
-NEUROMIX, репозиторий Bambale0/banano_kling, ветка tanyapi
+HappyFox, репозиторий Bambale0/foxgen, ветка main
 ```
+
+История происхождения production-core хранится отдельно в `MIGRATION_SOURCE.md`.
