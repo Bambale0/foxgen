@@ -93,6 +93,7 @@ def validate(values: dict[str, str]) -> list[str]:
         "DATABASE_URL",
         "REDIS_URL",
         "SUPPORT_CONTACT",
+        "YOOKASSA_RETURN_URL",
     ):
         value = values.get(key, "").strip().lower()
         if not value:
@@ -114,6 +115,7 @@ def validate(values: dict[str, str]) -> list[str]:
 
     payment_provider = values.get("PAYMENT_PROVIDER", "lava").strip().lower()
     payment_requirements: dict[str, tuple[str, ...]] = {
+        "yookassa": ("YOOKASSA_SHOP_ID", "YOOKASSA_SECRET_KEY"),
         "lava": ("LAVA_API_KEY", "LAVA_WEBHOOK_SECRET", *LAVA_OFFER_KEYS),
         "tbank": ("TBANK_TERMINAL_KEY", "TBANK_SECRET_KEY"),
         "cryptobot": ("CRYPTOBOT_API_TOKEN",),
@@ -132,6 +134,14 @@ def validate(values: dict[str, str]) -> list[str]:
                 errors.append(
                     f"{key} is required for PAYMENT_PROVIDER={payment_provider}"
                 )
+
+    if payment_provider == "yookassa":
+        return_url = values.get("YOOKASSA_RETURN_URL", "").strip() or mini_app_url
+        if not return_url.startswith("https://"):
+            errors.append("YOOKASSA_RETURN_URL (or MINI_APP_URL fallback) must use https://")
+        webhook_path = values.get("YOOKASSA_WEBHOOK_PATH", "/yookassa/webhook").strip()
+        if not webhook_path.startswith("/"):
+            errors.append("YOOKASSA_WEBHOOK_PATH must start with /")
 
     return errors
 
