@@ -26,21 +26,6 @@ export interface RunTrendResult {
   credits: number
 }
 
-function providerReferenceUrl(value: string): string {
-  try {
-    const url = new URL(value)
-    if (
-      url.hostname.toLowerCase() === 'cdn.chillcreative.ru' &&
-      url.pathname.startsWith('/uploads/')
-    ) {
-      return `https://tanyapi.chillcreative.ru${url.pathname}${url.search}${url.hash}`
-    }
-  } catch {
-    return value
-  }
-  return value
-}
-
 async function parseResponse(response: Response): Promise<RunTrendResponse> {
   const text = await response.text()
   let payload: RunTrendResponse | { ok?: false; error?: string }
@@ -72,7 +57,7 @@ export async function runTrend(
   const payload: Record<string, unknown> = {
     init_data: initData,
     trend_id: trendId,
-    reference_urls: referenceUrls.map(providerReferenceUrl),
+    reference_urls: referenceUrls,
   }
   const startParam = getStartParamFallback()
   if (startParam) payload.start_param_fallback = startParam
@@ -113,7 +98,7 @@ export async function runTrend(
             ...task,
             prompt: '',
             request_data: {
-              reference_images: referenceUrls.map(providerReferenceUrl),
+              reference_images: referenceUrls,
               trend_id: data.trend_id,
             },
           }
