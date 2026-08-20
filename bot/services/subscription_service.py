@@ -2,15 +2,29 @@
 
 import asyncio
 import logging
+import os
 import time
 from dataclasses import dataclass
 
 from aiogram import Bot
 from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 
-REQUIRED_CHANNEL_USERNAME = "neuromix_prompt"
-REQUIRED_CHANNEL_CHAT_ID = f"@{REQUIRED_CHANNEL_USERNAME}"
-REQUIRED_CHANNEL_URL = f"https://t.me/{REQUIRED_CHANNEL_USERNAME}"
+from bot.product import product
+
+_DEFAULT_REQUIRED_CHANNEL_USERNAME = (
+    "neuromix_prompt" if product.product_id == "neuromix" else ""
+)
+REQUIRED_CHANNEL_USERNAME = (
+    os.getenv("REQUIRED_CHANNEL_USERNAME", _DEFAULT_REQUIRED_CHANNEL_USERNAME)
+    .strip()
+    .lstrip("@")
+)
+REQUIRED_CHANNEL_CHAT_ID = (
+    f"@{REQUIRED_CHANNEL_USERNAME}" if REQUIRED_CHANNEL_USERNAME else ""
+)
+REQUIRED_CHANNEL_URL = (
+    f"https://t.me/{REQUIRED_CHANNEL_USERNAME}" if REQUIRED_CHANNEL_USERNAME else ""
+)
 SUBSCRIPTION_CHECK_CALLBACK = "check_required_channel_subscription"
 SUBSCRIPTION_CACHE_TTL_SECONDS = 15 * 60
 SUBSCRIPTION_CHECK_TIMEOUT_SECONDS = 2.0
@@ -65,7 +79,10 @@ async def check_required_channel_subscription(
     *,
     use_cache: bool = True,
 ) -> SubscriptionCheckResult:
-    """Return whether a user is subscribed to the required channel."""
+    """Return whether a user is subscribed to the configured required channel."""
+    if not REQUIRED_CHANNEL_USERNAME:
+        return SubscriptionCheckResult(ok=True, status="disabled")
+
     normalized_id = int(telegram_id)
     now = time.monotonic()
     cached_until = _positive_subscription_cache.get(normalized_id, 0)

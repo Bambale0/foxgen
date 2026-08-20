@@ -1,2 +1,5 @@
-export const BRAND_NAME = 'NEUROMIX'
-export const BRAND_DESCRIPTION = 'NEUROMIX — студия генерации фото и видео с помощью AI'
+import { PRODUCT } from './product'
+
+export const BRAND_NAME = PRODUCT.brandName
+export const BRAND_DESCRIPTION = PRODUCT.brandDescription
+export const BRAND_LOGO = PRODUCT.brandLogo
