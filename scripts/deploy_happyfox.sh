@@ -12,7 +12,9 @@ export PRODUCT_ID=happyfox
 export REDIS_PREFIX="${REDIS_PREFIX:-foxgen_happyfox}"
 export HAPPYFOX_BACKEND_NETWORK="${HAPPYFOX_BACKEND_NETWORK:-foxgen_backend}"
 export SKIP_BACKUP=1
-export CUTOVER_STOP_CONTAINERS="${CUTOVER_STOP_CONTAINERS:-foxgen-api-1 foxgen-bot-1 foxgen-worker-1}"
+export CUTOVER_STOP_CONTAINERS="${CUTOVER_STOP_CONTAINERS:-foxgen-api-1
+foxgen-bot-1
+foxgen-worker-1}"
 export CUTOVER_RESTART_ON_FAILURE=1
 
 cd "$PROJECT_DIR"
