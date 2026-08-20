@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { Sparkles, Video as VideoIcon } from 'lucide-react'
 import { useApp } from '@/lib/app-context'
 import { VideoGeneratorForm } from '../forms/video-generator-form'
 import { Seedance25PublicForm } from '../forms/seedance25-public-form'
@@ -149,44 +150,56 @@ export function VideoTab() {
   }
 
   return (
-    <div className="min-w-0 space-y-4 overflow-x-hidden px-3 pb-3 sm:px-4">
-      <div className="text-center mb-6">
-        <h2 className="font-serif text-xl font-semibold text-foreground mb-1">
-          Генерация видео
-        </h2>
-        <p className="text-sm text-muted-foreground">
-          Создавайте кинематографичные видео с AI
-        </p>
+    <div className="min-w-0 space-y-4 overflow-x-hidden px-3 pb-3 sm:px-4 lg:px-6">
+      <div className="flex items-start justify-between gap-4 px-0.5 pt-1">
+        <div>
+          <div className="mb-2 inline-flex items-center gap-1.5 rounded-full border border-gold/20 bg-gold/[0.07] px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.14em] text-gold">
+            <VideoIcon className="h-3 w-3" />
+            Видео
+          </div>
+          <h2 className="text-2xl font-black tracking-[-0.035em] text-foreground">Создайте видео</h2>
+          <p className="mt-1 max-w-xl text-xs leading-relaxed text-muted-foreground">
+            Выберите подходящую модель, сценарий и длительность. Для image-to-video добавьте стартовый кадр.
+          </p>
+        </div>
+        <div className="shrink-0 pt-1 text-right">
+          <div className="text-[9px] font-bold uppercase tracking-[0.13em] text-muted-foreground">Шаг 1 из 3</div>
+          <div className="mt-2 flex justify-end gap-1">
+            <span className="h-1 w-5 rounded-full bg-gold" />
+            <span className="h-1 w-3 rounded-full bg-white/10" />
+            <span className="h-1 w-3 rounded-full bg-white/10" />
+          </div>
+        </div>
       </div>
 
       {canUseSeedance25 ? (
         <div className="mx-auto mb-4 max-w-xl space-y-2">
-          <div className="px-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-            Выберите модель
+          <div className="px-1 text-[9px] font-black uppercase tracking-[0.16em] text-muted-foreground">
+            Быстрый выбор модели
           </div>
-          <div className="grid grid-cols-2 gap-2 rounded-2xl border border-gold/25 bg-background/45 p-1.5">
+          <div className="fox-surface grid grid-cols-2 gap-2 rounded-[18px] p-1.5">
             <button
               type="button"
               onClick={() => setVideoMode('seedance25')}
-              className={`rounded-xl px-3 py-3 text-xs font-semibold transition ${
+              className={`rounded-[14px] px-3 py-3 text-xs font-semibold transition-all ${
                 effectiveMode === 'seedance25' && !isSeedanceRepeat
-                  ? 'border border-gold/45 bg-gold/15 text-gold shadow-[0_0_18px_rgba(251,191,36,0.10)]'
-                  : 'border border-transparent text-muted-foreground hover:bg-gold/5 hover:text-foreground'
+                  ? 'border border-gold/45 bg-gold/[0.12] text-gold shadow-[0_0_18px_rgba(255,106,0,0.10)]'
+                  : 'border border-transparent text-muted-foreground hover:bg-gold/[0.05] hover:text-foreground'
               }`}
             >
-              <span className="block text-[10px] font-black uppercase tracking-[0.16em]">🔥🆕 NEW</span>
-              <span className="mt-0.5 block text-sm">Seedance 2.5</span>
+              <span className="block text-[9px] font-black uppercase tracking-[0.16em] text-gold">NEW</span>
+              <span className="mt-0.5 block text-sm text-foreground">Seedance 2.5</span>
             </button>
             <button
               type="button"
               onClick={() => setVideoMode('regular')}
-              className={`rounded-xl px-3 py-3 text-xs font-medium transition ${
+              className={`rounded-[14px] px-3 py-3 text-xs font-medium transition-all ${
                 effectiveMode === 'regular' || isSeedanceRepeat
-                  ? 'border border-border bg-secondary text-foreground'
+                  ? 'border border-white/[0.08] bg-secondary text-foreground'
                   : 'border border-transparent text-muted-foreground hover:bg-secondary/60 hover:text-foreground'
               }`}
             >
-              <span className="block text-[10px] uppercase tracking-[0.14em] opacity-70">Каталог</span>
+              <span className="block text-[9px] uppercase tracking-[0.14em] opacity-70">Каталог</span>
               <span className="mt-0.5 block text-sm">Другие модели</span>
             </button>
           </div>
@@ -221,29 +234,32 @@ export function VideoTab() {
 
         <div className="space-y-4">
           {error && (effectiveMode === 'regular' || isSeedanceRepeat) ? (
-            <div className="p-4 rounded-xl bg-destructive/10 border border-destructive/30">
+            <div className="rounded-xl border border-destructive/30 bg-destructive/10 p-4">
               <p className="text-sm text-destructive">{error}</p>
             </div>
           ) : null}
 
           {effectiveMode === 'seedance25' && !isSeedanceRepeat ? (
-            <div className="glass rounded-2xl border border-cyan/20 p-5">
-              <p className="text-xs uppercase tracking-[0.18em] text-cyan/80 mb-2">Seedance queue</p>
-              <h3 className="font-serif text-lg text-foreground mb-2">Seedance 2.5</h3>
+            <div className="fox-surface-accent rounded-[22px] p-5">
+              <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl border border-gold/20 bg-gold/[0.08]">
+                <Sparkles className="h-5 w-5 text-gold" />
+              </div>
+              <p className="mb-2 text-[9px] font-black uppercase tracking-[0.16em] text-gold">Очередь Seedance</p>
+              <h3 className="text-lg font-bold text-foreground">Seedance 2.5</h3>
               {seedanceQueued ? (
-                <div className="space-y-2 text-sm">
-                  <p>✅ Задача отправлена в Kie.ai.</p>
-                  <p className="break-all font-mono text-xs text-muted-foreground">{seedanceQueued.task_id}</p>
-                  <p className="text-xs text-muted-foreground">
+                <div className="mt-2 space-y-2 text-sm">
+                  <p>Задача отправлена в Kie.ai.</p>
+                  <p className="break-all font-mono text-[10px] text-muted-foreground">{seedanceQueued.task_id}</p>
+                  <p className="text-xs leading-relaxed text-muted-foreground">
                     {seedanceQueued.admin_free
                       ? 'Для администратора списание отключено.'
-                      : `Списано ${seedanceQueued.cost}🍌.`}{' '}
+                      : `Списано ${seedanceQueued.cost} кредитов.`}{' '}
                     Результат придёт в Telegram. Если callback задержится, включён polling fallback.
                   </p>
                 </div>
               ) : (
-                <p className="text-sm text-muted-foreground">
-                  Здесь появится ID последней задачи Seedance 2.5. Итоговое видео бот пришлёт автоматически.
+                <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+                  Здесь появится ID последней задачи. Итоговое видео бот пришлёт автоматически.
                 </p>
               )}
             </div>
@@ -253,11 +269,14 @@ export function VideoTab() {
               onClose={() => setLastРезультат(null)}
             />
           ) : (
-            <div className="glass rounded-2xl border border-cyan/20 p-5">
-              <p className="text-xs uppercase tracking-[0.18em] text-cyan/80 mb-2">Очередь</p>
-              <h3 className="font-serif text-lg text-foreground mb-2">Видео-панель</h3>
-              <p className="text-sm text-muted-foreground">
-                Очередь, task id и превью ролика появятся здесь. Для image-to-video сначала добавьте стартовый кадр, для video-to-video загрузите видео-референс.
+            <div className="fox-surface-accent rounded-[22px] p-5">
+              <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl border border-gold/20 bg-gold/[0.08]">
+                <VideoIcon className="h-5 w-5 text-gold" />
+              </div>
+              <p className="mb-2 text-[9px] font-black uppercase tracking-[0.16em] text-gold">Результат</p>
+              <h3 className="text-lg font-bold text-foreground">Видео-панель</h3>
+              <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+                После запуска здесь появятся очередь, task id и превью ролика. Все параметры сохраняются в истории.
               </p>
             </div>
           )}
