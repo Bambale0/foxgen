@@ -221,6 +221,12 @@ def build_runtime_values(
     def current_or_legacy(current: str, legacy_key: str) -> str:
         return existing.get(current, "").strip() or legacy.get(legacy_key, "").strip()
 
+    def payment_value(key: str) -> str:
+        # Operators may configure HappyFox payment credentials in either the
+        # generated runtime overlay or the protected server .env. Never invent
+        # or copy a different product's provider credentials.
+        return existing.get(key, "").strip() or legacy.get(key, "").strip()
+
     webhook_host = current_or_legacy("WEBHOOK_HOST", "FOXGEN_KIE_CALLBACK_BASE_URL").rstrip("/")
     database_url = existing.get("DATABASE_URL", "").strip()
     if not database_url:
@@ -236,6 +242,10 @@ def build_runtime_values(
     if not mini_app_url:
         legacy_miniapp = legacy.get("FOXGEN_MINIAPP_PUBLIC_URL", "").strip()
         mini_app_url = legacy_miniapp or mini_app_url_for_origin(webhook_host)
+
+    explicit_payment_provider = legacy.get("PAYMENT_PROVIDER", "").strip().lower()
+    existing_payment_provider = existing.get("PAYMENT_PROVIDER", "").strip().lower()
+    payment_provider = explicit_payment_provider or existing_payment_provider or "telegram_stars"
 
     values = {
         "PRODUCT_ID": "happyfox",
@@ -256,11 +266,44 @@ def build_runtime_values(
         "INTERNAL_API_SECRET": current_or_legacy(
             "INTERNAL_API_SECRET", "FOXGEN_INTERNAL_API_TOKEN"
         ),
-        "PAYMENT_PROVIDER": existing.get("PAYMENT_PROVIDER", "").strip()
-        or "telegram_stars",
+        "PAYMENT_PROVIDER": payment_provider,
         "WEBHOOK_BIND_HOST": "0.0.0.0",
         "WEBHOOK_PORT": "8080",
     }
+
+    payment_keys = (
+        "YOOKASSA_SHOP_ID",
+        "YOOKASSA_SECRET_KEY",
+        "YOOKASSA_RETURN_URL",
+        "YOOKASSA_WEBHOOK_PATH",
+        "TELEGRAM_STARS_ENABLED",
+        "TELEGRAM_STARS_PER_RUB",
+        "TELEGRAM_STARS_FLAT_FEE",
+        "LAVA_API_KEY",
+        "LAVA_WEBHOOK_SECRET",
+        "LAVA_OFFER_ID_MINI",
+        "LAVA_OFFER_ID_START",
+        "LAVA_OFFER_ID_OPTIMAL",
+        "LAVA_OFFER_ID_PRO",
+        "LAVA_OFFER_ID_STUDIO",
+        "LAVA_OFFER_ID_BUSINESS",
+        "CRYPTOBOT_API_TOKEN",
+        "TBANK_TERMINAL_KEY",
+        "TBANK_SECRET_KEY",
+        "FREEKASSA_MERCHANT_ID",
+        "FREEKASSA_SECRET_WORD",
+        "FREEKASSA_SECRET_WORD_2",
+        "FREEKASSA_API_KEY",
+    )
+    for key in payment_keys:
+        value = payment_value(key)
+        if value:
+            values[key] = value
+
+    if values.get("YOOKASSA_SHOP_ID") and values.get("YOOKASSA_SECRET_KEY"):
+        values.setdefault("YOOKASSA_WEBHOOK_PATH", "/yookassa/webhook")
+        values.setdefault("YOOKASSA_RETURN_URL", mini_app_url)
+
     admin_ids = current_or_legacy("ADMIN_IDS", "FOXGEN_ADMIN_SUPERUSER_IDS")
     if admin_ids:
         values["ADMIN_IDS"] = admin_ids

@@ -1,14 +1,13 @@
 'use client'
 
 import type { ComponentType } from 'react'
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Coins, CreditCard, Gift, Loader2, Mail, Receipt, Sparkles, Star, X } from 'lucide-react'
+import { Coins, CreditCard, Gift, Loader2, Receipt, Sparkles, Star, X } from 'lucide-react'
 import { useApp } from '@/lib/app-context'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
-import { bootstrapApp } from '@/lib/api'
 import { createPayment } from '@/lib/payment-api'
 import type { PaymentProvider } from '@/lib/types'
 
@@ -24,55 +23,14 @@ function getTelegramPaymentBridge(): TelegramPaymentBridge | null {
   }).Telegram?.WebApp || null)
 }
 
-function normalizeCustomerEmail(value: string) {
-  return value.trim().toLowerCase()
-}
-
-function isValidCustomerEmail(value: string) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(value)
-}
-
 export function BalanceSheet() {
   const { state, isBalanceOpen, closeBalance, refreshTasks } = useApp()
   const { paymentPackages, user, recentTasks, mode } = state
-  const emailInputRef = useRef<HTMLInputElement>(null)
   const [loadingPayment, setLoadingPayment] = useState<string | null>(null)
-  const [customerEmail, setCustomerEmail] = useState('')
 
-  const normalizedCustomerEmail = normalizeCustomerEmail(customerEmail)
-  const customerEmailValid = isValidCustomerEmail(normalizedCustomerEmail)
   const totalSpent = recentTasks.reduce((sum, task) => sum + task.cost, 0)
   const imageTasks = recentTasks.filter((task) => task.type === 'image').length
   const videoTasks = recentTasks.filter((task) => task.type === 'video').length
-
-  useEffect(() => {
-    if (!isBalanceOpen) return
-
-    let cancelled = false
-    void bootstrapApp()
-      .then((data) => {
-        const savedEmail = normalizeCustomerEmail(
-          String((data as typeof data & { payment_email?: string }).payment_email || ''),
-        )
-        if (!cancelled && isValidCustomerEmail(savedEmail)) {
-          setCustomerEmail((current) => current.trim() ? current : savedEmail)
-        }
-      })
-      .catch(() => {
-        // Payment can still proceed: the backend also falls back to the saved account email.
-      })
-
-    return () => {
-      cancelled = true
-    }
-  }, [isBalanceOpen])
-
-  const focusCustomerEmail = () => {
-    window.setTimeout(() => {
-      emailInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-      emailInputRef.current?.focus()
-    }, 50)
-  }
 
   const openExternalPayment = (url: string) => {
     const webApp = getTelegramPaymentBridge()
@@ -109,20 +67,14 @@ export function BalanceSheet() {
     })
   }
 
-  const handleTopup = async (packageId: string, provider: PaymentProvider = 'telegram_stars') => {
+  const handleTopup = async (packageId: string, provider: PaymentProvider = 'yookassa') => {
     const selectedPackage = paymentPackages.find((item) => item.id === packageId)
     if (!selectedPackage) return
 
     const loadingKey = `${packageId}:${provider}`
     setLoadingPayment(loadingKey)
     try {
-      const payment = await createPayment({
-        packageId,
-        provider,
-        customerEmail: provider === 'lava' && customerEmailValid
-          ? normalizedCustomerEmail
-          : undefined,
-      })
+      const payment = await createPayment({ packageId, provider })
       if (payment.provider === 'telegram_stars' && payment.invoice_url) {
         const status = await openTelegramInvoice(payment.invoice_url)
         if (status === 'paid') {
@@ -144,7 +96,14 @@ export function BalanceSheet() {
 
       if (payment.payment_url) {
         openExternalPayment(payment.payment_url)
-        toast.message('Открыта страница оплаты')
+        toast.message(
+          payment.provider === 'yookassa'
+            ? 'Открыта безопасная оплата ЮKassa'
+            : 'Открыта страница оплаты',
+          {
+            description: 'После успешной оплаты баланс обновится автоматически.',
+          },
+        )
         return
       }
 
@@ -152,9 +111,6 @@ export function BalanceSheet() {
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Не удалось создать платёж'
       toast.error(message)
-      if (provider === 'lava' && message.toLowerCase().includes('почт')) {
-        focusCustomerEmail()
-      }
     } finally {
       setLoadingPayment(null)
     }
@@ -223,34 +179,19 @@ export function BalanceSheet() {
                 <StatCard icon={CreditCard} label="Видео" value={`${videoTasks}`} />
               </div>
 
-              <label className="block space-y-2" htmlFor="payment-customer-email">
-                <span className="text-sm font-semibold text-foreground">Почта для карты и СБП</span>
-                <div className="relative">
-                  <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <input
-                    ref={emailInputRef}
-                    id="payment-customer-email"
-                    type="email"
-                    value={customerEmail}
-                    onChange={(event) => setCustomerEmail(event.target.value)}
-                    placeholder="name@example.com"
-                    autoComplete="email"
-                    inputMode="email"
-                    className={cn(
-                      'h-12 w-full rounded-xl border bg-secondary/55 pl-10 pr-3 text-sm text-foreground outline-none transition-colors',
-                      customerEmail && !customerEmailValid
-                        ? 'border-destructive/60 focus:border-destructive'
-                        : 'border-white/[0.07] focus:border-gold/45',
-                    )}
-                  />
+              <div className="fox-surface rounded-[18px] border border-gold/15 p-3.5">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gold/[0.1]">
+                    <CreditCard className="h-4 w-4 text-gold" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-foreground">ЮKassa • карта / СБП</p>
+                    <p className="mt-0.5 text-[10px] leading-relaxed text-muted-foreground">
+                      Оплата проходит на защищённой странице ЮKassa. Кредиты начисляются только после подтверждения платежа сервером.
+                    </p>
+                  </div>
                 </div>
-                <span className="block text-[10px] leading-relaxed text-muted-foreground">
-                  Адрес сохраняется в аккаунте и подставляется при следующих оплатах.
-                </span>
-                {customerEmail && !customerEmailValid ? (
-                  <span className="block text-xs text-destructive">Проверьте формат почты.</span>
-                ) : null}
-              </label>
+              </div>
 
               <div>
                 <div className="mb-3 flex items-end justify-between gap-3">
@@ -265,9 +206,8 @@ export function BalanceSheet() {
                   {paymentPackages.map((pkg) => {
                     const pricePerCredit = Math.round(pkg.price_rub / pkg.credits)
                     const starsPrice = pkg.price_stars ?? pkg.price_rub
-                    const lavaConfigured = Boolean(pkg.lava_offer_id)
                     const starsLoading = loadingPayment === `${pkg.id}:telegram_stars`
-                    const lavaLoading = loadingPayment === `${pkg.id}:lava`
+                    const yookassaLoading = loadingPayment === `${pkg.id}:yookassa`
                     return (
                       <div
                         key={pkg.id}
@@ -305,17 +245,17 @@ export function BalanceSheet() {
 
                         <div className="mt-3 space-y-1.5">
                           <Button
-                            onClick={() => handleTopup(pkg.id, 'lava')}
+                            onClick={() => handleTopup(pkg.id, 'yookassa')}
                             disabled={Boolean(loadingPayment)}
                             size="sm"
                             className="w-full"
                           >
-                            {lavaLoading ? (
+                            {yookassaLoading ? (
                               <Loader2 className="h-3.5 w-3.5 animate-spin" />
                             ) : (
                               <CreditCard className="h-3.5 w-3.5" />
                             )}
-                            Карта / СБП
+                            ЮKassa
                           </Button>
                           <Button
                             onClick={() => handleTopup(pkg.id, 'telegram_stars')}
@@ -331,11 +271,6 @@ export function BalanceSheet() {
                             )}
                             Stars
                           </Button>
-                          {lavaConfigured ? (
-                            <p className="px-1 pt-0.5 text-center text-[8px] text-muted-foreground">
-                              Карта и СБП доступны
-                            </p>
-                          ) : null}
                         </div>
                       </div>
                     )
@@ -351,9 +286,10 @@ export function BalanceSheet() {
                   Обновить статистику
                 </Button>
                 <Button
-                  onClick={() => handleTopup(paymentPackages[0]?.id || 'mini', 'lava')}
+                  onClick={() => handleTopup(paymentPackages[0]?.id || 'mini', 'yookassa')}
+                  disabled={Boolean(loadingPayment)}
                 >
-                  Пополнить картой / СБП
+                  Оплатить через ЮKassa
                 </Button>
               </div>
             </div>

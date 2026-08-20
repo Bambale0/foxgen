@@ -20,7 +20,7 @@ pydantic>=2.0.0
 # Type hints
 typing-extensions>=4.0.0
 
-# FreeKassa payments use aiohttp + stdlib signatures (no vendor SDK)
+# Payment providers (YooKassa, FreeKassa) use aiohttp + stdlib primitives.
 
 # Optional (face detection for improved frontal crops)
 # Installing face_recognition requires dlib and system build deps (cmake, boost).
