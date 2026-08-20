@@ -11,6 +11,7 @@ BLOCKED_MARKERS = (
     "media.chillcreative.ru",
     "tanyapp.",
     "neuromix",
+    "only_tany",
 )
 
 REQUIRED = (
@@ -24,6 +25,16 @@ REQUIRED = (
     "KIE_AI_WEBHOOK_SECRET",
     "INTERNAL_API_SECRET",
     "ADMIN_IDS",
+    "SUPPORT_CONTACT",
+)
+
+LAVA_OFFER_KEYS = (
+    "LAVA_OFFER_ID_MINI",
+    "LAVA_OFFER_ID_START",
+    "LAVA_OFFER_ID_OPTIMAL",
+    "LAVA_OFFER_ID_PRO",
+    "LAVA_OFFER_ID_STUDIO",
+    "LAVA_OFFER_ID_BUSINESS",
 )
 
 
@@ -75,7 +86,14 @@ def validate(values: dict[str, str]) -> list[str]:
     if redis_prefix and not ("happyfox" in redis_prefix or "foxgen" in redis_prefix):
         errors.append("REDIS_PREFIX must be HappyFox/FoxGen-specific")
 
-    for key in ("WEBHOOK_HOST", "MINI_APP_URL", "STATIC_BASE_URL", "DATABASE_URL", "REDIS_URL"):
+    for key in (
+        "WEBHOOK_HOST",
+        "MINI_APP_URL",
+        "STATIC_BASE_URL",
+        "DATABASE_URL",
+        "REDIS_URL",
+        "SUPPORT_CONTACT",
+    ):
         value = values.get(key, "").strip().lower()
         if not value:
             continue
@@ -96,10 +114,14 @@ def validate(values: dict[str, str]) -> list[str]:
 
     payment_provider = values.get("PAYMENT_PROVIDER", "lava").strip().lower()
     payment_requirements: dict[str, tuple[str, ...]] = {
-        "lava": ("LAVA_API_KEY", "LAVA_WEBHOOK_SECRET"),
+        "lava": ("LAVA_API_KEY", "LAVA_WEBHOOK_SECRET", *LAVA_OFFER_KEYS),
         "tbank": ("TBANK_TERMINAL_KEY", "TBANK_SECRET_KEY"),
         "cryptobot": ("CRYPTOBOT_API_TOKEN",),
-        "freekassa": ("FREEKASSA_MERCHANT_ID", "FREEKASSA_SECRET_WORD", "FREEKASSA_SECRET_WORD_2"),
+        "freekassa": (
+            "FREEKASSA_MERCHANT_ID",
+            "FREEKASSA_SECRET_WORD",
+            "FREEKASSA_SECRET_WORD_2",
+        ),
         "telegram_stars": (),
     }
     if payment_provider not in payment_requirements:
@@ -114,7 +136,12 @@ def validate(values: dict[str, str]) -> list[str]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Validate isolated HappyFox production environment")
-    parser.add_argument("env_files", nargs="*", type=Path, default=[Path(".env"), Path(".env.postgres")])
+    parser.add_argument(
+        "env_files",
+        nargs="*",
+        type=Path,
+        default=[Path(".env"), Path(".env.postgres")],
+    )
     args = parser.parse_args()
 
     values = load_values(args.env_files)
