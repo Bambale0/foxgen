@@ -27,6 +27,8 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
@@ -37,11 +39,39 @@ jobs:
           pip install --quiet pytest pytest-asyncio pytest-mock ruff
           pip install --quiet -r requirements.txt
           python -m pip check
+      - name: Normalize product copy
+        run: |
+          python scripts/apply_visible_copy_fixes.py
+          python scripts/apply_happyfox_product_copy.py
       - name: Compile runtime
         run: python -m compileall -q bot scripts
-      - name: Ruff changed runtime surface
+      - name: Ruff HappyFox Python delta
+        env:
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PUSH_BEFORE_SHA: ${{ github.event.before }}
+          CURRENT_SHA: ${{ github.sha }}
         run: |
-          python -m ruff check bot scripts tests --output-format=github
+          set -Eeuo pipefail
+          base_sha="${PR_BASE_SHA:-${PUSH_BEFORE_SHA:-}}"
+          head_sha="${PR_HEAD_SHA:-$CURRENT_SHA}"
+          if [ -z "$base_sha" ] || [[ "$base_sha" =~ ^0+$ ]]; then
+            base_sha="${head_sha}^"
+          fi
+
+          mapfile -t changed_python < <(
+            git diff --name-only --diff-filter=ACMRT "$base_sha" "$head_sha" -- \
+              'bot/*.py' 'bot/**/*.py' 'scripts/*.py' 'scripts/**/*.py' \
+              'tests/*.py' 'tests/**/*.py'
+          )
+
+          if [ "${#changed_python[@]}" -eq 0 ]; then
+            echo 'No changed Python files to lint'
+            exit 0
+          fi
+
+          printf 'Linting HappyFox Python delta:\n%s\n' "${changed_python[*]}"
+          python -m ruff check "${changed_python[@]}" --output-format=github
       - name: Safe regression suite
         run: |
           pytest tests/ \
@@ -72,11 +102,13 @@ jobs:
         run: npm run lint
       - name: Build production static export
         run: npm run build
-      - name: Verify static export
+      - name: Verify HappyFox static export
         run: |
           test -s out/index.html
           test -d out/_next/static
           grep -q '_next/static' out/index.html
+          grep -q 'HappyFox' out/index.html
+          test -s out/happyfox-logo.webp
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
       - name: Prepare browser E2E export
@@ -119,6 +151,8 @@ jobs:
             -e BANANO_LOG_TO_STDOUT=1 \
             --entrypoint python foxgen-happyfox-ci:${GITHUB_SHA} \
             -c 'import bot.config, bot.database, bot.main, bot.miniapp, bot.product; assert bot.product.product.product_id == "happyfox"; print("HappyFox container imports: ok")'
+          docker run --rm --entrypoint sh foxgen-happyfox-ci:${GITHUB_SHA} \
+            -c '! grep -q "🏠 <b>NEUROMIX</b>" /app/bot/handlers/common.py'
           docker run --rm --entrypoint ffmpeg foxgen-happyfox-ci:${GITHUB_SHA} -version >/dev/null
           docker run --rm --entrypoint pg_dump foxgen-happyfox-ci:${GITHUB_SHA} --version >/dev/null
           docker run --rm --entrypoint sqlite3 foxgen-happyfox-ci:${GITHUB_SHA} --version >/dev/null

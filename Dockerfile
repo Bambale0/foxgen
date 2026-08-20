@@ -29,9 +29,9 @@ ARG APP_GID=10001
 ARG VCS_REF="unknown"
 ARG BUILD_DATE="unknown"
 
-LABEL org.opencontainers.image.title="Banano Kling Telegram Bot" \
-      org.opencontainers.image.description="Webhook backend for the Banano Kling / NEUROMIX Telegram bot" \
-      org.opencontainers.image.source="https://github.com/Bambale0/banano_kling" \
+LABEL org.opencontainers.image.title="HappyFox Telegram Bot" \
+      org.opencontainers.image.description="Webhook backend for the HappyFox AI content studio" \
+      org.opencontainers.image.source="https://github.com/Bambale0/foxgen" \
       org.opencontainers.image.revision="${VCS_REF}" \
       org.opencontainers.image.created="${BUILD_DATE}"
 
@@ -39,6 +39,7 @@ ENV PATH="/opt/venv/bin:${PATH}" \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PRODUCT_ID=happyfox \
     BANANO_SKIP_PROJECT_ENV=1 \
     BANANO_LOG_TO_STDOUT=1 \
     WEBHOOK_BIND_HOST=0.0.0.0 \
@@ -63,8 +64,10 @@ COPY --from=builder /opt/venv /opt/venv
 COPY --chown=app:app . /app
 
 RUN python scripts/apply_visible_copy_fixes.py \
+    && python scripts/apply_happyfox_product_copy.py \
     && PYTHONPYCACHEPREFIX=/tmp/banano-pycache python -m compileall -q \
         bot/keyboards.py \
+        bot/handlers/common.py \
         bot/handlers/image_analyzer.py \
         bot/handlers/prompt_analyzer_v2.py \
         bot/browser_auth.py \
