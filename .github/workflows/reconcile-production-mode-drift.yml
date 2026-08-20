@@ -1,0 +1,112 @@
+name: Reconcile production wrapper modes
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - scripts/deploy_happyfox.sh
+      - scripts/deploy_happyfox_miniapp.sh
+      - .github/workflows/reconcile-production-mode-drift.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: happyfox-production-mode-reconcile
+  cancel-in-progress: false
+
+jobs:
+  reconcile:
+    name: Reconcile mode-only production drift
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment:
+      name: production
+
+    env:
+      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+      DEPLOY_SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
+      DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+      DEPLOY_USER: ${{ vars.DEPLOY_USER || 'root' }}
+      DEPLOY_PORT: ${{ vars.DEPLOY_PORT || '22' }}
+      DEPLOY_PATH: ${{ vars.DEPLOY_PATH || '/root/foxgen' }}
+
+    steps:
+      - name: Validate SSH configuration
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          : "${DEPLOY_HOST:?Missing production secret DEPLOY_HOST}"
+          : "${DEPLOY_SSH_PRIVATE_KEY:?Missing production secret DEPLOY_SSH_PRIVATE_KEY}"
+          : "${DEPLOY_KNOWN_HOSTS:?Missing production secret DEPLOY_KNOWN_HOSTS}"
+          : "${DEPLOY_USER:?Missing production variable DEPLOY_USER}"
+          : "${DEPLOY_PORT:?Missing production variable DEPLOY_PORT}"
+          : "${DEPLOY_PATH:?Missing production variable DEPLOY_PATH}"
+
+      - name: Configure pinned SSH
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          install -d -m 0700 "$HOME/.ssh"
+          printf '%s\n' "$DEPLOY_SSH_PRIVATE_KEY" | tr -d '\r' > "$HOME/.ssh/id_ed25519"
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" | tr -d '\r' > "$HOME/.ssh/known_hosts"
+          chmod 0600 "$HOME/.ssh/id_ed25519" "$HOME/.ssh/known_hosts"
+          ssh-keygen -y -f "$HOME/.ssh/id_ed25519" >/dev/null
+
+      - name: Reconcile tracked wrapper modes only
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          printf -v quoted_path '%q' "$DEPLOY_PATH"
+
+          ssh \
+            -i "$HOME/.ssh/id_ed25519" \
+            -p "$DEPLOY_PORT" \
+            -o BatchMode=yes \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            -o ConnectTimeout=15 \
+            "$DEPLOY_USER@$DEPLOY_HOST" \
+            "bash -s -- $quoted_path" <<'REMOTE'
+          set -Eeuo pipefail
+          PROJECT_DIR="$1"
+          cd "$PROJECT_DIR"
+          test -d .git
+
+          wrappers=(
+            scripts/deploy_happyfox.sh
+            scripts/deploy_happyfox_miniapp.sh
+          )
+
+          for path in "${wrappers[@]}"; do
+            test -f "$path"
+            tracked_blob="$(git rev-parse "HEAD:${path}")"
+            worktree_blob="$(git hash-object "$path")"
+            if [ "$tracked_blob" != "$worktree_blob" ]; then
+              echo "Refusing to change mode for $path: worktree content differs from current HEAD" >&2
+              exit 1
+            fi
+
+            tracked_mode="$(git ls-files -s -- "$path" | awk '{print $1}')"
+            case "$tracked_mode" in
+              100755) chmod 0755 "$path" ;;
+              100644) chmod 0644 "$path" ;;
+              *)
+                echo "Unexpected tracked mode for $path: $tracked_mode" >&2
+                exit 1
+                ;;
+            esac
+          done
+
+          git update-index -q --refresh || true
+          git diff --quiet -- "${wrappers[@]}"
+          git diff --cached --quiet -- "${wrappers[@]}"
+          echo "HappyFox production wrapper modes match current server HEAD"
+          REMOTE
+
+      - name: Remove SSH key
+        if: always()
+        shell: bash
+        run: rm -f "$HOME/.ssh/id_ed25519"
