@@ -1,0 +1,9 @@
+Production redeploy trigger for the photo prompt pricing release.
+
+Expected production source commit before this trigger:
+9ada9f92b1e56c319a9609caf88299d6a1608627
+
+Expected Telegram menu text:
+Стоимость анализа фото: 1 ₽ (0,1 🍌)
+
+Reason: the live bot still returned the previous «Промпт по описанию» screen after the release merge.

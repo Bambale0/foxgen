@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3 -c \"import ast; ast.parse\\(open\\('bot/handlers/generation.py'\\).read\\(\\)\\); print\\('generation.py OK'\\)\")",
+      "Bash(python3 -c \"import ast; ast.parse\\(open\\('bot/services/kling_service.py'\\).read\\(\\)\\); print\\('kling_service.py OK'\\)\")",
+      "Bash(./stop.sh)",
+      "Bash(./start.sh)",
+      "Bash(python *)"
+    ]
+  }
+}
