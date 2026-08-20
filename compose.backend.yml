@@ -10,12 +10,13 @@ services:
         VCS_REF: ${VCS_REF:-local}
         BUILD_DATE: ${BUILD_DATE:-local}
     container_name: ${CONTAINER_NAME:-foxgen-happyfox-bot}
-    network_mode: host
     restart: unless-stopped
     stop_grace_period: 30s
 
     env_file:
       - path: .env
+        required: true
+      - path: .env.happyfox.runtime
         required: true
       - path: .env.postgres
         required: false
@@ -24,10 +25,19 @@ services:
       PRODUCT_ID: happyfox
       BANANO_SKIP_PROJECT_ENV: "1"
       BANANO_LOG_TO_STDOUT: "1"
-      WEBHOOK_BIND_HOST: "127.0.0.1"
-      WEBHOOK_PORT: ${WEBHOOK_PORT:-1888}
+      WEBHOOK_BIND_HOST: "0.0.0.0"
+      WEBHOOK_PORT: "8080"
       DATABASE_PATH: ${DATABASE_PATH:-/app/data/bot.db}
-      MINI_APP_URL: ${MINI_APP_URL:?MINI_APP_URL must be set for HappyFox}
+
+    ports:
+      - "127.0.0.1:${HAPPYFOX_HOST_PORT:-1888}:8080"
+
+    networks:
+      legacy_backend:
+        aliases:
+          - api
+          - foxgen-api
+          - foxgen-api-1
 
     volumes:
       - ./data:/app/data
@@ -49,3 +59,8 @@ services:
       nofile:
         soft: 65536
         hard: 65536
+
+networks:
+  legacy_backend:
+    external: true
+    name: ${HAPPYFOX_BACKEND_NETWORK:-foxgen_backend}
