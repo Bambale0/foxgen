@@ -25,10 +25,21 @@ describe('Mini App media UX contracts', () => {
     expect(media).toContain('/full`')
   })
 
-  it('normalizes old upload hosts onto the live Mini App origin', () => {
+  it('keeps upload normalization scoped to the current HappyFox origin', () => {
     const source = read('lib/media-url.ts')
-    expect(source).toContain("'tanyapi.chillcreative.ru'")
     expect(source).toContain("url.pathname.startsWith('/uploads/')")
+    expect(source).toContain('url.origin === window.location.origin')
+    expect(source).not.toContain("'tanyapi.chillcreative.ru'")
+    expect(source).not.toContain("'tanyapp.chillcreative.ru'")
+    expect(source).not.toContain("'cdn.chillcreative.ru'")
     expect(source).toContain("url.hash = 't=0.001'")
+  })
+
+  it('does not rewrite trend reference URLs to the source product', () => {
+    const source = read('lib/trend-api.ts')
+    expect(source).toContain('reference_urls: referenceUrls')
+    expect(source).toContain('reference_images: referenceUrls')
+    expect(source).not.toContain('tanyapi.chillcreative.ru')
+    expect(source).not.toContain('providerReferenceUrl')
   })
 })
