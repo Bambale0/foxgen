@@ -83,6 +83,9 @@ tmp_*.py
 *.bak
 *.bak_*
 *.bak2
+*.orig
+*.backup
+*.backup.*
 
 # Static uploads (generated content)
 static/

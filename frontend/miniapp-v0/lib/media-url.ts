@@ -14,16 +14,9 @@ export function normalizeMiniAppMediaUrl(value?: string | null): string {
 
   try {
     const url = new URL(raw, window.location.origin)
-    const host = url.hostname.toLowerCase()
-    const localUploadHosts = new Set([
-      'tanyapi.chillcreative.ru',
-      'cdn.chillcreative.ru',
-      'tanyapp.chillcreative.ru',
-      'tanyapp.xn--e1aikcel5c5a.online',
-    ])
     if (
       url.pathname.startsWith('/uploads/')
-      && (url.origin === window.location.origin || localUploadHosts.has(host))
+      && url.origin === window.location.origin
     ) {
       return `${window.location.origin}${url.pathname}${url.search}${url.hash}`
     }

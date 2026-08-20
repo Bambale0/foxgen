@@ -1,19 +1,17 @@
+# ruff: noqa: BLE001, DTZ003
 import base64
-from datetime import datetime
-from functools import lru_cache
 import io
 import mimetypes
 import os
 import uuid
-from typing import Iterable
+from collections.abc import Iterable
+from datetime import datetime
+from functools import lru_cache
 from urllib.parse import urlparse
 
 from PIL import Image, ImageOps
 
 from bot.config import config
-
-
-DEFAULT_LOCAL_UPLOAD_HOSTS = {"tanyapi.chillcreative.ru"}
 
 
 def _guess_mime_type(source: str) -> str:
@@ -36,7 +34,7 @@ def _static_upload_hosts() -> set[str]:
         host = item.strip().lower().lstrip(".")
         if host:
             hosts.add(host)
-    return hosts | DEFAULT_LOCAL_UPLOAD_HOSTS
+    return hosts
 
 
 def _local_upload_candidate(source: str) -> str | None:
