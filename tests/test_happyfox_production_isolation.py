@@ -123,7 +123,10 @@ def test_happyfox_miniapp_deploy_has_no_source_product_defaults() -> None:
     assert "/etc/banano-miniapp/" not in script
 
 
-def test_production_deploy_is_explicitly_opt_in() -> None:
+def test_production_deploy_runs_automatically_after_green_main_ci() -> None:
     workflow = Path(".github/workflows/deploy-production.yml").read_text(encoding="utf-8")
 
-    assert "vars.ENABLE_PRODUCTION_DEPLOY == 'true'" in workflow
+    assert "vars.ENABLE_PRODUCTION_DEPLOY" not in workflow
+    assert "github.event.workflow_run.conclusion == 'success'" in workflow
+    assert "github.event.workflow_run.event == 'push'" in workflow
+    assert "github.event.workflow_run.head_branch == 'main'" in workflow
