@@ -1,5 +1,22 @@
 # syntax=docker/dockerfile:1.7
 
+FROM node:22-alpine AS miniapp-builder
+
+WORKDIR /build/miniapp
+
+COPY frontend/miniapp-v0/package.json frontend/miniapp-v0/package-lock.json ./
+RUN npm ci --no-audit --no-fund
+
+COPY frontend/miniapp-v0/ ./
+
+ENV NEXT_PUBLIC_PRODUCT_ID=happyfox \
+    NEXT_PUBLIC_MINIAPP_BASE_PATH=/mini-app
+
+RUN npm run build \
+    && test -s out/index.html \
+    && test -d out/_next/static
+
+
 FROM python:3.12-slim-bookworm AS builder
 
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
@@ -62,8 +79,10 @@ WORKDIR /app
 
 COPY --from=builder /opt/venv /opt/venv
 COPY --chown=app:app . /app
+COPY --from=miniapp-builder --chown=app:app /build/miniapp/out /app/frontend/miniapp-v0/out
 
-RUN python scripts/apply_visible_copy_fixes.py \
+RUN printf '%s\n' "${VCS_REF}" > /app/frontend/miniapp-v0/out/revision.txt \
+    && python scripts/apply_visible_copy_fixes.py \
     && python scripts/apply_happyfox_product_copy.py \
     && PYTHONPYCACHEPREFIX=/tmp/banano-pycache python -m compileall -q \
         bot/keyboards.py \

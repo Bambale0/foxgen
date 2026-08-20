@@ -47,6 +47,7 @@ rollback_legacy_app() {
 }
 
 python3 scripts/prepare_happyfox_production.py "$PROJECT_DIR"
+python3 scripts/canonicalize_happyfox_runtime.py "$PROJECT_DIR/.env.happyfox.runtime"
 python3 scripts/validate_happyfox_env.py .env .env.happyfox.runtime .env.postgres
 
 ACTION="${1:-deploy}"
