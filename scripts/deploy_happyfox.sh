@@ -10,9 +10,83 @@ export SYSTEMD_SERVICE="${SYSTEMD_SERVICE:-foxgen-happyfox}"
 export CONTAINER_NAME="${CONTAINER_NAME:-foxgen-happyfox-bot}"
 export PRODUCT_ID=happyfox
 export REDIS_PREFIX="${REDIS_PREFIX:-foxgen_happyfox}"
+export HAPPYFOX_BACKEND_NETWORK="${HAPPYFOX_BACKEND_NETWORK:-foxgen_backend}"
+export HAPPYFOX_REVERSE_PROXY_CONTAINER="${HAPPYFOX_REVERSE_PROXY_CONTAINER:-artflow-nginx-1}"
+export SKIP_BACKUP=1
+export CUTOVER_STOP_CONTAINERS="${CUTOVER_STOP_CONTAINERS:-foxgen-api-1
+foxgen-bot-1
+foxgen-worker-1}"
+export CUTOVER_RESTART_ON_FAILURE=1
 
 cd "$PROJECT_DIR"
 
-python3 scripts/validate_happyfox_env.py .env .env.postgres
+legacy_containers=(
+  foxgen-api-1
+  foxgen-bot-1
+  foxgen-worker-1
+)
 
-exec bash scripts/deploy_backend_docker.sh "${1:-deploy}"
+rollback_legacy_app() {
+  echo "[happyfox-deploy] Rolling back to legacy FoxGen application containers" >&2
+  docker compose \
+    --project-directory "$PROJECT_DIR" \
+    -f "$PROJECT_DIR/compose.backend.yml" \
+    down --remove-orphans >/dev/null 2>&1 || true
+
+  local name=""
+  for name in "${legacy_containers[@]}"; do
+    if docker inspect "$name" >/dev/null 2>&1; then
+      docker start "$name" >/dev/null 2>&1 || true
+    fi
+  done
+
+  if docker inspect "$HAPPYFOX_REVERSE_PROXY_CONTAINER" >/dev/null 2>&1; then
+    docker exec "$HAPPYFOX_REVERSE_PROXY_CONTAINER" nginx -t >/dev/null 2>&1 || true
+    docker exec "$HAPPYFOX_REVERSE_PROXY_CONTAINER" nginx -s reload >/dev/null 2>&1 || true
+  fi
+}
+
+python3 scripts/prepare_happyfox_production.py "$PROJECT_DIR"
+python3 scripts/validate_happyfox_env.py .env .env.happyfox.runtime .env.postgres
+
+ACTION="${1:-deploy}"
+if [ "$ACTION" != "deploy" ]; then
+  exec bash scripts/deploy_backend_docker.sh "$ACTION"
+fi
+
+bash scripts/deploy_backend_docker.sh deploy
+
+if docker inspect "$HAPPYFOX_REVERSE_PROXY_CONTAINER" >/dev/null 2>&1; then
+  if ! docker exec "$HAPPYFOX_REVERSE_PROXY_CONTAINER" nginx -t; then
+    rollback_legacy_app
+    echo "[happyfox-deploy] Reverse proxy configuration validation failed" >&2
+    exit 1
+  fi
+  docker exec "$HAPPYFOX_REVERSE_PROXY_CONTAINER" nginx -s reload
+fi
+
+PUBLIC_ORIGIN="$(python3 - "$PROJECT_DIR/.env.happyfox.runtime" <<'PY'
+import sys
+from pathlib import Path
+
+for raw_line in Path(sys.argv[1]).read_text(encoding="utf-8").splitlines():
+    line = raw_line.strip()
+    if not line.startswith("WEBHOOK_HOST="):
+        continue
+    value = line.split("=", 1)[1].strip()
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+        value = value[1:-1]
+    print(value.rstrip("/"))
+    raise SystemExit(0)
+raise SystemExit("WEBHOOK_HOST is missing from HappyFox runtime overlay")
+PY
+)"
+
+if ! curl -fsS --retry 8 --retry-delay 2 --retry-all-errors \
+  --max-time 15 "${PUBLIC_ORIGIN}/health" >/dev/null; then
+  rollback_legacy_app
+  echo "[happyfox-deploy] Public backend health check failed" >&2
+  exit 1
+fi
+
+echo "[happyfox-deploy] PUBLIC_HEALTH_OK ${PUBLIC_ORIGIN}/health"

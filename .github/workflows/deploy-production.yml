@@ -224,8 +224,13 @@ jobs:
           git reset --hard "$EXPECTED_SHA"
           export PRODUCT_ID=happyfox
           export REDIS_PREFIX="${REDIS_PREFIX:-foxgen_happyfox}"
+          export HAPPYFOX_BACKEND_NETWORK="${HAPPYFOX_BACKEND_NETWORK:-foxgen_backend}"
+
+          docker network inspect "$HAPPYFOX_BACKEND_NETWORK" >/dev/null
           python3 scripts/report_happyfox_production_topology.py .env
-          python3 scripts/validate_happyfox_env.py .env .env.postgres
+          python3 scripts/prepare_happyfox_production.py "$PROJECT_DIR"
+          python3 scripts/validate_happyfox_env.py \
+            .env .env.happyfox.runtime .env.postgres
 
           case "${MINIAPP_FRONTEND_DOMAIN,,}" in
             *tanyapi.chillcreative.ru*|*cdn.chillcreative.ru*|*media.chillcreative.ru*|*tanyapp*|*neuromix*|*only_tany*) exit 1 ;;
@@ -270,6 +275,7 @@ jobs:
             PROJECT_DIR="$PROJECT_DIR" \
             PRODUCT_ID=happyfox \
             REDIS_PREFIX=foxgen_happyfox \
+            HAPPYFOX_BACKEND_NETWORK=foxgen_backend \
             bash scripts/deploy_happyfox.sh deploy
 
           run_root env \
@@ -296,6 +302,8 @@ jobs:
             echo "- Commit: \`${EXPECTED_SHA}\`"
             echo "- Backend checkout: \`${DEPLOY_PATH}\`"
             echo "- Mini App: \`https://${MINIAPP_FRONTEND_DOMAIN}/mini-app/\`"
+            echo '- Database: isolated `happyfox` database on the established PostgreSQL service'
+            echo '- Redis: isolated logical DB plus `foxgen_happyfox` namespace'
             echo '- Source core: `banano_kling/tanyapi@36f92a0504f849c0c591652a880410e33a1c89aa`'
           } >> "$GITHUB_STEP_SUMMARY"
 

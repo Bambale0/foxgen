@@ -16,7 +16,11 @@ APP_GID="${APP_GID:-10001}"
 HEALTH_TIMEOUT_SECONDS="${HEALTH_TIMEOUT_SECONDS:-180}"
 SKIP_BACKUP="${SKIP_BACKUP:-0}"
 PULL_IMAGE="${PULL_IMAGE:-0}"
+CUTOVER_STOP_CONTAINERS="${CUTOVER_STOP_CONTAINERS:-}"
+CUTOVER_RESTART_ON_FAILURE="${CUTOVER_RESTART_ON_FAILURE:-1}"
 ACTION="${1:-deploy}"
+
+CUTOVER_STOPPED_CONTAINERS=()
 
 log() {
     printf '[docker-deploy] %s\n' "$*"
@@ -66,6 +70,9 @@ prepare_runtime_dirs() {
         "$PROJECT_DIR/outputs"
 
     chmod 0600 "$PROJECT_DIR/.env"
+    if [ -f "$PROJECT_DIR/.env.happyfox.runtime" ]; then
+        chmod 0600 "$PROJECT_DIR/.env.happyfox.runtime"
+    fi
     if [ -f "$PROJECT_DIR/.env.postgres" ]; then
         chmod 0600 "$PROJECT_DIR/.env.postgres"
     fi
@@ -134,6 +141,33 @@ wait_for_health() {
     return 1
 }
 
+stop_cutover_containers() {
+    local name=""
+    [ -n "$CUTOVER_STOP_CONTAINERS" ] || return 0
+
+    for name in $CUTOVER_STOP_CONTAINERS; do
+        if ! docker inspect "$name" >/dev/null 2>&1; then
+            continue
+        fi
+        if [ "$(docker inspect --format '{{.State.Running}}' "$name" 2>/dev/null || true)" = "true" ]; then
+            log "Stopping legacy cutover container: $name"
+            docker stop --time 30 "$name" >/dev/null
+            CUTOVER_STOPPED_CONTAINERS+=("$name")
+        fi
+    done
+}
+
+restore_cutover_containers() {
+    local name=""
+    [ "$CUTOVER_RESTART_ON_FAILURE" = "1" ] || return 0
+    [ "${#CUTOVER_STOPPED_CONTAINERS[@]}" -gt 0 ] || return 0
+
+    warn "Restoring legacy containers after failed cutover"
+    for name in "${CUTOVER_STOPPED_CONTAINERS[@]}"; do
+        docker start "$name" >/dev/null || warn "Failed to restart legacy container: $name"
+    done
+}
+
 backfill_public_feed_videos() {
     log "Backfilling durable public feed videos"
     if ! compose exec -T bot python -m scripts.backfill_feed_video_media; then
@@ -144,15 +178,21 @@ backfill_public_feed_videos() {
 rollback_to_systemd() {
     warn "Rolling back to systemd service"
     compose down --remove-orphans || true
+    restore_cutover_containers
     if service_exists; then
         systemctl enable "$SYSTEMD_SERVICE" >/dev/null 2>&1 || true
         systemctl restart "$SYSTEMD_SERVICE"
         systemctl is-active --quiet "$SYSTEMD_SERVICE" \
             || die "Rollback failed: ${SYSTEMD_SERVICE} is not active"
         log "Rollback complete: ${SYSTEMD_SERVICE} is active"
-    else
-        die "No systemd service found for rollback"
+    elif [ "${#CUTOVER_STOPPED_CONTAINERS[@]}" -eq 0 ]; then
+        die "No systemd service or legacy containers found for rollback"
     fi
+}
+
+rollback_failed_docker_cutover() {
+    compose down --remove-orphans || true
+    restore_cutover_containers
 }
 
 deploy() {
@@ -166,19 +206,27 @@ deploy() {
 
     if service_exists && systemctl is-active --quiet "$SYSTEMD_SERVICE"; then
         systemd_was_active=1
-        log "Stopping ${SYSTEMD_SERVICE} before host-network cutover"
+        log "Stopping ${SYSTEMD_SERVICE} before Docker cutover"
         systemctl stop "$SYSTEMD_SERVICE"
     fi
 
+    stop_cutover_containers
+
     log "Starting Docker backend"
     if ! compose up -d --remove-orphans bot; then
-        [ "$systemd_was_active" = "1" ] && rollback_to_systemd
+        rollback_failed_docker_cutover
+        if [ "$systemd_was_active" = "1" ]; then
+            systemctl restart "$SYSTEMD_SERVICE" || true
+        fi
         die "Docker Compose failed to start"
     fi
 
     if ! wait_for_health; then
         compose logs --tail=200 bot >&2 || true
-        [ "$systemd_was_active" = "1" ] && rollback_to_systemd
+        rollback_failed_docker_cutover
+        if [ "$systemd_was_active" = "1" ]; then
+            systemctl restart "$SYSTEMD_SERVICE" || true
+        fi
         die "Docker backend failed health check"
     fi
 
@@ -189,7 +237,7 @@ deploy() {
     fi
 
     compose ps
-    log "Deployment complete. Nginx continues proxying to the existing localhost webhook port."
+    log "Deployment complete. Existing reverse proxy can continue using the configured backend route."
 }
 
 status() {
@@ -224,8 +272,10 @@ Usage:
 Environment overrides:
   SYSTEMD_SERVICE=banano-kling
   SKIP_BACKUP=1
-  PULL_IMAGE=1 BANANO_IMAGE=ghcr.io/bambale0/banano-kling-bot:tanyapi
+  PULL_IMAGE=1 HAPPYFOX_IMAGE=ghcr.io/example/happyfox:sha
   HEALTH_TIMEOUT_SECONDS=180
+  CUTOVER_STOP_CONTAINERS='legacy-api legacy-bot legacy-worker'
+  CUTOVER_RESTART_ON_FAILURE=1
   FEED_VIDEO_BACKFILL_LIMIT=50
 USAGE
 }
