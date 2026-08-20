@@ -1,353 +1,395 @@
-# FoxGen architecture
+# Архитектура NEUROMIX
 
-This document describes the executable architecture on `main`. The public Mini App is outside the current implementation baseline.
+## 1. Назначение системы
 
-## System boundaries
+NEUROMIX объединяет Telegram-бота, Telegram Mini App, сервисы генерации, платежные интеграции, публикацию контента и административные маршруты.
 
-FoxGen is split into explicit transport, application, domain and infrastructure layers.
+Backend работает как единый Python runtime на `aiohttp` и подключает `aiogram`. Frontend Mini App собирается отдельно как статический Next.js export и не требует Node.js runtime в production.
 
-```text
-Telegram bot                     Trusted backend callers
-    |                                     |
-    |                                     v
-    |                                  FastAPI
-    |                       ┌─────────────┼─────────────┐
-    |                       |             |             |
-    |                  paid task API   admin API    KIE callback
-    |                       |             |             |
-    └──────────────┬────────┴─────────────┴─────────────┘
-                   v
-             application/domain
-          generation | billing | admin
-                   |
-        ┌──────────┼───────────┐
-        v          v           v
-   PostgreSQL    Redis      S3-compatible
-   durable truth  FSM/locks   private media
-        |
-        v
-   foxgen-worker
-   ├─ provider submission/polling
-   ├─ callback processing
-   ├─ archive/delivery
-   └─ admin/support/campaign jobs
-```
-
-Module responsibilities:
-
-- `foxgen.bot` — Telegram transport, FSM, keyboards and orchestration;
-- `foxgen.api` — FastAPI routes, authentication and transport validation;
-- `foxgen.application` — generation admission/lifecycle/reconciliation use cases;
-- `foxgen.admin` — shared administrative policy/services/workers;
-- `foxgen.domain` — provider-independent business states and transition rules;
-- `foxgen.infra` — PostgreSQL repositories/models, Redis, storage and durable queues;
-- `foxgen.providers` — KIE adapters, contracts and webhook/status normalization.
-
-Provider payload construction must not leak into Telegram handlers. Administrative write logic must not live only in Telegram/HTTP/web handlers.
-
-## Durable data ownership
-
-### PostgreSQL
-
-PostgreSQL is authoritative for:
-
-- users and block state;
-- generations and lifecycle timestamps;
-- provider callback inbox;
-- transactional outbox;
-- wallets, prices, reservations and immutable ledger entries;
-- archived media metadata;
-- Telegram delivery state;
-- admin users, command ledger and audit events;
-- payments/operations used by the admin contour;
-- support tickets/messages/outbox;
-- tariff and CMS versions;
-- notification campaigns/deliveries;
-- partner/promo/prompt/runtime/moderation admin data.
-
-### Redis
-
-Redis is ephemeral and non-authoritative for money/provider work. It owns:
-
-- Telegram FSM state/data TTL;
-- per-FSM-key event isolation;
-- request rate counters;
-- distributed locks/caches used by runtime services.
-
-A Redis TTL expiry may discard a conversation draft, but it cannot erase a committed paid generation or wallet movement.
-
-### S3-compatible storage
-
-Private object storage owns media bytes:
-
-- `inputs/` — temporary Telegram references;
-- deterministic generation result keys — durable archived outputs.
-
-PostgreSQL remains authoritative for durable result/media lifecycle. Provider source URLs are not forwarded to users.
-
-## Paid task admission
-
-Paid creation is fail-closed. Before queue admission FoxGen requires:
-
-1. `FOXGEN_TASK_SUBMISSION_ENABLED=true`;
-2. valid trusted internal bearer authentication;
-3. a positive `X-FoxGen-User-Id`;
-4. valid `Idempotency-Key`;
-5. production-ready model contract;
-6. runtime model availability not disabled by admin policy;
-7. user not administratively blocked;
-8. Redis rate limits satisfied;
-9. PostgreSQL active-generation limits satisfied;
-10. active model price;
-11. sufficient wallet balance.
-
-The admission transaction then atomically persists generation, reservation, immutable ledger movement and submission outbox. A request cannot become billable provider work without the matching local durable state.
-
-## Atomic admission and billing
-
-Conceptually:
+## 2. Production topology
 
 ```text
-BEGIN
-  ensure/update user
-  reject blocked user
-  enforce active-generation limits
-  insert generation(status=queued, request_hash, idempotency_key)
-  lock wallet
-  resolve active price
-  move available -> reserved
-  insert balance_reservation(status=reserved)
-  insert immutable ledger reserve entry
-  insert outbox generation.submit
-COMMIT
+Пользователь Telegram
+        │
+        ▼
+https://cdn.chillcreative.ru/mini-app/
+Frontend Nginx, сервер 91.200.84.187
+        │
+        ├── HTML/CSS/JS из static export
+        │
+        └── /mini-app/api/*
+                 │ HTTPS + SNI + Host=tanyapi.chillcreative.ru
+                 ▼
+https://tanyapi.chillcreative.ru
+Backend Nginx, сервер 144.76.188.75
+                 │
+                 ▼
+127.0.0.1:1888 aiohttp / banano-kling.service
+
+Публичные media URL
+        │
+        ▼
+https://media.chillcreative.ru/uploads/*
+Cloudflare Free
+        │
+        ▼
+Nginx на 144.76.188.75
+        │
+        ▼
+/var/www/media.chillcreative.ru/uploads
+        │ bind mount
+        ▼
+/root/tanya/banano_kling/static/uploads
 ```
 
-The unique `(user_id, idempotency_key)` generation key and ledger/outbox uniqueness converge duplicate confirmation requests onto one local billable generation.
+### Почему API идёт через публичный HTTPS backend
 
-## Billable provider submission boundary
+- backend port не нужно открывать frontend-серверу напрямую;
+- TLS и Host/SNI проверяются обычным Nginx;
+- один публичный API-домен используется Telegram webhook и Mini App;
+- firewall backend может оставить runtime привязанным к loopback;
+- проще диагностировать сертификат, маршрутизацию и access logs.
 
-KIE task creation is treated as a potentially non-idempotent billable POST. It is never blindly retried.
+## 3. Backend runtime
 
-For `generation.submit` the worker:
+Ключевой entrypoint: `bot/main.py`.
 
-1. claims the local event;
-2. verifies the generation can legally submit;
-3. moves generation to `submitting`;
-4. consumes the submission outbox boundary so a crash cannot replay it;
-5. performs one provider create call;
-6. persists `submitted` + `provider_task_id`, deterministic failure, or `submission_unknown`.
+Runtime отвечает за:
 
-`submission_unknown` means the provider may have accepted a billable request but the response was not safely recorded. Funds stay reserved until evidence resolves the ambiguity. The stale-submitting watchdog converts abandoned `submitting` work to `submission_unknown`; it does not submit again.
+- Telegram webhook;
+- Mini App API;
+- payment webhooks;
+- provider webhooks;
+- health endpoints;
+- internal API;
+- регистрацию routers;
+- запуск background loops;
+- graceful startup/shutdown.
 
-## Callback inbox and polling convergence
-
-KIE callback requests are authenticated with the provider webhook HMAC and replay-age window. The callback path normalizes task identity, records a deduplicated provider event and schedules local processing.
-
-Provider polling is read-only and may retry within bounded policies. Callback and polling share the same legal state transitions, so whichever produces verifiable state first wins without creating a second generation or provider charge.
-
-The callback URL can include the local generation identifier so an accepted provider task can be correlated even if the create-task response was lost.
-
-## Generation lifecycle
-
-Current durable states:
+Production service:
 
 ```text
-draft
-queued
-submitting
-submitted
-processing
-submission_unknown
-result_ready
-storing_media
-delivery_pending
-succeeded
-failed
-cancelled
+banano-kling.service
 ```
 
-Normal success path:
+Production checkout:
 
 ```text
-queued
- -> submitting
- -> submitted
- -> processing
- -> result_ready
- -> storing_media
- -> delivery_pending
- -> succeeded
+/root/tanya/banano_kling
 ```
 
-Important semantics:
-
-- `submission_unknown` is a recovery state, never an automatic resubmit signal;
-- provider success becomes `result_ready`, not user-visible success;
-- `succeeded` means result storage and Telegram delivery have completed;
-- cancellation is allowed only before provider submission may have started;
-- state transition validation and database constraints reject unknown/illegal durable values.
-
-## Outbox and retry model
-
-General outbox states:
+Рабочая ветка:
 
 ```text
-pending -> processing -> completed
-   |          |
-   |          +-> retry_wait -> processing
-   +-------------------------> dead_letter
+tanyapi
 ```
 
-`failed` remains a legacy compatibility value where present. Retry scheduling applies only to operations whose side effects are safe to retry. Exhausted/terminal work records a failure class and enters observable dead-letter state.
+## 4. Telegram-бот и FSM
 
-`FOR UPDATE SKIP LOCKED` allows multiple workers to claim independent rows without duplicate ownership. Leases allow safe local work to be reclaimed after worker failure.
+Ключевые каталоги и файлы:
 
-## Result archive
+- `bot/states.py` — FSM states;
+- `bot/keyboards.py` — inline/reply keyboards;
+- `bot/handlers/common.py` — общие команды и стартовые сценарии;
+- `bot/handlers/generation.py` — генерация;
+- `bot/handlers/payments.py` — платежные сценарии;
+- `bot/handlers/admin.py` — администрирование;
+- `bot/handlers/image_analyzer.py` — анализ изображений;
+- `bot/handlers/batch_generation.py` — пакетные сценарии;
+- `bot/handlers/support.py` — поддержка.
 
-A successful provider result advances to `result_ready`, then archive work:
-
-1. parses normalized result URLs;
-2. validates HTTPS/source constraints;
-3. rejects credential-bearing/private/reserved SSRF targets and unsafe redirects;
-4. enforces download timeout and byte limits;
-5. calculates SHA-256 while writing temporary bytes;
-6. stores under deterministic private S3 key;
-7. persists per-result `media_assets` state;
-8. creates one delivery only after all required assets are durable.
-
-Media asset states:
+Общий поток:
 
 ```text
-pending
-retry_wait
-stored
-failed
+Telegram update
+  -> router/handler
+  -> FSM state и FSM data
+  -> validation
+  -> database/service call
+  -> provider/payment side effect
+  -> user response
 ```
 
-Multi-file results can partially succeed. Retry skips already stored assets and resumes only incomplete ones.
+Redis используется для FSM/cache, когда доступен. При отказе Redis runtime может перейти на in-memory storage, что допустимо как аварийный fallback, но не обеспечивает сохранение FSM после restart.
 
-## Telegram delivery boundary
+## 5. Mini App backend
 
-Telegram send becomes a non-idempotent external side effect once sending begins.
+Ключевой файл: `bot/miniapp.py`.
 
-Delivery states:
+Backend Mini App отвечает за:
+
+- проверку Telegram `initData`;
+- bootstrap пользователя, моделей, баланса и истории;
+- загрузку файлов;
+- запуск image/video/motion generation;
+- task detail и историю;
+- feed, trends, prompt library и profile routes;
+- публикацию и удаление публикаций;
+- создание платежей;
+- AI assistant;
+- media gateway для отдельных временных provider URL;
+- browser auth fallback.
+
+### Авторизация внутри Telegram
+
+1. Telegram WebView открывает Mini App.
+2. Telegram Web App JS предоставляет `initData`.
+3. Frontend ждёт `initData` ограниченное время и показывает загрузчик.
+4. `POST /mini-app/api/bootstrap` отправляет авторизационные данные backend.
+5. Backend проверяет подпись и пользователя.
+6. После успешного bootstrap приложение переходит в live mode.
+
+Отсутствие `initData` при ручном `curl` должно приводить к `400/401/403`. Это ожидаемая граница авторизации.
+
+### Browser auth fallback
+
+При открытии не внутри Telegram frontend может показать Telegram Login Widget. Backend browser-auth route проверяет подпись Telegram Login, создаёт короткоживущий auth payload и перезагружает клиент с данными входа.
+
+Browser fallback не должен заменять нормальный Telegram WebView flow.
+
+## 6. Frontend Mini App
+
+Каталог:
 
 ```text
-pending
-retry_wait
-sending
-sent
-delivery_unknown
-failed
+frontend/miniapp-v0
 ```
 
-`retry_wait` is only safe before the send boundary. A timeout/transport ambiguity after sending begins becomes `delivery_unknown`; FoxGen does not automatically resend. An administrator can later mark it sent, retry only after confirming no message was delivered, or terminate/refund according to reconciliation policy.
+Стек:
 
-## Billing settlement
+- Next.js 16;
+- React 19;
+- Tailwind CSS 4;
+- static export;
+- client-side state/context;
+- dynamic imports для тяжёлых вкладок.
 
-Reservation states:
+Основные файлы:
+
+- `app/layout.tsx` — metadata, Telegram early-ready script;
+- `components/mini-app-shell.tsx` — оболочка, loader/gate/live state;
+- `components/mini-app-loader.tsx` — загрузчик до bootstrap;
+- `components/telegram-open-gate.tsx` — browser/Telegram login fallback;
+- `components/hero-header.tsx` — постоянный бренд NEUROMIX и статус;
+- `lib/app-context.tsx` — bootstrap, state, sync и task polling;
+- `lib/api.ts` — API client;
+- `lib/brand.ts` — единый пользовательский бренд;
+- `next.config.mjs` — export/basePath/assetPrefix.
+
+### Frontend state machine
+
+Упрощённо:
 
 ```text
-reserved
-captured
-released
-refunded
+initial locked + isLoading=true
+          │
+          ▼
+MiniAppLoader
+          │
+          ├── Telegram initData получены -> bootstrap -> live UI
+          │
+          └── данные входа не получены -> TelegramOpenGate
 ```
 
-Current rules:
+Загрузчик имеет приоритет над gate, чтобы при медленном Telegram WebView пользователь не видел ложное сообщение об отсутствии авторизации.
 
-- provider accepted (`submitted`) -> capture reserved funds;
-- `submission_unknown` -> keep funds reserved;
-- deterministic failure before capture -> release;
-- terminal failure after capture -> full refund under current policy;
-- repeated settlement attempts converge via row locks + deterministic ledger idempotency.
+### Branding
 
-See `billing.md`.
-
-## Telegram FSM architecture
-
-Redis FSM controls only the interactive draft. Every declared state has an explicit behavior contract for success/back/cancel/timeout/invalid input/stale callback. Event isolation serializes concurrent updates for one key.
-
-Quick Start and unsolicited photo/video reference entry store private object keys before asking whether the user wants image or video output. Reference-prefilled navigation preserves the stored reference across model/settings edits.
-
-Paid work becomes durable only at confirmation/admission. Telegram FSM is not used as the source of truth after a generation is committed.
-
-See `telegram-flows.md`.
-
-## Administrative control plane
-
-FoxGen has a shared admin domain layer:
+Пользовательский бренд задаётся через:
 
 ```text
-Telegram /admin ─────┐
-                     ├─> AdminPolicy -> AdminServices -> PostgreSQL/ledger/outboxes
-Signed admin HTTP ───┤
-                     └─> backend-only operator web surface
-                                      |
-                                      v
-                                  AdminWorker
+frontend/miniapp-v0/lib/brand.ts
 ```
 
-Key invariants:
+Названия моделей (`Nano Banana`, `Kling`, `Veo`, `Grok` и другие) остаются названиями внешних моделей. Они не заменяются на NEUROMIX.
 
-- all transports use server-side `AdminPolicy`;
-- each privileged callback/FSM/HTTP action re-authorizes;
-- writes use append-only command/audit records;
-- same idempotency key + same request replays the stored result;
-- key reuse with changed request conflicts;
-- destructive/expensive operations require manual confirmation;
-- signed HTTP is network allowlisted and HMACs exact raw body bytes;
-- support replies/campaign sends are durable worker work;
-- secrets are recursively redacted from admin output;
-- runtime user block/model availability are enforced at paid admission.
+## 7. Data layer
 
-The internal operator web surface is backend-only. It is not the public Mini App.
+Ключевые файлы:
 
-See `admin-control-plane.md` and `admin-capability-matrix.md`.
+- `bot/database.py` — high-level async operations;
+- `bot/db.py` — compatibility facade;
+- `schema_postgres.sql` — PostgreSQL schema reference.
 
-## Security boundaries
+Основные сущности:
 
-Secrets are intentionally separated:
+- users;
+- transactions;
+- generation tasks/history;
+- settings;
+- referrals and partner withdrawals;
+- promo codes/redemptions;
+- saved references;
+- prompts and likes;
+- feed items, likes, comments, remix/repeat events;
+- batch jobs;
+- Mini App notifications.
 
-- internal generation bearer token;
-- KIE API key;
-- KIE webhook HMAC secret;
-- legacy billing-admin token if enabled;
-- full admin HMAC secret;
-- database/Redis/storage credentials.
+Доменные инварианты:
 
-No trusted secret belongs in Telegram client state or public frontend code. Public reverse proxies must deny `/internal/admin/` entirely; backend callers use the private network path.
+- одна задача не списывает баланс дважды;
+- completed payment не начисляется повторно;
+- task detail доступен только владельцу или разрешённому admin flow;
+- webhook retry должен быть идемпотентным;
+- публикация обновляет существующую запись, а не плодит дубли;
+- приватные uploads не должны случайно получать публичный immutable cache.
 
-## Production topology
+## 8. Services layer
 
-`docker-compose.prod.yml` runs:
+Каталог:
 
-- PostgreSQL;
-- Redis;
-- MinIO/private storage service where used;
-- migration job;
-- API;
-- worker;
-- bot.
+```text
+bot/services/
+```
 
-The API host port is loopback-only for the reverse proxy. PostgreSQL, Redis and MinIO are not published on host public interfaces.
+Группы сервисов:
 
-Production deployment is exact-SHA after successful `main` CI. The server-side `.env` is preserved and tracked local modifications block deployment.
+### Generation providers
 
-## Consistency and reconciliation
+- Kling family;
+- Nano Banana family;
+- Seedream/Seedance;
+- GPT Image;
+- Grok;
+- Veo;
+- Gemini/Omni;
+- Wan и другие подключённые providers.
 
-Reconciliation inspects cross-resource invariants among generation, outbox, media, delivery and reservation state. Automated fixes are limited to deterministic local state repairs. It never performs another billable provider submission and never blindly resends `delivery_unknown`.
+### Supporting services
 
-See `postprocessing-reconciliation.md`.
+- storage референсов;
+- media validation;
+- prompt generation;
+- image/video analysis;
+- rate limiting;
+- task watchdog;
+- Redis helpers;
+- memory and backup helpers.
 
-## Source-of-truth hierarchy
+### Payments
 
-When resolving drift:
+В репозитории могут сохраняться активные и legacy integrations. Фактически используемый provider определяется конфигурацией и текущим кодом. Наличие модуля не означает, что provider включён в production.
 
-1. migrations + database constraints for schema/history;
-2. domain/application transition code for legal business state;
-3. tests for explicit expected behavior;
-4. transport adapters for API/FSM presentation;
-5. documentation.
+## 9. Media architecture
 
-A discovered mismatch is a documentation/code defect to fix, not permission to silently reinterpret production state.
+### Фактическое хранилище
+
+```text
+/root/tanya/banano_kling/static/uploads
+```
+
+Backend уже сохраняет туда файлы и формирует URL `/uploads/...`.
+
+Отдельный каталог с копиями не используется. Для безопасного доступа Nginx применяется bind mount:
+
+```text
+/root/tanya/banano_kling/static/uploads
+-> /var/www/media.chillcreative.ru/uploads
+```
+
+### Cache classes
+
+#### Публичная лента
+
+```text
+/uploads/feed/*
+```
+
+Можно кешировать как immutable, если имена файлов уникальны и не перезаписываются.
+
+#### WebP-превью
+
+```text
+/uploads/feed/thumbs/*.webp
+```
+
+Целевой размер превью: примерно 50–200 КБ. Превью используются в сетке вместо тяжёлых оригиналов.
+
+#### Остальные uploads
+
+По умолчанию `no-store`, если файлы могут быть приватными, временными или пользовательскими референсами.
+
+### Cloudflare
+
+Cloudflare Free используется как reverse proxy/cache для `media.chillcreative.ru`.
+
+- A record указывает на `144.76.188.75`;
+- proxy status включён;
+- HTTP/3 может быть временно отключён для проверки проблемных VPN;
+- Cache Rule ограничена публичным media path;
+- origin certificate — Let’s Encrypt;
+- SSL mode зоны — Full (strict).
+
+## 10. Deployment architecture
+
+### Backend deploy
+
+- checkout обновляется строго до `origin/tanyapi`;
+- зависимости и миграции выполняются отдельно от frontend deploy;
+- systemd service перезапускается только после проверки конфигурации;
+- health проверяется локально и через публичный Nginx.
+
+### Frontend deploy
+
+Команда на backend/operator host:
+
+```bash
+sudo bash cdn.sh --remote-deploy tanyafrontend
+```
+
+`cdn.sh`:
+
+1. читает root-only remote profile;
+2. подключается по SSH к `91.200.84.187`;
+3. проверяет чистоту checkout;
+4. обновляет ветку `tanyapi`;
+5. запускает domain deploy на frontend host;
+6. собирает static export;
+7. создаёт backup;
+8. выкладывает файлы без опасного удаления предыдущих chunks;
+9. проверяет health и HTML.
+
+### Media deploy
+
+```bash
+sudo -E bash scripts/deploy_media_origin.sh
+```
+
+Скрипт устанавливает Nginx/Certbot, bind mount, TLS, Cloudflare settings при наличии token, preview backfill и smoke tests.
+
+## 11. Security boundaries
+
+- Telegram `initData` проверяется на backend;
+- Telegram Login Widget payload проверяется на backend;
+- provider/payment webhooks проверяют signature/HMAC там, где это поддерживается;
+- internal API не должен быть публичным без auth;
+- secrets не логируются и не попадают в Git;
+- backend runtime желательно слушает loopback;
+- frontend proxy проверяет TLS upstream;
+- media cache разрешён только для явно публичных путей;
+- Nginx config применяется только после `nginx -t`.
+
+## 12. Observability
+
+Основные точки диагностики:
+
+- `systemctl status banano-kling.service`;
+- `journalctl -u banano-kling.service`;
+- `logs/bot.log`, если file logging включён;
+- frontend `/frontend-health`;
+- backend `/health`;
+- Nginx access/error logs обоих серверов;
+- Cloudflare headers: `CF-Cache-Status`, `Age`, `CF-Ray`;
+- frontend deploy log `/var/log/banano-miniapp-cdn.log`;
+- npm logs в `/root/.npm/_logs` на frontend host.
+
+## 13. Источники истины
+
+- runtime wiring: `bot/main.py`;
+- Mini App routes/contracts: `bot/miniapp.py`;
+- configuration: `bot/config.py`;
+- frontend API/state: `frontend/miniapp-v0/lib/api.ts`, `lib/app-context.tsx`;
+- frontend deployment: `cdn.sh`, `scripts/install_miniapp_frontend_host.sh`, `scripts/install_miniapp_frontend_https_host.sh`;
+- media deployment: `scripts/deploy_media_origin.sh`, `ops/media/nginx-media.conf`;
+- pricing/models: `data/price.json`, `bot/services/preset_manager.py`;
+- verified behavior: `tests/`.
