@@ -13,9 +13,6 @@ from PIL import Image, ImageOps
 from bot.config import config
 
 
-DEFAULT_LOCAL_UPLOAD_HOSTS = {"tanyapi.chillcreative.ru"}
-
-
 def _guess_mime_type(source: str) -> str:
     mime, _ = mimetypes.guess_type(source)
     return mime or "image/png"
@@ -36,7 +33,7 @@ def _static_upload_hosts() -> set[str]:
         host = item.strip().lower().lstrip(".")
         if host:
             hosts.add(host)
-    return hosts | DEFAULT_LOCAL_UPLOAD_HOSTS
+    return hosts
 
 
 def _local_upload_candidate(source: str) -> str | None:
