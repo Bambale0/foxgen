@@ -33,6 +33,27 @@ class Config:
     )
     PAYMENT_PROVIDER: str = os.getenv("PAYMENT_PROVIDER", "lava").lower()
 
+    # YooKassa
+    YOOKASSA_SHOP_ID: str = os.getenv("YOOKASSA_SHOP_ID", "")
+    YOOKASSA_SECRET_KEY: str = os.getenv("YOOKASSA_SECRET_KEY", "")
+    YOOKASSA_RETURN_URL: str = os.getenv("YOOKASSA_RETURN_URL", "")
+    YOOKASSA_WEBHOOK_PATH: str = os.getenv(
+        "YOOKASSA_WEBHOOK_PATH", "/yookassa/webhook"
+    )
+    YOOKASSA_API_BASE_URL: str = os.getenv(
+        "YOOKASSA_API_BASE_URL", "https://api.yookassa.ru/v3"
+    ).rstrip("/")
+    YOOKASSA_REQUEST_TIMEOUT_SECONDS: int = int(
+        os.getenv("YOOKASSA_REQUEST_TIMEOUT_SECONDS", "30")
+    )
+    YOOKASSA_PENDING_TTL_HOURS: int = int(
+        os.getenv("YOOKASSA_PENDING_TTL_HOURS", "168")
+    )
+    # YooKassa Basic Auth notifications do not carry a merchant HMAC secret.
+    # The legacy webhook handler reads this attribute; keep it empty so it
+    # authenticates notifications by fetching the payment from YooKassa API.
+    YOOKASSA_WEBHOOK_SECRET: str = ""
+
     # Telegram Stars
     TELEGRAM_STARS_ENABLED: bool = os.getenv("TELEGRAM_STARS_ENABLED", "1").lower() in (
         "1",
@@ -222,12 +243,11 @@ class Config:
         return f"{self.WEBHOOK_HOST.rstrip('/')}{path}"
 
     @property
-    def YOOKASSA_RETURN_URL(self) -> str:  # transitional API name
-        return self.FREEKASSA_RETURN_URL
-
-    @property
     def yookassa_notification_url(self) -> str:
-        return self.freekassa_notification_url
+        path = self.YOOKASSA_WEBHOOK_PATH or "/yookassa/webhook"
+        if not path.startswith("/"):
+            path = "/" + path
+        return f"{self.WEBHOOK_HOST.rstrip('/')}{path}"
 
     @property
     def payment_provider(self) -> str:
@@ -237,8 +257,11 @@ class Config:
             "freekassa",
             "tbank",
             "telegram_stars",
+            "yookassa",
         }:
             return self.PAYMENT_PROVIDER
+        if self.has_yookassa:
+            return "yookassa"
         return "lava" if self.LAVA_API_KEY else "cryptobot"
 
     @property
@@ -276,8 +299,7 @@ class Config:
 
     @property
     def has_yookassa(self) -> bool:
-        """Deprecated compatibility flag; reports FreeKassa availability."""
-        return self.has_freekassa
+        return bool(self.YOOKASSA_SHOP_ID and self.YOOKASSA_SECRET_KEY)
 
     @property
     def kling_notification_url(self) -> str:
