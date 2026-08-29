@@ -95,7 +95,7 @@
     "chrome >= 90",
     "edge >= 90",
     "firefox >= 90",
-    "safari >= 13",
-    "ios_saf >= 13"
+    "safari >= 16.4",
+    "ios_saf >= 16.4"
   ]
 }
