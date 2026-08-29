@@ -23,6 +23,20 @@ function getTelegramPaymentBridge(): TelegramPaymentBridge | null {
   }).Telegram?.WebApp || null)
 }
 
+function pawLabel(amount: number): string {
+  const absolute = Math.abs(Math.trunc(amount))
+  const lastTwo = absolute % 100
+  const last = absolute % 10
+  if (lastTwo >= 11 && lastTwo <= 14) return 'лапок'
+  if (last === 1) return 'лапка'
+  if (last >= 2 && last <= 4) return 'лапки'
+  return 'лапок'
+}
+
+function formatPaws(amount: number): string {
+  return `${amount} ${pawLabel(amount)}`
+}
+
 export function BalanceSheet() {
   const { state, isBalanceOpen, closeBalance, refreshTasks } = useApp()
   const { paymentPackages, user, recentTasks, mode } = state
@@ -79,7 +93,7 @@ export function BalanceSheet() {
         const status = await openTelegramInvoice(payment.invoice_url)
         if (status === 'paid') {
           toast.success('Оплата Stars прошла', {
-            description: `Начисляем ${payment.credits} кредитов. Баланс обновится автоматически.`,
+            description: `Начисляем ${formatPaws(payment.credits)}. Баланс обновится автоматически.`,
           })
           await refreshTasks()
         } else if (status === 'cancelled') {
@@ -141,7 +155,7 @@ export function BalanceSheet() {
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <p className="text-[9px] font-black uppercase tracking-[0.18em] text-gold">Баланс</p>
-                  <h2 className="mt-0.5 text-xl font-bold tracking-[-0.025em] text-foreground">Пополнение кредитов</h2>
+                  <h2 className="mt-0.5 text-xl font-bold tracking-[-0.025em] text-foreground">Пополнение лапок</h2>
                 </div>
                 <button
                   type="button"
@@ -160,10 +174,10 @@ export function BalanceSheet() {
                   <div>
                     <p className="text-xs text-muted-foreground">Ваш баланс</p>
                     <div className="mt-1 flex items-center gap-2.5">
-                      <Coins className="h-5 w-5 text-gold" />
+                      <span className="text-xl" aria-hidden="true">🐾</span>
                       <span className="text-3xl font-black tabular-nums tracking-[-0.04em] text-foreground">{user.credits}</span>
                     </div>
-                    <p className="mt-2 text-[10px] text-muted-foreground">1 кредит = 10 ₽</p>
+                    <p className="mt-2 text-[10px] text-muted-foreground">1 лапка = 10 ₽</p>
                   </div>
                   <div className="rounded-2xl border border-gold/20 bg-black/25 px-4 py-3 text-right">
                     <p className="text-[9px] uppercase tracking-[0.12em] text-muted-foreground">Статус</p>
@@ -174,7 +188,7 @@ export function BalanceSheet() {
 
               <div className="grid grid-cols-2 gap-2.5">
                 <StatCard icon={Sparkles} label="Всего запусков" value={`${recentTasks.length}`} />
-                <StatCard icon={Receipt} label="Потрачено" value={`${totalSpent} кр.`} />
+                <StatCard icon={Receipt} label="Потрачено" value={`${totalSpent} 🐾`} />
                 <StatCard icon={Gift} label="Фото" value={`${imageTasks}`} />
                 <StatCard icon={CreditCard} label="Видео" value={`${videoTasks}`} />
               </div>
@@ -187,7 +201,7 @@ export function BalanceSheet() {
                   <div>
                     <p className="text-sm font-bold text-foreground">ЮKassa • карта / СБП</p>
                     <p className="mt-0.5 text-[10px] leading-relaxed text-muted-foreground">
-                      Оплата проходит на защищённой странице ЮKassa. Кредиты начисляются только после подтверждения платежа сервером.
+                      Оплата проходит на защищённой странице ЮKassa. Лапки начисляются только после подтверждения платежа сервером.
                     </p>
                   </div>
                 </div>
@@ -197,14 +211,14 @@ export function BalanceSheet() {
                 <div className="mb-3 flex items-end justify-between gap-3">
                   <div>
                     <p className="text-[9px] font-black uppercase tracking-[0.16em] text-gold">Пополнить баланс</p>
-                    <h3 className="mt-0.5 text-lg font-bold text-foreground">Пакеты кредитов</h3>
+                    <h3 className="mt-0.5 text-lg font-bold text-foreground">Пакеты лапок</h3>
                   </div>
                   <span className="text-[10px] text-muted-foreground">Выберите пакет</span>
                 </div>
 
                 <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
                   {paymentPackages.map((pkg) => {
-                    const pricePerCredit = Math.round(pkg.price_rub / pkg.credits)
+                    const pricePerPaw = Math.round(pkg.price_rub / pkg.credits)
                     const starsPrice = pkg.price_stars ?? pkg.price_rub
                     const starsLoading = loadingPayment === `${pkg.id}:telegram_stars`
                     const yookassaLoading = loadingPayment === `${pkg.id}:yookassa`
@@ -232,10 +246,10 @@ export function BalanceSheet() {
                         <div className="mt-4 flex items-end justify-between gap-2">
                           <div>
                             <div className="flex items-center gap-1.5 text-gold">
-                              <Coins className="h-3.5 w-3.5" />
+                              <span className="text-sm" aria-hidden="true">🐾</span>
                               <span className="text-lg font-black tabular-nums">{pkg.credits}</span>
                             </div>
-                            <p className="mt-0.5 text-[8px] text-muted-foreground">≈ {pricePerCredit} ₽ / кредит</p>
+                            <p className="mt-0.5 text-[8px] text-muted-foreground">≈ {pricePerPaw} ₽ / лапку</p>
                           </div>
                           <div className="text-right">
                             <p className="text-sm font-black text-foreground">{pkg.price_rub} ₽</p>
