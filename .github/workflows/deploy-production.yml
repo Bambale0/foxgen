@@ -106,10 +106,28 @@ jobs:
         run: |
           set -Eeuo pipefail
 
+          normalize_domain() {
+            python3 - "$1" <<'PY'
+          import re
+          import sys
+          from urllib.parse import urlparse
+
+          value = sys.argv[1].strip()
+          if not value:
+              raise SystemExit("HappyFox Mini App domain is empty")
+
+          parsed = urlparse(value if "://" in value else f"//{value}")
+          host = (parsed.hostname or "").strip().rstrip(".")
+          if not host or not re.fullmatch(r"[A-Za-z0-9.-]+", host):
+              raise SystemExit("Could not parse a valid HappyFox Mini App hostname")
+          print(host)
+          PY
+          }
+
           resolved_domain="${MINIAPP_FRONTEND_DOMAIN:-}"
           if [ -z "$resolved_domain" ]; then
             printf -v quoted_path '%q' "$DEPLOY_PATH"
-            resolved_domain="$(
+            resolver_output="$(
               ssh \
                 -i "$HOME/.ssh/id_ed25519" \
                 -p "$DEPLOY_PORT" \
@@ -119,6 +137,7 @@ jobs:
                 -o ConnectTimeout=15 \
                 "$DEPLOY_USER@$DEPLOY_HOST" \
                 "python3 - $quoted_path" <<'PY'
+          import re
           import sys
           from pathlib import Path
           from urllib.parse import urlparse
@@ -148,26 +167,21 @@ jobs:
               if not value:
                   return ""
               parsed = urlparse(value if "://" in value else f"//{value}")
-              return parsed.hostname or ""
-
-          direct = values.get("MINIAPP_FRONTEND_DOMAIN", "").strip()
-          host = extract_hostname(direct)
-          if host:
-              print(host)
-              raise SystemExit(0)
+              host = (parsed.hostname or "").strip().rstrip(".")
+              if not re.fullmatch(r"[A-Za-z0-9.-]+", host):
+                  return ""
+              return host
 
           for key in (
+              "MINIAPP_FRONTEND_DOMAIN",
               "MINI_APP_URL",
               "FOXGEN_MINIAPP_PUBLIC_URL",
-              "WEBHOOK_HOST",
               "FOXGEN_KIE_CALLBACK_BASE_URL",
+              "WEBHOOK_HOST",
           ):
-              value = values.get(key, "").strip()
-              if not value:
-                  continue
-              host = extract_hostname(value)
+              host = extract_hostname(values.get(key, ""))
               if host:
-                  print(host)
+                  print(f"__HAPPYFOX_MINIAPP_DOMAIN__={host}")
                   raise SystemExit(0)
 
           raise SystemExit(
@@ -176,30 +190,16 @@ jobs:
           )
           PY
             )"
+
+            resolved_domain="$(
+              printf '%s\n' "$resolver_output" \
+                | sed -n 's/^__HAPPYFOX_MINIAPP_DOMAIN__=//p' \
+                | tail -n 1
+            )"
           fi
 
-          resolved_domain="${resolved_domain//$'\r'/}"
-          resolved_domain="${resolved_domain//$'\n'/}"
           : "${resolved_domain:?Unable to resolve HappyFox Mini App domain}"
-
-          resolved_domain="$(
-            python3 - "$resolved_domain" <<'PY'
-          import sys
-          from urllib.parse import urlparse
-
-          value = sys.argv[1].strip()
-          parsed = urlparse(value if "://" in value else f"//{value}")
-          host = parsed.hostname
-          if not host:
-              raise SystemExit("Could not parse HappyFox Mini App domain")
-          print(host)
-          PY
-          )"
-
-          [[ "$resolved_domain" =~ ^[A-Za-z0-9.-]+$ ]] || {
-            echo "Invalid HappyFox Mini App domain" >&2
-            exit 1
-          }
+          resolved_domain="$(normalize_domain "$resolved_domain")"
 
           case "${resolved_domain,,}" in
             *tanyapi.chillcreative.ru*|*cdn.chillcreative.ru*|*media.chillcreative.ru*|*tanyapp*|*neuromix*|*only_tany*)
@@ -208,6 +208,7 @@ jobs:
               ;;
           esac
 
+          echo "Resolved HappyFox Mini App domain: ${resolved_domain}"
           echo "MINIAPP_FRONTEND_DOMAIN=${resolved_domain}" >> "$GITHUB_ENV"
 
       - name: Preflight isolated HappyFox runtime
