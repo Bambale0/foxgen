@@ -125,15 +125,6 @@ async def show_happyfox_music(callback: types.CallbackQuery):
 
 '''
 
-OLD_MORE_COPY = '''        "⋯ <b>Ещё</b>\\n"
-        f"🍌 Баланс: <code>{user.credits}</code> бананов\\n\\n"
-        "Здесь находятся баланс, история, помощь и поддержка."
-'''
-NEW_MORE_COPY = '''        "✨ <b>Прочий AI</b>\\n"
-        f"🍌 Баланс: <code>{user.credits}</code> бананов\\n\\n"
-        "Выберите дополнительный сценарий: видео, фото или улучшение."
-'''
-
 
 def _replace_once_or_verify(text: str, old: str, new: str, *, context: str) -> str:
     if old in text:
@@ -184,12 +175,20 @@ def _patch_common() -> None:
             1,
         )
 
-    text = _replace_once_or_verify(
-        text,
-        OLD_MORE_COPY,
-        NEW_MORE_COPY,
-        context="HappyFox other-AI copy",
-    )
+    old_title = "⋯ <b>Ещё</b>"
+    new_title = "✨ <b>Прочий AI</b>"
+    if old_title in text:
+        text = text.replace(old_title, new_title, 1)
+    elif new_title not in text:
+        raise RuntimeError("HappyFox other-AI title anchor was not found")
+
+    old_body = "Здесь находятся баланс, история, помощь и поддержка."
+    new_body = "Выберите дополнительный сценарий: видео, фото или улучшение."
+    if old_body in text:
+        text = text.replace(old_body, new_body, 1)
+    elif new_body not in text:
+        raise RuntimeError("HappyFox other-AI body anchor was not found")
+
     COMMON_PATH.write_text(text, encoding="utf-8")
 
 
