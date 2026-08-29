@@ -83,11 +83,7 @@ jobs:
           fi
 
           printf 'Linting HappyFox Python delta:\n%s\n' "${changed_python[*]}"
-          python -m ruff check "${changed_python[@]}" --fix --output-format=github || true
-          echo '--- Ruff generated diff ---'
-          git diff -- bot/happyfox_video_ui.py
-          echo '--- End Ruff generated diff ---'
-          exit 1
+          python -m ruff check "${changed_python[@]}" --output-format=github
       - name: Safe regression suite
         run: |
           pytest tests/ \
