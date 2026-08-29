@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from bot.config import config
 from bot.keyboards import get_main_menu_keyboard, get_more_menu_keyboard
 
@@ -57,3 +59,16 @@ def test_other_ai_menu_is_a_three_scenario_hub():
         ["create_image_refs_new"],
         ["back_main"],
     ]
+
+
+def test_telegram_chat_menu_button_opens_registered_quick_commands():
+    source = Path("bot/main.py").read_text(encoding="utf-8")
+    helper = source.split("async def _set_commands_chat_menu_button() -> None:", 1)[1]
+    helper = helper.split("\nasync def ", 1)[0]
+
+    assert '"type": "commands"' in helper
+    assert '"type": "web_app"' not in helper
+    assert "_mini_app_url_with_start_param" not in helper
+
+    for command in ("start", "feed", "prompts", "help", "ref", "earn"):
+        assert f'BotCommand(command="{command}"' in source
