@@ -1,8 +1,7 @@
 from __future__ import annotations
 
+import functools
 import inspect
-from collections.abc import Callable
-from functools import wraps
 
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
@@ -203,9 +202,7 @@ def compose_happyfox_video_keyboard(
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def happyfox_dynamic_video_keyboard(
-    settings_builder: Callable[..., InlineKeyboardMarkup],
-) -> Callable[..., InlineKeyboardMarkup]:
+def happyfox_dynamic_video_keyboard(settings_builder):
     """Decorate the proven settings keyboard with the v7-style dynamic selector.
 
     Keeping model-specific controls in the existing builder avoids duplicating provider
@@ -213,7 +210,7 @@ def happyfox_dynamic_video_keyboard(
     """
     signature = inspect.signature(settings_builder)
 
-    @wraps(settings_builder)
+    @functools.wraps(settings_builder)
     def wrapped(*args, **kwargs) -> InlineKeyboardMarkup:
         bound = signature.bind_partial(*args, **kwargs)
         bound.apply_defaults()
