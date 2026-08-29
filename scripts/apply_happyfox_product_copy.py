@@ -89,23 +89,23 @@ def _patch_telegram_launch() -> None:
     KEYBOARDS_PATH.write_text(keyboards, encoding="utf-8")
 
     main_text = MAIN_PATH.read_text(encoding="utf-8")
-    old_import = """from bot.keyboards import (
+    commands_import = """from bot.keyboards import (
     get_main_menu_button_keyboard,
     get_required_subscription_keyboard,
 )
 """
-    new_import = """from bot.keyboards import (
+    webapp_import = """from bot.keyboards import (
     _mini_app_url_with_start_param,
     get_main_menu_button_keyboard,
     get_required_subscription_keyboard,
 )
 """
-    if old_import in main_text:
-        main_text = main_text.replace(old_import, new_import, 1)
-    elif new_import not in main_text:
+    if webapp_import in main_text:
+        main_text = main_text.replace(webapp_import, commands_import, 1)
+    elif commands_import not in main_text:
         raise RuntimeError("HappyFox main WebApp import anchor was not found")
 
-    old_menu = """async def _set_commands_chat_menu_button() -> None:
+    commands_menu = """async def _set_commands_chat_menu_button() -> None:
     \"\"\"Keep Telegram's system menu button on quick commands.\"\"\"
     url = f\"https://api.telegram.org/bot{config.BOT_TOKEN}/setChatMenuButton\"
     timeout = aiohttp.ClientTimeout(total=15)
@@ -118,7 +118,7 @@ def _patch_telegram_launch() -> None:
     if not payload.get(\"ok\"):
         raise RuntimeError(payload.get(\"description\") or \"setChatMenuButton failed\")
 """
-    new_menu = """async def _set_commands_chat_menu_button() -> None:
+    webapp_menu = """async def _set_commands_chat_menu_button() -> None:
     \"\"\"Keep Telegram's system menu button on the current HappyFox WebApp.\"\"\"
     launch_url = _mini_app_url_with_start_param()
     if not launch_url:
@@ -140,18 +140,24 @@ def _patch_telegram_launch() -> None:
     if not payload.get(\"ok\"):
         raise RuntimeError(payload.get(\"description\") or \"setChatMenuButton failed\")
 """
-    if old_menu in main_text:
-        main_text = main_text.replace(old_menu, new_menu, 1)
-    elif new_menu not in main_text:
+    if webapp_menu in main_text:
+        main_text = main_text.replace(webapp_menu, commands_menu, 1)
+    elif commands_menu not in main_text:
         raise RuntimeError("HappyFox Telegram menu-button anchor was not found")
 
     main_text = main_text.replace(
-        'logger.info("Configured Telegram chat menu button for bot commands")',
         'logger.info("Configured Telegram chat menu button for current HappyFox WebApp")',
+        'logger.info("Configured Telegram chat menu button for bot commands")',
         1,
     )
-    if '"type": "commands"' in main_text:
-        raise RuntimeError("Stale commands-only Telegram menu button remains")
+
+    helper = main_text.split("async def _set_commands_chat_menu_button() -> None:", 1)[-1]
+    helper = helper.split("\nasync def ", 1)[0]
+    if '"type": "commands"' not in helper:
+        raise RuntimeError("HappyFox Telegram menu button is not configured for commands")
+    if '"type": "web_app"' in helper:
+        raise RuntimeError("HappyFox Telegram menu button still points to the WebApp")
+
     MAIN_PATH.write_text(main_text, encoding="utf-8")
 
 
