@@ -62,16 +62,16 @@ NEW_MAIN_MENU = '''def get_main_menu_keyboard(user_credits: int = 0, telegram_id
         )
 
     builder.row(
-        InlineKeyboardButton(text="🎬 Создать видео", callback_data="create_video_new"),
+        InlineKeyboardButton(text="🖼 Создать фото", callback_data="create_image_text_new"),
         InlineKeyboardButton(text="🎙 Создать озвучку", callback_data="omni_mode_audio"),
     )
     builder.row(
-        InlineKeyboardButton(text="🖼 Создать фото", callback_data="create_image_text_new"),
+        InlineKeyboardButton(text="🎬 Создать видео", callback_data="create_video_new"),
         InlineKeyboardButton(text="🎵 Создать музыку · Suno", callback_data="happyfox_music"),
     )
     builder.row(
         InlineKeyboardButton(text="🎯 Motion Control", callback_data="motion_control"),
-        InlineKeyboardButton(text="✨ Прочий AI", callback_data="ux_more"),
+        InlineKeyboardButton(text="✨ Промпты", callback_data="menu_prompts"),
     )
     builder.row(
         InlineKeyboardButton(text="🔷 Gemini Omni", callback_data="v_model_gemini_omni"),
@@ -153,6 +153,7 @@ def _patch_keyboards() -> None:
         "✍️ Промпт по описанию",
         "🎞 Промпт по видео",
         "📚 Библиотека промптов",
+        "✨ Прочий AI",
         "⋯ Ещё",
     )
     main_menu_block = text.split("def get_main_menu_keyboard", 1)[1].split(
