@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import inspect
+from collections.abc import Callable
 from functools import wraps
-from typing import Callable
 
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
@@ -66,6 +66,7 @@ DEFAULT_DURATION = {
 }
 
 LEGACY_NAV_CALLBACKS = {"video_change_model", "video_change_media"}
+PRICE_LOOKUP_ERRORS = (KeyError, TypeError, ValueError, RuntimeError)
 
 
 def _selector_model(model: str) -> str:
@@ -89,7 +90,7 @@ def compatible_video_model(v_type: str, model: str | None) -> str:
     return models[0]
 
 
-def _format_amount(value: float | int) -> str:
+def _format_amount(value: float) -> str:
     amount = float(value)
     return str(int(amount)) if amount.is_integer() else f"{amount:g}"
 
@@ -104,15 +105,13 @@ def _model_price_label(model: str) -> str:
             return f"от {_format_amount(cost)}🐾"
 
         quality = "720p" if model.startswith("veo3") else None
-        per_second = preset_manager.get_video_cost_per_second(
-            model, duration, quality
-        )
+        per_second = preset_manager.get_video_cost_per_second(model, duration, quality)
         return f"{_format_amount(per_second)}🐾/с"
-    except Exception:
+    except PRICE_LOOKUP_ERRORS:
         try:
             cost = preset_manager.get_video_cost(model, duration)
             return f"{_format_amount(cost)}🐾"
-        except Exception:
+        except PRICE_LOOKUP_ERRORS:
             return "🐾"
 
 
