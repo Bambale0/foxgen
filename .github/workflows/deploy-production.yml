@@ -266,6 +266,7 @@ jobs:
           export PRODUCT_ID=happyfox
           export REDIS_PREFIX="${REDIS_PREFIX:-foxgen_happyfox}"
           export HAPPYFOX_BACKEND_NETWORK="${HAPPYFOX_BACKEND_NETWORK:-foxgen_backend}"
+          export HAPPYFOX_PUBLIC_ORIGIN="https://${MINIAPP_FRONTEND_DOMAIN}"
 
           docker network inspect "$HAPPYFOX_BACKEND_NETWORK" >/dev/null
           python3 scripts/report_happyfox_production_topology.py .env
@@ -317,6 +318,7 @@ jobs:
             PRODUCT_ID=happyfox \
             REDIS_PREFIX=foxgen_happyfox \
             HAPPYFOX_BACKEND_NETWORK=foxgen_backend \
+            HAPPYFOX_PUBLIC_ORIGIN="https://${MINIAPP_FRONTEND_DOMAIN}" \
             bash scripts/deploy_happyfox.sh deploy
 
           run_root env \
