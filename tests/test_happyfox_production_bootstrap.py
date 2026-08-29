@@ -3,6 +3,7 @@ from pathlib import Path
 from scripts.prepare_happyfox_production import (
     build_runtime_values,
     mini_app_url_for_origin,
+    pin_public_origin,
     postgres_url_for_database,
     redis_url_for_db,
 )
@@ -104,6 +105,36 @@ def test_miniapp_url_is_derived_from_existing_happyfox_origin() -> None:
     )
 
 
+def test_verified_public_origin_overrides_stale_runtime_domain() -> None:
+    existing = {
+        "WEBHOOK_HOST": "https://alena.нейроныч.online",
+        "MINI_APP_URL": "https://alena.нейроныч.online/mini-app/",
+        "STATIC_BASE_URL": "https://alena.нейроныч.online",
+        "REDIS_URL": "redis://redis:6379/5",
+    }
+
+    pinned = pin_public_origin(existing, "https://alena.chillcreative.ru")
+
+    assert pinned["WEBHOOK_HOST"] == "https://alena.chillcreative.ru"
+    assert pinned["MINI_APP_URL"] == "https://alena.chillcreative.ru/mini-app/"
+    assert pinned["STATIC_BASE_URL"] == "https://alena.chillcreative.ru"
+    assert pinned["REDIS_URL"] == existing["REDIS_URL"]
+
+
+def test_verified_public_origin_rejects_paths_and_non_https_urls() -> None:
+    for invalid in (
+        "http://alena.chillcreative.ru",
+        "https://alena.chillcreative.ru/mini-app/",
+        "https://user:pass@alena.chillcreative.ru",
+    ):
+        try:
+            pin_public_origin({}, invalid)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError(f"public origin should be rejected: {invalid}")
+
+
 def test_empty_admin_ids_are_safe_and_do_not_block_production() -> None:
     values = build_runtime_values(
         _legacy(),
@@ -151,3 +182,4 @@ def test_production_workflow_prepares_runtime_before_strict_validation() -> None
     )
     assert prepare_index < runtime_validation_index
     assert "docker network inspect" in workflow
+    assert 'HAPPYFOX_PUBLIC_ORIGIN="https://${MINIAPP_FRONTEND_DOMAIN}"' in workflow
