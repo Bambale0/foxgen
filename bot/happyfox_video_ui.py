@@ -11,6 +11,9 @@ from bot.services.preset_manager import preset_manager
 
 STANDARD_VIDEO_TYPES = {"text", "imgtxt", "video"}
 
+# HappyFox mirrors the v7_kate interaction contract, but only exposes models that
+# are already implemented by this runtime. Provider payloads remain owned by the
+# existing generation service.
 VIDEO_TYPE_ROWS: dict[str, tuple[str, ...]] = {
     "text": (
         "v3_pro",
@@ -30,9 +33,7 @@ VIDEO_TYPE_ROWS: dict[str, tuple[str, ...]] = {
         "grok_imagine_v15",
         "seedance_2",
         "gemini_omni",
-        "veo3",
         "veo3_fast",
-        "veo3_lite",
     ),
     "video": (
         "seedance_2",
@@ -67,6 +68,27 @@ DEFAULT_DURATION = {
 LEGACY_NAV_CALLBACKS = {"video_change_model", "video_change_media"}
 
 
+def _selector_model(model: str) -> str:
+    if model == "gemini_omni" or model.startswith("gemini_omni_"):
+        return "gemini_omni"
+    return model
+
+
+def is_video_model_compatible(v_type: str, model: str) -> bool:
+    return _selector_model(model) in VIDEO_TYPE_ROWS.get(v_type, ())
+
+
+def compatible_video_model(v_type: str, model: str | None) -> str:
+    """Keep the current model when valid, otherwise choose the first valid model."""
+    current = str(model or "")
+    if current and is_video_model_compatible(v_type, current):
+        return current
+    models = VIDEO_TYPE_ROWS.get(v_type, ())
+    if not models:
+        return current or "v3_pro"
+    return models[0]
+
+
 def _format_amount(value: float | int) -> str:
     amount = float(value)
     return str(int(amount)) if amount.is_integer() else f"{amount:g}"
@@ -95,9 +117,7 @@ def _model_price_label(model: str) -> str:
 
 
 def _is_selected_model(current_model: str, model: str) -> bool:
-    if model == "gemini_omni":
-        return current_model == "gemini_omni" or current_model.startswith("gemini_omni_")
-    return current_model == model
+    return _selector_model(current_model) == model
 
 
 def _type_row(current_v_type: str) -> list[InlineKeyboardButton]:
