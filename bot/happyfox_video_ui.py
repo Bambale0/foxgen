@@ -150,16 +150,18 @@ def _model_rows(current_v_type: str, current_model: str) -> list[list[InlineKeyb
 
 def _paw_text(text: str) -> str:
     value = str(text or "")
+    # Escaped legacy literals are intentional: the build-time HappyFox normalizer
+    # must not rewrite this compatibility adapter before Python executes it.
     replacements = (
-        ("🍌", "🐾"),
-        ("бананов", "лапок"),
-        ("бананы", "лапки"),
-        ("банана", "лапки"),
-        ("банан", "лапка"),
-        ("кредитов", "лапок"),
-        ("кредиты", "лапки"),
-        ("кредита", "лапки"),
-        ("кредит", "лапка"),
+        ("\U0001f34c", "🐾"),
+        ("\u0431\u0430\u043d\u0430\u043d\u043e\u0432", "лапок"),
+        ("\u0431\u0430\u043d\u0430\u043d\u044b", "лапки"),
+        ("\u0431\u0430\u043d\u0430\u043d\u0430", "лапки"),
+        ("\u0431\u0430\u043d\u0430\u043d", "лапка"),
+        ("\u043a\u0440\u0435\u0434\u0438\u0442\u043e\u0432", "лапок"),
+        ("\u043a\u0440\u0435\u0434\u0438\u0442\u044b", "лапки"),
+        ("\u043a\u0440\u0435\u0434\u0438\u0442\u0430", "лапки"),
+        ("\u043a\u0440\u0435\u0434\u0438\u0442", "лапка"),
     )
     for old, new in replacements:
         value = value.replace(old, new)
