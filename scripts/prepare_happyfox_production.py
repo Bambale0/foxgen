@@ -77,6 +77,39 @@ def mini_app_url_for_origin(origin: str) -> str:
     return f"https://{parsed.netloc}/mini-app/"
 
 
+def pin_public_origin(existing: dict[str, str], public_origin: str) -> dict[str, str]:
+    """Return a runtime overlay pinned to the verified HappyFox public origin.
+
+    The production workflow resolves the actual public hostname before cutover.
+    That value must win over stale pre-migration FOXGEN_* domains and over an
+    older generated runtime overlay, otherwise public health checks can target
+    the wrong virtual host even while the new container is healthy.
+    """
+
+    public_origin = public_origin.strip().rstrip("/")
+    if not public_origin:
+        return dict(existing)
+
+    parsed = urlsplit(public_origin)
+    if (
+        parsed.scheme != "https"
+        or not parsed.hostname
+        or parsed.username
+        or parsed.password
+        or parsed.query
+        or parsed.fragment
+        or parsed.path not in {"", "/"}
+    ):
+        raise ValueError("HAPPYFOX_PUBLIC_ORIGIN must be a public HTTPS origin")
+
+    canonical_origin = f"https://{parsed.netloc}"
+    pinned = dict(existing)
+    pinned["WEBHOOK_HOST"] = canonical_origin
+    pinned["MINI_APP_URL"] = mini_app_url_for_origin(canonical_origin)
+    pinned["STATIC_BASE_URL"] = canonical_origin
+    return pinned
+
+
 def _run(
     args: list[str],
     *,
@@ -352,6 +385,7 @@ def main() -> int:
         "HAPPYFOX_POSTGRES_CONTAINER", DEFAULT_POSTGRES_CONTAINER
     )
     redis_container = os.getenv("HAPPYFOX_REDIS_CONTAINER", DEFAULT_REDIS_CONTAINER)
+    public_origin = os.getenv("HAPPYFOX_PUBLIC_ORIGIN", "").strip()
 
     if (
         not database_name
@@ -377,7 +411,7 @@ def main() -> int:
         print("legacy_env_backup=present")
 
     legacy = parse_env(legacy_path)
-    existing = parse_env(runtime_path)
+    existing = pin_public_origin(parse_env(runtime_path), public_origin)
 
     backup_legacy_database(project_dir, postgres_container)
     ensure_happyfox_database(project_dir, postgres_container, database_name)
@@ -401,6 +435,8 @@ def main() -> int:
         redis_db=redis_db,
     )
     write_runtime_env(runtime_path, values)
+    if public_origin:
+        print(f"happyfox_public_origin={values['WEBHOOK_HOST']}")
     print("happyfox_production_bootstrap=ready")
     return 0
 
