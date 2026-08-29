@@ -20,18 +20,18 @@ def test_happyfox_main_menu_matches_product_layout(monkeypatch):
 
     assert _texts(markup) == [
         ["🚀 Mini App"],
-        ["🎬 Создать видео", "🎙 Создать озвучку"],
-        ["🖼 Создать фото", "🎵 Создать музыку · Suno"],
-        ["🎯 Motion Control", "✨ Прочий AI"],
+        ["🖼 Создать фото", "🎙 Создать озвучку"],
+        ["🎬 Создать видео", "🎵 Создать музыку · Suno"],
+        ["🎯 Motion Control", "✨ Промпты"],
         ["🔷 Gemini Omni", "🤖 AI-помощник"],
         ["🔗 Ссылки на работы", "💬 Поддержка"],
         ["🐾 Баланс: 42", "🤝 Партнёры"],
         ["💳 Тарифы"],
     ]
     assert _callbacks(markup)[1:] == [
-        ["create_video_new", "omni_mode_audio"],
-        ["create_image_text_new", "happyfox_music"],
-        ["motion_control", "ux_more"],
+        ["create_image_text_new", "omni_mode_audio"],
+        ["create_video_new", "happyfox_music"],
+        ["motion_control", "menu_prompts"],
         ["v_model_gemini_omni", "menu_ai_assistant"],
         ["menu_feed", "menu_support"],
         ["menu_balance", "menu_partner"],
