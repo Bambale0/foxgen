@@ -7,6 +7,8 @@ fails closed if an expected upstream anchor changes.
 
 from pathlib import Path
 
+from apply_happyfox_main_menu import apply_happyfox_main_menu
+
 COMMON_PATH = Path("bot/handlers/common.py")
 KEYBOARDS_PATH = Path("bot/keyboards.py")
 MAIN_PATH = Path("bot/main.py")
@@ -280,6 +282,7 @@ def main() -> None:
     _patch_miniapp()
     _patch_preset_manager()
     _patch_payments()
+    apply_happyfox_main_menu()
 
 
 if __name__ == "__main__":
