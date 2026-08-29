@@ -121,8 +121,8 @@ jobs:
           grep -q '_next/static' out/index.html
           grep -q 'HappyFox' out/index.html
           test -s out/happyfox-logo.webp
-      - name: Install Chromium
-        run: npx playwright install --with-deps chromium
+      - name: Install Chromium and WebKit
+        run: npx playwright install --with-deps chromium webkit
       - name: Prepare browser E2E export
         run: |
           rm -rf .e2e-server
@@ -130,6 +130,8 @@ jobs:
           cp -R out/. .e2e-server/mini-app/
       - name: Critical browser journeys
         run: node e2e/critical-flows.mjs
+      - name: Telegram startup on Chromium and iPhone WebKit
+        run: node e2e/telegram-startup.mjs
 
   docker:
     name: Production Docker image
