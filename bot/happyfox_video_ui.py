@@ -7,7 +7,6 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from bot.services.preset_manager import preset_manager
 
-
 STANDARD_VIDEO_TYPES = {"text", "imgtxt", "video"}
 
 # HappyFox mirrors the v7_kate interaction contract, but only exposes models that
