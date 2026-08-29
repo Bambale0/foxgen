@@ -4,7 +4,6 @@ import functools
 import inspect
 
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
-
 from bot.services.preset_manager import preset_manager
 
 
