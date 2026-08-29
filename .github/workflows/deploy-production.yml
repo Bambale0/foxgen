@@ -125,6 +125,7 @@ jobs:
           }
 
           resolved_domain="${MINIAPP_FRONTEND_DOMAIN:-}"
+          resolver_source="github-environment:MINIAPP_FRONTEND_DOMAIN"
           if [ -z "$resolved_domain" ]; then
             printf -v quoted_path '%q' "$DEPLOY_PATH"
             resolver_output="$(
@@ -143,24 +144,25 @@ jobs:
           from urllib.parse import urlparse
 
           project_dir = Path(sys.argv[1])
-          env_path = project_dir / ".env"
-          if not env_path.is_file():
-              raise SystemExit(f"{env_path} is missing")
 
-          values: dict[str, str] = {}
-          for raw_line in env_path.read_text(encoding="utf-8").splitlines():
-              line = raw_line.strip()
-              if not line or line.startswith("#"):
-                  continue
-              if line.startswith("export "):
-                  line = line[7:].lstrip()
-              if "=" not in line:
-                  continue
-              key, value = line.split("=", 1)
-              value = value.strip()
-              if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
-                  value = value[1:-1]
-              values[key.strip()] = value
+          def parse_env(path: Path) -> dict[str, str]:
+              values: dict[str, str] = {}
+              if not path.is_file():
+                  return values
+              for raw_line in path.read_text(encoding="utf-8").splitlines():
+                  line = raw_line.strip()
+                  if not line or line.startswith("#"):
+                      continue
+                  if line.startswith("export "):
+                      line = line[7:].lstrip()
+                  if "=" not in line:
+                      continue
+                  key, value = line.split("=", 1)
+                  value = value.strip()
+                  if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+                      value = value[1:-1]
+                  values[key.strip()] = value
+              return values
 
           def extract_hostname(value: str) -> str:
               value = value.strip()
@@ -168,25 +170,35 @@ jobs:
                   return ""
               parsed = urlparse(value if "://" in value else f"//{value}")
               host = (parsed.hostname or "").strip().rstrip(".")
-              if not re.fullmatch(r"[A-Za-z0-9.-]+", host):
+              if not host or not re.fullmatch(r"[A-Za-z0-9.-]+", host):
                   return ""
               return host
 
-          for key in (
+          sources = (
+              project_dir / ".env.happyfox.runtime",
+              project_dir / ".env",
+              project_dir / "backups" / "pre-happyfox" / "legacy.env.initial",
+          )
+          keys = (
               "MINIAPP_FRONTEND_DOMAIN",
               "MINI_APP_URL",
               "FOXGEN_MINIAPP_PUBLIC_URL",
               "FOXGEN_KIE_CALLBACK_BASE_URL",
               "WEBHOOK_HOST",
-          ):
-              host = extract_hostname(values.get(key, ""))
-              if host:
-                  print(f"__HAPPYFOX_MINIAPP_DOMAIN__={host}")
-                  raise SystemExit(0)
+              "STATIC_BASE_URL",
+          )
+
+          for path in sources:
+              values = parse_env(path)
+              for key in keys:
+                  host = extract_hostname(values.get(key, ""))
+                  if host:
+                      print(f"__HAPPYFOX_MINIAPP_DOMAIN__={host}")
+                      print(f"__HAPPYFOX_MINIAPP_SOURCE__={path.name}:{key}")
+                      raise SystemExit(0)
 
           raise SystemExit(
-              "Could not resolve HappyFox Mini App domain from server .env; "
-              "set MINIAPP_FRONTEND_DOMAIN or MINI_APP_URL"
+              "Could not resolve HappyFox Mini App domain from runtime or fallback env files"
           )
           PY
             )"
@@ -194,6 +206,11 @@ jobs:
             resolved_domain="$(
               printf '%s\n' "$resolver_output" \
                 | sed -n 's/^__HAPPYFOX_MINIAPP_DOMAIN__=//p' \
+                | tail -n 1
+            )"
+            resolver_source="$(
+              printf '%s\n' "$resolver_output" \
+                | sed -n 's/^__HAPPYFOX_MINIAPP_SOURCE__=//p' \
                 | tail -n 1
             )"
           fi
@@ -208,7 +225,7 @@ jobs:
               ;;
           esac
 
-          echo "Resolved HappyFox Mini App domain: ${resolved_domain}"
+          echo "Resolved HappyFox Mini App domain: ${resolved_domain} (${resolver_source:-unknown source})"
           echo "MINIAPP_FRONTEND_DOMAIN=${resolved_domain}" >> "$GITHUB_ENV"
 
       - name: Preflight isolated HappyFox runtime
