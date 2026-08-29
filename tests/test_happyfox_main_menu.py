@@ -25,7 +25,7 @@ def test_happyfox_main_menu_matches_product_layout(monkeypatch):
         ["🎯 Motion Control", "✨ Прочий AI"],
         ["🔷 Gemini Omni", "🤖 AI-помощник"],
         ["🔗 Ссылки на работы", "💬 Поддержка"],
-        ["🍌 Баланс: 42", "🤝 Партнёры"],
+        ["🐾 Баланс: 42", "🤝 Партнёры"],
         ["💳 Тарифы"],
     ]
     assert _callbacks(markup)[1:] == [
