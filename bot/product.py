@@ -11,13 +11,27 @@ class ProductConfig:
     brand_description: str
     welcome_text: str
     credit_name: str
+    credit_name_few: str
     credit_name_plural: str
     credit_short: str
     credit_emoji: str
     support_contact: str
 
     def credit_label(self, amount: float) -> str:
-        return self.credit_name if abs(amount) == 1 else self.credit_name_plural
+        value = abs(float(amount))
+        if not value.is_integer():
+            return self.credit_name_plural
+
+        integer = int(value)
+        last_two = integer % 100
+        last = integer % 10
+        if 11 <= last_two <= 14:
+            return self.credit_name_plural
+        if last == 1:
+            return self.credit_name
+        if 2 <= last <= 4:
+            return self.credit_name_few
+        return self.credit_name_plural
 
     def format_credits(self, amount: float) -> str:
         value = float(amount)
@@ -34,10 +48,11 @@ HAPPYFOX_PRODUCT = ProductConfig(
         "Я <b>HappyFox</b> — удобный AI-сервис для создания изображений, видео и другого контента.\n\n"
         "👇 Выбирай генерацию в боте или открывай приложение, чтобы начать."
     ),
-    credit_name="кредит",
-    credit_name_plural="кредитов",
-    credit_short="кр.",
-    credit_emoji="",
+    credit_name="лапка",
+    credit_name_few="лапки",
+    credit_name_plural="лапок",
+    credit_short="🐾",
+    credit_emoji="🐾",
     support_contact=os.getenv("SUPPORT_CONTACT", "").strip(),
 )
 
