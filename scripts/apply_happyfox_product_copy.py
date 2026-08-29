@@ -8,6 +8,7 @@ fails closed if an expected upstream anchor changes.
 from pathlib import Path
 
 from apply_happyfox_main_menu import apply_happyfox_main_menu
+from apply_happyfox_video_ui import apply_happyfox_video_ui
 
 COMMON_PATH = Path("bot/handlers/common.py")
 KEYBOARDS_PATH = Path("bot/keyboards.py")
@@ -23,6 +24,35 @@ NEW_MAIN_MENU_BRAND = '        f"🏠 <b>{html.escape(product.brand_name)}</b>\\
 SUPPORT_CONTACT_EXPRESSION = (
     'f"{html.escape(product.support_contact) if product.support_contact else '
     "'через встроенную поддержку'}\""
+)
+
+# These replacements are intentionally limited to human-facing Russian copy and
+# the old currency emoji. Stable English identifiers such as banana_pro and the
+# real model name "Nano Banana" remain untouched.
+CURRENCY_COPY_REPLACEMENTS = (
+    ("🍌", "🐾"),
+    ("бананов", "лапок"),
+    ("Бананов", "Лапок"),
+    ("бананы", "лапки"),
+    ("Бананы", "Лапки"),
+    ("банана", "лапки"),
+    ("Банана", "Лапки"),
+    ("банану", "лапке"),
+    ("Банану", "Лапке"),
+    ("бананами", "лапками"),
+    ("Бананами", "Лапками"),
+    ("бананах", "лапках"),
+    ("Бананах", "Лапках"),
+    ("банан", "лапка"),
+    ("Банан", "Лапка"),
+    ("кредитов", "лапок"),
+    ("Кредитов", "Лапок"),
+    ("кредиты", "лапки"),
+    ("Кредиты", "Лапки"),
+    ("кредита", "лапки"),
+    ("Кредита", "Лапки"),
+    ("кредит", "лапка"),
+    ("Кредит", "Лапка"),
 )
 
 
@@ -194,7 +224,7 @@ def _patch_preset_manager() -> None:
             self._price_config[\"credit_name\"] = product.credit_name
             self._price_config[\"credit_name_plural\"] = product.credit_name_plural
             self._price_config[\"credit_emoji\"] = product.credit_emoji
-            self._price_config[\"credit_value\"] = \"1 кредит = 10 ₽\"
+            self._price_config[\"credit_value\"] = \"1 лапка = 10 ₽\"
             self._price_config[\"support_contact\"] = product.support_contact
             self._price_config[\"admin_ids\"] = list(config.admin_ids)
 
@@ -276,6 +306,29 @@ def _patch_payments() -> None:
     PAYMENTS_PATH.write_text(text, encoding="utf-8")
 
 
+def _patch_currency_copy() -> None:
+    """Remove imported Banano/credit currency wording from HappyFox runtime copy."""
+    for path in Path("bot").rglob("*.py"):
+        text = path.read_text(encoding="utf-8")
+        patched = text
+        for old, new in CURRENCY_COPY_REPLACEMENTS:
+            patched = patched.replace(old, new)
+        # Preserve the provider/model trademark while removing its old currency icon.
+        patched = patched.replace("🐾 Nano Banana", "✨ Nano Banana")
+        if patched != text:
+            path.write_text(patched, encoding="utf-8")
+
+    stale_paths: list[str] = []
+    for path in Path("bot").rglob("*.py"):
+        text = path.read_text(encoding="utf-8")
+        if "🍌" in text or " бананов" in text.lower() or " кредиты" in text.lower():
+            stale_paths.append(str(path))
+    if stale_paths:
+        raise RuntimeError(
+            "Stale source-product currency copy remains: " + ", ".join(stale_paths[:12])
+        )
+
+
 def main() -> None:
     _patch_common()
     _patch_telegram_launch()
@@ -283,6 +336,8 @@ def main() -> None:
     _patch_preset_manager()
     _patch_payments()
     apply_happyfox_main_menu()
+    apply_happyfox_video_ui()
+    _patch_currency_copy()
 
 
 if __name__ == "__main__":
