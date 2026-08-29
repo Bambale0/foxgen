@@ -4,7 +4,7 @@ import { join } from 'node:path'
 const outDir = join(process.cwd(), 'out')
 const localTelegramJs = 'telegram-web-app.js'
 const localTelegramSrc = `/mini-app/${localTelegramJs}`
-const telegramScript = `<script defer src="${localTelegramSrc}"></script>`
+const telegramScript = `<script src="${localTelegramSrc}"></script>`
 const inlineMiniappCss = process.env.MINIAPP_INLINE_CSS === '1'
 const assetVersion =
   process.env.MINIAPP_ASSET_VERSION ||
@@ -13,15 +13,16 @@ const assetVersion =
 const telegramEarlyScriptPattern =
   /<script\b(?=[^>]*\bid=(["'])telegram-early-ready\1)[^>]*>[\s\S]*?<\/script>/gi
 const telegramSdkScriptPattern =
-  /<script\b(?=[^>]*\bsrc=(["'])https:\/\/telegram\.org\/js\/telegram-web-app\.js\1)[^>]*>\s*<\/script>/gi
+  /<script\b(?=[^>]*\bsrc=(["'])https:\/\/telegram\.org\/js\/telegram-web-app\.js(?:\?[^"']*)?\1)[^>]*>\s*<\/script>/gi
 const localTelegramScriptPattern =
   /<script\b(?=[^>]*\bsrc=(["'])\/mini-app\/telegram-web-app\.js\1)[^>]*>\s*<\/script>/gi
 const telegramSdkPreloadPattern =
-  /<link\b(?=[^>]*\brel=(["'])preload\1)(?=[^>]*\bhref=(["'])https:\/\/telegram\.org\/js\/telegram-web-app\.js\2)[^>]*\/?>/gi
+  /<link\b(?=[^>]*\brel=(["'])preload\1)(?=[^>]*\bhref=(["'])https:\/\/telegram\.org\/js\/telegram-web-app\.js(?:\?[^"']*)?\2)[^>]*\/?>/gi
 const scriptTagPattern = /<script\b(?![^>]*\bsrc=)[^>]*>[\s\S]*?<\/script>/gi
 const charsetPattern = /<head><meta\b[^>]*(?:charset|charSet)=(["'])utf-8\1[^>]*\/?>/i
 const stylesheetPattern =
   /<link\b(?=[^>]*\brel=(["'])stylesheet\1)(?=[^>]*\bhref=(["'])(\/mini-app\/_next\/static\/css\/[^"']+\.css)\2)[^>]*\/?>/i
+const nextRuntimeScriptPattern = /<script\b[^>]*\bsrc=(["'])\/mini-app\/_next\/static\/[^"']+\.js(?:\?[^"']*)?\1[^>]*>/i
 
 function htmlFiles(dir) {
   return readdirSync(dir).flatMap((entry) => {
@@ -77,14 +78,36 @@ function versionStaticAssets(html) {
   )
 }
 
-// Copy local telegram-web-app.js into out/ so it is served from the same origin
+function assertTelegramStartupContract(html, file, earlyScript) {
+  const telegramIndex = html.indexOf(telegramScript)
+  if (telegramIndex < 0) {
+    throw new Error(`Telegram SDK script is missing from ${file}`)
+  }
+
+  const firstNextRuntime = html.match(nextRuntimeScriptPattern)
+  if (firstNextRuntime?.index != null && telegramIndex > firstNextRuntime.index) {
+    throw new Error(`Telegram SDK must load before Next.js runtime scripts in ${file}`)
+  }
+
+  if (/\bdefer\b/i.test(telegramScript) || /\basync\b/i.test(telegramScript)) {
+    throw new Error('Telegram SDK must load synchronously before application scripts')
+  }
+
+  if (/TelegramWebviewProxy|window\.webkit|window\.external\.notify/.test(earlyScript)) {
+    throw new Error(`Mini App bootstrap must not bypass Telegram.WebApp SDK in ${file}`)
+  }
+}
+
+// Copy local telegram-web-app.js into out/ so it is served from the same origin.
+// The SDK is intentionally synchronous: Telegram requires it to initialize before
+// application bundles, and WKWebView is particularly sensitive to this ordering.
 const publicTelegramJs = join(process.cwd(), 'public', localTelegramJs)
 const outTelegramJs = join(outDir, localTelegramJs)
 if (existsSync(publicTelegramJs)) {
   copyFileSync(publicTelegramJs, outTelegramJs)
   console.log(`Copied ${localTelegramJs} to ${outTelegramJs}`)
 } else {
-  console.warn(`⚠ Missing ${publicTelegramJs} — local Telegram SDK file not found`)
+  throw new Error(`Missing ${publicTelegramJs} — local Telegram SDK file not found`)
 }
 
 let patched = 0
@@ -117,6 +140,8 @@ for (const file of htmlFiles(outDir)) {
     ? stripped.replace(charsetMatch[0], `${charsetMatch[0]}${telegramHeadScripts}`)
     : stripped.replace('<head>', `<head>${telegramHeadScripts}`)
   const nextHtml = versionStaticAssets(inlineMiniappStyles(nextHtmlWithTelegram))
+
+  assertTelegramStartupContract(nextHtml, file, earlyScript)
 
   if (nextHtml !== html) {
     writeFileSync(file, nextHtml)
