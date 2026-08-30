@@ -1,12 +1,12 @@
 """
-Internal API для административной панели (read-only).
+Internal API for the HappyFox admin surface and autonomous external routes.
 
-Использует timestamped HMAC-аутентификацию, совместимую с
+Uses timestamped HMAC authentication compatible with
 backend/app/channels/internal.py (InternalChannelClient).
 
-Эндпоинты:
-  GET  /internal/v1/health  — детальный статус HappyFox backend
-  GET  /internal/v1/stats   — агрегированная read-only статистика
+Endpoints:
+  GET  /internal/v1/health  — detailed HappyFox backend status
+  GET  /internal/v1/stats   — aggregated read-only statistics
 """
 
 from __future__ import annotations
@@ -31,7 +31,7 @@ _DISABLED_LEGACY_PAYMENT_PATHS = frozenset(
 
 
 def _verify_hmac(request: web.Request, secret: str) -> bool:
-    """Проверяет HMAC-подпись из InternalChannelClient._signed_headers."""
+    """Validate a signature created by InternalChannelClient._signed_headers."""
     if not secret:
         return False
     timestamp_str = request.headers.get("X-Internal-Timestamp", "")
@@ -82,7 +82,7 @@ async def internal_auth_middleware(request: web.Request, handler: Any) -> web.Re
 
 
 async def handle_internal_health(request: web.Request) -> web.Response:
-    """Детальный статус HappyFox backend — версия, аптайм, база данных."""
+    """Report HappyFox backend version and database connectivity."""
     from bot.internal_api_db import simple_db_query_ok
 
     db_ok = False
@@ -109,7 +109,7 @@ async def handle_internal_health(request: web.Request) -> web.Response:
 
 
 async def handle_internal_stats(request: web.Request) -> web.Response:
-    """Агрегированная read-only статистика: пользователи, генерации, транзакции, доход."""
+    """Return aggregated read-only users, generation and billing statistics."""
     from bot.internal_api_db import get_db_aggregates
 
     try:
@@ -121,8 +121,25 @@ async def handle_internal_stats(request: web.Request) -> web.Response:
     return web.json_response(stats)
 
 
+def _setup_instagram_channel(app: web.Application) -> None:
+    """Register Instagram only when the channel is explicitly enabled."""
+    from bot.instagram_api import InstagramSettings, setup_instagram_routes
+    from bot.instagram_channel import build_instagram_event_handler
+
+    settings = InstagramSettings.from_env()
+    if not settings.enabled:
+        logger.info("Instagram channel disabled")
+        return
+
+    setup_instagram_routes(
+        app,
+        settings=settings,
+        event_handler=build_instagram_event_handler(settings),
+    )
+
+
 def setup_internal_api(app: web.Application, secret: str, version: str = "") -> None:
-    """Регистрирует internal API, а также автономные payment routes."""
+    """Register internal API plus isolated payment and channel HTTP routes."""
     app["internal_api_secret"] = secret
     app["bot_version"] = version
 
@@ -135,6 +152,7 @@ def setup_internal_api(app: web.Application, secret: str, version: str = "") -> 
     from bot.handlers.freekassa_payments import setup_freekassa_routes
 
     setup_freekassa_routes(app)
+    _setup_instagram_channel(app)
 
     logger.info(
         "Internal API registered: prefix=%s, routes=health, stats",
