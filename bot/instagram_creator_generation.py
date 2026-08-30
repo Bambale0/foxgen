@@ -15,6 +15,7 @@ from bot.instagram_video_generation import (
     InstagramVideoGenerationService,
     video_state_parts,
 )
+from bot.instagram_video_state import ensure_instagram_video_draft
 
 
 class InstagramCreatorGenerationService(InstagramVideoGenerationService):
@@ -37,6 +38,14 @@ class InstagramCreatorGenerationService(InstagramVideoGenerationService):
             "📸 Фото выбрано. Пришли исходное фото, затем одним сообщением "
             "напиши, что хочешь получить. Первая фото-генерация бесплатная 🎁",
         )
+
+    async def enter_video_paywall(
+        self,
+        identity: ChannelIdentity,
+        event: InstagramEvent,
+    ) -> None:
+        await ensure_instagram_video_draft(identity.id)
+        await super().enter_video_paywall(identity, event)
 
     async def _select_creation_kind(
         self,
