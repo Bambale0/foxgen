@@ -46,27 +46,8 @@ rollback_legacy_app() {
   fi
 }
 
-python3 scripts/prepare_happyfox_production.py "$PROJECT_DIR"
-python3 scripts/canonicalize_happyfox_runtime.py "$PROJECT_DIR/.env.happyfox.runtime"
-python3 scripts/validate_happyfox_env.py .env .env.happyfox.runtime .env.postgres
-
-ACTION="${1:-deploy}"
-if [ "$ACTION" != "deploy" ]; then
-  exec bash scripts/deploy_backend_docker.sh "$ACTION"
-fi
-
-bash scripts/deploy_backend_docker.sh deploy
-
-if docker inspect "$HAPPYFOX_REVERSE_PROXY_CONTAINER" >/dev/null 2>&1; then
-  if ! docker exec "$HAPPYFOX_REVERSE_PROXY_CONTAINER" nginx -t; then
-    rollback_legacy_app
-    echo "[happyfox-deploy] Reverse proxy configuration validation failed" >&2
-    exit 1
-  fi
-  docker exec "$HAPPYFOX_REVERSE_PROXY_CONTAINER" nginx -s reload
-fi
-
-PUBLIC_ORIGIN="$(python3 - "$PROJECT_DIR/.env.happyfox.runtime" <<'PY'
+resolve_public_origin() {
+  python3 - "$PROJECT_DIR/.env.happyfox.runtime" <<'PY'
 import sys
 from pathlib import Path
 
@@ -81,10 +62,49 @@ for raw_line in Path(sys.argv[1]).read_text(encoding="utf-8").splitlines():
     raise SystemExit(0)
 raise SystemExit("WEBHOOK_HOST is missing from HappyFox runtime overlay")
 PY
-)"
+}
 
-if ! curl -fsS --retry 8 --retry-delay 2 --retry-all-errors \
-  --max-time 15 "${PUBLIC_ORIGIN}/health" >/dev/null; then
+public_health_ok() {
+  local retries="${1:-0}"
+  curl -fsS \
+    --retry "$retries" \
+    --retry-delay 1 \
+    --retry-all-errors \
+    --max-time 10 \
+    "${PUBLIC_ORIGIN}/health" >/dev/null
+}
+
+python3 scripts/prepare_happyfox_production.py "$PROJECT_DIR"
+python3 scripts/canonicalize_happyfox_runtime.py "$PROJECT_DIR/.env.happyfox.runtime"
+python3 scripts/validate_happyfox_env.py .env .env.happyfox.runtime .env.postgres
+
+ACTION="${1:-deploy}"
+if [ "$ACTION" != "deploy" ]; then
+  exec bash scripts/deploy_backend_docker.sh "$ACTION"
+fi
+
+PUBLIC_ORIGIN="$(resolve_public_origin)"
+bash scripts/deploy_backend_docker.sh deploy
+
+# The reverse proxy is shared by several unrelated products. If its currently
+# running workers already route HappyFox to the newly healthy container, there
+# is no reason to reload the global nginx configuration. This prevents an
+# unrelated broken upstream from rolling back an otherwise healthy HappyFox
+# release. A reload is attempted only when the live HappyFox route actually
+# needs it.
+if public_health_ok 2; then
+  echo "[happyfox-deploy] Existing reverse proxy already routes the new HappyFox backend; reload skipped"
+elif docker inspect "$HAPPYFOX_REVERSE_PROXY_CONTAINER" >/dev/null 2>&1; then
+  echo "[happyfox-deploy] Public route is not healthy yet; validating reverse proxy before reload"
+  if ! docker exec "$HAPPYFOX_REVERSE_PROXY_CONTAINER" nginx -t; then
+    rollback_legacy_app
+    echo "[happyfox-deploy] Reverse proxy configuration validation failed" >&2
+    exit 1
+  fi
+  docker exec "$HAPPYFOX_REVERSE_PROXY_CONTAINER" nginx -s reload
+fi
+
+if ! public_health_ok 8; then
   rollback_legacy_app
   echo "[happyfox-deploy] Public backend health check failed" >&2
   exit 1
