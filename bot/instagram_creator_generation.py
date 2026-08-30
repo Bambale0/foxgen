@@ -30,20 +30,12 @@ class InstagramCreatorGenerationService(InstagramVideoGenerationService):
             "Ответь «Фото» или «Видео».",
         )
 
-    async def _confirm_kind(self, event: InstagramEvent, kind: str) -> None:
-        if kind == "photo":
-            await self.client.send_text(
-                event.account_id,
-                event.sender_id,
-                "📸 Фото выбрано. Пришли исходное фото, затем одним сообщением "
-                "напиши, что хочешь получить.",
-            )
-            return
+    async def _confirm_photo_kind(self, event: InstagramEvent) -> None:
         await self.client.send_text(
             event.account_id,
             event.sender_id,
-            "🎬 Видео выбрано. Пришли фото или видео-референс, затем напиши, "
-            "что должно происходить в ролике.",
+            "📸 Фото выбрано. Пришли исходное фото, затем одним сообщением "
+            "напиши, что хочешь получить. Первая фото-генерация бесплатная 🎁",
         )
 
     async def _select_creation_kind(
@@ -69,8 +61,13 @@ class InstagramCreatorGenerationService(InstagramVideoGenerationService):
                     state="idle",
                     clear_image=True,
                 )
+
         await set_instagram_creation_kind(identity.id, selected_kind)
-        await self._confirm_kind(event, selected_kind)
+        if selected_kind == "video":
+            await self.enter_video_paywall(identity, event)
+            return True
+
+        await self._confirm_photo_kind(event)
         return True
 
     async def handle_message(
