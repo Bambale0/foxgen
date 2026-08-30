@@ -5,8 +5,9 @@ import hmac
 import json
 import logging
 import os
+from collections.abc import Awaitable, Callable, Iterable
 from dataclasses import dataclass, field
-from typing import Any, Awaitable, Callable, Iterable
+from typing import Any
 from urllib.parse import urlparse
 
 import aiohttp
@@ -23,22 +24,24 @@ _DEFAULT_IDEMPOTENCY_TTL_SECONDS = 7 * 24 * 60 * 60
 _DEFAULT_SUBSCRIBED_FIELDS = ("messages", "messaging_postbacks", "comments")
 _TRUE_VALUES = {"1", "true", "yes", "on"}
 
-InstagramEventHandler = Callable[["InstagramEvent"], Awaitable[None]]
-InstagramClaimOnce = Callable[[str], Awaitable[bool]]
-InstagramReleaseClaim = Callable[[str], Awaitable[None]]
-
 
 class InstagramApiError(RuntimeError):
-    """Stable exception for Instagram transport failures."""
+    """Stable exception exposed by the Instagram infrastructure adapter."""
 
-    def __init__(self, message: str, *, status: int | None = None, code: Any = None):
+    def __init__(
+        self,
+        message: str,
+        *,
+        status: int | None = None,
+        code: Any = None,
+    ) -> None:
         super().__init__(message)
         self.status = status
         self.code = code
 
 
 class InstagramDeliveryUnavailable(RuntimeError):
-    """Raised when an inbound event cannot be processed safely yet."""
+    """Raised when a webhook cannot be processed with exactly-once safety."""
 
 
 @dataclass(frozen=True)
@@ -56,14 +59,13 @@ class InstagramSettings:
     subscribed_fields: tuple[str, ...] = _DEFAULT_SUBSCRIBED_FIELDS
 
     @classmethod
-    def from_env(cls) -> "InstagramSettings":
+    def from_env(cls) -> InstagramSettings:
         raw_fields = os.getenv(
-            "INSTAGRAM_SUBSCRIBED_FIELDS", ",".join(_DEFAULT_SUBSCRIBED_FIELDS)
+            "INSTAGRAM_SUBSCRIBED_FIELDS",
+            ",".join(_DEFAULT_SUBSCRIBED_FIELDS),
         )
         fields = tuple(
-            item.strip()
-            for item in raw_fields.split(",")
-            if item.strip()
+            item.strip() for item in raw_fields.split(",") if item.strip()
         ) or _DEFAULT_SUBSCRIBED_FIELDS
         return cls(
             enabled=os.getenv("INSTAGRAM_ENABLED", "0").strip().lower()
@@ -82,7 +84,8 @@ class InstagramSettings:
                 or _DEFAULT_WEBHOOK_PATH
             ),
             request_timeout_seconds=max(
-                1, int(os.getenv("INSTAGRAM_REQUEST_TIMEOUT_SECONDS", "30"))
+                1,
+                int(os.getenv("INSTAGRAM_REQUEST_TIMEOUT_SECONDS", "30")),
             ),
             idempotency_ttl_seconds=max(
                 60,
@@ -123,8 +126,13 @@ class InstagramEvent:
     payload: dict[str, Any] = field(default_factory=dict)
 
 
+InstagramEventHandler = Callable[[InstagramEvent], Awaitable[None]]
+InstagramClaimOnce = Callable[[str], Awaitable[bool]]
+InstagramReleaseClaim = Callable[[str], Awaitable[None]]
+
+
 def verify_instagram_signature(body: bytes, signature: str, app_secret: str) -> bool:
-    """Validate Meta's X-Hub-Signature-256 against the unparsed request body."""
+    """Validate Meta's X-Hub-Signature-256 against the raw request body."""
     if not body or not signature or not app_secret:
         return False
     prefix = "sha256="
@@ -134,7 +142,9 @@ def verify_instagram_signature(body: bytes, signature: str, app_secret: str) -> 
     if not received:
         return False
     expected = hmac.new(
-        app_secret.encode("utf-8"), body, hashlib.sha256
+        app_secret.encode("utf-8"),
+        body,
+        hashlib.sha256,
     ).hexdigest()
     return hmac.compare_digest(expected, received)
 
@@ -167,24 +177,24 @@ def _message_event(account_id: str, item: dict[str, Any]) -> InstagramEvent | No
 
     message = item.get("message")
     if isinstance(message, dict):
-        event_id = _stable_event_id("message", message.get("mid"), item)
         return InstagramEvent(
-            event_id=event_id,
+            event_id=_stable_event_id("message", message.get("mid"), item),
             kind="message",
             account_id=account_id,
             sender_id=sender_id,
             recipient_id=recipient_id,
             timestamp=timestamp,
             text=str(message.get("text") or ""),
-            is_echo=bool(sender_id and sender_id == account_id),
+            is_echo=bool(
+                message.get("is_echo") or (sender_id and sender_id == account_id)
+            ),
             payload={"message": message},
         )
 
     postback = item.get("postback")
     if isinstance(postback, dict):
-        event_id = _stable_event_id("postback", postback.get("mid"), item)
         return InstagramEvent(
-            event_id=event_id,
+            event_id=_stable_event_id("postback", postback.get("mid"), item),
             kind="postback",
             account_id=account_id,
             sender_id=sender_id,
@@ -222,15 +232,15 @@ def _field_event(entry: dict[str, Any]) -> InstagramEvent | None:
 
 
 def normalize_instagram_events(payload: dict[str, Any]) -> list[InstagramEvent]:
-    """Convert Meta webhook payloads into a small channel-neutral event envelope."""
+    """Translate Meta webhook payloads into channel-neutral event envelopes."""
     if payload.get("object") != "instagram":
         return []
 
-    normalized: list[InstagramEvent] = []
     entries = payload.get("entry")
     if not isinstance(entries, list):
-        return normalized
+        return []
 
+    normalized: list[InstagramEvent] = []
     for raw_entry in entries:
         if not isinstance(raw_entry, dict):
             continue
@@ -269,7 +279,7 @@ async def _claim_event_once(event_id: str, ttl_seconds: int) -> bool:
             ex=ttl_seconds,
             nx=True,
         )
-    except Exception as exc:  # noqa: BLE001 - convert infrastructure errors
+    except Exception as exc:
         raise InstagramDeliveryUnavailable(
             "Instagram webhook idempotency storage is unavailable"
         ) from exc
@@ -282,7 +292,7 @@ async def _release_event_claim(event_id: str) -> None:
         return
     try:
         await client.delete(_event_key(event_id))
-    except Exception:  # noqa: BLE001 - Meta will retry on the 503 response
+    except Exception:
         logger.exception("Failed to release Instagram event claim: %s", event_id)
 
 
@@ -291,14 +301,14 @@ async def verify_instagram_webhook(request: web.Request) -> web.Response:
     mode = str(request.query.get("hub.mode") or "")
     verify_token = str(request.query.get("hub.verify_token") or "")
     challenge = str(request.query.get("hub.challenge") or "")
-    valid = (
+    is_valid = (
         settings.enabled
         and mode == "subscribe"
         and bool(challenge)
         and bool(settings.verify_token)
         and hmac.compare_digest(verify_token, settings.verify_token)
     )
-    if not valid:
+    if not is_valid:
         return web.Response(text="Forbidden", status=403)
     return web.Response(text=challenge, status=200)
 
@@ -324,28 +334,33 @@ async def handle_instagram_webhook(request: web.Request) -> web.Response:
         "instagram_event_handler"
     )
     if event_handler is None:
-        return web.json_response({"error": "instagram_handler_unavailable"}, status=503)
+        return web.json_response(
+            {"error": "instagram_handler_unavailable"},
+            status=503,
+        )
 
-    injected_claim: InstagramClaimOnce | None = request.app.get("instagram_claim_once")
-    injected_release: InstagramReleaseClaim | None = request.app.get(
+    claim_once: InstagramClaimOnce | None = request.app.get("instagram_claim_once")
+    release_claim: InstagramReleaseClaim | None = request.app.get(
         "instagram_release_claim"
     )
-
     processed = 0
     duplicates = 0
     echoes = 0
+
     try:
         for event in normalize_instagram_events(payload):
             if event.is_echo:
                 echoes += 1
                 continue
 
-            if injected_claim is not None:
-                claimed = await injected_claim(event.event_id)
-            else:
-                claimed = await _claim_event_once(
-                    event.event_id, settings.idempotency_ttl_seconds
+            claimed = (
+                await claim_once(event.event_id)
+                if claim_once is not None
+                else await _claim_event_once(
+                    event.event_id,
+                    settings.idempotency_ttl_seconds,
                 )
+            )
             if not claimed:
                 duplicates += 1
                 continue
@@ -353,8 +368,8 @@ async def handle_instagram_webhook(request: web.Request) -> web.Response:
             try:
                 await event_handler(event)
             except Exception:
-                if injected_release is not None:
-                    await injected_release(event.event_id)
+                if release_claim is not None:
+                    await release_claim(event.event_id)
                 else:
                     await _release_event_claim(event.event_id)
                 raise
@@ -362,7 +377,7 @@ async def handle_instagram_webhook(request: web.Request) -> web.Response:
     except InstagramDeliveryUnavailable:
         logger.exception("Instagram webhook delivery unavailable")
         return web.json_response({"error": "delivery_unavailable"}, status=503)
-    except Exception:  # noqa: BLE001 - trigger Meta retry without leaking details
+    except Exception:
         logger.exception("Instagram webhook event handler failed")
         return web.json_response({"error": "event_processing_failed"}, status=503)
 
@@ -380,11 +395,10 @@ def _require_public_https_url(value: str) -> str:
     candidate = str(value or "").strip()
     parsed = urlparse(candidate)
     hostname = (parsed.hostname or "").lower()
-    blocked_hosts = {"localhost", "127.0.0.1", "::1"}
     if (
         parsed.scheme != "https"
         or not hostname
-        or hostname in blocked_hosts
+        or hostname in {"localhost", "127.0.0.1", "::1"}
         or hostname.endswith(".local")
     ):
         raise ValueError("Instagram media URL must be a public https URL")
@@ -392,7 +406,7 @@ def _require_public_https_url(value: str) -> str:
 
 
 class InstagramClient:
-    """Small official Instagram Login API client for messages and publishing."""
+    """Official Instagram Login API client for messaging and publishing."""
 
     def __init__(
         self,
@@ -408,7 +422,7 @@ class InstagramClient:
         self.graph_host = str(graph_host or _GRAPH_HOST).rstrip("/")
 
     @classmethod
-    def from_settings(cls, settings: InstagramSettings) -> "InstagramClient":
+    def from_settings(cls, settings: InstagramSettings) -> InstagramClient:
         return cls(
             access_token=settings.access_token,
             api_version=settings.api_version,
@@ -426,34 +440,37 @@ class InstagramClient:
     ) -> dict[str, Any]:
         if not self.access_token:
             raise InstagramApiError("Instagram access token is not configured")
+
         url = f"{self.graph_host}/{self.api_version}/{path.lstrip('/')}"
         headers = {"Authorization": f"Bearer {self.access_token}"}
         timeout = aiohttp.ClientTimeout(total=self.timeout_seconds)
         try:
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.request(
+            async with (
+                aiohttp.ClientSession(timeout=timeout) as session,
+                session.request(
                     method,
                     url,
                     headers=headers,
                     params=params,
                     json=json_body,
                     data=form_body,
-                ) as response:
-                    try:
-                        payload = await response.json(content_type=None)
-                    except (aiohttp.ContentTypeError, json.JSONDecodeError):
-                        payload = {"raw": await response.text()}
+                ) as response,
+            ):
+                try:
+                    payload = await response.json(content_type=None)
+                except (aiohttp.ContentTypeError, json.JSONDecodeError):
+                    payload = {"raw": await response.text()}
+                status = response.status
         except (aiohttp.ClientError, TimeoutError) as exc:
             raise InstagramApiError("Instagram API request failed") from exc
 
         if not isinstance(payload, dict):
             payload = {"data": payload}
         error = payload.get("error") if isinstance(payload.get("error"), dict) else {}
-        if response.status >= 400 or error:
-            message = str(error.get("message") or "Instagram API request failed")
+        if status >= 400 or error:
             raise InstagramApiError(
-                message,
-                status=response.status,
+                str(error.get("message") or "Instagram API request failed"),
+                status=status,
                 code=error.get("code"),
             )
         return payload
@@ -466,7 +483,9 @@ class InstagramClient:
         ig_user_id: str,
         fields: Iterable[str] = _DEFAULT_SUBSCRIBED_FIELDS,
     ) -> dict[str, Any]:
-        normalized = ",".join(dict.fromkeys(str(item).strip() for item in fields if str(item).strip()))
+        normalized = ",".join(
+            dict.fromkeys(str(item).strip() for item in fields if str(item).strip())
+        )
         if not normalized:
             raise ValueError("At least one Instagram webhook field is required")
         return await self._request(
@@ -479,7 +498,10 @@ class InstagramClient:
         return await self._request("DELETE", f"{ig_user_id}/subscribed_apps")
 
     async def send_text(
-        self, ig_user_id: str, recipient_id: str, text: str
+        self,
+        ig_user_id: str,
+        recipient_id: str,
+        text: str,
     ) -> dict[str, Any]:
         message = str(text or "").strip()
         if not message:
@@ -519,7 +541,10 @@ class InstagramClient:
         )
 
     async def private_reply(
-        self, ig_user_id: str, comment_id: str, text: str
+        self,
+        ig_user_id: str,
+        comment_id: str,
+        text: str,
     ) -> dict[str, Any]:
         message = str(text or "").strip()
         if not message:
@@ -539,11 +564,15 @@ class InstagramClient:
         image_url: str,
         caption: str = "",
     ) -> dict[str, Any]:
-        form_body: dict[str, Any] = {"image_url": _require_public_https_url(image_url)}
+        form_body: dict[str, Any] = {
+            "image_url": _require_public_https_url(image_url)
+        }
         if caption:
             form_body["caption"] = str(caption)
         return await self._request(
-            "POST", f"{ig_user_id}/media", form_body=form_body
+            "POST",
+            f"{ig_user_id}/media",
+            form_body=form_body,
         )
 
     async def create_reel_container(
@@ -562,7 +591,9 @@ class InstagramClient:
         if caption:
             form_body["caption"] = str(caption)
         return await self._request(
-            "POST", f"{ig_user_id}/media", form_body=form_body
+            "POST",
+            f"{ig_user_id}/media",
+            form_body=form_body,
         )
 
     async def get_container_status(self, container_id: str) -> dict[str, Any]:
@@ -573,7 +604,9 @@ class InstagramClient:
         )
 
     async def publish_container(
-        self, ig_user_id: str, creation_id: str
+        self,
+        ig_user_id: str,
+        creation_id: str,
     ) -> dict[str, Any]:
         return await self._request(
             "POST",
@@ -582,7 +615,10 @@ class InstagramClient:
         )
 
     async def get_content_publishing_limit(self, ig_user_id: str) -> dict[str, Any]:
-        return await self._request("GET", f"{ig_user_id}/content_publishing_limit")
+        return await self._request(
+            "GET",
+            f"{ig_user_id}/content_publishing_limit",
+        )
 
 
 def setup_instagram_routes(
@@ -591,7 +627,7 @@ def setup_instagram_routes(
     event_handler: InstagramEventHandler | None = None,
     settings: InstagramSettings | None = None,
 ) -> bool:
-    """Register Instagram webhook routes only after explicit feature enablement."""
+    """Register webhook routes only after explicit Instagram enablement."""
     resolved = settings or InstagramSettings.from_env()
     if not resolved.enabled:
         logger.info("Instagram transport disabled")
@@ -599,7 +635,9 @@ def setup_instagram_routes(
 
     errors = resolved.route_validation_errors()
     if errors:
-        raise RuntimeError("Invalid Instagram webhook configuration: " + "; ".join(errors))
+        raise RuntimeError(
+            "Invalid Instagram webhook configuration: " + "; ".join(errors)
+        )
 
     app["instagram_settings"] = resolved
     if event_handler is not None:
