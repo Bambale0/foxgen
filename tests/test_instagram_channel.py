@@ -83,6 +83,8 @@ def test_comment_keyword_starts_private_reply_acquisition_flow() -> None:
     assert "Direct" in text
     assert "фото" in text.lower()
     assert "бесплат" in text.lower()
+    assert "видео" in text.lower()
+    assert "плат" in text.lower()
 
 
 def test_unrelated_comment_is_not_auto_dm_trigger() -> None:
@@ -183,7 +185,7 @@ def test_unlinked_user_is_sent_to_payment_link_only_after_free_image_is_consumed
     assert link_calls == [7]
     assert len(client.messages) == 1
     reply = client.messages[0][2]
-    assert "бесплатная первая генерация уже использована" in reply.lower()
+    assert "бесплатная первая фото-генерация уже использована" in reply.lower()
     assert "обычным ценам" in reply.lower()
     assert "https://t.me/HappyFoxBot?start=iglink_token123" in reply
 
@@ -232,4 +234,6 @@ def test_first_text_dm_explains_the_two_step_creator_flow() -> None:
     reply = client.messages[0][2]
     assert "фото" in reply.lower()
     assert "бесплат" in reply.lower()
+    assert "видео" in reply.lower()
+    assert "плат" in reply.lower()
     assert "опис" in reply.lower() or "напиши" in reply.lower()
