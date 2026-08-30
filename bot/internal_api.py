@@ -122,41 +122,62 @@ async def handle_internal_stats(request: web.Request) -> web.Response:
     return web.json_response(stats)
 
 
-async def _build_instagram_account_link_url(app: web.Application, identity: Any) -> str:
-    from bot.channel_link import create_channel_link_token
-
+async def _instagram_bot_username(app: web.Application) -> str:
     bot = app.get("bot")
     if bot is None:
         raise RuntimeError("Telegram bot is unavailable for Instagram account linking")
 
     username = str(app.get("instagram_link_bot_username") or "").strip().lstrip("@")
-    if not username:
-        me = await bot.get_me()
-        username = str(getattr(me, "username", "") or "").strip().lstrip("@")
-        if not username:
-            raise RuntimeError("Telegram bot username is unavailable")
-        app["instagram_link_bot_username"] = username
+    if username:
+        return username
 
+    me = await bot.get_me()
+    username = str(getattr(me, "username", "") or "").strip().lstrip("@")
+    if not username:
+        raise RuntimeError("Telegram bot username is unavailable")
+    app["instagram_link_bot_username"] = username
+    return username
+
+
+async def _build_instagram_account_link_url(app: web.Application, identity: Any) -> str:
+    from bot.channel_link import create_channel_link_token
+
+    username = await _instagram_bot_username(app)
     token = await create_channel_link_token(int(identity.id))
     return f"https://t.me/{username}?start=iglink_{token}"
 
 
 def _setup_instagram_channel(app: web.Application) -> None:
     """Register Instagram only when the channel is explicitly enabled."""
-    from bot.instagram_api import InstagramSettings, setup_instagram_routes
+    from bot.instagram_api import InstagramClient, InstagramSettings, setup_instagram_routes
     from bot.instagram_channel import build_instagram_event_handler
+    from bot.instagram_generation import (
+        InstagramGenerationService,
+        install_instagram_generation_worker,
+    )
 
     settings = InstagramSettings.from_env()
     if not settings.enabled:
         logger.info("Instagram channel disabled")
         return
 
+    account_link_factory = partial(_build_instagram_account_link_url, app)
+    client = InstagramClient.from_settings(settings)
+    generation_service = InstagramGenerationService(
+        settings=settings,
+        client=client,
+        account_link_factory=account_link_factory,
+    )
+    install_instagram_generation_worker(app, generation_service)
+
     setup_instagram_routes(
         app,
         settings=settings,
         event_handler=build_instagram_event_handler(
             settings,
-            account_link_factory=partial(_build_instagram_account_link_url, app),
+            client=client,
+            account_link_factory=account_link_factory,
+            generation_service=generation_service,
         ),
     )
 
