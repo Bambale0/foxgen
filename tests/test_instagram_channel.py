@@ -8,7 +8,7 @@ from bot.instagram_channel import InstagramChannelAdapter
 @dataclass
 class _Identity:
     id: int = 1
-    user_id: int | None = None
+    user_id: int | None = 42
 
 
 class _FakeClient:
@@ -29,7 +29,12 @@ async def _identity_resolver(**_kwargs):
     return _Identity()
 
 
-def _adapter(client: _FakeClient) -> InstagramChannelAdapter:
+def _adapter(
+    client: _FakeClient,
+    *,
+    identity_resolver=_identity_resolver,
+    account_link_factory=None,
+) -> InstagramChannelAdapter:
     settings = InstagramSettings(
         enabled=True,
         app_id="app",
@@ -41,7 +46,8 @@ def _adapter(client: _FakeClient) -> InstagramChannelAdapter:
     return InstagramChannelAdapter(
         settings=settings,
         client=client,
-        identity_resolver=_identity_resolver,
+        identity_resolver=identity_resolver,
+        account_link_factory=account_link_factory,
     )
 
 
@@ -83,6 +89,41 @@ def test_unrelated_comment_is_not_auto_dm_trigger() -> None:
 
     assert client.private_replies == []
     assert client.messages == []
+
+
+def test_unlinked_dm_receives_one_time_happyfox_link_before_any_action() -> None:
+    client = _FakeClient()
+
+    async def unlinked_identity(**_kwargs):
+        return _Identity(id=7, user_id=None)
+
+    link_calls: list[int] = []
+
+    async def account_link_factory(identity: _Identity) -> str:
+        link_calls.append(identity.id)
+        return "https://t.me/HappyFoxBot?start=iglink_token123"
+
+    adapter = _adapter(
+        client,
+        identity_resolver=unlinked_identity,
+        account_link_factory=account_link_factory,
+    )
+    event = InstagramEvent(
+        event_id="message:unlinked",
+        kind="message",
+        account_id="ig-business-1",
+        sender_id="igsid-unlinked",
+        text="Хочу сделать аватарку",
+        payload={"message": {"mid": "unlinked", "text": "Хочу сделать аватарку"}},
+    )
+
+    asyncio.run(adapter.handle_event(event))
+
+    assert link_calls == [7]
+    assert len(client.messages) == 1
+    reply = client.messages[0][2]
+    assert "привяз" in reply.lower()
+    assert "https://t.me/HappyFoxBot?start=iglink_token123" in reply
 
 
 def test_incoming_photo_dm_is_acknowledged_and_asks_for_prompt() -> None:
