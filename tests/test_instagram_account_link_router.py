@@ -36,7 +36,12 @@ class _State:
 
 def test_instagram_start_token_parser_is_narrow() -> None:
     assert instagram_account_link.extract_link_token("/start iglink_abc-123_X") == "abc-123_X"
-    assert instagram_account_link.extract_link_token("/start@HappyFoxBot iglink_token") == "token"
+    assert (
+        instagram_account_link.extract_link_token(
+            "/start@HappyFoxBot iglink_token123"
+        )
+        == "token123"
+    )
     assert instagram_account_link.extract_link_token("/start ref_TEST") == ""
     assert instagram_account_link.extract_link_token("/start") == ""
 
@@ -44,7 +49,7 @@ def test_instagram_start_token_parser_is_narrow() -> None:
 def test_successful_telegram_confirmation_links_existing_user_and_grants_free_image(
     monkeypatch,
 ) -> None:
-    message = _Message("/start iglink_token-1")
+    message = _Message("/start iglink_token-123")
     state = _State()
     calls: list[tuple[str, int]] = []
     promotion_calls: list[int] = []
@@ -70,8 +75,16 @@ def test_successful_telegram_confirmation_links_existing_user_and_grants_free_im
             reservation_key=None,
         )
 
-    monkeypatch.setattr(instagram_account_link, "get_or_create_user", fake_get_or_create_user)
-    monkeypatch.setattr(instagram_account_link, "consume_channel_link_token", fake_consume)
+    monkeypatch.setattr(
+        instagram_account_link,
+        "get_or_create_user",
+        fake_get_or_create_user,
+    )
+    monkeypatch.setattr(
+        instagram_account_link,
+        "consume_channel_link_token",
+        fake_consume,
+    )
     monkeypatch.setattr(
         instagram_account_link,
         "ensure_instagram_first_image_promotion",
@@ -81,7 +94,7 @@ def test_successful_telegram_confirmation_links_existing_user_and_grants_free_im
     asyncio.run(instagram_account_link.confirm_instagram_account_link(message, state))
 
     assert state.cleared is True
-    assert calls == [("token-1", 55)]
+    assert calls == [("token-123", 55)]
     assert promotion_calls == [2]
     assert len(message.answers) == 1
     assert "привязан" in message.answers[0].lower()
@@ -91,7 +104,7 @@ def test_successful_telegram_confirmation_links_existing_user_and_grants_free_im
 
 
 def test_consumed_promotion_is_not_advertised_as_free_again(monkeypatch) -> None:
-    message = _Message("/start iglink_token-2")
+    message = _Message("/start iglink_token-456")
     state = _State()
 
     async def fake_get_or_create_user(_telegram_id: int):
@@ -113,8 +126,16 @@ def test_consumed_promotion_is_not_advertised_as_free_again(monkeypatch) -> None
             reservation_key="done",
         )
 
-    monkeypatch.setattr(instagram_account_link, "get_or_create_user", fake_get_or_create_user)
-    monkeypatch.setattr(instagram_account_link, "consume_channel_link_token", fake_consume)
+    monkeypatch.setattr(
+        instagram_account_link,
+        "get_or_create_user",
+        fake_get_or_create_user,
+    )
+    monkeypatch.setattr(
+        instagram_account_link,
+        "consume_channel_link_token",
+        fake_consume,
+    )
     monkeypatch.setattr(
         instagram_account_link,
         "ensure_instagram_first_image_promotion",
