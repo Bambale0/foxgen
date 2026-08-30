@@ -5,9 +5,14 @@ from bot import database
 from bot.channel_identity import ensure_channel_identity, get_channel_identity
 
 
+def _prepare_database(database_path, monkeypatch) -> None:
+    monkeypatch.setattr(database, "DATABASE_PATH", str(database_path))
+    asyncio.run(database.init_db())
+
+
 def test_instagram_identity_exists_without_fake_telegram_user(tmp_path, monkeypatch) -> None:
     database_path = tmp_path / "identity.db"
-    monkeypatch.setattr(database, "DATABASE_PATH", str(database_path))
+    _prepare_database(database_path, monkeypatch)
 
     identity = asyncio.run(
         ensure_channel_identity(
@@ -40,7 +45,7 @@ def test_identity_upsert_refreshes_profile_without_creating_duplicate(
     monkeypatch,
 ) -> None:
     database_path = tmp_path / "identity-upsert.db"
-    monkeypatch.setattr(database, "DATABASE_PATH", str(database_path))
+    _prepare_database(database_path, monkeypatch)
 
     first = asyncio.run(
         ensure_channel_identity(
