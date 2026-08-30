@@ -11,6 +11,7 @@ from bot.instagram_api import InstagramClient, InstagramEvent, InstagramSettings
 logger = logging.getLogger(__name__)
 
 IdentityResolver = Callable[..., Awaitable[ChannelIdentity]]
+AccountLinkFactory = Callable[[ChannelIdentity], Awaitable[str]]
 _DEFAULT_COMMENT_KEYWORDS = {"хочу", "want", "try", "попробовать"}
 
 
@@ -50,11 +51,13 @@ class InstagramChannelAdapter:
         settings: InstagramSettings,
         client: InstagramClient | Any | None = None,
         identity_resolver: IdentityResolver = ensure_channel_identity,
+        account_link_factory: AccountLinkFactory | None = None,
         comment_keywords: set[str] | None = None,
     ) -> None:
         self.settings = settings
         self.client = client or InstagramClient.from_settings(settings)
         self.identity_resolver = identity_resolver
+        self.account_link_factory = account_link_factory
         self.comment_keywords = {
             item.casefold().strip()
             for item in (comment_keywords or _DEFAULT_COMMENT_KEYWORDS)
@@ -95,6 +98,27 @@ class InstagramChannelAdapter:
             comment_id,
             "Привет! 👋 Напиши мне в Direct и пришли фото — помогу сделать AI-версию в HappyFox.",
         )
+
+    async def _send_account_link(
+        self,
+        event: InstagramEvent,
+        identity: ChannelIdentity,
+    ) -> None:
+        link = ""
+        if self.account_link_factory is not None:
+            link = (await self.account_link_factory(identity)).strip()
+        if link:
+            text = (
+                "Чтобы использовать тот же баланс и историю HappyFox, сначала привяжи Instagram к аккаунту.\n\n"
+                f"Открой ссылку: {link}\n\n"
+                "После подтверждения вернись сюда — продолжим в Direct."
+            )
+        else:
+            text = (
+                "Чтобы продолжить в Instagram, сначала привяжи этот профиль к HappyFox. "
+                "Ссылка для привязки сейчас недоступна — попробуй ещё раз чуть позже."
+            )
+        await self.client.send_text(event.account_id, event.sender_id, text)
 
     async def _handle_message(self, event: InstagramEvent) -> None:
         attachments = _message_attachments(event)
@@ -139,11 +163,18 @@ class InstagramChannelAdapter:
             logger.info("Instagram event has no sender; skipped: %s", event.event_id)
             return
 
-        await self._ensure_identity(event)
+        identity = await self._ensure_identity(event)
+        if identity is None:
+            return
 
         if event.kind == "comments":
             await self._handle_comment(event)
             return
+
+        if identity.user_id is None and event.kind in {"message", "postback"}:
+            await self._send_account_link(event, identity)
+            return
+
         if event.kind == "message":
             await self._handle_message(event)
             return
@@ -153,6 +184,11 @@ class InstagramChannelAdapter:
 
 def build_instagram_event_handler(
     settings: InstagramSettings | None = None,
+    *,
+    account_link_factory: AccountLinkFactory | None = None,
 ) -> Callable[[InstagramEvent], Awaitable[None]]:
-    adapter = InstagramChannelAdapter(settings=settings or InstagramSettings.from_env())
+    adapter = InstagramChannelAdapter(
+        settings=settings or InstagramSettings.from_env(),
+        account_link_factory=account_link_factory,
+    )
     return adapter.handle_event
