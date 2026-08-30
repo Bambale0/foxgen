@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
-import os
 import time
 import uuid
 from collections.abc import Awaitable, Callable
@@ -83,6 +82,7 @@ class InstagramGenerationJob:
     status: str
     provider_task_id: str | None
     result_url: str | None
+    delivered_at_epoch: int | None
     attempt_count: int
 
 
@@ -131,6 +131,7 @@ def _sqlite_schema_statements() -> tuple[str, ...]:
             status TEXT NOT NULL,
             provider_task_id TEXT,
             result_url TEXT,
+            delivered_at_epoch INTEGER,
             error TEXT,
             attempt_count INTEGER NOT NULL DEFAULT 0,
             next_attempt_at_epoch INTEGER NOT NULL DEFAULT 0,
@@ -180,6 +181,7 @@ def _postgres_schema_statements() -> tuple[str, ...]:
             status TEXT NOT NULL,
             provider_task_id TEXT,
             result_url TEXT,
+            delivered_at_epoch BIGINT,
             error TEXT,
             attempt_count INTEGER NOT NULL DEFAULT 0,
             next_attempt_at_epoch BIGINT NOT NULL DEFAULT 0,
@@ -255,7 +257,9 @@ def _row_to_job(row: db_backend.Row | None) -> InstagramGenerationJob | None:
         model=str(row["model"]),
         cost=float(row["cost"] or 0),
         billing_mode=str(row["billing_mode"]),
-        telegram_id=(int(row["telegram_id"]) if row["telegram_id"] is not None else None),
+        telegram_id=(
+            int(row["telegram_id"]) if row["telegram_id"] is not None else None
+        ),
         promotion_reservation_key=(
             str(row["promotion_reservation_key"])
             if row["promotion_reservation_key"] is not None
@@ -263,9 +267,18 @@ def _row_to_job(row: db_backend.Row | None) -> InstagramGenerationJob | None:
         ),
         status=str(row["status"]),
         provider_task_id=(
-            str(row["provider_task_id"]) if row["provider_task_id"] is not None else None
+            str(row["provider_task_id"])
+            if row["provider_task_id"] is not None
+            else None
         ),
-        result_url=str(row["result_url"]) if row["result_url"] is not None else None,
+        result_url=(
+            str(row["result_url"]) if row["result_url"] is not None else None
+        ),
+        delivered_at_epoch=(
+            int(row["delivered_at_epoch"])
+            if row["delivered_at_epoch"] is not None
+            else None
+        ),
         attempt_count=int(row["attempt_count"] or 0),
     )
 
@@ -363,10 +376,13 @@ async def _insert_job(job: InstagramGenerationJob, *, status: str) -> None:
                 id, identity_id, account_id, recipient_id, image_url, prompt,
                 model, cost, billing_mode, telegram_id,
                 promotion_reservation_key, status, provider_task_id, result_url,
-                error, attempt_count, next_attempt_at_epoch,
+                delivered_at_epoch, error, attempt_count, next_attempt_at_epoch,
                 lease_expires_at_epoch, created_at_epoch, updated_at_epoch,
                 completed_at_epoch
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, 0, 0, NULL, ?, ?, NULL)
+            ) VALUES (
+                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL,
+                NULL, NULL, 0, 0, NULL, ?, ?, NULL
+            )
             """,
             (
                 job.id,
@@ -459,7 +475,11 @@ async def _claim_next_job() -> InstagramGenerationJob | None:
         return _row_to_job(await cursor.fetchone())
 
 
-async def _mark_job_result(job_id: str, result_url: str, provider_task_id: str | None) -> None:
+async def _mark_job_result(
+    job_id: str,
+    result_url: str,
+    provider_task_id: str | None,
+) -> None:
     async with db_backend.connect() as db:
         await db.execute(
             """
@@ -470,6 +490,21 @@ async def _mark_job_result(job_id: str, result_url: str, provider_task_id: str |
             (result_url, provider_task_id, int(time.time()), job_id),
         )
         await db.commit()
+
+
+async def _mark_job_delivered(job_id: str) -> int:
+    delivered_at = int(time.time())
+    async with db_backend.connect() as db:
+        await db.execute(
+            """
+            UPDATE instagram_generation_jobs
+            SET delivered_at_epoch = ?, updated_at_epoch = ?
+            WHERE id = ? AND delivered_at_epoch IS NULL
+            """,
+            (delivered_at, delivered_at, job_id),
+        )
+        await db.commit()
+    return delivered_at
 
 
 async def _mark_job_succeeded(job_id: str) -> None:
@@ -502,7 +537,7 @@ async def _mark_job_failed(job_id: str, error: str) -> None:
         await db.commit()
 
 
-async def _retry_delivery(job_id: str, error: str) -> None:
+async def _retry_job(job_id: str, error: str) -> None:
     now = int(time.time())
     async with db_backend.connect() as db:
         await db.execute(
@@ -520,7 +555,9 @@ async def _retry_delivery(job_id: str, error: str) -> None:
 async def _persist_inline_result(image_bytes: bytes, mime_type: str | None) -> str:
     host = str(config.WEBHOOK_HOST or "").strip().rstrip("/")
     if not host.startswith("https://"):
-        raise RuntimeError("A public HTTPS WEBHOOK_HOST is required for Instagram media delivery")
+        raise RuntimeError(
+            "A public HTTPS WEBHOOK_HOST is required for Instagram media delivery"
+        )
     ext = {
         "image/jpeg": "jpg",
         "image/webp": "webp",
@@ -553,7 +590,9 @@ async def _default_image_generator(prompt: str, image_url: str) -> str:
         )
     task_id = str(result.get("task_id") or "").strip()
     if not task_id:
-        raise RuntimeError(str(result.get("error") or "Image provider returned no task"))
+        raise RuntimeError(
+            str(result.get("error") or "Image provider returned no task")
+        )
     completed = await nano_banana_2_service.wait_for_completion(task_id)
     if not isinstance(completed, dict):
         raise RuntimeError("Image generation failed or timed out")
@@ -571,9 +610,14 @@ def _attachment_image_url(event: InstagramEvent) -> str:
     if not isinstance(attachments, list):
         return ""
     for item in attachments:
-        if not isinstance(item, dict) or str(item.get("type") or "").lower() != "image":
+        if (
+            not isinstance(item, dict)
+            or str(item.get("type") or "").lower() != "image"
+        ):
             continue
-        payload = item.get("payload") if isinstance(item.get("payload"), dict) else {}
+        payload = (
+            item.get("payload") if isinstance(item.get("payload"), dict) else {}
+        )
         url = str(payload.get("url") or "").strip()
         if url:
             return url
@@ -600,7 +644,12 @@ class InstagramGenerationService:
         self._stop_event = asyncio.Event()
         self._active: set[asyncio.Task] = set()
 
-    async def _send_account_link(self, identity: ChannelIdentity, account_id: str, recipient_id: str) -> None:
+    async def _send_account_link(
+        self,
+        identity: ChannelIdentity,
+        account_id: str,
+        recipient_id: str,
+    ) -> None:
         link = ""
         if self.account_link_factory is not None:
             link = str(await self.account_link_factory(identity)).strip()
@@ -608,8 +657,9 @@ class InstagramGenerationService:
         await self.client.send_text(
             account_id,
             recipient_id,
-            "Первая генерация уже использована ✅ Следующие фото оплачиваются по обычным ценам HappyFox. "
-            "Привяжи Instagram к своему аккаунту, чтобы использовать общий баланс и историю."
+            "Первая генерация уже использована ✅ Следующие фото оплачиваются "
+            "по обычным ценам HappyFox. Привяжи Instagram к своему аккаунту, "
+            "чтобы использовать общий баланс и историю."
             + suffix,
         )
 
@@ -623,7 +673,11 @@ class InstagramGenerationService:
     ) -> None:
         billing = await _linked_billing_user(identity.id)
         if billing is None:
-            await update_instagram_draft(identity.id, prompt=prompt, state="awaiting_link")
+            await update_instagram_draft(
+                identity.id,
+                prompt=prompt,
+                state="awaiting_link",
+            )
             await self._send_account_link(identity, account_id, recipient_id)
             return
 
@@ -638,13 +692,17 @@ class InstagramGenerationService:
         price_rub = round(cost * rub_value, 2)
         balance_line = f"Баланс: {credits:g} 🐾."
         if credits < cost:
-            action = " Баланса не хватает — пополни HappyFox в Telegram, затем вернись и ответь ДА."
+            action = (
+                " Баланса не хватает — пополни HappyFox в Telegram, "
+                "затем вернись и ответь ДА."
+            )
         else:
             action = " Ответь ДА для запуска или НЕТ для отмены."
         await self.client.send_text(
             account_id,
             recipient_id,
-            f"Стоимость следующей генерации: {cost:g} 🐾 ({price_rub:g} ₽). {balance_line}{action}",
+            f"Стоимость следующей генерации: {cost:g} 🐾 "
+            f"({price_rub:g} ₽). {balance_line}{action}",
         )
 
     async def _enqueue_free(
@@ -673,6 +731,7 @@ class InstagramGenerationService:
             status="prepared",
             provider_task_id=None,
             result_url=None,
+            delivered_at_epoch=None,
             attempt_count=0,
         )
         try:
@@ -681,11 +740,16 @@ class InstagramGenerationService:
         except Exception:
             await release_instagram_first_image(job_id)
             raise
-        await update_instagram_draft(identity.id, prompt=prompt, state="generating")
+        await update_instagram_draft(
+            identity.id,
+            prompt=prompt,
+            state="generating",
+        )
         await self.client.send_text(
             account_id,
             recipient_id,
-            "Запускаю первую генерацию бесплатно 🎁 Результат пришлю сюда, как только он будет готов.",
+            "Запускаю первую генерацию бесплатно 🎁 Результат пришлю сюда, "
+            "как только он будет готов.",
         )
         return True
 
@@ -718,6 +782,7 @@ class InstagramGenerationService:
             status="prepared",
             provider_task_id=None,
             result_url=None,
+            delivered_at_epoch=None,
             attempt_count=0,
         )
         await _insert_job(job, status="prepared")
@@ -727,7 +792,8 @@ class InstagramGenerationService:
             await self.client.send_text(
                 account_id,
                 recipient_id,
-                f"Не хватает баланса для запуска. Нужно {cost:g} 🐾. Пополни HappyFox в Telegram и попробуй ещё раз.",
+                f"Не хватает баланса для запуска. Нужно {cost:g} 🐾. "
+                "Пополни HappyFox в Telegram и попробуй ещё раз.",
             )
             return
         try:
@@ -740,12 +806,21 @@ class InstagramGenerationService:
         await self.client.send_text(
             account_id,
             recipient_id,
-            f"Оплата {cost:g} 🐾 принята ✅ Запускаю генерацию и пришлю результат сюда.",
+            f"Оплата {cost:g} 🐾 принята ✅ Запускаю генерацию "
+            "и пришлю результат сюда.",
         )
         if user_id > 0:
-            logger.info("Instagram paid generation queued: job=%s user=%s", job.id, user_id)
+            logger.info(
+                "Instagram paid generation queued: job=%s user=%s",
+                job.id,
+                user_id,
+            )
 
-    async def handle_message(self, identity: ChannelIdentity, event: InstagramEvent) -> bool:
+    async def handle_message(
+        self,
+        identity: ChannelIdentity,
+        event: InstagramEvent,
+    ) -> bool:
         image_url = _attachment_image_url(event)
         if image_url:
             draft = await get_instagram_draft(identity.id)
@@ -753,7 +828,8 @@ class InstagramGenerationService:
                 await self.client.send_text(
                     event.account_id,
                     event.sender_id,
-                    "Я уже делаю предыдущую генерацию. Сначала пришлю результат, потом можно отправить новое фото.",
+                    "Я уже делаю предыдущую генерацию. Сначала пришлю результат, "
+                    "потом можно отправить новое фото.",
                 )
                 return True
             await save_instagram_image_draft(identity.id, image_url)
@@ -766,7 +842,9 @@ class InstagramGenerationService:
             await self.client.send_text(
                 event.account_id,
                 event.sender_id,
-                "Фото получил 📸" + free_line + " Теперь одним сообщением напиши, что хочешь получить.",
+                "Фото получил 📸"
+                + free_line
+                + " Теперь одним сообщением напиши, что хочешь получить.",
             )
             return True
 
@@ -778,7 +856,8 @@ class InstagramGenerationService:
             await self.client.send_text(
                 event.account_id,
                 event.sender_id,
-                "Сначала пришли фото 📸, а следующим сообщением — что хочешь с ним сделать.",
+                "Сначала пришли фото 📸, а следующим сообщением — "
+                "что хочешь с ним сделать.",
             )
             return True
 
@@ -793,7 +872,11 @@ class InstagramGenerationService:
 
         if draft.state == "awaiting_confirmation":
             if normalized in _CANCEL_WORDS:
-                await update_instagram_draft(identity.id, prompt="", state="waiting_prompt")
+                await update_instagram_draft(
+                    identity.id,
+                    prompt="",
+                    state="waiting_prompt",
+                )
                 await self.client.send_text(
                     event.account_id,
                     event.sender_id,
@@ -804,15 +887,25 @@ class InstagramGenerationService:
                 await self.client.send_text(
                     event.account_id,
                     event.sender_id,
-                    "Ответь ДА, чтобы запустить платную генерацию, или НЕТ, чтобы отменить.",
+                    "Ответь ДА, чтобы запустить платную генерацию, "
+                    "или НЕТ, чтобы отменить.",
                 )
                 return True
-            await self._enqueue_paid(identity, draft, event.account_id, event.sender_id)
+            await self._enqueue_paid(
+                identity,
+                draft,
+                event.account_id,
+                event.sender_id,
+            )
             return True
 
         if draft.state == "awaiting_link":
             if identity.user_id is None:
-                await self._send_account_link(identity, event.account_id, event.sender_id)
+                await self._send_account_link(
+                    identity,
+                    event.account_id,
+                    event.sender_id,
+                )
                 return True
             await self._offer_paid_generation(
                 identity,
@@ -838,7 +931,8 @@ class InstagramGenerationService:
                 await self.client.send_text(
                     event.account_id,
                     event.sender_id,
-                    "Бесплатная генерация уже запускается. Результат пришлю сюда автоматически.",
+                    "Бесплатная генерация уже запускается. "
+                    "Результат пришлю сюда автоматически.",
                 )
                 return True
 
@@ -851,7 +945,11 @@ class InstagramGenerationService:
         )
         return True
 
-    async def _finalize_failure(self, job: InstagramGenerationJob, error: Exception) -> None:
+    async def _finalize_failure(
+        self,
+        job: InstagramGenerationJob,
+        error: Exception,
+    ) -> None:
         if job.billing_mode == "free" and job.promotion_reservation_key:
             await release_instagram_first_image(job.promotion_reservation_key)
         elif job.billing_mode == "credits" and job.telegram_id and job.cost > 0:
@@ -868,15 +966,21 @@ class InstagramGenerationService:
             await self.client.send_text(
                 job.account_id,
                 job.recipient_id,
-                "Не получилось завершить генерацию 😕 Попробуй ещё раз с тем же фото." + retry_note,
+                "Не получилось завершить генерацию 😕 Попробуй ещё раз "
+                "с тем же фото."
+                + retry_note,
             )
 
-    async def _deliver_success(self, job: InstagramGenerationJob, result_url: str) -> None:
-        await self.client.send_media(job.account_id, job.recipient_id, "image", result_url)
+    async def _finalize_success(self, job: InstagramGenerationJob) -> None:
         if job.billing_mode == "free" and job.promotion_reservation_key:
-            consumed = await consume_instagram_first_image(job.promotion_reservation_key)
+            consumed = await consume_instagram_first_image(
+                job.promotion_reservation_key
+            )
             if not consumed:
-                raise RuntimeError("Failed to consume Instagram free-image entitlement")
+                raise RuntimeError(
+                    "Failed to consume Instagram free-image entitlement"
+                )
+
         await _mark_job_succeeded(job.id)
         with contextlib.suppress(Exception):
             await update_instagram_draft(
@@ -885,6 +989,7 @@ class InstagramGenerationService:
                 state="idle",
                 clear_image=True,
             )
+
         if job.billing_mode == "credits":
             billing = await _linked_billing_user(job.identity_id)
             if billing is not None:
@@ -896,18 +1001,23 @@ class InstagramGenerationService:
                         job.prompt,
                         job.cost,
                     )
+            with contextlib.suppress(Exception):
+                await self.client.send_text(
+                    job.account_id,
+                    job.recipient_id,
+                    "Готово ✨ Можешь прислать следующее фото — "
+                    "цена будет показана до запуска.",
+                )
+            return
+
+        with contextlib.suppress(Exception):
             await self.client.send_text(
                 job.account_id,
                 job.recipient_id,
-                "Готово ✨ Можешь прислать следующее фото — цена будет показана до запуска.",
+                "Готово 🎁 Это была бесплатная первая генерация. "
+                "Следующие фото — по обычной цене HappyFox; "
+                "перед запуском всегда покажу стоимость.",
             )
-            return
-
-        await self.client.send_text(
-            job.account_id,
-            job.recipient_id,
-            "Готово 🎁 Это была бесплатная первая генерация. Следующие фото — по обычной цене HappyFox; перед запуском всегда покажу стоимость.",
-        )
 
     async def _process_job(self, job: InstagramGenerationJob) -> None:
         result_url = str(job.result_url or "").strip()
@@ -918,15 +1028,40 @@ class InstagramGenerationService:
                     raise RuntimeError("Image generator returned an empty URL")
                 await _mark_job_result(job.id, result_url, job.provider_task_id)
             except Exception as error:
-                logger.exception("Instagram image generation failed: job=%s", job.id)
+                logger.exception(
+                    "Instagram image generation failed: job=%s",
+                    job.id,
+                )
                 await self._finalize_failure(job, error)
                 return
 
+        delivered_at_epoch = job.delivered_at_epoch
+        if delivered_at_epoch is None:
+            try:
+                await self.client.send_media(
+                    job.account_id,
+                    job.recipient_id,
+                    "image",
+                    result_url,
+                )
+                delivered_at_epoch = await _mark_job_delivered(job.id)
+            except Exception as error:
+                logger.exception(
+                    "Instagram result delivery failed: job=%s",
+                    job.id,
+                )
+                await _retry_job(job.id, str(error))
+                return
+
         try:
-            await self._deliver_success(job, result_url)
+            await self._finalize_success(job)
         except Exception as error:
-            logger.exception("Instagram result delivery failed: job=%s", job.id)
-            await _retry_delivery(job.id, str(error))
+            logger.exception(
+                "Instagram result finalization failed after delivery: job=%s delivered_at=%s",
+                job.id,
+                delivered_at_epoch,
+            )
+            await _retry_job(job.id, str(error))
 
     async def run_worker(self) -> None:
         await ensure_instagram_generation_schema()
