@@ -105,6 +105,11 @@ async def _create_postgres_schema(db: db_backend.Connection) -> None:
     await raw_connection.commit()
 
 
+def _use_mapping_rows(db: db_backend.Connection) -> None:
+    """Keep SQLite and PostgreSQL identity reads on the same mapping-row contract."""
+    db.row_factory = db_backend.Row
+
+
 async def ensure_channel_identity_schema() -> None:
     """Create the additive identity bridge without changing legacy Telegram users."""
     key = _schema_key()
@@ -149,6 +154,7 @@ async def get_channel_identity(
     account = _required(account_id, "account_id")
     external_id = _required(external_user_id, "external_user_id")
     async with db_backend.connect() as db:
+        _use_mapping_rows(db)
         cursor = await db.execute(
             """
             SELECT id, user_id, channel, account_id, external_user_id, username, display_name
@@ -177,6 +183,7 @@ async def ensure_channel_identity(
     normalized_display_name = str(display_name or "").strip()
 
     async with db_backend.connect() as db:
+        _use_mapping_rows(db)
         await db.execute(
             """
             INSERT INTO channel_identities (
@@ -230,6 +237,7 @@ async def link_channel_identity_to_user(
         raise ValueError("identity_id and user_id must be positive")
 
     async with db_backend.connect() as db:
+        _use_mapping_rows(db)
         user_cursor = await db.execute("SELECT id FROM users WHERE id = ?", (user_id,))
         if await user_cursor.fetchone() is None:
             raise ValueError("HappyFox user does not exist")
