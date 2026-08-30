@@ -4,7 +4,8 @@ import asyncio
 from dataclasses import dataclass
 from typing import Any
 
-from bot import database, db as db_backend
+from bot import database
+from bot import db as db_backend
 
 _SCHEMA_LOCK: asyncio.Lock | None = None
 _SCHEMA_READY: set[str] = set()
@@ -60,8 +61,10 @@ def _sqlite_schema_statements() -> tuple[str, ...]:
         )
         """,
         "CREATE INDEX IF NOT EXISTS idx_channel_identities_user ON channel_identities(user_id)",
-        "CREATE INDEX IF NOT EXISTS idx_channel_identities_lookup "
-        "ON channel_identities(channel, account_id, external_user_id)",
+        (
+            "CREATE INDEX IF NOT EXISTS idx_channel_identities_lookup "
+            "ON channel_identities(channel, account_id, external_user_id)"
+        ),
     )
 
 
@@ -84,8 +87,10 @@ def _postgres_schema_statements() -> tuple[str, ...]:
         )
         """,
         "CREATE INDEX IF NOT EXISTS idx_channel_identities_user ON channel_identities(user_id)",
-        "CREATE INDEX IF NOT EXISTS idx_channel_identities_lookup "
-        "ON channel_identities(channel, account_id, external_user_id)",
+        (
+            "CREATE INDEX IF NOT EXISTS idx_channel_identities_lookup "
+            "ON channel_identities(channel, account_id, external_user_id)"
+        ),
     )
 
 
