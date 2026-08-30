@@ -2,6 +2,8 @@ import asyncio
 from dataclasses import dataclass
 from pathlib import Path
 
+import pytest
+
 from bot.channel_identity import ChannelIdentity
 from bot.handlers import instagram_account_link
 
@@ -34,6 +36,15 @@ class _State:
         self.cleared = True
 
 
+def _callback_values(keyboard) -> list[str]:
+    return [
+        button.callback_data
+        for row in keyboard.inline_keyboard
+        for button in row
+        if button.callback_data
+    ]
+
+
 def test_instagram_start_token_parser_is_narrow() -> None:
     assert instagram_account_link.extract_link_token("/start iglink_abc-123_X") == "abc-123_X"
     assert (
@@ -46,7 +57,7 @@ def test_instagram_start_token_parser_is_narrow() -> None:
     assert instagram_account_link.extract_link_token("/start") == ""
 
 
-def test_successful_instagram_link_opens_normal_telegram_topup(monkeypatch) -> None:
+def test_successful_instagram_link_offers_only_yookassa_and_lava_top(monkeypatch) -> None:
     message = _Message("/start iglink_token-123")
     state = _State()
     calls: list[tuple[str, int]] = []
@@ -82,17 +93,58 @@ def test_successful_instagram_link_opens_normal_telegram_topup(monkeypatch) -> N
     assert len(message.answers) == 1
     text, kwargs = message.answers[0]
     assert "instagram привязан" in text.lower()
-    assert "пополн" in text.lower()
+    assert "юkassa" in text.lower()
+    assert "lava top" in text.lower()
     assert "продолжить" in text.lower()
     keyboard = kwargs.get("reply_markup")
     assert keyboard is not None
-    callback_values = {
-        button.callback_data
-        for row in keyboard.inline_keyboard
-        for button in row
-        if button.callback_data
-    }
-    assert "menu_topup" in callback_values
+    assert _callback_values(keyboard) == [
+        "instagram_topup_yookassa",
+        "instagram_topup_lava",
+    ]
+
+
+def test_instagram_provider_package_callbacks_are_provider_specific() -> None:
+    packages = [
+        {"id": "mini", "name": "Мини", "credits": 10, "price_rub": 100},
+        {"id": "max", "name": "Макси", "credits": 60, "price_rub": 500},
+    ]
+
+    yookassa = instagram_account_link.get_instagram_provider_packages_keyboard(
+        "yookassa",
+        packages,
+    )
+    lava = instagram_account_link.get_instagram_provider_packages_keyboard(
+        "lava",
+        packages,
+    )
+
+    assert _callback_values(yookassa) == [
+        "buy_yookassa_mini",
+        "buy_yookassa_max",
+        "instagram_topup_providers",
+    ]
+    assert _callback_values(lava) == [
+        "instagram_topup_lava_package_mini",
+        "instagram_topup_lava_package_max",
+        "instagram_topup_providers",
+    ]
+
+    with pytest.raises(ValueError, match="Unsupported Instagram payment provider"):
+        instagram_account_link.get_instagram_provider_packages_keyboard(
+            "telegram_stars",
+            packages,
+        )
+
+
+def test_instagram_lava_top_package_keeps_card_and_sbp_options() -> None:
+    keyboard = instagram_account_link.get_instagram_lava_method_keyboard("max")
+
+    assert _callback_values(keyboard) == [
+        "buy_lava_card_max",
+        "buy_lava_sbp_max",
+        "instagram_topup_lava",
+    ]
 
 
 def test_account_link_router_is_before_legacy_start_handler() -> None:
