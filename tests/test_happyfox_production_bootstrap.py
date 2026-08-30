@@ -173,6 +173,22 @@ def test_happyfox_deploy_stops_only_legacy_app_tier_and_has_public_rollback() ->
     assert "CUTOVER_RESTART_ON_FAILURE" in generic
 
 
+def test_happyfox_deploy_skips_shared_nginx_reload_when_live_route_is_healthy() -> None:
+    wrapper = Path("scripts/deploy_happyfox.sh").read_text(encoding="utf-8")
+
+    deploy_index = wrapper.index("bash scripts/deploy_backend_docker.sh deploy")
+    route_probe_index = wrapper.index("if public_health_ok 2; then")
+    nginx_validation_index = wrapper.index(
+        'docker exec "$HAPPYFOX_REVERSE_PROXY_CONTAINER" nginx -t',
+        route_probe_index,
+    )
+    final_health_index = wrapper.index("if ! public_health_ok 8; then")
+
+    assert deploy_index < route_probe_index < nginx_validation_index < final_health_index
+    assert "Existing reverse proxy already routes the new HappyFox backend; reload skipped" in wrapper
+    assert "Public route is not healthy yet; validating reverse proxy before reload" in wrapper
+
+
 def test_production_workflow_prepares_runtime_before_strict_validation() -> None:
     workflow = Path(".github/workflows/deploy-production.yml").read_text(encoding="utf-8")
 
