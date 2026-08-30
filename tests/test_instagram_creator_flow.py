@@ -1,7 +1,6 @@
 import asyncio
 
-from bot import database
-from bot import instagram_video_generation
+from bot import database, instagram_video_generation
 from bot.channel_identity import ensure_channel_identity
 from bot.instagram_api import InstagramEvent, InstagramSettings
 from bot.instagram_creation_mode import get_instagram_creation_kind
