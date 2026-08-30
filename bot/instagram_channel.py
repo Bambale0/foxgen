@@ -106,7 +106,7 @@ class InstagramChannelAdapter:
         await self.client.private_reply(
             event.account_id,
             comment_id,
-            "Привет! 👋 Напиши мне в Direct и пришли фото — первая AI-генерация будет бесплатно 🎁",
+            "Привет! 👋 Напиши мне в Direct — сначала выберем, что создать: 📸 фото или 🎬 видео. Первая генерация бесплатно 🎁",
         )
 
     async def _send_account_link(
@@ -120,14 +120,14 @@ class InstagramChannelAdapter:
         if link:
             text = (
                 "Бесплатная первая генерация уже использована ✅\n\n"
-                "Чтобы делать следующие фото и оплачивать их по обычным ценам HappyFox, привяжи Instagram к своему аккаунту.\n\n"
-                f"Открой ссылку: {link}\n\n"
-                "После подтверждения вернись сюда — продолжим в Direct."
+                "Чтобы продолжить, привяжи Instagram к HappyFox и пополни общий баланс тем же способом, что в Telegram.\n\n"
+                f"Пополнить и продолжить: {link}\n\n"
+                "После оплаты вернись сюда и напиши «Продолжить»."
             )
         else:
             text = (
                 "Бесплатная первая генерация уже использована ✅\n\n"
-                "Для следующих генераций нужна привязка к HappyFox, но ссылка сейчас недоступна. "
+                "Для следующих генераций нужен общий баланс HappyFox, но ссылка сейчас недоступна. "
                 "Попробуй ещё раз чуть позже."
             )
         await self.client.send_text(event.account_id, event.sender_id, text)
@@ -142,22 +142,23 @@ class InstagramChannelAdapter:
             await self.client.send_text(
                 event.account_id,
                 event.sender_id,
-                "Фото получил 📸" + free_line + " Теперь напиши, что хочешь с ним сделать — например: «сделай стильную аватарку».",
+                "Фото получил 📸" + free_line + " Теперь напиши, что хочешь получить.",
             )
             return
         if "video" in attachment_types:
+            free_line = " Первая генерация будет бесплатно 🎁" if first_image_free else ""
             await self.client.send_text(
                 event.account_id,
                 event.sender_id,
-                "Видео получил 🎬 Напиши, какой результат хочешь получить, и я подберу подходящий сценарий.",
+                "Видео получил 🎬" + free_line + " Теперь напиши, что должно происходить в результате.",
             )
             return
 
-        free_line = " Первая генерация фото — бесплатно 🎁" if first_image_free else ""
+        free_line = " Первая генерация — бесплатно 🎁" if first_image_free else ""
         await self.client.send_text(
             event.account_id,
             event.sender_id,
-            "Привет! Здесь можно делать AI-фото и видео прямо из Direct." + free_line + " Пришли фото и одним сообщением напиши, что хочешь получить.",
+            "Что хочешь создать: 📸 Фото или 🎬 Видео?" + free_line,
         )
 
     async def _handle_postback(self, event: InstagramEvent, *, first_image_free: bool) -> None:
@@ -165,12 +166,19 @@ class InstagramChannelAdapter:
         payload = (
             str(postback.get("payload") or "") if isinstance(postback, dict) else ""
         )
-        if payload == "CREATE_IMAGE":
+        if payload in {"CREATE_IMAGE", "CREATE_PHOTO"}:
             free_line = " Первая генерация будет бесплатно 🎁" if first_image_free else ""
             await self.client.send_text(
                 event.account_id,
                 event.sender_id,
-                "Пришли фото и коротко опиши результат." + free_line,
+                "📸 Фото выбрано. Пришли исходное фото и коротко опиши результат." + free_line,
+            )
+        elif payload in {"CREATE_VIDEO", "CREATE_REEL"}:
+            free_line = " Первая генерация будет бесплатно 🎁" if first_image_free else ""
+            await self.client.send_text(
+                event.account_id,
+                event.sender_id,
+                "🎬 Видео выбрано. Пришли фото или видео-референс и опиши движение." + free_line,
             )
 
     async def handle_event(self, event: InstagramEvent) -> None:
