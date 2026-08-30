@@ -62,10 +62,14 @@ def _sqlite_schema_statements() -> tuple[str, ...]:
             FOREIGN KEY (identity_id) REFERENCES channel_identities (id) ON DELETE CASCADE
         )
         """,
-        "CREATE INDEX IF NOT EXISTS idx_channel_link_tokens_identity "
-        "ON channel_link_tokens(identity_id)",
-        "CREATE INDEX IF NOT EXISTS idx_channel_link_tokens_expiry "
-        "ON channel_link_tokens(expires_at_epoch)",
+        (
+            "CREATE INDEX IF NOT EXISTS idx_channel_link_tokens_identity "
+            "ON channel_link_tokens(identity_id)"
+        ),
+        (
+            "CREATE INDEX IF NOT EXISTS idx_channel_link_tokens_expiry "
+            "ON channel_link_tokens(expires_at_epoch)"
+        ),
     )
 
 
@@ -82,10 +86,14 @@ def _postgres_schema_statements() -> tuple[str, ...]:
             FOREIGN KEY (identity_id) REFERENCES channel_identities (id) ON DELETE CASCADE
         )
         """,
-        "CREATE INDEX IF NOT EXISTS idx_channel_link_tokens_identity "
-        "ON channel_link_tokens(identity_id)",
-        "CREATE INDEX IF NOT EXISTS idx_channel_link_tokens_expiry "
-        "ON channel_link_tokens(expires_at_epoch)",
+        (
+            "CREATE INDEX IF NOT EXISTS idx_channel_link_tokens_identity "
+            "ON channel_link_tokens(identity_id)"
+        ),
+        (
+            "CREATE INDEX IF NOT EXISTS idx_channel_link_tokens_expiry "
+            "ON channel_link_tokens(expires_at_epoch)"
+        ),
     )
 
 
