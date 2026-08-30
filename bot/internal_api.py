@@ -15,6 +15,7 @@ import hashlib
 import hmac
 import logging
 import time
+from functools import partial
 from typing import Any
 
 from aiohttp import web
@@ -121,6 +122,25 @@ async def handle_internal_stats(request: web.Request) -> web.Response:
     return web.json_response(stats)
 
 
+async def _build_instagram_account_link_url(app: web.Application, identity: Any) -> str:
+    from bot.channel_link import create_channel_link_token
+
+    bot = app.get("bot")
+    if bot is None:
+        raise RuntimeError("Telegram bot is unavailable for Instagram account linking")
+
+    username = str(app.get("instagram_link_bot_username") or "").strip().lstrip("@")
+    if not username:
+        me = await bot.get_me()
+        username = str(getattr(me, "username", "") or "").strip().lstrip("@")
+        if not username:
+            raise RuntimeError("Telegram bot username is unavailable")
+        app["instagram_link_bot_username"] = username
+
+    token = await create_channel_link_token(int(identity.id))
+    return f"https://t.me/{username}?start=iglink_{token}"
+
+
 def _setup_instagram_channel(app: web.Application) -> None:
     """Register Instagram only when the channel is explicitly enabled."""
     from bot.instagram_api import InstagramSettings, setup_instagram_routes
@@ -134,7 +154,10 @@ def _setup_instagram_channel(app: web.Application) -> None:
     setup_instagram_routes(
         app,
         settings=settings,
-        event_handler=build_instagram_event_handler(settings),
+        event_handler=build_instagram_event_handler(
+            settings,
+            account_link_factory=partial(_build_instagram_account_link_url, app),
+        ),
     )
 
 
