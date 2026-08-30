@@ -91,10 +91,10 @@ PRODUCT_ID=happyfox
 NEXT_PUBLIC_PRODUCT_ID=happyfox
 ```
 
-Внутренняя единица расчёта — **кредит**. Текущий production pricing contract сохраняет курс:
+Пользователю баланс и стоимость показываются в **🐾 лапках**. Внутренний compatibility-ledger импортированного production-ядра по-прежнему хранит расчётную единицу как кредит; текущий pricing contract сохраняет курс:
 
 ```text
-1 кредит = 10 ₽
+1 внутренний кредит = 10 ₽
 ```
 
 Числовая модель ценообразования импортированного production-ядра сохраняется; HappyFox меняет product presentation и собственные платежные/административные настройки, а не алгоритм списаний.
@@ -171,6 +171,8 @@ Validator запрещает известные Tanya/NEUROMIX домены, о�
 Особенно важно: HappyFox **не использует импортированные Lava offer IDs** из старого product config. При `PAYMENT_PROVIDER=lava` все HappyFox `LAVA_OFFER_ID_*` должны быть заданы через environment.
 
 Полный runbook: [`docs/happyfox-production-cutover.md`](docs/happyfox-production-cutover.md).
+
+Фактическое production-состояние и acceptance evidence для передачи проекта: [`docs/happyfox-handoff.md`](docs/happyfox-handoff.md).
 
 ## Deploy
 
