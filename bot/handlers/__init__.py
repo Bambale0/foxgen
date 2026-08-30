@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Handlers for the Telegram bot.
 """
@@ -57,6 +56,7 @@ from .admin_user_ban import router as admin_user_ban_router
 from .batch_generation import router as batch_generation_router
 from .freekassa_payments import router as freekassa_payments_router
 from .image_analyzer import router as legacy_image_analyzer_router
+from .instagram_account_link import router as instagram_account_link_router
 from .notification_campaigns import router as notification_campaigns_router
 from .partner_approval import admin_router as partner_approval_admin_router
 from .partner_approval import user_router as partner_approval_user_router
@@ -179,6 +179,7 @@ common_router.include_router(feed_model_filter_compat_router)
 common_router.include_router(notification_campaigns_router)
 common_router.include_router(repeat_result_compat_router)
 common_router.include_router(support_router)
+common_router.include_router(instagram_account_link_router)
 common_router.include_router(legacy_common_router)
 
 __all__ = [
@@ -189,6 +190,7 @@ __all__ = [
     "freekassa_payments_router",
     "generation_router",
     "image_analyzer_router",
+    "instagram_account_link_router",
     "lava_checkout_router",
     "notification_campaigns_router",
     "payments_router",
