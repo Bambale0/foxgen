@@ -2,7 +2,6 @@ import asyncio
 import hashlib
 import hmac
 import json
-from types import SimpleNamespace
 
 import pytest
 
@@ -95,6 +94,29 @@ def test_normalize_instagram_message_comment_and_postback_events() -> None:
     assert events[2].event_id == "comments:comment-1"
     assert events[2].sender_id == "igsid-2"
     assert events[2].media_id == "media-1"
+
+
+def test_normalize_marks_explicit_meta_echo_as_echo() -> None:
+    payload = {
+        "object": "instagram",
+        "entry": [
+            {
+                "id": "ig-business-1",
+                "messaging": [
+                    {
+                        "sender": {"id": "some-id"},
+                        "recipient": {"id": "igsid-1"},
+                        "message": {"mid": "mid-echo", "is_echo": True},
+                    }
+                ],
+            }
+        ],
+    }
+
+    events = normalize_instagram_events(payload)
+
+    assert len(events) == 1
+    assert events[0].is_echo is True
 
 
 def test_webhook_verification_returns_challenge_only_for_matching_token() -> None:
@@ -210,10 +232,29 @@ def test_instagram_client_builds_official_login_api_requests(monkeypatch) -> Non
 
     asyncio.run(client.subscribe_webhooks("ig-1", ["messages", "comments"]))
     asyncio.run(client.send_text("ig-1", "igsid-1", "Привет"))
-    asyncio.run(client.send_media("ig-1", "igsid-1", "image", "https://example.com/a.jpg"))
+    asyncio.run(
+        client.send_media(
+            "ig-1",
+            "igsid-1",
+            "image",
+            "https://example.com/a.jpg",
+        )
+    )
     asyncio.run(client.private_reply("ig-1", "comment-1", "Пришли фото в Direct"))
-    asyncio.run(client.create_image_container("ig-1", "https://example.com/a.jpg", "caption"))
-    asyncio.run(client.create_reel_container("ig-1", "https://example.com/a.mp4", "caption"))
+    asyncio.run(
+        client.create_image_container(
+            "ig-1",
+            "https://example.com/a.jpg",
+            "caption",
+        )
+    )
+    asyncio.run(
+        client.create_reel_container(
+            "ig-1",
+            "https://example.com/a.mp4",
+            "caption",
+        )
+    )
     asyncio.run(client.get_container_status("container-1"))
     asyncio.run(client.publish_container("ig-1", "container-1"))
 
@@ -247,6 +288,13 @@ def test_instagram_client_rejects_non_public_media_urls() -> None:
     client = InstagramClient(access_token="token")
 
     with pytest.raises(ValueError, match="public https"):
-        asyncio.run(client.send_media("ig-1", "igsid-1", "image", "file:///tmp/a.jpg"))
+        asyncio.run(
+            client.send_media(
+                "ig-1",
+                "igsid-1",
+                "image",
+                "file:///tmp/a.jpg",
+            )
+        )
     with pytest.raises(ValueError, match="public https"):
         asyncio.run(client.create_reel_container("ig-1", "http://localhost/a.mp4"))
