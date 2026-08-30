@@ -2,6 +2,7 @@ import asyncio
 
 from bot import database
 from bot import db as db_backend
+from bot import instagram_generation
 from bot.channel_identity import ensure_channel_identity, link_channel_identity_to_user
 from bot.channel_promotions import (
     consume_instagram_first_image,
@@ -64,7 +65,9 @@ def _image_event(sender_id: str = "igsid-1") -> InstagramEvent:
                 "attachments": [
                     {
                         "type": "image",
-                        "payload": {"url": "https://cdn.example/reference.jpg"},
+                        "payload": {
+                            "url": "https://cdn.example/reference.jpg"
+                        },
                     }
                 ],
             }
@@ -72,7 +75,12 @@ def _image_event(sender_id: str = "igsid-1") -> InstagramEvent:
     )
 
 
-def _text_event(text: str, sender_id: str = "igsid-1", *, event_id: str = "text-1") -> InstagramEvent:
+def _text_event(
+    text: str,
+    sender_id: str = "igsid-1",
+    *,
+    event_id: str = "text-1",
+) -> InstagramEvent:
     return InstagramEvent(
         event_id=f"message:{event_id}",
         kind="message",
@@ -83,7 +91,12 @@ def _text_event(text: str, sender_id: str = "igsid-1", *, event_id: str = "text-
     )
 
 
-def _prepare_identity(tmp_path, monkeypatch, *, external_user_id: str = "igsid-1"):
+def _prepare_identity(
+    tmp_path,
+    monkeypatch,
+    *,
+    external_user_id: str = "igsid-1",
+):
     database_path = tmp_path / f"{external_user_id}.db"
     monkeypatch.setattr(database, "DATABASE_PATH", str(database_path))
     asyncio.run(database.init_db())
@@ -96,7 +109,23 @@ def _prepare_identity(tmp_path, monkeypatch, *, external_user_id: str = "igsid-1
     )
 
 
-def test_first_instagram_image_runs_free_without_telegram_link(tmp_path, monkeypatch) -> None:
+async def _make_job_retry_ready(job_id: str) -> None:
+    async with db_backend.connect() as db:
+        await db.execute(
+            """
+            UPDATE instagram_generation_jobs
+            SET next_attempt_at_epoch = 0
+            WHERE id = ?
+            """,
+            (job_id,),
+        )
+        await db.commit()
+
+
+def test_first_instagram_image_runs_free_without_telegram_link(
+    tmp_path,
+    monkeypatch,
+) -> None:
     identity = _prepare_identity(tmp_path, monkeypatch)
     client = _FakeClient()
     generator_calls: list[tuple[str, str]] = []
@@ -151,8 +180,15 @@ def test_first_instagram_image_runs_free_without_telegram_link(tmp_path, monkeyp
     assert final_draft.image_url == ""
 
 
-def test_failed_free_generation_keeps_the_gift_for_retry(tmp_path, monkeypatch) -> None:
-    identity = _prepare_identity(tmp_path, monkeypatch, external_user_id="igsid-fail")
+def test_failed_free_generation_keeps_the_gift_for_retry(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    identity = _prepare_identity(
+        tmp_path,
+        monkeypatch,
+        external_user_id="igsid-fail",
+    )
     client = _FakeClient()
 
     async def failing_generator(_prompt: str, _image_url: str) -> str:
@@ -168,7 +204,11 @@ def test_failed_free_generation_keeps_the_gift_for_retry(tmp_path, monkeypatch) 
     asyncio.run(
         service.handle_message(
             identity,
-            _text_event("Сделай портрет", "igsid-fail", event_id="fail-text"),
+            _text_event(
+                "Сделай портрет",
+                "igsid-fail",
+                event_id="fail-text",
+            ),
         )
     )
     job = asyncio.run(_claim_next_job())
@@ -177,19 +217,31 @@ def test_failed_free_generation_keeps_the_gift_for_retry(tmp_path, monkeypatch) 
 
     promotion = asyncio.run(ensure_instagram_first_image_promotion(identity.id))
     assert promotion.status == "available"
-    assert any("Бесплатная попытка сохранена" in message[2] for message in client.messages)
+    assert any(
+        "Бесплатная попытка сохранена" in message[2]
+        for message in client.messages
+    )
 
 
 def test_second_instagram_image_requires_confirmation_and_charges_normal_price(
     tmp_path,
     monkeypatch,
 ) -> None:
-    identity = _prepare_identity(tmp_path, monkeypatch, external_user_id="igsid-paid")
+    identity = _prepare_identity(
+        tmp_path,
+        monkeypatch,
+        external_user_id="igsid-paid",
+    )
     user = asyncio.run(database.get_or_create_user(700020))
     identity = asyncio.run(
         link_channel_identity_to_user(identity_id=identity.id, user_id=user.id)
     )
-    assert asyncio.run(reserve_instagram_first_image(identity.id, "already-free")) is True
+    assert (
+        asyncio.run(
+            reserve_instagram_first_image(identity.id, "already-free")
+        )
+        is True
+    )
     assert asyncio.run(consume_instagram_first_image("already-free")) is True
 
     client = _FakeClient()
@@ -208,13 +260,20 @@ def test_second_instagram_image_requires_confirmation_and_charges_normal_price(
     asyncio.run(
         service.handle_message(
             identity,
-            _text_event("Сделай fashion-портрет", "igsid-paid", event_id="paid-prompt"),
+            _text_event(
+                "Сделай fashion-портрет",
+                "igsid-paid",
+                event_id="paid-prompt",
+            ),
         )
     )
     draft = asyncio.run(get_instagram_draft(identity.id))
     assert draft is not None
     assert draft.state == "awaiting_confirmation"
-    assert any("2.5" in message[2] and "ДА" in message[2] for message in client.messages)
+    assert any(
+        "2.5" in message[2] and "ДА" in message[2]
+        for message in client.messages
+    )
 
     asyncio.run(
         service.handle_message(
@@ -237,12 +296,19 @@ def test_second_instagram_image_requires_confirmation_and_charges_normal_price(
 
 
 def test_paid_generation_failure_refunds_credits(tmp_path, monkeypatch) -> None:
-    identity = _prepare_identity(tmp_path, monkeypatch, external_user_id="igsid-refund")
+    identity = _prepare_identity(
+        tmp_path,
+        monkeypatch,
+        external_user_id="igsid-refund",
+    )
     user = asyncio.run(database.get_or_create_user(700030))
     identity = asyncio.run(
         link_channel_identity_to_user(identity_id=identity.id, user_id=user.id)
     )
-    assert asyncio.run(reserve_instagram_first_image(identity.id, "used-free")) is True
+    assert (
+        asyncio.run(reserve_instagram_first_image(identity.id, "used-free"))
+        is True
+    )
     assert asyncio.run(consume_instagram_first_image("used-free")) is True
 
     client = _FakeClient()
@@ -260,7 +326,11 @@ def test_paid_generation_failure_refunds_credits(tmp_path, monkeypatch) -> None:
     asyncio.run(
         service.handle_message(
             identity,
-            _text_event("Убери фон", "igsid-refund", event_id="refund-prompt"),
+            _text_event(
+                "Убери фон",
+                "igsid-refund",
+                event_id="refund-prompt",
+            ),
         )
     )
     asyncio.run(
@@ -278,8 +348,15 @@ def test_paid_generation_failure_refunds_credits(tmp_path, monkeypatch) -> None:
     assert any("возвращены" in message[2].lower() for message in client.messages)
 
 
-def test_delivery_retry_does_not_generate_or_charge_twice(tmp_path, monkeypatch) -> None:
-    identity = _prepare_identity(tmp_path, monkeypatch, external_user_id="igsid-delivery")
+def test_delivery_retry_does_not_generate_or_charge_twice(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    identity = _prepare_identity(
+        tmp_path,
+        monkeypatch,
+        external_user_id="igsid-delivery",
+    )
     client = _FakeClient(fail_first_media=True)
     calls = 0
 
@@ -297,7 +374,11 @@ def test_delivery_retry_does_not_generate_or_charge_twice(tmp_path, monkeypatch)
     asyncio.run(
         service.handle_message(
             identity,
-            _text_event("Сделай арт", "igsid-delivery", event_id="delivery-prompt"),
+            _text_event(
+                "Сделай арт",
+                "igsid-delivery",
+                event_id="delivery-prompt",
+            ),
         )
     )
     first_job = asyncio.run(_claim_next_job())
@@ -305,21 +386,80 @@ def test_delivery_retry_does_not_generate_or_charge_twice(tmp_path, monkeypatch)
     asyncio.run(service._process_job(first_job))
     assert calls == 1
 
-    async def make_retry_ready() -> None:
-        async with db_backend.connect() as db:
-            await db.execute(
-                "UPDATE instagram_generation_jobs SET next_attempt_at_epoch = 0 WHERE id = ?",
-                (first_job.id,),
-            )
-            await db.commit()
-
-    asyncio.run(make_retry_ready())
+    asyncio.run(_make_job_retry_ready(first_job.id))
     retry_job = asyncio.run(_claim_next_job())
     assert retry_job is not None
     assert retry_job.result_url == "https://cdn.example/result-retry.jpg"
+    assert retry_job.delivered_at_epoch is None
     asyncio.run(service._process_job(retry_job))
 
     assert calls == 1
     assert client.media_attempts == 2
+    promotion = asyncio.run(ensure_instagram_first_image_promotion(identity.id))
+    assert promotion.status == "consumed"
+
+
+def test_finalization_retry_does_not_resend_already_delivered_image(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    identity = _prepare_identity(
+        tmp_path,
+        monkeypatch,
+        external_user_id="igsid-finalize",
+    )
+    client = _FakeClient()
+    calls = 0
+    consume_calls = 0
+    real_consume = instagram_generation.consume_instagram_first_image
+
+    async def generator(_prompt: str, _image_url: str) -> str:
+        nonlocal calls
+        calls += 1
+        return "https://cdn.example/result-finalize.jpg"
+
+    async def flaky_consume(reservation_key: str) -> bool:
+        nonlocal consume_calls
+        consume_calls += 1
+        if consume_calls == 1:
+            raise RuntimeError("temporary promotion DB failure")
+        return await real_consume(reservation_key)
+
+    monkeypatch.setattr(
+        instagram_generation,
+        "consume_instagram_first_image",
+        flaky_consume,
+    )
+    service = InstagramGenerationService(
+        settings=_settings(),
+        client=client,
+        generator=generator,
+    )
+    asyncio.run(service.handle_message(identity, _image_event("igsid-finalize")))
+    asyncio.run(
+        service.handle_message(
+            identity,
+            _text_event(
+                "Сделай киношный портрет",
+                "igsid-finalize",
+                event_id="finalize-prompt",
+            ),
+        )
+    )
+    first_job = asyncio.run(_claim_next_job())
+    assert first_job is not None
+    asyncio.run(service._process_job(first_job))
+
+    assert calls == 1
+    assert client.media_attempts == 1
+    asyncio.run(_make_job_retry_ready(first_job.id))
+    retry_job = asyncio.run(_claim_next_job())
+    assert retry_job is not None
+    assert retry_job.delivered_at_epoch is not None
+    asyncio.run(service._process_job(retry_job))
+
+    assert calls == 1
+    assert client.media_attempts == 1
+    assert consume_calls == 2
     promotion = asyncio.run(ensure_instagram_first_image_promotion(identity.id))
     assert promotion.status == "consumed"
