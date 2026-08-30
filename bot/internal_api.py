@@ -5,7 +5,7 @@ Internal API для административной панели (read-only).
 backend/app/channels/internal.py (InternalChannelClient).
 
 Эндпоинты:
-  GET  /internal/v1/health  — детальный статус бота
+  GET  /internal/v1/health  — детальный статус HappyFox backend
   GET  /internal/v1/stats   — агрегированная read-only статистика
 """
 
@@ -82,7 +82,7 @@ async def internal_auth_middleware(request: web.Request, handler: Any) -> web.Re
 
 
 async def handle_internal_health(request: web.Request) -> web.Response:
-    """Детальный статус бота — версия, аптайм, база данных."""
+    """Детальный статус HappyFox backend — версия, аптайм, база данных."""
     from bot.internal_api_db import simple_db_query_ok
 
     db_ok = False
@@ -93,7 +93,7 @@ async def handle_internal_health(request: web.Request) -> web.Response:
         db_error = str(exc)
 
     payload: dict[str, Any] = {
-        "service": "tanya-telegram",
+        "service": "happyfox-backend",
         "status": "ok" if db_ok else "degraded",
         "version": request.app.get("bot_version", "unknown"),
         "database": (
