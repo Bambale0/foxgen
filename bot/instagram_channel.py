@@ -107,7 +107,7 @@ class InstagramChannelAdapter:
             event.account_id,
             comment_id,
             "Привет! 👋 Напиши мне в Direct — сначала выберем, что создать: "
-            "📸 фото или 🎬 видео. Первая генерация бесплатно 🎁",
+            "📸 фото или 🎬 видео. Первое фото бесплатно 🎁, видео — платно.",
         )
 
     async def _send_account_link(
@@ -120,17 +120,18 @@ class InstagramChannelAdapter:
             link = (await self.account_link_factory(identity)).strip()
         if link:
             text = (
-                "Бесплатная первая генерация уже использована ✅\n\n"
-                "Чтобы продолжить, привяжи Instagram к HappyFox и пополни общий "
-                "баланс тем же способом, что в Telegram.\n\n"
+                "Бесплатная первая фото-генерация уже использована ✅\n\n"
+                "Дальше генерации идут по обычным ценам HappyFox. Чтобы продолжить, "
+                "привяжи Instagram к HappyFox и пополни общий баланс тем же способом, "
+                "что в Telegram.\n\n"
                 f"Пополнить и продолжить: {link}\n\n"
                 "После оплаты вернись сюда и напиши «Продолжить»."
             )
         else:
             text = (
-                "Бесплатная первая генерация уже использована ✅\n\n"
-                "Для следующих генераций нужен общий баланс HappyFox, но ссылка "
-                "сейчас недоступна. Попробуй ещё раз чуть позже."
+                "Бесплатная первая фото-генерация уже использована ✅\n\n"
+                "Дальше действуют обычные цены HappyFox. Для следующих генераций "
+                "нужен общий баланс, но ссылка сейчас недоступна. Попробуй чуть позже."
             )
         await self.client.send_text(event.account_id, event.sender_id, text)
 
@@ -145,7 +146,7 @@ class InstagramChannelAdapter:
             str(item.get("type") or "").strip().lower() for item in attachments
         }
         if "image" in attachment_types:
-            free_line = " Первая генерация будет бесплатно 🎁" if first_image_free else ""
+            free_line = " Первая фото-генерация будет бесплатно 🎁" if first_image_free else ""
             await self.client.send_text(
                 event.account_id,
                 event.sender_id,
@@ -153,21 +154,20 @@ class InstagramChannelAdapter:
             )
             return
         if "video" in attachment_types:
-            free_line = " Первая генерация будет бесплатно 🎁" if first_image_free else ""
             await self.client.send_text(
                 event.account_id,
                 event.sender_id,
-                "Видео получил 🎬"
-                + free_line
-                + " Теперь напиши, что должно происходить в результате.",
+                "Видео создаётся платно 🎬 Сначала напиши «Видео» — предложу пополнить "
+                "баланс и только после оплаты попрошу референс.",
             )
             return
 
-        free_line = " Первая генерация — бесплатно 🎁" if first_image_free else ""
+        free_line = " Первое фото бесплатно 🎁; видео — платно." if first_image_free else ""
         await self.client.send_text(
             event.account_id,
             event.sender_id,
-            "Что хочешь создать: 📸 Фото или 🎬 Видео?" + free_line,
+            "Что хочешь создать: 📸 Фото или 🎬 Видео? Напиши «Фото» или «Видео»."
+            + free_line,
         )
 
     async def _handle_postback(
@@ -181,7 +181,7 @@ class InstagramChannelAdapter:
             str(postback.get("payload") or "") if isinstance(postback, dict) else ""
         )
         if payload in {"CREATE_IMAGE", "CREATE_PHOTO"}:
-            free_line = " Первая генерация будет бесплатно 🎁" if first_image_free else ""
+            free_line = " Первая фото-генерация будет бесплатно 🎁" if first_image_free else ""
             await self.client.send_text(
                 event.account_id,
                 event.sender_id,
@@ -189,12 +189,11 @@ class InstagramChannelAdapter:
                 + free_line,
             )
         elif payload in {"CREATE_VIDEO", "CREATE_REEL"}:
-            free_line = " Первая генерация будет бесплатно 🎁" if first_image_free else ""
             await self.client.send_text(
                 event.account_id,
                 event.sender_id,
-                "🎬 Видео выбрано. Пришли фото или видео-референс и опиши движение."
-                + free_line,
+                "🎬 Видео — платно. Напиши «Видео» в Direct: сначала предложу "
+                "пополнить баланс, затем попрошу фото или видео-референс.",
             )
 
     async def handle_event(self, event: InstagramEvent) -> None:
