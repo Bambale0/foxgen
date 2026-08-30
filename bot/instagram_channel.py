@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import Any, Awaitable, Callable
+from collections.abc import Awaitable, Callable
+from typing import Any
 
 from bot.channel_identity import ChannelIdentity, ensure_channel_identity
 from bot.instagram_api import InstagramClient, InstagramEvent, InstagramSettings
@@ -61,7 +62,7 @@ class InstagramChannelAdapter:
         }
 
     @classmethod
-    def from_env(cls) -> "InstagramChannelAdapter":
+    def from_env(cls) -> InstagramChannelAdapter:
         return cls(settings=InstagramSettings.from_env())
 
     async def _ensure_identity(self, event: InstagramEvent) -> ChannelIdentity | None:
@@ -84,7 +85,10 @@ class InstagramChannelAdapter:
             return
         comment_id = str(event.payload.get("id") or "").strip()
         if not comment_id:
-            logger.warning("Instagram comment event without comment id: %s", event.event_id)
+            logger.warning(
+                "Instagram comment event without comment id: %s",
+                event.event_id,
+            )
             return
         await self.client.private_reply(
             event.account_id,
@@ -120,7 +124,9 @@ class InstagramChannelAdapter:
 
     async def _handle_postback(self, event: InstagramEvent) -> None:
         postback = event.payload.get("postback")
-        payload = str(postback.get("payload") or "") if isinstance(postback, dict) else ""
+        payload = (
+            str(postback.get("payload") or "") if isinstance(postback, dict) else ""
+        )
         if payload == "CREATE_IMAGE":
             await self.client.send_text(
                 event.account_id,
