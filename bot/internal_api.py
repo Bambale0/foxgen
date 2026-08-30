@@ -149,7 +149,11 @@ async def _build_instagram_account_link_url(app: web.Application, identity: Any)
 
 def _setup_instagram_channel(app: web.Application) -> None:
     """Register Instagram only when the channel is explicitly enabled."""
-    from bot.instagram_api import InstagramClient, InstagramSettings, setup_instagram_routes
+    from bot.instagram_api import (
+        InstagramClient,
+        InstagramSettings,
+        setup_instagram_routes,
+    )
     from bot.instagram_channel import build_instagram_event_handler
     from bot.instagram_creator_generation import InstagramCreatorGenerationService
     from bot.instagram_generation import install_instagram_generation_worker
