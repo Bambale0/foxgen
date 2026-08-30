@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from typing import Any
 
-from bot import db as db_backend
+from bot import database, db as db_backend
+
+_SCHEMA_LOCK: asyncio.Lock | None = None
+_SCHEMA_READY: set[str] = set()
 
 
 @dataclass(frozen=True)
@@ -24,35 +28,95 @@ def _required(value: Any, name: str) -> str:
     return normalized
 
 
+def _schema_lock() -> asyncio.Lock:
+    global _SCHEMA_LOCK
+    if _SCHEMA_LOCK is None:
+        _SCHEMA_LOCK = asyncio.Lock()
+    return _SCHEMA_LOCK
+
+
+def _schema_key() -> str:
+    if db_backend.is_postgres():
+        return f"postgres:{db_backend.DATABASE_URL}"
+    return f"sqlite:{database.DATABASE_PATH}"
+
+
+def _sqlite_schema_statements() -> tuple[str, ...]:
+    return (
+        """
+        CREATE TABLE IF NOT EXISTS channel_identities (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            channel TEXT NOT NULL,
+            account_id TEXT NOT NULL,
+            external_user_id TEXT NOT NULL,
+            username TEXT,
+            display_name TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            last_seen_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(channel, account_id, external_user_id),
+            FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE SET NULL
+        )
+        """,
+        "CREATE INDEX IF NOT EXISTS idx_channel_identities_user ON channel_identities(user_id)",
+        "CREATE INDEX IF NOT EXISTS idx_channel_identities_lookup "
+        "ON channel_identities(channel, account_id, external_user_id)",
+    )
+
+
+def _postgres_schema_statements() -> tuple[str, ...]:
+    return (
+        """
+        CREATE TABLE IF NOT EXISTS channel_identities (
+            id BIGSERIAL PRIMARY KEY,
+            user_id BIGINT,
+            channel TEXT NOT NULL,
+            account_id TEXT NOT NULL,
+            external_user_id TEXT NOT NULL,
+            username TEXT,
+            display_name TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            last_seen_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(channel, account_id, external_user_id),
+            FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE SET NULL
+        )
+        """,
+        "CREATE INDEX IF NOT EXISTS idx_channel_identities_user ON channel_identities(user_id)",
+        "CREATE INDEX IF NOT EXISTS idx_channel_identities_lookup "
+        "ON channel_identities(channel, account_id, external_user_id)",
+    )
+
+
+async def _create_postgres_schema(db: db_backend.Connection) -> None:
+    """Run DDL through psycopg because the SQLite compatibility layer skips DDL."""
+    raw_connection = getattr(db, "_conn", None)
+    if raw_connection is None:
+        raise RuntimeError("PostgreSQL connection does not expose its migration handle")
+    async with raw_connection.cursor() as cursor:
+        for statement in _postgres_schema_statements():
+            await cursor.execute(statement)
+    await raw_connection.commit()
+
+
 async def ensure_channel_identity_schema() -> None:
     """Create the additive identity bridge without changing legacy Telegram users."""
-    async with db_backend.connect() as db:
-        await db.execute(
-            """
-            CREATE TABLE IF NOT EXISTS channel_identities (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER,
-                channel TEXT NOT NULL,
-                account_id TEXT NOT NULL,
-                external_user_id TEXT NOT NULL,
-                username TEXT,
-                display_name TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                last_seen_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE(channel, account_id, external_user_id),
-                FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE SET NULL
-            )
-            """
-        )
-        await db.execute(
-            "CREATE INDEX IF NOT EXISTS idx_channel_identities_user ON channel_identities(user_id)"
-        )
-        await db.execute(
-            "CREATE INDEX IF NOT EXISTS idx_channel_identities_lookup "
-            "ON channel_identities(channel, account_id, external_user_id)"
-        )
-        await db.commit()
+    key = _schema_key()
+    if key in _SCHEMA_READY:
+        return
+
+    async with _schema_lock():
+        if key in _SCHEMA_READY:
+            return
+        async with db_backend.connect() as db:
+            if db_backend.is_postgres():
+                await _create_postgres_schema(db)
+            else:
+                for statement in _sqlite_schema_statements():
+                    await db.execute(statement)
+                await db.commit()
+        _SCHEMA_READY.add(key)
 
 
 def _row_to_identity(row: db_backend.Row | None) -> ChannelIdentity | None:
@@ -99,7 +163,7 @@ async def ensure_channel_identity(
     username: str = "",
     display_name: str = "",
 ) -> ChannelIdentity:
-    """Upsert an external identity; user_id deliberately stays nullable until linking."""
+    """Upsert an external identity; user_id stays nullable until verified linking."""
     await ensure_channel_identity_schema()
     channel_name = _required(channel, "channel").lower()
     account = _required(account_id, "account_id")
