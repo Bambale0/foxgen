@@ -96,7 +96,7 @@ class InstagramChannelAdapter:
         await self.client.private_reply(
             event.account_id,
             comment_id,
-            "Привет! 👋 Напиши мне в Direct и пришли фото — помогу сделать AI-версию в HappyFox.",
+            "Привет! 👋 Напиши мне в Direct и пришли фото — первая AI-генерация будет бесплатно 🎁",
         )
 
     async def _send_account_link(
@@ -109,12 +109,14 @@ class InstagramChannelAdapter:
             link = (await self.account_link_factory(identity)).strip()
         if link:
             text = (
-                "Чтобы использовать тот же баланс и историю HappyFox, сначала привяжи Instagram к аккаунту.\n\n"
+                "Первая генерация фото — бесплатно 🎁\n\n"
+                "Чтобы дальше использовать единый баланс и историю HappyFox, сначала привяжи Instagram к аккаунту.\n\n"
                 f"Открой ссылку: {link}\n\n"
                 "После подтверждения вернись сюда — продолжим в Direct."
             )
         else:
             text = (
+                "Первая генерация фото — бесплатно 🎁\n\n"
                 "Чтобы продолжить в Instagram, сначала привяжи этот профиль к HappyFox. "
                 "Ссылка для привязки сейчас недоступна — попробуй ещё раз чуть позже."
             )
