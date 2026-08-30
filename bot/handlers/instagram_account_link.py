@@ -9,8 +9,8 @@ from aiogram.fsm.context import FSMContext
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from bot.channel_link import ChannelLinkError, consume_channel_link_token
+from bot.config import config
 from bot.database import get_or_create_user
-from bot.handlers.payments import _package_lava_offer_config
 from bot.services.lava_service import lava_service
 from bot.services.preset_manager import preset_manager
 from bot.services.yookassa_service import yookassa_service
@@ -115,10 +115,19 @@ def get_instagram_lava_method_keyboard(package_id: str) -> types.InlineKeyboardM
     return builder.as_markup()
 
 
+def _instagram_lava_offer_config(package: dict[str, Any]) -> tuple[str, str]:
+    package_id = str(package.get("id") or "").strip()
+    offer_id = str(package.get("lava_offer_id") or "").strip()
+    if offer_id:
+        currency = str(package.get("lava_currency") or "RUB").strip().upper() or "RUB"
+        return offer_id, currency
+    return config.lava_offer_id_for_package(package_id), "RUB"
+
+
 def _lava_packages() -> list[dict[str, Any]]:
     result: list[dict[str, Any]] = []
     for package in preset_manager.get_packages():
-        offer_id, currency = _package_lava_offer_config(package)
+        offer_id, currency = _instagram_lava_offer_config(package)
         if offer_id and str(currency or "").upper() == "RUB":
             result.append(package)
     return result
@@ -225,7 +234,7 @@ async def show_instagram_lava_methods(callback: types.CallbackQuery) -> None:
         await callback.answer("Пакет не найден", show_alert=True)
         return
 
-    offer_id, currency = _package_lava_offer_config(package)
+    offer_id, currency = _instagram_lava_offer_config(package)
     if not lava_service.enabled or not offer_id or str(currency or "").upper() != "RUB":
         await callback.message.edit_text(
             "Lava Top сейчас недоступна для этого пакета. Выберите другой пакет "
