@@ -1,6 +1,7 @@
 import asyncio
 
 from bot import database
+from bot import instagram_video_generation
 from bot.channel_identity import ensure_channel_identity
 from bot.instagram_api import InstagramEvent, InstagramSettings
 from bot.instagram_creation_mode import get_instagram_creation_kind
@@ -70,6 +71,10 @@ def _image_event(sender_id: str) -> InstagramEvent:
     )
 
 
+async def _account_link(_identity) -> str:
+    return "https://t.me/HappyFoxBot?start=iglink_test-token"
+
+
 def test_first_instagram_step_always_asks_photo_or_video(tmp_path, monkeypatch) -> None:
     identity = asyncio.run(_identity(tmp_path, monkeypatch, "igsid-choice"))
     client = _FakeClient()
@@ -99,7 +104,9 @@ def test_photo_choice_is_persisted_before_accepting_media(tmp_path, monkeypatch)
     ) is True
 
     assert asyncio.run(get_instagram_creation_kind(identity.id)) == "photo"
-    assert "seedream 5 pro" in client.messages[-1][2].lower()
+    photo_text = client.messages[-1][2].lower()
+    assert "seedream 5 pro" not in photo_text or "фото" in photo_text
+    assert "бесплат" in photo_text
 
     assert asyncio.run(service.handle_message(identity, _image_event("igsid-photo"))) is True
     draft = asyncio.run(get_instagram_draft(identity.id))
@@ -108,19 +115,74 @@ def test_photo_choice_is_persisted_before_accepting_media(tmp_path, monkeypatch)
     assert draft.state == "waiting_prompt"
 
 
-def test_video_choice_is_persisted_and_accepts_image_reference(tmp_path, monkeypatch) -> None:
-    identity = asyncio.run(_identity(tmp_path, monkeypatch, "igsid-video"))
+def test_video_choice_immediately_paywalls_and_rejects_media(tmp_path, monkeypatch) -> None:
+    identity = asyncio.run(_identity(tmp_path, monkeypatch, "igsid-video-paywall"))
     client = _FakeClient()
-    service = InstagramCreatorGenerationService(settings=_settings(), client=client)
+    service = InstagramCreatorGenerationService(
+        settings=_settings(),
+        client=client,
+        account_link_factory=_account_link,
+    )
 
     assert asyncio.run(
-        service.handle_message(identity, _text_event("Видео", "igsid-video"))
+        service.handle_message(identity, _text_event("Видео", "igsid-video-paywall"))
     ) is True
 
     assert asyncio.run(get_instagram_creation_kind(identity.id)) == "video"
-    assert "seedance 2.5" in client.messages[-1][2].lower()
+    draft = asyncio.run(get_instagram_draft(identity.id))
+    assert draft is not None
+    assert draft.state == "video:awaiting_topup:"
+    assert draft.image_url == ""
+    paywall = client.messages[-1][2].lower()
+    assert "видео" in paywall
+    assert "плат" in paywall
+    assert "пополни" in paywall
+    assert "продолжить" in paywall
+    assert "t.me/happyfoxbot" in paywall
 
-    assert asyncio.run(service.handle_message(identity, _image_event("igsid-video"))) is True
+    assert asyncio.run(
+        service.handle_message(identity, _image_event("igsid-video-paywall"))
+    ) is True
+    blocked_draft = asyncio.run(get_instagram_draft(identity.id))
+    assert blocked_draft is not None
+    assert blocked_draft.state == "video:awaiting_topup:"
+    assert blocked_draft.image_url == ""
+    assert "референс пока не нужен" in client.messages[-1][2].lower()
+
+
+def test_video_accepts_reference_only_after_paid_continue(tmp_path, monkeypatch) -> None:
+    identity = asyncio.run(_identity(tmp_path, monkeypatch, "igsid-video-paid"))
+    client = _FakeClient()
+    service = InstagramCreatorGenerationService(
+        settings=_settings(),
+        client=client,
+        account_link_factory=_account_link,
+    )
+
+    async def fake_linked_billing_user(_identity_id: int):
+        return 77, 700010, 999.0
+
+    monkeypatch.setattr(
+        instagram_video_generation.generation,
+        "_linked_billing_user",
+        fake_linked_billing_user,
+    )
+
+    assert asyncio.run(
+        service.handle_message(identity, _text_event("Видео", "igsid-video-paid"))
+    ) is True
+    assert asyncio.run(
+        service.handle_message(identity, _text_event("Продолжить", "igsid-video-paid"))
+    ) is True
+
+    resumed = asyncio.run(get_instagram_draft(identity.id))
+    assert resumed is not None
+    assert resumed.state == "video:waiting_source:"
+    assert "пришли фото или видео" in client.messages[-1][2].lower()
+
+    assert asyncio.run(
+        service.handle_message(identity, _image_event("igsid-video-paid"))
+    ) is True
     draft = asyncio.run(get_instagram_draft(identity.id))
     assert draft is not None
     assert draft.image_url == "https://cdn.example/source.jpg"
