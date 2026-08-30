@@ -6,6 +6,7 @@ from aiogram import F, Router, types
 from aiogram.fsm.context import FSMContext
 
 from bot.channel_link import ChannelLinkError, consume_channel_link_token
+from bot.channel_promotions import ensure_instagram_first_image_promotion
 from bot.database import get_or_create_user
 
 router = Router()
@@ -53,12 +54,20 @@ async def confirm_instagram_account_link(
     await state.clear()
     user = await get_or_create_user(message.from_user.id)
     try:
-        await consume_channel_link_token(token, user.id)
+        identity = await consume_channel_link_token(token, user.id)
     except ChannelLinkError as error:
         await message.answer(_link_error_text(error))
         return
 
+    promotion = await ensure_instagram_first_image_promotion(identity.id)
+    free_image_text = (
+        "Первая генерация фото в Instagram — бесплатно 🎁\n"
+        if promotion.status != "consumed"
+        else ""
+    )
     await message.answer(
         "✅ Instagram привязан к вашему HappyFox.\n\n"
-        "Баланс и история теперь общие. Вернитесь в Direct — можно продолжать там."
+        f"{free_image_text}"
+        "Баланс и история теперь общие. После бесплатной генерации действуют обычные цены HappyFox.\n\n"
+        "Вернитесь в Direct — можно продолжать там."
     )
