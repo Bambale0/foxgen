@@ -11,6 +11,7 @@ from bot.channel_promotions import (
     ensure_instagram_first_image_promotion,
 )
 from bot.instagram_api import InstagramClient, InstagramEvent, InstagramSettings
+from bot.instagram_generation import InstagramGenerationService
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +49,7 @@ def _message_attachments(event: InstagramEvent) -> list[dict[str, Any]]:
 
 
 class InstagramChannelAdapter:
-    """Thin Instagram UX adapter; generation and billing stay outside this module."""
+    """Instagram UX adapter; billing/generation are delegated to durable services."""
 
     def __init__(
         self,
@@ -58,6 +59,7 @@ class InstagramChannelAdapter:
         identity_resolver: IdentityResolver = ensure_channel_identity,
         promotion_resolver: PromotionResolver = ensure_instagram_first_image_promotion,
         account_link_factory: AccountLinkFactory | None = None,
+        generation_service: InstagramGenerationService | Any | None = None,
         comment_keywords: set[str] | None = None,
     ) -> None:
         self.settings = settings
@@ -65,6 +67,7 @@ class InstagramChannelAdapter:
         self.identity_resolver = identity_resolver
         self.promotion_resolver = promotion_resolver
         self.account_link_factory = account_link_factory
+        self.generation_service = generation_service
         self.comment_keywords = {
             item.casefold().strip()
             for item in (comment_keywords or _DEFAULT_COMMENT_KEYWORDS)
@@ -183,6 +186,10 @@ class InstagramChannelAdapter:
             await self._handle_comment(event)
             return
 
+        if event.kind == "message" and self.generation_service is not None:
+            if await self.generation_service.handle_message(identity, event):
+                return
+
         promotion = await self.promotion_resolver(identity.id)
         first_image_free = promotion.status != "consumed"
 
@@ -200,10 +207,14 @@ class InstagramChannelAdapter:
 def build_instagram_event_handler(
     settings: InstagramSettings | None = None,
     *,
+    client: InstagramClient | Any | None = None,
     account_link_factory: AccountLinkFactory | None = None,
+    generation_service: InstagramGenerationService | Any | None = None,
 ) -> Callable[[InstagramEvent], Awaitable[None]]:
     adapter = InstagramChannelAdapter(
         settings=settings or InstagramSettings.from_env(),
+        client=client,
         account_link_factory=account_link_factory,
+        generation_service=generation_service,
     )
     return adapter.handle_event
