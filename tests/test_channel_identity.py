@@ -1,4 +1,5 @@
 import asyncio
+from pathlib import Path
 
 from bot import database
 from bot.channel_identity import ensure_channel_identity, get_channel_identity
@@ -34,7 +35,10 @@ def test_instagram_identity_exists_without_fake_telegram_user(tmp_path, monkeypa
     assert again.user_id is None
 
 
-def test_identity_upsert_refreshes_profile_without_creating_duplicate(tmp_path, monkeypatch) -> None:
+def test_identity_upsert_refreshes_profile_without_creating_duplicate(
+    tmp_path,
+    monkeypatch,
+) -> None:
     database_path = tmp_path / "identity-upsert.db"
     monkeypatch.setattr(database, "DATABASE_PATH", str(database_path))
 
@@ -60,3 +64,12 @@ def test_identity_upsert_refreshes_profile_without_creating_duplicate(tmp_path, 
     assert second.username == "new_name"
     assert second.display_name == "New Name"
     assert second.user_id is None
+
+
+def test_postgres_identity_schema_bypasses_compatibility_ddl_skip() -> None:
+    source = Path("bot/channel_identity.py").read_text(encoding="utf-8")
+
+    assert "id BIGSERIAL PRIMARY KEY" in source
+    assert "raw_connection.cursor()" in source
+    assert "_create_postgres_schema" in source
+    assert "FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE SET NULL" in source
