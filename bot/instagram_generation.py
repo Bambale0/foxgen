@@ -39,6 +39,8 @@ _WORKER_CONCURRENCY = 4
 _WORKER_POLL_SECONDS = 1.0
 _JOB_LEASE_SECONDS = 20 * 60
 _RETRY_DELAY_SECONDS = 30
+_PROVIDER_POLL_SECONDS = 5.0
+_PROVIDER_POLL_ATTEMPTS = 60
 _SCHEMA_LOCK: asyncio.Lock | None = None
 _SCHEMA_READY: set[str] = set()
 
@@ -56,6 +58,10 @@ _CANCEL_WORDS = {"нет", "no", "отмена", "отменить", "стоп",
 
 AccountLinkFactory = Callable[[ChannelIdentity], Awaitable[str]]
 ImageGenerator = Callable[[str, str], Awaitable[str]]
+
+
+class InstagramGenerationRetry(RuntimeError):
+    """Retry the same durable job without refunding or consuming its entitlement."""
 
 
 @dataclass(frozen=True)
@@ -475,6 +481,19 @@ async def _claim_next_job() -> InstagramGenerationJob | None:
         return _row_to_job(await cursor.fetchone())
 
 
+async def _mark_job_provider_task(job_id: str, provider_task_id: str) -> None:
+    async with db_backend.connect() as db:
+        await db.execute(
+            """
+            UPDATE instagram_generation_jobs
+            SET provider_task_id = ?, updated_at_epoch = ?
+            WHERE id = ?
+            """,
+            (provider_task_id, int(time.time()), job_id),
+        )
+        await db.commit()
+
+
 async def _mark_job_result(
     job_id: str,
     result_url: str,
@@ -484,7 +503,9 @@ async def _mark_job_result(
         await db.execute(
             """
             UPDATE instagram_generation_jobs
-            SET result_url = ?, provider_task_id = ?, updated_at_epoch = ?
+            SET result_url = ?,
+                provider_task_id = COALESCE(?, provider_task_id),
+                updated_at_epoch = ?
             WHERE id = ?
             """,
             (result_url, provider_task_id, int(time.time()), job_id),
@@ -571,35 +592,43 @@ async def _persist_inline_result(image_bytes: bytes, mime_type: str | None) -> s
     return f"{host}/uploads/instagram/results/{filename}"
 
 
-async def _default_image_generator(prompt: str, image_url: str) -> str:
-    result = await nano_banana_2_service.generate_image(
-        prompt=prompt,
-        aspect_ratio="auto",
-        resolution=INSTAGRAM_IMAGE_RESOLUTION,
-        image_input=[image_url],
-        output_format=INSTAGRAM_IMAGE_OUTPUT_FORMAT,
-        callback_url=None,
-        model=INSTAGRAM_PROVIDER_MODEL,
-    )
-    if not isinstance(result, dict):
-        raise RuntimeError("Image provider did not accept the generation")
-    if result.get("image_bytes"):
-        return await _persist_inline_result(
-            bytes(result["image_bytes"]),
-            str(result.get("mime_type") or "image/png"),
-        )
-    task_id = str(result.get("task_id") or "").strip()
-    if not task_id:
-        raise RuntimeError(
-            str(result.get("error") or "Image provider returned no task")
-        )
-    completed = await nano_banana_2_service.wait_for_completion(task_id)
-    if not isinstance(completed, dict):
-        raise RuntimeError("Image generation failed or timed out")
-    urls = kie_market_service.parse_result_urls(completed)
-    if not urls:
-        raise RuntimeError("Image provider completed without a result URL")
-    return str(urls[0])
+def _provider_result_urls(task_data: dict[str, Any]) -> list[str]:
+    return [
+        str(url).strip()
+        for url in kie_market_service.parse_result_urls(task_data)
+        if str(url or "").strip()
+    ]
+
+
+async def _wait_for_provider_result(task_id: str) -> str:
+    consecutive_errors = 0
+    for _attempt in range(_PROVIDER_POLL_ATTEMPTS):
+        status = await nano_banana_2_service.get_task_status(task_id)
+        if status is None:
+            consecutive_errors += 1
+            if consecutive_errors >= 5:
+                raise InstagramGenerationRetry(
+                    "Provider status is temporarily unavailable"
+                )
+            await asyncio.sleep(_PROVIDER_POLL_SECONDS)
+            continue
+
+        consecutive_errors = 0
+        task_state = str(status.get("state") or "").strip().lower()
+        if task_state == "success":
+            urls = _provider_result_urls(status)
+            if not urls:
+                raise RuntimeError(
+                    "Image provider completed without a result URL"
+                )
+            return urls[0]
+        if task_state == "fail":
+            raise RuntimeError(
+                str(status.get("failMsg") or "Image generation failed")
+            )
+        await asyncio.sleep(_PROVIDER_POLL_SECONDS)
+
+    raise InstagramGenerationRetry("Image generation is still pending")
 
 
 def _attachment_image_url(event: InstagramEvent) -> str:
@@ -635,7 +664,7 @@ class InstagramGenerationService:
         settings: InstagramSettings,
         client: InstagramClient | Any | None = None,
         account_link_factory: AccountLinkFactory | None = None,
-        generator: ImageGenerator = _default_image_generator,
+        generator: ImageGenerator | None = None,
     ) -> None:
         self.settings = settings
         self.client = client or InstagramClient.from_settings(settings)
@@ -1019,14 +1048,65 @@ class InstagramGenerationService:
                 "перед запуском всегда покажу стоимость.",
             )
 
+    async def _generate_result(self, job: InstagramGenerationJob) -> str:
+        if self.generator is not None:
+            return await self.generator(job.prompt, job.image_url)
+
+        task_id = str(job.provider_task_id or "").strip()
+        if not task_id:
+            result = await nano_banana_2_service.generate_image(
+                prompt=job.prompt,
+                aspect_ratio="auto",
+                resolution=INSTAGRAM_IMAGE_RESOLUTION,
+                image_input=[job.image_url],
+                output_format=INSTAGRAM_IMAGE_OUTPUT_FORMAT,
+                callback_url=None,
+                model=INSTAGRAM_PROVIDER_MODEL,
+            )
+            if not isinstance(result, dict):
+                raise InstagramGenerationRetry(
+                    "Image provider did not accept the generation"
+                )
+            if result.get("image_bytes"):
+                return await _persist_inline_result(
+                    bytes(result["image_bytes"]),
+                    str(result.get("mime_type") or "image/png"),
+                )
+            task_id = str(result.get("task_id") or "").strip()
+            if not task_id:
+                error_message = str(
+                    result.get("error") or "Image provider returned no task"
+                )
+                if result.get("retryable", True):
+                    raise InstagramGenerationRetry(error_message)
+                raise RuntimeError(error_message)
+            await _mark_job_provider_task(job.id, task_id)
+
+        return await _wait_for_provider_result(task_id)
+
     async def _process_job(self, job: InstagramGenerationJob) -> None:
         result_url = str(job.result_url or "").strip()
         if not result_url:
             try:
-                result_url = await self.generator(job.prompt, job.image_url)
+                result_url = await self._generate_result(job)
                 if not result_url:
                     raise RuntimeError("Image generator returned an empty URL")
-                await _mark_job_result(job.id, result_url, job.provider_task_id)
+                await _mark_job_result(
+                    job.id,
+                    result_url,
+                    job.provider_task_id,
+                )
+            except InstagramGenerationRetry as error:
+                logger.warning(
+                    "Instagram image generation will retry: job=%s error=%s",
+                    job.id,
+                    error,
+                )
+                if job.provider_task_id is None and job.attempt_count >= 5:
+                    await self._finalize_failure(job, error)
+                else:
+                    await _retry_job(job.id, str(error))
+                return
             except Exception as error:
                 logger.exception(
                     "Instagram image generation failed: job=%s",
@@ -1057,7 +1137,8 @@ class InstagramGenerationService:
             await self._finalize_success(job)
         except Exception as error:
             logger.exception(
-                "Instagram result finalization failed after delivery: job=%s delivered_at=%s",
+                "Instagram result finalization failed after delivery: "
+                "job=%s delivered_at=%s",
                 job.id,
                 delivered_at_epoch,
             )
