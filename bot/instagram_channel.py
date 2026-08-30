@@ -106,7 +106,8 @@ class InstagramChannelAdapter:
         await self.client.private_reply(
             event.account_id,
             comment_id,
-            "Привет! 👋 Напиши мне в Direct — сначала выберем, что создать: 📸 фото или 🎬 видео. Первая генерация бесплатно 🎁",
+            "Привет! 👋 Напиши мне в Direct — сначала выберем, что создать: "
+            "📸 фото или 🎬 видео. Первая генерация бесплатно 🎁",
         )
 
     async def _send_account_link(
@@ -120,19 +121,25 @@ class InstagramChannelAdapter:
         if link:
             text = (
                 "Бесплатная первая генерация уже использована ✅\n\n"
-                "Чтобы продолжить, привяжи Instagram к HappyFox и пополни общий баланс тем же способом, что в Telegram.\n\n"
+                "Чтобы продолжить, привяжи Instagram к HappyFox и пополни общий "
+                "баланс тем же способом, что в Telegram.\n\n"
                 f"Пополнить и продолжить: {link}\n\n"
                 "После оплаты вернись сюда и напиши «Продолжить»."
             )
         else:
             text = (
                 "Бесплатная первая генерация уже использована ✅\n\n"
-                "Для следующих генераций нужен общий баланс HappyFox, но ссылка сейчас недоступна. "
-                "Попробуй ещё раз чуть позже."
+                "Для следующих генераций нужен общий баланс HappyFox, но ссылка "
+                "сейчас недоступна. Попробуй ещё раз чуть позже."
             )
         await self.client.send_text(event.account_id, event.sender_id, text)
 
-    async def _handle_message(self, event: InstagramEvent, *, first_image_free: bool) -> None:
+    async def _handle_message(
+        self,
+        event: InstagramEvent,
+        *,
+        first_image_free: bool,
+    ) -> None:
         attachments = _message_attachments(event)
         attachment_types = {
             str(item.get("type") or "").strip().lower() for item in attachments
@@ -150,7 +157,9 @@ class InstagramChannelAdapter:
             await self.client.send_text(
                 event.account_id,
                 event.sender_id,
-                "Видео получил 🎬" + free_line + " Теперь напиши, что должно происходить в результате.",
+                "Видео получил 🎬"
+                + free_line
+                + " Теперь напиши, что должно происходить в результате.",
             )
             return
 
@@ -161,7 +170,12 @@ class InstagramChannelAdapter:
             "Что хочешь создать: 📸 Фото или 🎬 Видео?" + free_line,
         )
 
-    async def _handle_postback(self, event: InstagramEvent, *, first_image_free: bool) -> None:
+    async def _handle_postback(
+        self,
+        event: InstagramEvent,
+        *,
+        first_image_free: bool,
+    ) -> None:
         postback = event.payload.get("postback")
         payload = (
             str(postback.get("payload") or "") if isinstance(postback, dict) else ""
@@ -171,14 +185,16 @@ class InstagramChannelAdapter:
             await self.client.send_text(
                 event.account_id,
                 event.sender_id,
-                "📸 Фото выбрано. Пришли исходное фото и коротко опиши результат." + free_line,
+                "📸 Фото выбрано. Пришли исходное фото и коротко опиши результат."
+                + free_line,
             )
         elif payload in {"CREATE_VIDEO", "CREATE_REEL"}:
             free_line = " Первая генерация будет бесплатно 🎁" if first_image_free else ""
             await self.client.send_text(
                 event.account_id,
                 event.sender_id,
-                "🎬 Видео выбрано. Пришли фото или видео-референс и опиши движение." + free_line,
+                "🎬 Видео выбрано. Пришли фото или видео-референс и опиши движение."
+                + free_line,
             )
 
     async def handle_event(self, event: InstagramEvent) -> None:
@@ -194,9 +210,12 @@ class InstagramChannelAdapter:
             await self._handle_comment(event)
             return
 
-        if event.kind == "message" and self.generation_service is not None:
-            if await self.generation_service.handle_message(identity, event):
-                return
+        if (
+            event.kind == "message"
+            and self.generation_service is not None
+            and await self.generation_service.handle_message(identity, event)
+        ):
+            return
 
         promotion = await self.promotion_resolver(identity.id)
         first_image_free = promotion.status != "consumed"
