@@ -56,7 +56,7 @@ def _load_defaults() -> dict[str, Any]:
     with DEFAULTS_PATH.open("r", encoding="utf-8") as handle:
         payload = json.load(handle)
     if not isinstance(payload, dict):
-        raise RuntimeError("Suno price defaults must be a JSON object")
+        raise TypeError("Suno price defaults must be a JSON object")
     return payload
 
 
@@ -154,7 +154,6 @@ async def list_suno_prices(channel: str) -> list[SunoPriceEntry]:
     for operation in SUNO_OPERATIONS:
         variants = SUNO_MODELS if operation in MODEL_PRICED_OPERATIONS else ("default",)
         for variant in variants:
-            default = default_suno_price(clean_channel, operation, variant)
             raw = await get_bot_setting(
                 _setting_key(clean_channel, operation, variant),
                 default=None,
@@ -171,7 +170,7 @@ async def list_suno_prices(channel: str) -> list[SunoPriceEntry]:
                     operation=operation,
                     variant=variant,
                     price=price,
-                    overridden=overridden and abs(price - default) >= 0,
+                    overridden=overridden,
                 )
             )
     return entries
