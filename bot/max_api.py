@@ -4,6 +4,7 @@ import asyncio
 import hmac
 import logging
 import os
+import re
 import time
 from dataclasses import dataclass
 from typing import Any, Awaitable, Callable
@@ -23,6 +24,8 @@ logger = logging.getLogger(__name__)
 MAX_DEFAULT_API_BASE = "https://platform-api2.max.ru"
 MAX_DEFAULT_WEBHOOK_PATH = "/max/webhook"
 MAX_UPDATE_TYPES = ("bot_started", "message_created", "message_callback")
+MAX_WEBHOOK_SECRET_RE = re.compile(r"^[A-Za-z0-9_-]{5,256}$")
+MAX_MEDIA_TYPES = frozenset({"image", "video", "audio", "file"})
 
 
 class MaxApiError(RuntimeError):
@@ -63,16 +66,18 @@ class MaxSettings:
             return
         if not self.access_token:
             raise RuntimeError("MAX_ACCESS_TOKEN is required when MAX_ENABLED=1")
-        if not self.webhook_secret:
-            raise RuntimeError("MAX_WEBHOOK_SECRET is required when MAX_ENABLED=1")
-        if len(self.webhook_secret) < 5:
-            raise RuntimeError("MAX_WEBHOOK_SECRET must contain at least 5 characters")
+        if not MAX_WEBHOOK_SECRET_RE.fullmatch(self.webhook_secret):
+            raise RuntimeError(
+                "MAX_WEBHOOK_SECRET must match ^[A-Za-z0-9_-]{5,256}$"
+            )
         if not self.webhook_path.startswith("/"):
             raise RuntimeError("MAX_WEBHOOK_PATH must start with /")
+        if not self.api_base.startswith("https://"):
+            raise RuntimeError("MAX_API_BASE must use HTTPS")
 
 
 class MaxClient:
-    """Small production client for the official MAX Bot API."""
+    """Production HTTP client for the official MAX Bot API."""
 
     def __init__(
         self,
@@ -92,7 +97,7 @@ class MaxClient:
 
     async def _get_session(self) -> aiohttp.ClientSession:
         if self._session is None or self._session.closed:
-            timeout = aiohttp.ClientTimeout(total=30, connect=10)
+            timeout = aiohttp.ClientTimeout(total=60, connect=10)
             self._session = aiohttp.ClientSession(timeout=timeout)
         return self._session
 
@@ -124,7 +129,10 @@ class MaxClient:
                     message = str(payload.get("message") or raw or f"HTTP {response.status}")[:500]
                     raise MaxApiError(message, status=response.status)
                 if not isinstance(payload, dict):
-                    raise MaxApiError("MAX API returned a non-object JSON response", status=response.status)
+                    raise MaxApiError(
+                        "MAX API returned a non-object JSON response",
+                        status=response.status,
+                    )
                 return payload
         except asyncio.TimeoutError as exc:
             raise MaxApiError("MAX API request timed out") from exc
@@ -176,17 +184,20 @@ class MaxClient:
         *,
         message: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        return await self._request_json(
+        payload = await self._request_json(
             "POST",
             "/answers",
             params={"callback_id": callback_id},
             json_body={"message": message} if message is not None else {},
         )
+        if payload.get("success") is False:
+            raise MaxApiError(str(payload.get("message") or "MAX callback answer failed"))
+        return payload
 
     async def create_subscription(self, webhook_url: str) -> dict[str, Any]:
         if not webhook_url.startswith("https://"):
             raise ValueError("MAX webhook URL must use HTTPS")
-        return await self._request_json(
+        payload = await self._request_json(
             "POST",
             "/subscriptions",
             json_body={
@@ -195,14 +206,122 @@ class MaxClient:
                 "secret": self.settings.webhook_secret,
             },
         )
+        if payload.get("success") is not True:
+            raise MaxApiError(str(payload.get("message") or "MAX subscription failed"))
+        return payload
 
     async def get_subscriptions(self) -> dict[str, Any]:
         return await self._request_json("GET", "/subscriptions")
 
     async def get_upload_slot(self, media_type: str) -> dict[str, Any]:
-        if media_type not in {"image", "video", "audio", "file"}:
+        if media_type not in MAX_MEDIA_TYPES:
             raise ValueError("Unsupported MAX media type")
         return await self._request_json("POST", "/uploads", params={"type": media_type})
+
+    async def upload_media_bytes(
+        self,
+        media_type: str,
+        content: bytes,
+        *,
+        filename: str,
+        content_type: str = "application/octet-stream",
+    ) -> str:
+        """Upload one MAX media object and return its attachment token."""
+        slot = await self.get_upload_slot(media_type)
+        upload_url = str(slot.get("url") or "")
+        if not upload_url.startswith("https://"):
+            raise MaxApiError("MAX upload slot did not contain an HTTPS URL")
+
+        session = await self._get_session()
+        form = aiohttp.FormData()
+        form.add_field(
+            "data",
+            content,
+            filename=filename,
+            content_type=content_type,
+        )
+        try:
+            async with session.post(upload_url, data=form) as response:
+                raw = await response.text()
+                try:
+                    uploaded = await response.json(content_type=None)
+                except (ValueError, aiohttp.ContentTypeError):
+                    uploaded = {}
+                if response.status < 200 or response.status >= 300:
+                    raise MaxApiError(
+                        str(uploaded.get("message") or raw or "MAX media upload failed")[:500],
+                        status=response.status,
+                    )
+        except asyncio.TimeoutError as exc:
+            raise MaxApiError("MAX media upload timed out") from exc
+        except aiohttp.ClientError as exc:
+            raise MaxApiError(f"MAX media upload transport error: {exc}") from exc
+
+        token = str(uploaded.get("token") or slot.get("token") or "").strip()
+        if not token:
+            raise MaxApiError("MAX media upload did not return a token")
+        return token
+
+    async def upload_media_from_url(
+        self,
+        media_type: str,
+        source_url: str,
+        *,
+        filename: str,
+    ) -> str:
+        """Download a provider result and upload it to MAX.
+
+        MAX supports direct external URLs only for images. Video/audio/file results
+        therefore pass through the official upload endpoint before delivery.
+        """
+        if media_type not in MAX_MEDIA_TYPES:
+            raise ValueError("Unsupported MAX media type")
+        session = await self._get_session()
+        try:
+            async with session.get(source_url) as response:
+                if response.status < 200 or response.status >= 300:
+                    raise MaxApiError(
+                        f"Provider media download failed with HTTP {response.status}",
+                        status=response.status,
+                    )
+                content = await response.read()
+                content_type = str(response.headers.get("Content-Type") or "application/octet-stream")
+        except asyncio.TimeoutError as exc:
+            raise MaxApiError("Provider media download timed out") from exc
+        except aiohttp.ClientError as exc:
+            raise MaxApiError(f"Provider media download failed: {exc}") from exc
+        return await self.upload_media_bytes(
+            media_type,
+            content,
+            filename=filename,
+            content_type=content_type,
+        )
+
+    async def send_media_url(
+        self,
+        user_id: int,
+        *,
+        media_type: str,
+        url: str,
+        text: str = "",
+        filename: str = "result.bin",
+        attachments: list[dict[str, Any]] | None = None,
+    ) -> dict[str, Any]:
+        extra = list(attachments or [])
+        if media_type == "image":
+            media = image_url_attachment(url)
+        else:
+            token = await self.upload_media_from_url(
+                media_type,
+                url,
+                filename=filename,
+            )
+            media = token_attachment(media_type, token)
+        return await self.send_message(
+            user_id,
+            text,
+            attachments=[media, *extra],
+        )
 
 
 def callback_button(text: str, payload: str) -> dict[str, str]:
@@ -214,15 +333,25 @@ def link_button(text: str, url: str) -> dict[str, str]:
 
 
 def open_app_button(text: str, url: str) -> dict[str, str]:
-    return {"type": "open_app", "text": text, "url": url}
+    return {"type": "open_app", "text": text, "web_app": url}
 
 
 def inline_keyboard(rows: list[list[dict[str, Any]]]) -> dict[str, Any]:
+    if len(rows) > 30 or any(len(row) > 7 for row in rows):
+        raise ValueError("MAX inline keyboard exceeds platform limits")
+    if sum(len(row) for row in rows) > 210:
+        raise ValueError("MAX inline keyboard exceeds 210 buttons")
     return {"type": "inline_keyboard", "payload": {"buttons": rows}}
 
 
 def image_url_attachment(url: str) -> dict[str, Any]:
     return {"type": "image", "payload": {"url": url}}
+
+
+def token_attachment(media_type: str, token: str) -> dict[str, Any]:
+    if media_type not in MAX_MEDIA_TYPES:
+        raise ValueError("Unsupported MAX media type")
+    return {"type": media_type, "payload": {"token": token}}
 
 
 def verify_max_webhook_secret(request: web.Request, secret: str) -> bool:
