@@ -1,62 +1,45 @@
-# Migration and Repair Guide
+# HappyFox migration rules
 
-Этот документ описывает не внешние provider migrations, а внутренние data/runtime scripts, которые лежат в `scripts/`.
+This file records general migration guardrails. Task-specific scripts/runtime code remain the source of truth.
 
-## 1. Когда нужен этот файл
+## Product boundary
 
-- перенос SQLite -> PostgreSQL
-- проверка runtime DB backend
-- backfill feed/referral data
-- redelivery / repair после инцидента
+HappyFox was created from a known production-core import, but current production data belongs exclusively to HappyFox.
 
-## 2. Основные scripts
+Never use a NEUROMIX/Tanya database, Redis namespace, media root or `.env` as a migration shortcut or rollback target.
 
-### DB / runtime
+## Schema migrations
 
-- `scripts/backup_db.sh`
-- `scripts/check_postgres_runtime.py`
-- `scripts/migrate_sqlite_to_postgres.py`
-- `scripts/verify_postgres_migration.py`
+For any schema change:
 
-### Feed / referral repair
+```text
+code + migration/startup DDL
+ -> regression tests
+ -> backup/rollback plan
+ -> PR/main CI
+ -> exact-SHA deploy
+ -> post-deploy DB/runtime smoke
+```
 
-- `scripts/persist_existing_feed.py`
-- `scripts/restore_feed_from_kie.py`
-- `scripts/backfill_feed_author_photos.py`
-- `scripts/backfill_referral_events_from_logs.py`
-- `scripts/repair_referral_cycles.py`
-- `scripts/repair_referral_sync.py`
+Production is PostgreSQL. SQLite compatibility may be retained for tests, but a SQLite-only migration is not production-complete.
 
-### Delivery / payment / watcher
+## Channel migrations
 
-- `scripts/redeliver_tasks.py`
-- `scripts/poll_yookassa_pending.py`
-- `scripts/watcher.py`
+Instagram-specific persistent structures include channel identities, link tokens, promotions, language state and durable generation sessions/jobs.
 
-## 3. Правила запуска
+Do not:
 
-- сначала читать код скрипта
-- запускать только с понятным `DATABASE_URL`
-- перед изменяющими операциями делать backup
-- не выполнять repair scripts на проде без понимания rollback path
+- fabricate Telegram IDs for Instagram identities;
+- reset promotions during account relink;
+- drop durable provider task/result state during schema cleanup;
+- change billing ownership without a data backfill/reconciliation plan.
 
-## 4. Практический порядок при DB migration
+## Financial/data repairs
 
-1. Сделать backup
-2. Проверить текущий backend через `check_postgres_runtime.py`
-3. Выполнить migration script
-4. Выполнить verification script
-5. Перезапустить runtime
-6. Проверить `/health` и smoke flows
+Repairs must be targeted and idempotent. Before manual changes record relevant user/channel/job/transaction identifiers and take a compatible HappyFox backup.
 
-## 5. Что не документирует этот файл
+Do not manually credit/refund before reconciling the original transaction/generation state.
 
-- provider payload contracts
-- Mini App frontend build
-- production nginx/systemd specifics
+## Infrastructure migration
 
-Для этого смотри:
-
-- [runbook.md](runbook.md)
-- [postgres-migration.md](postgres-migration.md)
-- [architecture.md](architecture.md)
+Use `happyfox-production-cutover.md` and `production-deployment.md`. Instagram may be temporarily disabled using `INSTAGRAM_ENABLED=0` while preserving Telegram if the migration risk is channel-specific.
