@@ -4,6 +4,7 @@ Handlers for the Telegram bot.
 
 from aiogram import Router
 
+from bot import keyboards as keyboards_module
 from bot.services.lava_binding_schema_compat import (
     install_lava_binding_schema_compat,
 )
@@ -81,9 +82,16 @@ from .seedance_multimodal_compat import (
 from .seedance_multimodal_compat import (
     router as seedance_multimodal_compat_router,
 )
+from .suno import router as suno_router
+from .suno_admin import router as suno_admin_router
+from .suno_menu_compat import install_suno_menu_compat
 from .support import router as support_router
 from .trend_route_compat import install_trend_route_compat
 from .trend_seedance_25_compat import install_trend_seedance_25_compat
+
+# Suno is isolated from the legacy monolith but appears in the same established
+# Telegram/admin menus. Install wrappers before composing broad legacy routers.
+install_suno_menu_compat(common_module, admin_module, keyboards_module)
 
 # Partner applications and moderation handlers must run before the legacy admin
 # router. Existing partners continue to use partner_agreed_at as the financial
@@ -91,6 +99,7 @@ from .trend_seedance_25_compat import install_trend_seedance_25_compat
 admin_router = Router()
 admin_router.include_router(partner_approval_admin_router)
 admin_router.include_router(admin_user_ban_router)
+admin_router.include_router(suno_admin_router)
 admin_router.include_router(admin_module.router)
 
 # Keep payment safety fixes without changing the established user-facing flow.
@@ -172,6 +181,7 @@ install_miniapp_regression_safety()
 install_trend_route_compat()
 common_router = Router()
 common_router.include_router(partner_approval_user_router)
+common_router.include_router(suno_router)
 common_router.include_router(trend_video_compat_router)
 common_router.include_router(trend_text_upload_router)
 common_router.include_router(trends_compat_router)
@@ -201,6 +211,8 @@ __all__ = [
     "seedance_25_preview_router",
     "seedance_25_telegram_compat_router",
     "seedance_multimodal_compat_router",
+    "suno_admin_router",
+    "suno_router",
     "support_router",
     "trend_text_upload_router",
     "trend_video_compat_router",
