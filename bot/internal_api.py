@@ -196,9 +196,11 @@ def setup_internal_api(app: web.Application, secret: str, version: str = "") -> 
     router.add_get(f"{_INTERNAL_PREFIX}/stats", handle_internal_stats)
 
     from bot.handlers.freekassa_payments import setup_freekassa_routes
+    from bot.max_runtime import setup_max_runtime
 
     setup_freekassa_routes(app)
     _setup_instagram_channel(app)
+    setup_max_runtime(app)
 
     logger.info(
         "Internal API registered: prefix=%s, routes=health, stats",
