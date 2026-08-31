@@ -11,8 +11,9 @@ from aiohttp import web
 from bot.max_api import MAX_UPDATE_TYPES, MaxClient, MaxSettings, setup_max_routes
 from bot.max_generation import install_max_generation_worker
 from bot.max_omni_audio import MaxOmniGenerationService
-from bot.max_omni_channel import MaxOmniChannelService
 from bot.max_payments import MaxYooKassaService, ensure_max_payment_schema
+from bot.max_suno_full_channel import MaxSunoFullChannelService
+from bot.suno_jobs import install_suno_worker
 
 logger = logging.getLogger(__name__)
 
@@ -120,7 +121,9 @@ async def _max_payment_reconcile_loop(
 
 
 def setup_max_runtime(app: web.Application) -> None:
-    """Composition root for the isolated MAX channel. Dark unless MAX_ENABLED=1."""
+    """Composition root for MAX plus the channel-agnostic durable Suno worker."""
+    install_suno_worker(app)
+
     settings = MaxSettings.from_env()
     if not settings.enabled:
         logger.info("MAX channel disabled")
@@ -136,7 +139,7 @@ def setup_max_runtime(app: web.Application) -> None:
         raise RuntimeError(
             "MAX_ENABLED=1 requires YooKassa credentials and MAX_PAYMENT_RETURN_URL"
         )
-    channel = MaxOmniChannelService(
+    channel = MaxSunoFullChannelService(
         settings=settings,
         client=client,
         payments=payments,

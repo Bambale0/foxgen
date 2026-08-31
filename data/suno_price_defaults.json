@@ -1,0 +1,126 @@
+{
+  "telegram": {
+    "generate": {
+      "V5_5": 25,
+      "V5": 25,
+      "V4_5PLUS": 22,
+      "V4_5": 20,
+      "V4_5ALL": 20,
+      "V4": 15
+    },
+    "extend": {
+      "V5_5": 22,
+      "V5": 22,
+      "V4_5PLUS": 20,
+      "V4_5": 18,
+      "V4_5ALL": 18,
+      "V4": 14
+    },
+    "upload_extend": {
+      "V5_5": 24,
+      "V5": 24,
+      "V4_5PLUS": 22,
+      "V4_5": 20,
+      "V4_5ALL": 20,
+      "V4": 16
+    },
+    "upload_cover": {
+      "V5_5": 24,
+      "V5": 24,
+      "V4_5PLUS": 22,
+      "V4_5": 20,
+      "V4_5ALL": 20,
+      "V4": 16
+    },
+    "add_vocals": {
+      "V5_5": 20,
+      "V5": 20,
+      "V4_5PLUS": 18,
+      "V4_5": 18,
+      "V4_5ALL": 18,
+      "V4": 15
+    },
+    "add_instrumental": {
+      "V5_5": 20,
+      "V5": 20,
+      "V4_5PLUS": 18,
+      "V4_5": 18,
+      "V4_5ALL": 18,
+      "V4": 15
+    },
+    "lyrics": {"default": 3},
+    "separate_vocal": {"default": 5},
+    "split_stem": {"default": 20},
+    "split_stem_advanced": {"default": 10},
+    "wav": {"default": 2},
+    "music_video": {"default": 3},
+    "persona": {"default": 3},
+    "timestamped_lyrics": {"default": 1},
+    "midi": {"default": 5},
+    "sounds": {"default": 10},
+    "voice_validate": {"default": 3},
+    "voice_generate": {"default": 12}
+  },
+  "max": {
+    "generate": {
+      "V5_5": 25,
+      "V5": 25,
+      "V4_5PLUS": 22,
+      "V4_5": 20,
+      "V4_5ALL": 20,
+      "V4": 15
+    },
+    "extend": {
+      "V5_5": 22,
+      "V5": 22,
+      "V4_5PLUS": 20,
+      "V4_5": 18,
+      "V4_5ALL": 18,
+      "V4": 14
+    },
+    "upload_extend": {
+      "V5_5": 24,
+      "V5": 24,
+      "V4_5PLUS": 22,
+      "V4_5": 20,
+      "V4_5ALL": 20,
+      "V4": 16
+    },
+    "upload_cover": {
+      "V5_5": 24,
+      "V5": 24,
+      "V4_5PLUS": 22,
+      "V4_5": 20,
+      "V4_5ALL": 20,
+      "V4": 16
+    },
+    "add_vocals": {
+      "V5_5": 20,
+      "V5": 20,
+      "V4_5PLUS": 18,
+      "V4_5": 18,
+      "V4_5ALL": 18,
+      "V4": 15
+    },
+    "add_instrumental": {
+      "V5_5": 20,
+      "V5": 20,
+      "V4_5PLUS": 18,
+      "V4_5": 18,
+      "V4_5ALL": 18,
+      "V4": 15
+    },
+    "lyrics": {"default": 3},
+    "separate_vocal": {"default": 5},
+    "split_stem": {"default": 20},
+    "split_stem_advanced": {"default": 10},
+    "wav": {"default": 2},
+    "music_video": {"default": 3},
+    "persona": {"default": 3},
+    "timestamped_lyrics": {"default": 1},
+    "midi": {"default": 5},
+    "sounds": {"default": 10},
+    "voice_validate": {"default": 3},
+    "voice_generate": {"default": 12}
+  }
+}
