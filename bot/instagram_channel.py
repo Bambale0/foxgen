@@ -72,7 +72,11 @@ def _choice_text(language: str) -> str:
     if language == "en":
         return text + "\n\nYour first photo is free 🎁; video is paid."
     if language == "ru":
-        return text + "\n\nПервое фото бесплатно 🎁, видео — платно."
+        return (
+            text
+            + "\n\nПервое фото бесплатно 🎁, видео — платно. "
+            "Напиши «Фото» или «Видео», и продолжим."
+        )
     return text + "\n\n📸 Seedream 5 Pro\n🎬 Seedance 2.5"
 
 
