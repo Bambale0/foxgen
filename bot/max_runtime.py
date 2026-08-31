@@ -9,8 +9,9 @@ from urllib.parse import urlparse
 from aiohttp import web
 
 from bot.max_api import MAX_UPDATE_TYPES, MaxClient, MaxSettings, setup_max_routes
-from bot.max_channel import MaxChannelService
-from bot.max_generation import MaxGenerationService, install_max_generation_worker
+from bot.max_creator_channel import MaxCreatorChannelService
+from bot.max_creator_generation import MaxCreatorGenerationService
+from bot.max_generation import install_max_generation_worker
 from bot.max_payments import MaxYooKassaService, ensure_max_payment_schema
 
 logger = logging.getLogger(__name__)
@@ -135,14 +136,14 @@ def setup_max_runtime(app: web.Application) -> None:
         raise RuntimeError(
             "MAX_ENABLED=1 requires YooKassa credentials and MAX_PAYMENT_RETURN_URL"
         )
-    channel = MaxChannelService(
+    channel = MaxCreatorChannelService(
         settings=settings,
         client=client,
         payments=payments,
         bot_name=runtime.bot_name,
         support_contact=runtime.support_contact,
     )
-    generation = MaxGenerationService(client)
+    generation = MaxCreatorGenerationService(client)
 
     setup_max_routes(app, settings=settings, event_handler=channel.handle_update)
     app["max_client"] = client
