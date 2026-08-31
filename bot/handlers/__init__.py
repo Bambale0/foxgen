@@ -4,6 +4,7 @@ Handlers for the Telegram bot.
 
 from aiogram import Router
 
+from bot import keyboards as keyboards_module
 from bot.services.lava_binding_schema_compat import (
     install_lava_binding_schema_compat,
 )
@@ -23,9 +24,6 @@ from .miniapp_video_continuity_compat import install_miniapp_video_continuity_co
 from .own_profile_feed_compat import install_own_profile_feed_compat
 from .profile_feed_deeplink_compat import install_profile_feed_deeplink_compat
 
-# Publication scope must be installed before generation/common/miniapp import
-# their database and keyboard functions. This keeps the established flow while
-# adding a separate "profile only" state next to the public discovery feed.
 from .publication_scope_compat import (
     install_common_publication_scope_compat,
     install_publication_scope_compat,
@@ -43,15 +41,9 @@ install_publication_scope_compat()
 
 from . import admin as admin_module
 from . import common as common_module
-from . import (
-    generation as generation_module,
-)
-from . import (
-    lava_checkout as lava_checkout_module,
-)
-from . import (
-    payments as payments_module,
-)
+from . import generation as generation_module
+from . import lava_checkout as lava_checkout_module
+from . import payments as payments_module
 from .admin_user_ban import router as admin_user_ban_router
 from .batch_generation import router as batch_generation_router
 from .freekassa_payments import router as freekassa_payments_router
@@ -75,25 +67,24 @@ from .seedance_25_telegram_compat import install_seedance_25_telegram_compat
 from .seedance_25_telegram_compat import router as seedance_25_telegram_compat_router
 from .seedance_25_upload_compat import install_seedance_25_upload_compat
 from .seedance_25_video_ref_pricing import install_seedance_25_video_ref_pricing
-from .seedance_multimodal_compat import (
-    install_seedance_multimodal_runtime_compat,
-)
-from .seedance_multimodal_compat import (
-    router as seedance_multimodal_compat_router,
-)
+from .seedance_multimodal_compat import install_seedance_multimodal_runtime_compat
+from .seedance_multimodal_compat import router as seedance_multimodal_compat_router
+from .suno import router as suno_router
+from .suno_admin import router as suno_admin_router
+from .suno_menu_compat import install_suno_menu_compat
+from .suno_priority import router as suno_priority_router
 from .support import router as support_router
 from .trend_route_compat import install_trend_route_compat
 from .trend_seedance_25_compat import install_trend_seedance_25_compat
 
-# Partner applications and moderation handlers must run before the legacy admin
-# router. Existing partners continue to use partner_agreed_at as the financial
-# activation flag, while new applications are approved explicitly.
+install_suno_menu_compat(common_module, admin_module, keyboards_module)
+
 admin_router = Router()
 admin_router.include_router(partner_approval_admin_router)
 admin_router.include_router(admin_user_ban_router)
+admin_router.include_router(suno_admin_router)
 admin_router.include_router(admin_module.router)
 
-# Keep payment safety fixes without changing the established user-facing flow.
 install_lava_binding_schema_compat()
 install_lava_payment_safety(payments_module)
 install_lava_invoice_compat(payments_module, lava_checkout_module)
@@ -101,32 +92,16 @@ legacy_payments_router = payments_module.router
 lava_checkout_router = lava_checkout_module.router
 legacy_common_router = common_module.router
 
-# Long Telegram prompts may arrive as several messages because a single text
-# message is capped by Telegram. Delay only actual generation prompt handlers
-# briefly and coalesce consecutive fragments into one submit. Analyzer routers
-# are intentionally excluded because some of their handlers use SkipHandler
-# fallback routing after the matched callback returns.
 prompt_fragment_coalescer = PromptFragmentCoalescingMiddleware()
 generation_module.router.message.middleware(prompt_fragment_coalescer)
 batch_generation_router.message.middleware(prompt_fragment_coalescer)
 
-# Ordinary photo-only prompt analysis should use the same compact result structure
-# as the VK bot. Voice-only and photo+voice keep the richer Telegram result.
 install_vk_photo_prompt_result_compat()
 
-# The unified analyzer owns text, photo, and voice prompt creation. Keep it
-# before the legacy analyzer, which still handles video-to-prompt and fallback
-# compatibility routes using the same FSM state.
 image_analyzer_router = Router()
 image_analyzer_router.include_router(prompt_analyzer_v2_router)
 image_analyzer_router.include_router(legacy_image_analyzer_router)
 
-# Seedance 2.0 keeps its established multimodal compatibility layer. Seedance
-# 2.5 is assembled from isolated compatibility layers so the production branch
-# remains untouched: provider/runtime -> chunk uploads -> preview UI -> pricing
-# -> public access/billing -> stale-client request compatibility -> Telegram UX
-# -> NEW priority. Mini App continuity is installed last so repeat restoration
-# feeds the final Seedance/public wrapper as well as every legacy video model.
 install_seedance_multimodal_runtime_compat()
 install_seedance_25_upload_compat()
 install_seedance_25_fullstack()
@@ -141,23 +116,17 @@ install_miniapp_video_continuity_compat()
 install_trend_seedance_25_compat()
 generation_router = Router()
 generation_router.include_router(publication_scope_compat_router)
-# Public first-frame photo handling goes before the older Seedance routers so
-# it cannot be swallowed by a generic document/photo route.
 generation_router.include_router(seedance_25_telegram_compat_router)
 generation_router.include_router(seedance_25_fullstack_router)
 generation_router.include_router(seedance_25_preview_router)
 generation_router.include_router(seedance_multimodal_compat_router)
 generation_router.include_router(generation_module.router)
 
-# Provider-specific payment handlers run before the broad legacy payments router,
-# while generation and photo analysis keep the original UX routing.
 payments_router = Router()
 payments_router.include_router(lava_checkout_router)
 payments_router.include_router(freekassa_payments_router)
 payments_router.include_router(legacy_payments_router)
 
-# Keep the established common-menu flow. Specific background/support handlers are
-# included before the broad legacy common router without replacing its UI.
 install_common_publication_scope_compat(common_module)
 install_profile_feed_deeplink_compat(common_module)
 install_trends_compat(common_module, generation_module, admin_module)
@@ -167,11 +136,13 @@ install_feed_model_filter_compat(common_module)
 install_own_profile_feed_compat()
 install_partner_referral_approval_guard()
 install_miniapp_regression_safety()
-# Route safety must wrap add_post before trend/miniapp routes are registered.
-# The trend route itself must be inserted before Mini App's API catch-all.
 install_trend_route_compat()
 common_router = Router()
 common_router.include_router(partner_approval_user_router)
+# These handlers intentionally go first: lyrics/sounds/tools use their own FSM
+# and must not be swallowed by the generic Suno generation text state.
+common_router.include_router(suno_priority_router)
+common_router.include_router(suno_router)
 common_router.include_router(trend_video_compat_router)
 common_router.include_router(trend_text_upload_router)
 common_router.include_router(trends_compat_router)
@@ -201,6 +172,9 @@ __all__ = [
     "seedance_25_preview_router",
     "seedance_25_telegram_compat_router",
     "seedance_multimodal_compat_router",
+    "suno_admin_router",
+    "suno_priority_router",
+    "suno_router",
     "support_router",
     "trend_text_upload_router",
     "trend_video_compat_router",
