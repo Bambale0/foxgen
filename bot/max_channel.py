@@ -5,11 +5,19 @@ import logging
 import re
 from typing import Any
 
-from bot.max_api import MaxApiError, MaxClient, MaxSettings, callback_button, inline_keyboard, link_button
+from bot.max_api import (
+    MaxApiError,
+    MaxClient,
+    MaxSettings,
+    callback_button,
+    inline_keyboard,
+    link_button,
+)
 from bot.max_catalog import MAX_VIDEO_TYPES, MaxPresetManager, max_preset_manager
 from bot.max_generation import MaxGenerationJob, enqueue_max_generation
 from bot.max_payments import (
     MaxYooKassaService,
+    get_max_payment_order,
     get_max_referral_stats,
     register_max_referral,
 )
@@ -187,7 +195,13 @@ class MaxChannelService:
                 logger.warning("MAX callback answer failed; falling back to new message")
         await self.client.send_message(user_id, text, attachments=attachments)
 
-    async def _home(self, user_id: int, *, callback_id: str = "", clear: bool = True) -> None:
+    async def _home(
+        self,
+        user_id: int,
+        *,
+        callback_id: str = "",
+        clear: bool = True,
+    ) -> None:
         if clear:
             await clear_max_session(user_id)
         balance = await get_max_balance(user_id)
@@ -266,7 +280,13 @@ class MaxChannelService:
             callback_id=callback_id,
         )
 
-    async def _create_payment(self, user_id: int, package_id: str, *, callback_id: str) -> None:
+    async def _create_payment(
+        self,
+        user_id: int,
+        package_id: str,
+        *,
+        callback_id: str,
+    ) -> None:
         try:
             order = await self.payments.create_checkout(user_id, package_id)
         except (RuntimeError, ValueError) as exc:
@@ -282,7 +302,12 @@ class MaxChannelService:
             inline_keyboard(
                 [
                     [link_button("💳 Оплатить в YooKassa", str(order.checkout_url))],
-                    [callback_button("🔄 Проверить оплату", f"max:payment:{order.order_id}")],
+                    [
+                        callback_button(
+                            "🔄 Проверить оплату",
+                            f"max:payment:{order.order_id}",
+                        )
+                    ],
                     [callback_button("🏠 Главное меню", "max:home")],
                 ]
             )
@@ -298,28 +323,57 @@ class MaxChannelService:
             callback_id=callback_id,
         )
 
-    async def _check_payment(self, user_id: int, order_id: str, *, callback_id: str) -> None:
-        result = await self.payments.complete_order(order_id)
-        order = result.get("order")
-        if order is not None and int(order.max_user_id) != int(user_id):
-            await self._respond(user_id, "Этот счёт принадлежит другому пользователю.", callback_id=callback_id)
+    async def _check_payment(
+        self,
+        user_id: int,
+        order_id: str,
+        *,
+        callback_id: str,
+    ) -> None:
+        local_order = await get_max_payment_order(order_id)
+        if local_order is None:
+            await self._respond(
+                user_id,
+                "Счёт MAX не найден.",
+                attachments=back_home_menu(),
+                callback_id=callback_id,
+            )
             return
+        if int(local_order.max_user_id) != int(user_id):
+            await self._respond(
+                user_id,
+                "Этот счёт принадлежит другому пользователю.",
+                attachments=back_home_menu(),
+                callback_id=callback_id,
+            )
+            return
+
+        result = await self.payments.complete_order(order_id)
         status = str(result.get("status") or "")
         if status == "completed":
             balance = await get_max_balance(user_id)
             await self._respond(
                 user_id,
                 f"✅ <b>Оплата подтверждена</b>\n\nБаланс MAX: <b>{_format_cost(balance)} 🐾</b>",
-                attachments=main_menu(balance, mini_app_url=self.settings.mini_app_url),
+                attachments=main_menu(
+                    balance,
+                    mini_app_url=self.settings.mini_app_url,
+                ),
                 callback_id=callback_id,
             )
             return
         if status == "failed":
             text = "Платёж отменён или не прошёл. Можно создать новый счёт."
         elif status == "verification_failed":
-            text = "Платёж найден, но его данные не совпали со счётом MAX. Начисление остановлено безопасно."
+            text = (
+                "Платёж найден, но его данные не совпали со счётом MAX. "
+                "Начисление остановлено безопасно."
+            )
         else:
-            text = "Платёж ещё не подтверждён. Если вы уже оплатили, повторите проверку через несколько секунд."
+            text = (
+                "Платёж ещё не подтверждён. Если вы уже оплатили, "
+                "повторите проверку через несколько секунд."
+            )
         await self._respond(
             user_id,
             text,
@@ -327,9 +381,19 @@ class MaxChannelService:
             callback_id=callback_id,
         )
 
-    async def _select_image_model(self, user_id: int, model: str, *, callback_id: str) -> None:
+    async def _select_image_model(
+        self,
+        user_id: int,
+        model: str,
+        *,
+        callback_id: str,
+    ) -> None:
         if model not in self.catalog.image_models():
-            await self._respond(user_id, "Эта модель фото сейчас недоступна.", callback_id=callback_id)
+            await self._respond(
+                user_id,
+                "Эта модель фото сейчас недоступна.",
+                callback_id=callback_id,
+            )
             return
         await save_max_session(
             user_id,
@@ -343,7 +407,8 @@ class MaxChannelService:
         )
         await self._respond(
             user_id,
-            f"🖼 <b>{html.escape(model)}</b>\n\nОтправьте промпт одним сообщением.{reference_note}",
+            f"🖼 <b>{html.escape(model)}</b>\n\n"
+            f"Отправьте промпт одним сообщением.{reference_note}",
             attachments=back_home_menu(),
             callback_id=callback_id,
         )
@@ -356,13 +421,24 @@ class MaxChannelService:
         *,
         callback_id: str,
     ) -> None:
-        if generation_type not in MAX_VIDEO_TYPES or model not in self.catalog.video_models(generation_type):
-            await self._respond(user_id, "Эта видео-модель сейчас недоступна для выбранного сценария.", callback_id=callback_id)
+        if (
+            generation_type not in MAX_VIDEO_TYPES
+            or model not in self.catalog.video_models(generation_type)
+        ):
+            await self._respond(
+                user_id,
+                "Эта видео-модель сейчас недоступна для выбранного сценария.",
+                callback_id=callback_id,
+            )
             return
         await save_max_session(
             user_id,
             "video:waiting_input",
-            {"kind": "video", "generation_type": generation_type, "model": model},
+            {
+                "kind": "video",
+                "generation_type": generation_type,
+                "model": model,
+            },
         )
         if generation_type == "text":
             media_note = "Отправьте текстовый промпт."
@@ -379,14 +455,21 @@ class MaxChannelService:
             callback_id=callback_id,
         )
 
-    async def _prepare_generation_from_message(self, user_id: int, update: dict[str, Any]) -> bool:
+    async def _prepare_generation_from_message(
+        self,
+        user_id: int,
+        update: dict[str, Any],
+    ) -> bool:
         session = await get_max_session(user_id)
         if session.state not in {"image:waiting_input", "video:waiting_input"}:
             return False
         prompt = _message_text(update)
         images, videos = _media_urls(update)
         if not prompt:
-            await self._respond(user_id, "Добавьте текстовый промпт к сообщению — без него генерацию не запускаю.")
+            await self._respond(
+                user_id,
+                "Добавьте текстовый промпт к сообщению — без него генерацию не запускаю.",
+            )
             return True
 
         data = dict(session.data)
@@ -396,7 +479,10 @@ class MaxChannelService:
         options: dict[str, Any]
         if kind == "image":
             if model in _IMAGE_REFERENCE_REQUIRED and not images:
-                await self._respond(user_id, "Для этой модели нужен референс. Пришлите изображение вместе с промптом.")
+                await self._respond(
+                    user_id,
+                    "Для этой модели нужен референс. Пришлите изображение вместе с промптом.",
+                )
                 return True
             cost = self.catalog.image_cost(model)
             options = {"aspect_ratio": "1:1", "quality": "2K"}
@@ -404,18 +490,35 @@ class MaxChannelService:
         else:
             generation_type = str(data.get("generation_type") or "")
             if generation_type == "imgtxt" and not images:
-                await self._respond(user_id, "Для «Фото → Видео» приложите изображение вместе с промптом.")
+                await self._respond(
+                    user_id,
+                    "Для «Фото → Видео» приложите изображение вместе с промптом.",
+                )
                 return True
             if generation_type == "video" and not videos:
-                await self._respond(user_id, "Для «Видео → Видео» приложите видео-референс вместе с промптом.")
+                await self._respond(
+                    user_id,
+                    "Для «Видео → Видео» приложите видео-референс вместе с промптом.",
+                )
                 return True
             if model == "glow" and (not images or not videos):
-                await self._respond(user_id, "Kling Glow нужны и изображение, и видео-референс.")
+                await self._respond(
+                    user_id,
+                    "Kling Glow нужны и изображение, и видео-референс.",
+                )
                 return True
             duration = _video_duration(model)
             resolution = "720p"
-            quality = resolution if model.startswith("veo3") or model == "gemini_omni" else None
-            cost = self.catalog.video_cost(model, duration=duration, quality=quality)
+            quality = (
+                resolution
+                if model.startswith("veo3") or model == "gemini_omni"
+                else None
+            )
+            cost = self.catalog.video_cost(
+                model,
+                duration=duration,
+                quality=quality,
+            )
             options = {
                 "duration": duration,
                 "aspect_ratio": "16:9",
@@ -435,7 +538,7 @@ class MaxChannelService:
         refs = len(images) + len(videos)
         await self._respond(
             user_id,
-            f"✨ <b>Готово к запуску</b>\n\n"
+            "✨ <b>Готово к запуску</b>\n\n"
             f"Модель: <b>{html.escape(model)}</b>\n"
             f"Стоимость: <b>{_format_cost(cost)} 🐾</b>\n"
             f"Референсов: <b>{refs}</b>\n\n"
@@ -450,7 +553,10 @@ class MaxChannelService:
             await self._respond(
                 user_id,
                 "Сценарий уже завершён или устарел. Выберите модель заново.",
-                attachments=main_menu(await get_max_balance(user_id), mini_app_url=self.settings.mini_app_url),
+                attachments=main_menu(
+                    await get_max_balance(user_id),
+                    mini_app_url=self.settings.mini_app_url,
+                ),
                 callback_id=callback_id,
             )
             return
@@ -493,20 +599,35 @@ class MaxChannelService:
             f"Списано: <b>{_format_cost(job.cost)} 🐾</b>\n"
             f"Осталось: <b>{_format_cost(balance)} 🐾</b>\n\n"
             "Результат придёт сюда автоматически.",
-            attachments=main_menu(balance, mini_app_url=self.settings.mini_app_url),
+            attachments=main_menu(
+                balance,
+                mini_app_url=self.settings.mini_app_url,
+            ),
             callback_id=callback_id,
         )
 
-    async def _unsupported(self, user_id: int, feature: str, *, callback_id: str) -> None:
+    async def _unsupported(
+        self,
+        user_id: int,
+        feature: str,
+        *,
+        callback_id: str,
+    ) -> None:
         await self._respond(
             user_id,
-            f"{html.escape(feature)} уже есть в HappyFox, но отдельный MAX-сценарий ещё переносится. "
-            "Фото, видео, баланс, оплата, история и партнёрская программа в MAX работают независимо.",
+            f"{html.escape(feature)} уже есть в HappyFox, но отдельный MAX-сценарий "
+            "ещё переносится. Фото, видео, баланс, оплата, история и партнёрская "
+            "программа в MAX работают независимо.",
             attachments=back_home_menu(),
             callback_id=callback_id,
         )
 
-    async def _handle_callback(self, user_id: int, callback_id: str, payload: str) -> None:
+    async def _handle_callback(
+        self,
+        user_id: int,
+        callback_id: str,
+        payload: str,
+    ) -> None:
         if payload == "max:home":
             await self._home(user_id, callback_id=callback_id)
         elif payload == "max:balance":
@@ -526,7 +647,11 @@ class MaxChannelService:
                 callback_id=callback_id,
             )
         elif payload.startswith("max:image:"):
-            await self._select_image_model(user_id, payload.split(":", 2)[2], callback_id=callback_id)
+            await self._select_image_model(
+                user_id,
+                payload.split(":", 2)[2],
+                callback_id=callback_id,
+            )
         elif payload == "max:create_video":
             await clear_max_session(user_id)
             await self._respond(
@@ -538,7 +663,11 @@ class MaxChannelService:
         elif payload.startswith("max:vtype:"):
             generation_type = payload.split(":", 2)[2]
             if generation_type not in MAX_VIDEO_TYPES:
-                await self._respond(user_id, "Неизвестный тип видео.", callback_id=callback_id)
+                await self._respond(
+                    user_id,
+                    "Неизвестный тип видео.",
+                    callback_id=callback_id,
+                )
             else:
                 await self._respond(
                     user_id,
@@ -549,17 +678,35 @@ class MaxChannelService:
         elif payload.startswith("max:video:"):
             parts = payload.split(":", 3)
             if len(parts) == 4:
-                await self._select_video_model(user_id, parts[2], parts[3], callback_id=callback_id)
+                await self._select_video_model(
+                    user_id,
+                    parts[2],
+                    parts[3],
+                    callback_id=callback_id,
+                )
         elif payload == "max:gemini_omni":
-            await self._select_video_model(user_id, "text", "gemini_omni", callback_id=callback_id)
+            await self._select_video_model(
+                user_id,
+                "text",
+                "gemini_omni",
+                callback_id=callback_id,
+            )
         elif payload == "max:generate":
             await self._launch_generation(user_id, callback_id=callback_id)
         elif payload == "max:cancel":
             await self._home(user_id, callback_id=callback_id)
         elif payload.startswith("max:package:"):
-            await self._create_payment(user_id, payload.split(":", 2)[2], callback_id=callback_id)
+            await self._create_payment(
+                user_id,
+                payload.split(":", 2)[2],
+                callback_id=callback_id,
+            )
         elif payload.startswith("max:payment:"):
-            await self._check_payment(user_id, payload.split(":", 2)[2], callback_id=callback_id)
+            await self._check_payment(
+                user_id,
+                payload.split(":", 2)[2],
+                callback_id=callback_id,
+            )
         elif payload == "max:support":
             contact = self.support_contact or "раздел поддержки HappyFox"
             await self._respond(
@@ -575,7 +722,12 @@ class MaxChannelService:
                 attachments=[
                     inline_keyboard(
                         [
-                            [link_button("🚀 Открыть Mini App", self.settings.mini_app_url)],
+                            [
+                                link_button(
+                                    "🚀 Открыть Mini App",
+                                    self.settings.mini_app_url,
+                                )
+                            ],
                             [callback_button("🏠 Главное меню", "max:home")],
                         ]
                     )
@@ -590,12 +742,19 @@ class MaxChannelService:
                 "max:assistant": "🤖 AI-помощник",
                 "max:prompts": "✨ Промпты",
             }
-            await self._unsupported(user_id, labels.get(payload, "Этот сценарий"), callback_id=callback_id)
+            await self._unsupported(
+                user_id,
+                labels.get(payload, "Этот сценарий"),
+                callback_id=callback_id,
+            )
 
     async def handle_update(self, update: dict[str, Any]) -> None:
         user_id = _user_id(update)
         if user_id <= 0:
-            logger.info("Ignoring MAX update without a direct user: type=%s", update.get("update_type"))
+            logger.info(
+                "Ignoring MAX update without a direct user: type=%s",
+                update.get("update_type"),
+            )
             return
         username, first_name, last_name = _user_names(update)
         await ensure_max_user(
@@ -621,7 +780,8 @@ class MaxChannelService:
                 balance = await get_max_balance(user_id)
                 await self.client.send_message(
                     user_id,
-                    f"🎁 Реферальный бонус MAX начислен. Баланс: {_format_cost(balance)} 🐾",
+                    "🎁 Реферальный бонус MAX начислен. "
+                    f"Баланс: {_format_cost(balance)} 🐾",
                 )
             return
 
@@ -642,9 +802,17 @@ class MaxChannelService:
         if text in {"/start", "start", "старт", "меню", "/menu"}:
             await self._home(user_id)
         elif text in {"фото", "создать фото"}:
-            await self._respond(user_id, "🖼 <b>Создать фото</b>\n\nВыберите модель.", attachments=image_model_menu(self.catalog))
+            await self._respond(
+                user_id,
+                "🖼 <b>Создать фото</b>\n\nВыберите модель.",
+                attachments=image_model_menu(self.catalog),
+            )
         elif text in {"видео", "создать видео"}:
-            await self._respond(user_id, "🎬 <b>Создать видео</b>\n\nВыберите сценарий.", attachments=video_type_menu())
+            await self._respond(
+                user_id,
+                "🎬 <b>Создать видео</b>\n\nВыберите сценарий.",
+                attachments=video_type_menu(),
+            )
         elif text in {"баланс", "/balance"}:
             await self._balance(user_id, callback_id="")
         elif text in {"партнёры", "партнеры", "/ref"}:
@@ -652,6 +820,10 @@ class MaxChannelService:
         else:
             await self._respond(
                 user_id,
-                "Я не потерял сообщение. Выберите действие в меню — так быстрее дойти до результата.",
-                attachments=main_menu(await get_max_balance(user_id), mini_app_url=self.settings.mini_app_url),
+                "Я не потерял сообщение. Выберите действие в меню — так быстрее "
+                "дойти до результата.",
+                attachments=main_menu(
+                    await get_max_balance(user_id),
+                    mini_app_url=self.settings.mini_app_url,
+                ),
             )
