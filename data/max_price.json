@@ -59,6 +59,13 @@
   },
   "admin_ids": [],
   "support_contact": "",
+  "partner_program": {
+    "level1_percent": 30,
+    "level2_percent": 7,
+    "new_user_bonus_credits": 5,
+    "inviter_bonus_credits": 3,
+    "reward_mode": "credits_equivalent"
+  },
   "partner_exchange": {"rub_per_credit":10},
   "service_prices": {"video_prompt":3,"photo_prompt_rub":1},
   "credit_rub_value": 10
