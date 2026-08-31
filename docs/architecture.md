@@ -1,395 +1,225 @@
-# Архитектура NEUROMIX
+# HappyFox architecture
 
-## 1. Назначение системы
+## 1. System purpose
 
-NEUROMIX объединяет Telegram-бота, Telegram Mini App, сервисы генерации, платежные интеграции, публикацию контента и административные маршруты.
+HappyFox combines multiple delivery channels over one generation, billing and data core:
 
-Backend работает как единый Python runtime на `aiohttp` и подключает `aiogram`. Frontend Mini App собирается отдельно как статический Next.js export и не требует Node.js runtime в production.
+- Telegram bot;
+- Telegram Mini App;
+- Instagram Professional Creator/Business channel;
+- provider/payment webhooks;
+- internal/admin APIs.
+
+The Python backend is the runtime authority. The Next.js Mini App is built as a static export.
 
 ## 2. Production topology
 
 ```text
-Пользователь Telegram
-        │
-        ▼
-https://cdn.chillcreative.ru/mini-app/
-Frontend Nginx, сервер 91.200.84.187
-        │
-        ├── HTML/CSS/JS из static export
-        │
-        └── /mini-app/api/*
-                 │ HTTPS + SNI + Host=tanyapi.chillcreative.ru
-                 ▼
-https://tanyapi.chillcreative.ru
-Backend Nginx, сервер 144.76.188.75
-                 │
-                 ▼
-127.0.0.1:1888 aiohttp / banano-kling.service
+Telegram updates ───────────────┐
+Telegram Mini App HTTPS ────────┼──> HappyFox aiohttp/aiogram backend
+Instagram webhook HTTPS ────────┤          │
+Provider/payment webhooks ──────┘          ├─ PostgreSQL
+                                           ├─ Redis
+                                           ├─ provider adapters
+                                           ├─ billing/ledger
+                                           └─ media delivery
 
-Публичные media URL
-        │
-        ▼
-https://media.chillcreative.ru/uploads/*
-Cloudflare Free
-        │
-        ▼
-Nginx на 144.76.188.75
-        │
-        ▼
-/var/www/media.chillcreative.ru/uploads
-        │ bind mount
-        ▼
-/root/tanya/banano_kling/static/uploads
+Public HappyFox origin: https://alena.chillcreative.ru
+Mini App:               https://alena.chillcreative.ru/mini-app/
+Compose project:        foxgen-happyfox
+Container:              foxgen-happyfox-bot
+Database:               happyfox
+Redis prefix:           foxgen_happyfox
+Production branch:      main
 ```
 
-### Почему API идёт через публичный HTTPS backend
+Exact server/IP details are runtime/deployment configuration, not product constants.
 
-- backend port не нужно открывать frontend-серверу напрямую;
-- TLS и Host/SNI проверяются обычным Nginx;
-- один публичный API-домен используется Telegram webhook и Mini App;
-- firewall backend может оставить runtime привязанным к loopback;
-- проще диагностировать сертификат, маршрутизацию и access logs.
+## 3. Channel adapter principle
 
-## 3. Backend runtime
-
-Ключевой entrypoint: `bot/main.py`.
-
-Runtime отвечает за:
-
-- Telegram webhook;
-- Mini App API;
-- payment webhooks;
-- provider webhooks;
-- health endpoints;
-- internal API;
-- регистрацию routers;
-- запуск background loops;
-- graceful startup/shutdown.
-
-Production service:
+Telegram and Instagram are adapters around the same domain. A channel may define UX, message formatting and acquisition mechanics, but must not fork pricing, provider lifecycle or the user ledger unnecessarily.
 
 ```text
-banano-kling.service
+Telegram adapter ───┐
+                    ├─> identities/users -> generation -> provider -> result
+Instagram adapter ──┘                     -> billing -> shared ledger
 ```
 
-Production checkout:
+Instagram users have channel-neutral identities (`channel_identities`) and can later link to the same HappyFox user used by Telegram. No fake Telegram IDs are allowed.
+
+## 4. Telegram surface
+
+Telegram is the full-featured surface:
+
+- `/start` and creator flows;
+- Mini App bootstrap/auth;
+- image/video/motion creation;
+- references/history/feed/profile/remix;
+- balance and configured payment providers;
+- partner/support/admin contours.
+
+Core modules include `bot/handlers/*`, `bot/miniapp.py`, `bot/database.py`, `bot/services/*`.
+
+Telegram payments remain independent from Instagram presentation. CryptoBot may stay available in Telegram even though Instagram top-up handoff intentionally shows only YooKassa and Lava Top.
+
+## 5. Instagram transport
+
+`bot/instagram_api.py` owns external Meta transport:
+
+- settings/env parsing;
+- GET webhook verification;
+- raw-body HMAC-SHA256 validation;
+- message/postback/comment normalization;
+- echo detection;
+- Redis idempotency;
+- text/media/private-reply Send API calls;
+- webhook subscriptions;
+- publishing container/status/publish primitives.
+
+Runtime registration occurs in `bot/internal_api.py` only when `INSTAGRAM_ENABLED=1`.
+
+Primary Meta host is `graph.instagram.com`; default API version is `v24.0`.
+
+## 6. Instagram identity, language and promotion
 
 ```text
-/root/tanya/banano_kling
+bot/channel_identity.py     channel identity -> optional users.id
+bot/channel_link.py         one-time hashed iglink tokens
+bot/channel_promotions.py   first-photo entitlement
+bot/instagram_i18n.py       persisted RU/EN language
 ```
 
-Рабочая ветка:
+The first successful Instagram photo can be free before Telegram account linking. The promotion is keyed by Instagram external identity, so relinking accounts cannot reset it.
+
+Language is persisted per Instagram identity and resolved from meaningful RU/EN text. Attachment-first entry remains bilingual until a language is known.
+
+## 7. Instagram creator orchestration
+
+`bot/instagram_creator_generation.py` is the top-level creator orchestrator.
+
+### Photo
 
 ```text
-tanyapi
+Photo -> Seedream 5 Pro High -> durable job -> image Direct delivery
 ```
 
-## 4. Telegram-бот и FSM
-
-Ключевые каталоги и файлы:
-
-- `bot/states.py` — FSM states;
-- `bot/keyboards.py` — inline/reply keyboards;
-- `bot/handlers/common.py` — общие команды и стартовые сценарии;
-- `bot/handlers/generation.py` — генерация;
-- `bot/handlers/payments.py` — платежные сценарии;
-- `bot/handlers/admin.py` — администрирование;
-- `bot/handlers/image_analyzer.py` — анализ изображений;
-- `bot/handlers/batch_generation.py` — пакетные сценарии;
-- `bot/handlers/support.py` — поддержка.
-
-Общий поток:
+Contract source: `bot/instagram_model_contract.py`.
 
 ```text
-Telegram update
-  -> router/handler
-  -> FSM state и FSM data
-  -> validation
-  -> database/service call
-  -> provider/payment side effect
-  -> user response
+product_key: seedream_5_pro
+provider:    seedream/5-pro-image-to-image
+quality:     high
+ratio:       1:1
+paid cost:   2.5 🐾
 ```
 
-Redis используется для FSM/cache, когда доступен. При отказе Redis runtime может перейти на in-memory storage, что допустимо как аварийный fallback, но не обеспечивает сохранение FSM после restart.
+Photo lifecycle lives in `bot/instagram_seedream_generation.py` + shared durable worker infrastructure.
 
-## 5. Mini App backend
-
-Ключевой файл: `bot/miniapp.py`.
-
-Backend Mini App отвечает за:
-
-- проверку Telegram `initData`;
-- bootstrap пользователя, моделей, баланса и истории;
-- загрузку файлов;
-- запуск image/video/motion generation;
-- task detail и историю;
-- feed, trends, prompt library и profile routes;
-- публикацию и удаление публикаций;
-- создание платежей;
-- AI assistant;
-- media gateway для отдельных временных provider URL;
-- browser auth fallback.
-
-### Авторизация внутри Telegram
-
-1. Telegram WebView открывает Mini App.
-2. Telegram Web App JS предоставляет `initData`.
-3. Frontend ждёт `initData` ограниченное время и показывает загрузчик.
-4. `POST /mini-app/api/bootstrap` отправляет авторизационные данные backend.
-5. Backend проверяет подпись и пользователя.
-6. После успешного bootstrap приложение переходит в live mode.
-
-Отсутствие `initData` при ручном `curl` должно приводить к `400/401/403`. Это ожидаемая граница авторизации.
-
-### Browser auth fallback
-
-При открытии не внутри Telegram frontend может показать Telegram Login Widget. Backend browser-auth route проверяет подпись Telegram Login, создаёт короткоживущий auth payload и перезагружает клиент с данными входа.
-
-Browser fallback не должен заменять нормальный Telegram WebView flow.
-
-## 6. Frontend Mini App
-
-Каталог:
+### Video
 
 ```text
-frontend/miniapp-v0
+Video -> paywall/top-up -> Continue -> reference -> prompt
+      -> Seedance 2.5 -> durable job -> video Direct delivery
 ```
 
-Стек:
+```text
+product_key: seedance_2_5
+provider:    bytedance/seedance-2-5
+resolution:  720p
+ratio:       9:16
+price:       shared HappyFox/Telegram pricing
+```
+
+Video is always paid. `video:awaiting_topup` must not accept a new media reference.
+
+## 8. Durable job lifecycle
+
+`bot/instagram_generation.py` persists Instagram creator jobs and session drafts.
+
+Core safety properties:
+
+1. durable job exists before charge/promotion side effect;
+2. promotion reservation or paid charge is recoverable;
+3. provider task ID is persisted after submit;
+4. retries poll the same task instead of creating a second generation;
+5. result URL is persisted before delivery retry;
+6. delivery checkpoint prevents repeat media delivery during later local-finalization retries;
+7. terminal paid failure refunds;
+8. terminal free-photo failure releases the entitlement.
+
+The same discipline should be applied to future channel adapters.
+
+## 9. Billing architecture
+
+The HappyFox ledger is shared.
+
+Instagram top-up handoff:
+
+```text
+Instagram -> Telegram iglink -> YooKassa or Lava Top -> shared balance -> Direct Continue
+```
+
+Telegram's normal balance menu can expose other configured providers, including CryptoBot. Do not encode Instagram provider restrictions in the global payment backend.
+
+## 10. Data layer
+
+Production uses PostgreSQL. Redis is used for FSM/cache/locks/idempotency.
+
+Important entities added/used by the Instagram contour:
+
+- `channel_identities`;
+- `channel_link_tokens`;
+- `channel_promotions` / Instagram first-image promotion state;
+- `instagram_channel_languages`;
+- `instagram_generation_sessions`;
+- `instagram_generation_jobs`;
+- existing `users`, transactions and generation history.
+
+New schemas support SQLite tests and PostgreSQL production, but production must remain PostgreSQL.
+
+## 11. Mini App frontend
+
+Directory: `frontend/miniapp-v0`.
+
+Stack:
 
 - Next.js 16;
 - React 19;
-- Tailwind CSS 4;
+- TypeScript;
 - static export;
-- client-side state/context;
-- dynamic imports для тяжёлых вкладок.
+- Playwright browser validation.
 
-Основные файлы:
+The frontend is a Telegram product surface; Instagram creator interaction happens in Direct, not by embedding the Telegram Mini App UX into Instagram.
 
-- `app/layout.tsx` — metadata, Telegram early-ready script;
-- `components/mini-app-shell.tsx` — оболочка, loader/gate/live state;
-- `components/mini-app-loader.tsx` — загрузчик до bootstrap;
-- `components/telegram-open-gate.tsx` — browser/Telegram login fallback;
-- `components/hero-header.tsx` — постоянный бренд NEUROMIX и статус;
-- `lib/app-context.tsx` — bootstrap, state, sync и task polling;
-- `lib/api.ts` — API client;
-- `lib/brand.ts` — единый пользовательский бренд;
-- `next.config.mjs` — export/basePath/assetPrefix.
+## 12. Internal/admin API
 
-### Frontend state machine
+`bot/internal_api.py` registers protected internal routes and isolated external integrations. Internal routes use timestamped HMAC auth. Instagram routes are registered through the same aiohttp application but are authenticated using the Meta webhook contract, not internal HMAC.
 
-Упрощённо:
+## 13. Deployment architecture
+
+`main` is production source of truth.
 
 ```text
-initial locked + isLoading=true
-          │
-          ▼
-MiniAppLoader
-          │
-          ├── Telegram initData получены -> bootstrap -> live UI
-          │
-          └── данные входа не получены -> TelegramOpenGate
+PR head -> CI -> merge -> main CI -> deployment preflight -> exact-SHA deploy
 ```
 
-Загрузчик имеет приоритет над gate, чтобы при медленном Telegram WebView пользователь не видел ложное сообщение об отсутствии авторизации.
+CI gates backend regression/Ruff, Mini App lint/build, Chromium + iPhone WebKit journeys and production Docker image/runtime verification.
 
-### Branding
+## 14. Dependency rule
 
-Пользовательский бренд задаётся через:
+Dependencies point inward:
 
 ```text
-frontend/miniapp-v0/lib/brand.ts
+Meta/Telegram transport -> channel/application services -> shared domain/data/provider services
 ```
 
-Названия моделей (`Nano Banana`, `Kling`, `Veo`, `Grok` и другие) остаются названиями внешних моделей. Они не заменяются на NEUROMIX.
+Do not make shared generation/billing code depend on Meta webhook payloads or Telegram update objects.
 
-## 7. Data layer
+## 15. Source of truth when documents disagree
 
-Ключевые файлы:
-
-- `bot/database.py` — high-level async operations;
-- `bot/db.py` — compatibility facade;
-- `schema_postgres.sql` — PostgreSQL schema reference.
-
-Основные сущности:
-
-- users;
-- transactions;
-- generation tasks/history;
-- settings;
-- referrals and partner withdrawals;
-- promo codes/redemptions;
-- saved references;
-- prompts and likes;
-- feed items, likes, comments, remix/repeat events;
-- batch jobs;
-- Mini App notifications.
-
-Доменные инварианты:
-
-- одна задача не списывает баланс дважды;
-- completed payment не начисляется повторно;
-- task detail доступен только владельцу или разрешённому admin flow;
-- webhook retry должен быть идемпотентным;
-- публикация обновляет существующую запись, а не плодит дубли;
-- приватные uploads не должны случайно получать публичный immutable cache.
-
-## 8. Services layer
-
-Каталог:
-
-```text
-bot/services/
-```
-
-Группы сервисов:
-
-### Generation providers
-
-- Kling family;
-- Nano Banana family;
-- Seedream/Seedance;
-- GPT Image;
-- Grok;
-- Veo;
-- Gemini/Omni;
-- Wan и другие подключённые providers.
-
-### Supporting services
-
-- storage референсов;
-- media validation;
-- prompt generation;
-- image/video analysis;
-- rate limiting;
-- task watchdog;
-- Redis helpers;
-- memory and backup helpers.
-
-### Payments
-
-В репозитории могут сохраняться активные и legacy integrations. Фактически используемый provider определяется конфигурацией и текущим кодом. Наличие модуля не означает, что provider включён в production.
-
-## 9. Media architecture
-
-### Фактическое хранилище
-
-```text
-/root/tanya/banano_kling/static/uploads
-```
-
-Backend уже сохраняет туда файлы и формирует URL `/uploads/...`.
-
-Отдельный каталог с копиями не используется. Для безопасного доступа Nginx применяется bind mount:
-
-```text
-/root/tanya/banano_kling/static/uploads
--> /var/www/media.chillcreative.ru/uploads
-```
-
-### Cache classes
-
-#### Публичная лента
-
-```text
-/uploads/feed/*
-```
-
-Можно кешировать как immutable, если имена файлов уникальны и не перезаписываются.
-
-#### WebP-превью
-
-```text
-/uploads/feed/thumbs/*.webp
-```
-
-Целевой размер превью: примерно 50–200 КБ. Превью используются в сетке вместо тяжёлых оригиналов.
-
-#### Остальные uploads
-
-По умолчанию `no-store`, если файлы могут быть приватными, временными или пользовательскими референсами.
-
-### Cloudflare
-
-Cloudflare Free используется как reverse proxy/cache для `media.chillcreative.ru`.
-
-- A record указывает на `144.76.188.75`;
-- proxy status включён;
-- HTTP/3 может быть временно отключён для проверки проблемных VPN;
-- Cache Rule ограничена публичным media path;
-- origin certificate — Let’s Encrypt;
-- SSL mode зоны — Full (strict).
-
-## 10. Deployment architecture
-
-### Backend deploy
-
-- checkout обновляется строго до `origin/tanyapi`;
-- зависимости и миграции выполняются отдельно от frontend deploy;
-- systemd service перезапускается только после проверки конфигурации;
-- health проверяется локально и через публичный Nginx.
-
-### Frontend deploy
-
-Команда на backend/operator host:
-
-```bash
-sudo bash cdn.sh --remote-deploy tanyafrontend
-```
-
-`cdn.sh`:
-
-1. читает root-only remote profile;
-2. подключается по SSH к `91.200.84.187`;
-3. проверяет чистоту checkout;
-4. обновляет ветку `tanyapi`;
-5. запускает domain deploy на frontend host;
-6. собирает static export;
-7. создаёт backup;
-8. выкладывает файлы без опасного удаления предыдущих chunks;
-9. проверяет health и HTML.
-
-### Media deploy
-
-```bash
-sudo -E bash scripts/deploy_media_origin.sh
-```
-
-Скрипт устанавливает Nginx/Certbot, bind mount, TLS, Cloudflare settings при наличии token, preview backfill и smoke tests.
-
-## 11. Security boundaries
-
-- Telegram `initData` проверяется на backend;
-- Telegram Login Widget payload проверяется на backend;
-- provider/payment webhooks проверяют signature/HMAC там, где это поддерживается;
-- internal API не должен быть публичным без auth;
-- secrets не логируются и не попадают в Git;
-- backend runtime желательно слушает loopback;
-- frontend proxy проверяет TLS upstream;
-- media cache разрешён только для явно публичных путей;
-- Nginx config применяется только после `nginx -t`.
-
-## 12. Observability
-
-Основные точки диагностики:
-
-- `systemctl status banano-kling.service`;
-- `journalctl -u banano-kling.service`;
-- `logs/bot.log`, если file logging включён;
-- frontend `/frontend-health`;
-- backend `/health`;
-- Nginx access/error logs обоих серверов;
-- Cloudflare headers: `CF-Cache-Status`, `Age`, `CF-Ray`;
-- frontend deploy log `/var/log/banano-miniapp-cdn.log`;
-- npm logs в `/root/.npm/_logs` на frontend host.
-
-## 13. Источники истины
-
-- runtime wiring: `bot/main.py`;
-- Mini App routes/contracts: `bot/miniapp.py`;
-- configuration: `bot/config.py`;
-- frontend API/state: `frontend/miniapp-v0/lib/api.ts`, `lib/app-context.tsx`;
-- frontend deployment: `cdn.sh`, `scripts/install_miniapp_frontend_host.sh`, `scripts/install_miniapp_frontend_https_host.sh`;
-- media deployment: `scripts/deploy_media_origin.sh`, `ops/media/nginx-media.conf`;
-- pricing/models: `data/price.json`, `bot/services/preset_manager.py`;
-- verified behavior: `tests/`.
+1. runtime code;
+2. regression tests;
+3. CI/deploy workflows;
+4. `.env.happyfox.example` and `bot/config.py`;
+5. canonical docs;
+6. legacy/provider reference snapshots.
