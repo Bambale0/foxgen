@@ -76,6 +76,11 @@ RUN apt-get update \
     && groupadd --gid "${APP_GID}" app \
     && useradd --uid "${APP_UID}" --gid "${APP_GID}" --create-home --home-dir /home/app app
 
+# Russian Trusted (Минцифры) CA — required to verify TLS for MAX platform-api2.max.ru
+# and YooKassa. These roots are not bundled in upstream ca-certificates/certifi.
+COPY deploy/certs/ /usr/local/share/ca-certificates/rus/
+RUN update-ca-certificates
+
 WORKDIR /app
 
 COPY --from=builder /opt/venv /opt/venv
