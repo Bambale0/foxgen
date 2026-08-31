@@ -27,10 +27,13 @@ class InstagramCreatorGenerationService(LocalizedInstagramVideoGenerationService
     ) -> None:
         language = await resolve_instagram_language(identity.id, event.text)
         key = "ask_kind" if language else "ask_kind_bilingual"
+        text = tr(language, key)
+        if not language:
+            text += "\n\n📸 Seedream 5 Pro\n🎬 Seedance 2.5"
         await self.client.send_text(
             event.account_id,
             event.sender_id,
-            tr(language, key),
+            text,
         )
 
     async def _confirm_photo_kind(
