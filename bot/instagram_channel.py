@@ -56,13 +56,34 @@ def _message_attachments(event: InstagramEvent) -> list[dict[str, Any]]:
 async def _resolve_language_safe(identity_id: int, text: str | None) -> str:
     try:
         return await resolve_instagram_language(identity_id, text)
-    except Exception:
+    except Exception as error:
         logger.warning(
-            "Instagram language preference could not be persisted: identity=%s",
+            "Instagram language preference could not be persisted: identity=%s error=%s",
             identity_id,
-            exc_info=True,
+            error,
         )
         return detect_instagram_language(text)
+
+
+def _choice_text(language: str) -> str:
+    key = "ask_kind" if language else "ask_kind_bilingual"
+    text = tr(language, key)
+    if language == "en":
+        return text + "\n\nYour first photo is free 🎁; video is paid."
+    if language == "ru":
+        return text + "\n\nПервое фото бесплатно 🎁, видео — платно."
+    return text + "\n\n📸 Seedream 5 Pro\n🎬 Seedance 2.5"
+
+
+def _account_link_text(language: str, suffix: str) -> str:
+    if language == "en":
+        return tr(language, "account_link", suffix=suffix)
+    return (
+        "Бесплатная первая фото-генерация уже использована ✅ "
+        "Следующие генерации оплачиваются по обычным ценам HappyFox. "
+        "Привяжи Instagram к HappyFox, чтобы использовать общий баланс и историю."
+        + suffix
+    )
 
 
 class InstagramChannelAdapter:
@@ -144,7 +165,7 @@ class InstagramChannelAdapter:
         await self.client.send_text(
             event.account_id,
             event.sender_id,
-            tr(language, "account_link", suffix=suffix),
+            _account_link_text(language, suffix),
         )
 
     async def _handle_message(
@@ -171,14 +192,14 @@ class InstagramChannelAdapter:
             await self.client.send_text(
                 event.account_id,
                 event.sender_id,
-                tr(language, "ask_kind" if language else "ask_kind_bilingual"),
+                _choice_text(language),
             )
             return
 
         await self.client.send_text(
             event.account_id,
             event.sender_id,
-            tr(language, "ask_kind" if language else "ask_kind_bilingual"),
+            _choice_text(language),
         )
 
     async def _handle_postback(
@@ -204,7 +225,7 @@ class InstagramChannelAdapter:
             await self.client.send_text(
                 event.account_id,
                 event.sender_id,
-                tr(language, "ask_kind" if language else "ask_kind_bilingual"),
+                _choice_text(language),
             )
 
     async def handle_event(self, event: InstagramEvent) -> None:
