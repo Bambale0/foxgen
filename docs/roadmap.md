@@ -1,217 +1,158 @@
-# Roadmap NEUROMIX
+# HappyFox roadmap
 
-Актуальность: `2026-08-01`, ветка `tanyapi`.
+Updated: 2026-08-31. Production source: `Bambale0/foxgen:main`.
 
-Roadmap фиксирует ближайшие направления стабилизации. Это не список обещанных дат и не замена issue tracker.
+This roadmap records current direction, not promised dates. GitHub issues/PRs remain the execution tracker.
 
-## 1. Текущее состояние
+## Delivered baseline
 
-### Product
+### Product/core
 
-Реализованы:
+- standalone HappyFox repository/runtime isolated from NEUROMIX/Tanya;
+- Telegram bot + Telegram Mini App;
+- image/video generation, references, history/feed/profile/remix;
+- shared HappyFox balance/transactions;
+- PostgreSQL production + Redis;
+- exact-SHA CI/CD and isolated production preflight;
+- YooKassa, Lava Top and retained Telegram payment integrations including CryptoBot where configured.
 
-- Telegram bot с webhook runtime;
-- Telegram Mini App;
-- image/video/motion generation;
-- работа с референсами;
-- prompt-by-photo и video analysis flows;
-- feed, trends, profiles, remix/repeat/share;
-- balance, packages, promo codes, referrals и partner mechanics;
-- browser auth fallback;
-- task history и синхронизация результатов.
+### Instagram foundation
 
-### Frontend
+Implemented in source:
 
-- Next.js static export;
-- production frontend на `cdn.chillcreative.ru`;
-- remote deployment через `cdn.sh` и профиль `tanyafrontend`;
-- отдельный initial loader;
-- Telegram auth gate после завершённой проверки;
-- единый пользовательский бренд NEUROMIX;
-- cache-overlap strategy для Telegram WebView.
+- Instagram API with Instagram Login transport;
+- signed webhook verification and Redis idempotency;
+- message/postback/comment normalization;
+- channel-neutral Instagram identities;
+- secure Telegram account linking;
+- Direct creator flow with first Photo/Video choice;
+- Photo -> Seedream 5 Pro High;
+- first successful Instagram photo free;
+- later photos paid at 2.5 🐾 current contract;
+- Video -> Seedance 2.5, always paid;
+- video paywall before reference upload;
+- Instagram top-up via YooKassa/Lava Top using shared ledger;
+- `Продолжить / Continue` resume;
+- automatic persisted RU/EN language switching;
+- durable provider task/result/delivery checkpoints, refund/promotion recovery.
 
-### Backend
+Instagram code can ship dark; live route registration requires `INSTAGRAM_ENABLED=1`.
 
-- production API на `tanyapi.chillcreative.ru`;
-- `banano-kling.service`;
-- Mini App API и provider/payment webhooks;
-- local health;
-- database compatibility layer;
-- Redis FSM/cache с fallback;
-- internal APIs и operational loops.
+## P0: Instagram live activation
 
-### Media
+Remaining external/operational work before calling the channel live:
 
-- существующее storage `static/uploads`;
-- direct Nginx delivery;
-- bind mount в `/var/www/media.chillcreative.ru/uploads`;
-- `media.chillcreative.ru` через Cloudflare Free;
-- Cache Rule только для публичной ленты;
-- WebP previews;
-- IPv4/IPv6/HTTP2/HTTP3/cache diagnostics.
+- configure Meta production app/account with Instagram Login;
+- confirm required permissions/access level;
+- provision production access token/account ID/secrets outside Git;
+- verify public `/instagram/webhook` GET challenge;
+- verify valid/invalid `X-Hub-Signature-256` behavior;
+- subscribe `messages,messaging_postbacks,comments`;
+- run controlled RU/EN Direct smoke;
+- run first-free-photo smoke;
+- run YooKassa and Lava Top top-up/resume smoke;
+- run paid Seedance video smoke;
+- validate comment acquisition/private-reply limits;
+- document activation evidence and rollback.
 
-### Documentation
+## P1: Instagram publishing
 
-Создан единый production documentation set:
+Transport primitives exist; product publishing should remain an explicit user action.
 
-- architecture;
-- full deployment;
-- frontend deployment;
-- media runbook;
-- environment reference;
-- operations runbook;
-- troubleshooting;
-- branding;
-- local development guide.
+Next work:
 
-## 2. Приоритет P0: подтвердить инфраструктуру на production
+- explicit `Publish` confirmation after generation;
+- public HTTPS media preparation/retention policy;
+- Reel/image container status handling and user-friendly failures;
+- publish result/history linkage;
+- duplicate publish protection;
+- RU/EN publishing copy;
+- permissions/review validation in Meta live app.
 
-- выполнить полный media deploy script на backend host;
-- подтвердить certificate renewal;
-- проверить Cloudflare Cache Rule на реальном feed file;
-- проверить `CF-Cache-Status` и `Age`;
-- проверить поведение через проблемные VPN;
-- завершить successful remote frontend deploy на актуальном commit;
-- выполнить Telegram smoke Android/iOS/Desktop;
-- подтвердить, что loader не сменяется ложным auth gate;
-- подтвердить все user-facing заголовки NEUROMIX.
+Do not auto-publish generated media without user confirmation.
 
-## 3. Приоритет P1: frontend deploy reliability
+## P1: observability
 
-### Dependency install
+- structured channel/event/job correlation IDs;
+- Instagram webhook valid/invalid/idempotent counters;
+- generation queue/lease/retry metrics;
+- provider latency/failure metrics by model;
+- payment pending/reconcile alerts;
+- free-promotion reserve/consume/release metrics;
+- deployment SHA and runtime version in operational health/summary;
+- alerting for PostgreSQL/Redis/disk/media failures.
 
-- добавить timeout/heartbeat вокруг `npm ci`;
-- сохранять verbose npm log как release artifact/log;
-- различать network stall, install scripts и OOM;
-- не считать deprecated warnings failure;
-- предусмотреть reuse безопасного npm cache;
-- документировать supported Node/npm versions автоматически.
+## P1: payment reliability
 
-### Release process
+- keep provider webhook idempotency tests current;
+- reconciliation tooling for YooKassa/Lava/CryptoBot and other active Telegram providers;
+- safe manual repair audit trail;
+- alert on aged pending transactions;
+- keep Instagram provider subset separated from Telegram global provider availability.
 
-- один release ID/commit в logs и health;
-- atomic switch текущего frontend release;
-- гарантированное хранение минимум двух наборов hashed chunks;
-- отдельная безопасная rotation old assets;
-- автоматический rollback при failed smoke;
-- remote deploy lock от параллельных запусков.
+## P1: creator UX
 
-## 4. Приоритет P1: media reliability
+- keep Instagram creator path within a few conversational steps;
+- improve media/prompt examples without adding technical jargon;
+- preserve language automatically through result/top-up/resume;
+- add creator-friendly recovery for expired account-link/token/top-up flow;
+- consider result actions that make sense specifically in Direct rather than copying Telegram menus.
 
-- проверить, что public filenames immutable;
-- исключить годовой cache для приватных refs;
-- добавить storage capacity alerts;
-- добавить cleanup policy для временных media;
-- контролировать thumbnail generation failures;
-- добавить метрики original/preview size ratio;
-- добавить мониторинг Cloudflare cache hit ratio;
-- определить условия повторного включения HTTP/3 после VPN-теста.
+## P2: architecture cleanup
 
-## 5. Приоритет P1: observability
+- continue extracting large legacy modules behind clear application/service boundaries;
+- channel adapters must depend inward on shared domain/services;
+- unify shared provider task lifecycle without coupling core to Telegram/Meta payload objects;
+- keep compatibility IDs until a deliberate migration exists;
+- add migrations/tests before schema cleanup.
 
-- machine-readable health с version/commit;
-- frontend health с deployed commit и build timestamp;
-- structured backend logs;
-- correlation ID для frontend proxy -> backend -> provider;
-- отдельные counters для auth errors, provider errors и proxy failures;
-- alert на рост `NRestarts` systemd service;
-- alert на disk usage uploads;
-- payment reconcile lag;
-- orphan webhook/task counters.
+## P2: data and recovery
 
-## 6. Приоритет P1: auth и Mini App startup
+- test backup restore, not just backup creation;
+- formalize retention for uploaded/generated media;
+- monitor storage growth;
+- document targeted repair for stuck generation/payment/promotion state;
+- add migration smoke for channel tables/jobs in PostgreSQL.
 
-- regression tests loader/gate/live state;
-- browser auth expiry/replay tests;
-- Telegram `initData` timeout telemetry;
-- понятная retry-кнопка при transient bootstrap failure;
-- отличать invalid auth от backend unavailable;
-- не раскрывать signature details в UI;
-- проверить clock skew handling.
+## P2: documentation quality
 
-## 7. Приоритет P2: backend structure
+Canonical documentation now lives around HappyFox/main and the Instagram contour. Continue with:
 
-- постепенно уменьшать `bot/main.py` и `bot/miniapp.py`;
-- выделить route registration modules;
-- выделить publication/media/auth services;
-- унифицировать Telegram и Mini App generation orchestration;
-- сохранить compatibility model IDs, callback IDs и deep links;
-- покрывать extraction regression tests до refactor.
+- automated Markdown link checking;
+- stale NEUROMIX/Tanya term audit for non-historical docs;
+- document freshness metadata where useful;
+- keep provider API snapshots explicitly labeled reference-only;
+- update FSM/QA/tracemaps in the same PR as behavioral changes.
 
-## 8. Приоритет P2: storage clarity
+## P3: developer experience
 
-- окончательно закрепить primary production database path;
-- синхронизировать schema, migration scripts и docs;
-- проверить backup restore, а не только создание backup;
-- документировать retention;
-- исключить использование legacy DB dump как runtime source;
-- добавить migration smoke в staging.
-
-## 9. Приоритет P2: payments
-
-- подтвердить фактически активные providers;
-- отделить legacy modules от production configuration;
-- idempotency tests для каждого active provider;
-- reconciliation dashboard/summary;
-- безопасный manual repair flow;
-- audit trail ручных начислений;
-- алерты на pending возрастом выше threshold.
-
-## 10. Приоритет P2: branding cleanup
-
-- user-facing audit bot + Mini App + payment pages;
-- убрать старые Banana/Banano labels из пользовательского слоя;
-- не менять model names Nano Banana;
-- планировать technical identifier migration отдельно;
-- добавить automated brand grep в CI;
-- проверить icons/OpenGraph/Telegram menu metadata.
-
-## 11. Приоритет P3: developer experience
-
-- единая команда quality gate backend + frontend;
-- pre-commit checks;
-- documented staging environment;
-- test fixtures для Mini App auth;
-- локальный mock provider;
+- one local quality-gate command for backend + Mini App + Instagram subset;
+- pre-commit formatting/lint/docs checks;
+- provider mocks/fixtures for generation lifecycle;
+- easier safe local Meta webhook fixtures;
 - dependency update policy;
-- CI build static export;
-- автоматическая проверка docs links и shell syntax.
+- documented non-production environment with isolated data/payment credentials.
 
-## 12. Что не делать без отдельного migration plan
+## Non-goals without migration plan
 
-- не переименовывать массово callback IDs;
-- не менять model IDs ради косметики;
-- не переименовывать systemd/Redis/database identifiers без compatibility strategy;
-- не удалять старые frontend chunks сразу после release;
-- не перемещать `static/uploads` без data migration;
-- не открывать backend port в интернет ради обхода Nginx;
-- не применять Cache Everything ко всем uploads;
-- не делать большой rewrite domain layer без regression coverage.
+Do not casually:
 
-## 13. Definition of stable production
+- mass-rename `banana_*` / `banano_*` compatibility identifiers;
+- change model/provider IDs for branding;
+- merge Telegram and Instagram user IDs into one numeric namespace;
+- create a second Instagram ledger/payment backend;
+- remove CryptoBot from Telegram because Instagram hides it;
+- bypass HMAC/idempotency to make Meta integration easier;
+- reuse NEUROMIX runtime/data as rollback.
 
-Система считается стабилизированной для текущего этапа, когда:
+## Stable production definition
 
-- backend health стабилен и restart count не растёт;
-- frontend deploy воспроизводим и имеет rollback;
-- media загружается в проблемных сетях;
-- Cloudflare cache работает только для публичного контента;
-- Telegram startup не показывает ложный gate;
-- user-facing бренд везде NEUROMIX;
-- generation/payment critical flows покрыты tests;
-- backup restore проверен;
-- оператор может диагностировать типовую проблему по документации без устных инструкций.
+Current HappyFox is stable when:
 
-## 14. Правила обновления roadmap
-
-Пересматривать документ при изменении:
-
-- production topology;
-- frontend deployment strategy;
-- media storage/cache policy;
-- active payment providers;
-- database primary path;
-- Mini App auth/startup model;
-- пользовательского бренда;
-- critical provider families;
-- major operational incident.
+- exact-SHA deployment evidence is reproducible;
+- Telegram/Mini App critical flows remain green on Chromium+iPhone WebKit;
+- payment/generation idempotency and refunds are covered;
+- PostgreSQL/Redis and backups are operationally verified;
+- if Instagram is disabled, it cannot destabilize Telegram;
+- if Instagram is enabled, RU/EN photo/video/payment/comment smoke passes;
+- operators can diagnose common failures from canonical docs without relying on old NEUROMIX instructions.
