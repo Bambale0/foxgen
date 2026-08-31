@@ -1,47 +1,16 @@
-# Настройка nginx для приёма вебхуков LAVA на домене tanyapi.chillcreative.ru
+# Lava Top routing — HappyFox note
 
-Файлы, созданные в репозитории:
-- [nginx/lava.conf](nginx/lava.conf)
+Historical Nginx/Lava instructions from the imported NEUROMIX runtime are not the HappyFox source of truth.
 
-Шаги для развёртывания на сервере:
+HappyFox Lava Top uses the existing application payment handlers/webhooks configured through HappyFox environment. Production reverse-proxy routes must match the current application/runtime and `.env.happyfox.example`, not copied Tanya paths.
 
-1. Скопируйте конфиг в `/etc/nginx/sites-available/` и создайте симлинк в `/etc/nginx/sites-enabled/`:
+Instagram uses Lava Top only as one of two visible top-up providers, with package -> card/SBP flow. Telegram payment configuration remains independent and can keep CryptoBot.
 
-```bash
-sudo cp nginx/lava.conf /etc/nginx/sites-available/lava.conf
-sudo ln -s /etc/nginx/sites-available/lava.conf /etc/nginx/sites-enabled/lava.conf
-```
+For current operations use:
 
-2. Получите TLS-сертификат (рекомендую certbot):
+- `environment.md` — `LAVA_*` configuration;
+- `production-deployment.md` — reverse-proxy/deploy boundary;
+- `troubleshooting.md` — Lava/Instagram diagnostics;
+- `../tracemap_payments.md` — payment lifecycle.
 
-```bash
-# Установите certbot и плагин для nginx, затем выполните
-sudo certbot --nginx -d tanyapi.chillcreative.ru
-```
-
-3. Проверка и перезагрузка nginx:
-
-```bash
-sudo nginx -t
-sudo systemctl reload nginx
-```
-
-4. Убедитесь, что ваш backend слушает на `127.0.0.1:8443` (или поправьте upstream в nginx/lava.conf).
-
-5. Проверьте доступность webhook вручную:
-
-```bash
-curl -v -X POST https://tanyapi.chillcreative.ru/lava/webhook -d '{"test":"ok"}' -H 'Content-Type: application/json'
-```
-
-6. Проверьте логи nginx и бекенда при отладке:
-
-```bash
-sudo journalctl -u nginx -f
-# и логи вашего приложения (в зависимости от настроек)
-```
-
-Дополнительные рекомендации:
-- Если сайт находится за Cloudflare, добавьте его диапазоны IP в `/etc/nginx/cloudflare.conf` и раскомментируйте include.
-- Если LAVA присылает большие payloads, можно увеличить `client_max_body_size` в конфиге.
-- Если backend слушает на другом порту/хосте — измените `upstream lava_backend` в `nginx/lava.conf`.
+Never reuse imported Tanya `LAVA_OFFER_ID_*` values for HappyFox.
