@@ -25,6 +25,8 @@ from bot.instagram_generation import (
     _mark_job_succeeded,
     update_instagram_draft,
 )
+from bot.instagram_generation_i18n import InstagramLocalizedGenerationMixin
+from bot.instagram_i18n import resolve_instagram_language, tr
 from bot.instagram_model_contract import (
     INSTAGRAM_PHOTO_MODEL,
     instagram_photo_cost,
@@ -62,7 +64,10 @@ def _seedream_result_url(status: dict) -> str:
     return ""
 
 
-class InstagramSeedream5ProService(InstagramGenerationService):
+class InstagramSeedream5ProService(
+    InstagramLocalizedGenerationMixin,
+    InstagramGenerationService,
+):
     """Durable Instagram photo flow backed by Seedream 5 Pro High."""
 
     async def _offer_paid_generation(
@@ -83,6 +88,7 @@ class InstagramSeedream5ProService(InstagramGenerationService):
             await self._send_account_link(identity, account_id, recipient_id)
             return
 
+        language = await resolve_instagram_language(identity.id)
         _user_id, _telegram_id, credits = billing
         cost = instagram_photo_cost()
         await update_instagram_draft(
@@ -92,18 +98,11 @@ class InstagramSeedream5ProService(InstagramGenerationService):
         )
         rub_value = float(preset_manager.get_credit_rub_value())
         price_rub = round(cost * rub_value, 2)
-        if credits < cost:
-            action = (
-                " Баланса не хватает — пополни его в Telegram, затем вернись "
-                "сюда и напиши «Продолжить»."
-            )
-        else:
-            action = " Ответь ДА для запуска или НЕТ для отмены."
+        key = "photo_paid_offer_low" if credits < cost else "photo_paid_offer_ok"
         await self.client.send_text(
             account_id,
             recipient_id,
-            f"Seedream 5 Pro • {cost:g} 🐾 ({price_rub:g} ₽). "
-            f"Баланс: {credits:g} 🐾.{action}",
+            tr(language, key, cost=cost, price=price_rub, credits=credits),
         )
 
     async def _enqueue_free(
@@ -146,10 +145,11 @@ class InstagramSeedream5ProService(InstagramGenerationService):
             prompt=prompt,
             state="generating",
         )
+        language = await resolve_instagram_language(identity.id)
         await self.client.send_text(
             account_id,
             recipient_id,
-            "Запускаю Seedream 5 Pro ✨ Эта первая генерация бесплатная 🎁",
+            tr(language, "free_start"),
         )
         return True
 
@@ -165,6 +165,7 @@ class InstagramSeedream5ProService(InstagramGenerationService):
             await update_instagram_draft(identity.id, state="awaiting_link")
             await self._send_account_link(identity, account_id, recipient_id)
             return
+        language = await resolve_instagram_language(identity.id)
         user_id, telegram_id, _credits = billing
         cost = instagram_photo_cost()
         job = InstagramGenerationJob(
@@ -192,8 +193,7 @@ class InstagramSeedream5ProService(InstagramGenerationService):
             await self.client.send_text(
                 account_id,
                 recipient_id,
-                f"Не хватает баланса. Для Seedream 5 Pro нужно {cost:g} 🐾. "
-                "Пополни баланс в Telegram и вернись с «Продолжить».",
+                tr(language, "photo_insufficient", cost=cost),
             )
             return
         try:
@@ -206,7 +206,7 @@ class InstagramSeedream5ProService(InstagramGenerationService):
         await self.client.send_text(
             account_id,
             recipient_id,
-            f"{cost:g} 🐾 списано ✅ Запускаю Seedream 5 Pro.",
+            tr(language, "paid_started", cost=cost),
         )
         logger.info(
             "Instagram Seedream 5 Pro job queued: job=%s user=%s",
@@ -290,6 +290,7 @@ class InstagramSeedream5ProService(InstagramGenerationService):
                 clear_image=True,
             )
 
+        language = await resolve_instagram_language(job.identity_id)
         if job.billing_mode == "credits":
             billing = await _linked_billing_user(job.identity_id)
             if billing is not None:
@@ -305,7 +306,7 @@ class InstagramSeedream5ProService(InstagramGenerationService):
                 await self.client.send_text(
                     job.account_id,
                     job.recipient_id,
-                    "Готово ✨ Хочешь ещё — пришли новое фото.",
+                    tr(language, "photo_paid_done"),
                 )
             return
 
@@ -320,13 +321,11 @@ class InstagramSeedream5ProService(InstagramGenerationService):
         if self.account_link_factory is not None:
             with contextlib.suppress(Exception):
                 link = str(await self.account_link_factory(identity)).strip()
-        suffix = f"\n\nПополнить и продолжить: {link}" if link else ""
+        label = "Пополнить и продолжить" if language != "en" else "Top up and continue"
+        suffix = f"\n\n{label}: {link}" if link else ""
         with contextlib.suppress(Exception):
             await self.client.send_text(
                 job.account_id,
                 job.recipient_id,
-                "Готово 🎁 Первая генерация была бесплатной.\n\n"
-                "Хочешь продолжить — пополни баланс тем же способом, что в Telegram. "
-                "После оплаты вернись сюда и напиши «Продолжить»."
-                + suffix,
+                tr(language, "photo_free_done", suffix=suffix),
             )
