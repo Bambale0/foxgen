@@ -1,192 +1,110 @@
-# Бренд NEUROMIX
+# HappyFox branding and user-facing copy
 
-## 1. Основное правило
+## Product brand
 
-Пользовательский бренд продукта во всех интерфейсах и пользовательской документации:
+User-facing product name is **HappyFox**.
 
-```text
-NEUROMIX
-```
+Do not present the product as NEUROMIX, Tanya, Banano Kling or FoxGen legacy in new user-facing copy.
 
-Не использовать как название продукта:
+Historical/internal compatibility identifiers such as `banana_*`, `banano_*`, old database enums or callback values may remain where changing them would require a dedicated migration. Technical compatibility names are not user branding.
 
-- Banano Studio;
-- Banana Studio;
-- Banano AI Studio;
-- Banana AI;
-- Banano Kling;
-- Banana Boom;
-- внутреннее имя репозитория.
+## Channel surfaces
 
-## 2. Где NEUROMIX обязателен
+### Telegram
 
-- browser `<title>`;
-- Next.js metadata/application name;
-- загрузчик Mini App;
-- Telegram/browser auth gate;
-- основной header;
-- error screens;
-- welcome copy бота;
-- пользовательские инструкции;
-- public screenshots и marketing materials;
-- название продукта в README и release notes.
+Telegram Bot + Mini App is the full HappyFox application surface. Navigation, balance, history, feed, partner/support/admin copy should use HappyFox terminology and the user-facing currency **🐾**.
 
-## 3. Единый frontend source
+### Instagram
 
-Источник имени бренда:
+Instagram is a compact creator/acquisition channel. Copy should be conversational, short and task-oriented rather than reproducing the Telegram menu structure.
+
+Core first question:
 
 ```text
-frontend/miniapp-v0/lib/brand.ts
+Фото / Photo
+Видео / Video
 ```
 
-Компоненты должны импортировать `BRAND_NAME` и `BRAND_DESCRIPTION`, а не создавать собственные строки.
+User does not need to know provider implementation details beyond model names that are useful product choices/status information.
 
-Пример:
+## Model names
 
-```ts
-import { BRAND_NAME } from '@/lib/brand'
-```
-
-## 4. Названия моделей не являются брендом продукта
-
-Не переименовывать provider/model names:
-
-- Nano Banana;
-- Nano Banana Pro;
-- Kling;
-- Veo;
-- Grok Imagine;
-- Seedream;
-- Seedance;
-- GPT Image;
-- Gemini.
-
-Правильно:
+External model/product names are not rebranded:
 
 ```text
-NEUROMIX
-Модель: Nano Banana Pro
+Seedream 5 Pro
+Seedance 2.5
+Kling
+Veo
+Grok
+Nano Banana
+other provider/model names in Telegram catalog
 ```
 
-Неправильно:
+Instagram fixed models:
+
+- Photo -> Seedream 5 Pro;
+- Video -> Seedance 2.5.
+
+## RU/EN Instagram copy
+
+Instagram supports Russian and English automatically.
+
+Rules:
+
+- use `bot/instagram_i18n.py` for Instagram creator/billing/error text;
+- meaningful Russian text establishes Russian;
+- meaningful English text establishes English;
+- attachment-first entry is bilingual until language is known;
+- `English` and `Русский` explicitly switch language;
+- do not add one-off hard-coded Russian responses to Instagram handlers.
+
+Tone should remain equivalent across languages: creator-friendly, clear about price/payment and free entitlement, no technical API jargon.
+
+## Payment terminology
+
+Instagram:
 
 ```text
-Модель: NEUROMIX Pro
+YooKassa
+Lava Top
 ```
 
-## 5. Legacy technical identifiers
+Telegram may additionally show CryptoBot, Stars or other configured providers. Do not write global copy claiming HappyFox has only two payment methods when the restriction is Instagram-specific.
 
-В коде и инфраструктуре могут оставаться:
+## Free/paid claims
 
-- repository `banano_kling`;
-- systemd service `banano-kling.service`;
-- Redis prefix `banano_kling`;
-- log path `banano-miniapp-cdn.log`;
-- env flags `BANANO_*`;
-- internal function names с `banana`/`banano`;
-- callback IDs и database enum values.
-
-Они могут сохраняться для backward compatibility. Не показывать их пользователю как название продукта.
-
-Переименование technical identifiers выполняется отдельной migration-задачей с анализом:
-
-- systemd units;
-- Redis keys;
-- database values;
-- callbacks/deep links;
-- deploy profiles;
-- monitoring;
-- backups;
-- external integrations.
-
-## 6. Заголовки экранов
-
-Главный брендовый заголовок должен включать NEUROMIX или отображаться рядом с постоянным header NEUROMIX.
-
-Примеры:
-
-- `NEUROMIX`;
-- `NEUROMIX загружается`;
-- `Добро пожаловать в NEUROMIX`;
-- `NEUROMIX — фото и видео с AI`.
-
-Функциональные заголовки внутри уже брендированного приложения могут быть короткими:
-
-- `Создать фото`;
-- `Создать видео`;
-- `Ваши работы`;
-- `Тренды`;
-- `Профиль`.
-
-Не требуется добавлять NEUROMIX к каждой кнопке.
-
-## 7. Tone of voice
-
-- понятно и без технического мусора;
-- действие пользователя видно сразу;
-- не обещать результат, который зависит от внешнего provider;
-- ошибки объяснять человеческим языком;
-- технический код ошибки можно показывать вторичной строкой;
-- не использовать старый «банановый» нейминг в пользовательском тексте, если это не название модели.
-
-## 8. Loader
-
-Loader должен:
-
-- сразу показывать NEUROMIX;
-- сообщать, что загружается приложение/данные Telegram;
-- не обвинять пользователя;
-- не показывать auth gate до завершения проверки initData;
-- иметь доступный `role=status`, `aria-live` и `aria-busy`.
-
-## 9. Browser auth gate
-
-Gate вне Telegram:
-
-- содержит бренд NEUROMIX;
-- объясняет вход через Telegram;
-- не называется Banana/Banano;
-- после ошибки предлагает повтор или открытие в Telegram;
-- не раскрывает детали signature validation.
-
-## 10. QA checklist бренда
-
-После frontend build:
-
-```bash
-cd frontend/miniapp-v0
-npm run build
-
-grep -RniE 'Banano AI Studio|Banana Studio|Banano Studio|Banano Kling' \
-  app components lib out \
-  || true
-```
-
-Результаты нужно классифицировать:
-
-- user-facing text — исправить;
-- technical identifier — допустим при обосновании;
-- provider model `Nano Banana` — не менять.
-
-Проверить публичный title:
-
-```bash
-curl -fsS https://cdn.chillcreative.ru/mini-app/ \
-  | grep -o '<title>[^<]*</title>'
-```
-
-Ожидается:
-
-```html
-<title>NEUROMIX</title>
-```
-
-## 11. Документация
-
-Заголовки актуальных пользовательских и production-документов должны использовать NEUROMIX. Исторические provider docs и internal filenames можно не переименовывать, если переименование сломает ссылки или историю.
-
-При упоминании репозитория использовать формулировку:
+Allowed Instagram claim:
 
 ```text
-NEUROMIX, репозиторий Bambale0/banano_kling, ветка tanyapi
+First successful photo generation is free.
 ```
+
+Do not claim:
+
+```text
+first generation is free
+first video is free
+all first actions are free
+```
+
+Video is always paid.
+
+After the free photo, direct the user to top up and continue; do not imply an entitlement was consumed when the provider failed before successful delivery.
+
+## Technical errors
+
+User-facing errors should describe what to do next, not expose:
+
+- HTTP status internals;
+- provider payloads;
+- database/table names;
+- tokens/signatures;
+- stack traces;
+- raw provider messages containing implementation details.
+
+Logs may contain sanitized technical context, never secrets.
+
+## Documentation copy
+
+Canonical operational docs should use HappyFox/main/current production identity. Historical documents may preserve old product names only when explicitly marked as historical/reference snapshots.
