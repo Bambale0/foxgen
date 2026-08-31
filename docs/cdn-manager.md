@@ -1,75 +1,23 @@
-# `cdn.sh` — интерактивное управление Mini App frontend/CDN
+# HappyFox frontend/CDN management note
 
-Запуск на frontend-сервере:
+The old `cdn.sh` Tanya/NEUROMIX profile workflow is not the canonical HappyFox production deployment path.
 
-```bash
-sudo bash cdn.sh
-```
+HappyFox Mini App is released from the same verified `foxgen/main` SHA as the backend through the current CI/deploy workflows.
 
-Скрипт хранит профили доменов в:
+Current public Mini App:
 
 ```text
-/etc/banano-miniapp/profiles/<domain>.env
+https://alena.chillcreative.ru/mini-app/
 ```
 
-Файлы создаются с правами `0600`. Активный домен записывается в:
+Use:
 
-```text
-/etc/banano-miniapp/active-domain
-```
+- `miniapp-frontend-deployment.md`;
+- `production-deployment.md`;
+- `production_auto_deploy.md`;
+- `../frontend/miniapp-v0/README.md`;
+- current `.github/workflows/*`.
 
-## Возможности
+Do not use old `/etc/banano-miniapp` profiles, Tanya source paths, `tanyapi` branch rules or legacy CDN domains as HappyFox production instructions.
 
-Меню поддерживает:
-
-1. первую установку frontend на чистом Ubuntu-сервере;
-2. обновление существующей static-сборки;
-3. создание дополнительного домена-зеркала;
-4. переезд на новый домен с сохранением старого frontend для отката;
-5. переключение `MINI_APP_URL` на backend через SSH;
-6. проверку HTML, Nginx и срока TLS-сертификатов;
-7. восстановление из автоматической резервной копии;
-8. изменение сохранённого профиля.
-
-## Безопасная схема proxy
-
-`cdn.sh` принимает для backend только публичный HTTPS-домен:
-
-```text
-frontend-domain:443
-        ↓ HTTPS + проверка сертификата
-backend-domain:443 (Nginx)
-        ↓
-127.0.0.1:1888 (aiohttp)
-```
-
-Он не открывает `1888/tcp`, не устанавливает `WEBHOOK_BIND_HOST=0.0.0.0` и не подключается к aiohttp по внешнему IP.
-
-## Что спросит при первой установке
-
-- новый frontend-домен;
-- HTTPS-домен backend;
-- email для Let's Encrypt;
-- Git-репозиторий и ветку;
-- каталоги исходников, статики и резервных копий;
-- запускать ли `npm audit`;
-- нужно ли автоматически обновлять `MINI_APP_URL` backend через SSH;
-- SSH-адрес, путь к `.env` и имя systemd-сервиса, когда включена автоматизация backend.
-
-После сохранения профиля повторные обновления выполняются через меню без повторного ввода этих значений.
-
-## DNS
-
-Перед выпуском сертификата A-запись frontend-домена должна указывать на сервер, где запускается `cdn.sh`. Скрипт показывает ожидаемый IPv4 и останавливает установку, пока DNS не готов.
-
-## Переезд
-
-При переезде создаётся отдельный профиль и отдельный Nginx site для нового домена. Старый домен и его файлы не удаляются автоматически. Это позволяет проверить Telegram Mini App, API, uploads и платежи, а затем вручную вывести старый домен из эксплуатации.
-
-## Логи
-
-```text
-/var/log/banano-miniapp-cdn.log
-```
-
-Низкоуровневый установщик дополнительно ведёт собственный deployment log и создаёт резервные копии static export перед обновлением.
+If a future HappyFox CDN manager is adopted, document its exact profile paths, source branch, rollback and revision validation as a new HappyFox-specific contract rather than reviving the legacy workflow implicitly.
