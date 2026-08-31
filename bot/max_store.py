@@ -6,6 +6,7 @@ import json
 from dataclasses import dataclass
 from typing import Any
 
+from bot import database
 from bot import db as db_backend
 
 _SCHEMA_LOCK: asyncio.Lock | None = None
@@ -42,7 +43,7 @@ def _schema_lock() -> asyncio.Lock:
 def _schema_key() -> str:
     if db_backend.is_postgres():
         return f"postgres:{db_backend.DATABASE_URL}:max"
-    return f"sqlite:{db_backend.DATABASE_PATH}:max"
+    return f"sqlite:{database.DATABASE_PATH}:max"
 
 
 def _schema_statements(*, postgres: bool) -> tuple[str, ...]:
