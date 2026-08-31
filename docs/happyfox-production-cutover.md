@@ -1,80 +1,160 @@
 # HappyFox production cutover
 
-HappyFox is now a standalone product in `Bambale0/foxgen` based on the exact proven source snapshot `Bambale0/banano_kling@36f92a0504f849c0c591652a880410e33a1c89aa`.
+This runbook establishes or changes an isolated HappyFox production runtime.
 
-The previous experimental FoxGen tree is preserved at `legacy/foxgen-pre-tanyapi-20260820`.
+## Isolation boundary
 
-## Hard isolation rules
+HappyFox must own its own:
 
-HappyFox production must never reuse NEUROMIX/Tanya product credentials or data-plane identifiers.
-
-Required separate values:
-
-- Telegram `BOT_TOKEN`;
-- public `WEBHOOK_HOST`;
-- `MINI_APP_URL`;
+- Telegram bot token;
+- public origin/Mini App domain;
 - PostgreSQL database/user;
-- Redis DB/prefix (`foxgen_happyfox` recommended);
-- KIE/provider webhook secret;
-- internal API secret;
-- payment credentials when using an external payment provider;
-- public media/static origin;
-- Telegram admin IDs.
+- Redis DB/prefix;
+- provider secrets/webhooks;
+- payment credentials/offers;
+- media storage;
+- admin/support configuration;
+- deployment secrets and runtime identity.
 
-`MINIAPP_FRONTEND_DOMAIN` may be kept as a GitHub production variable, but it is not required for an already configured server. If omitted, the deployment resolves the hostname from the server-side `.env`, preferring `MINI_APP_URL` and retaining compatibility with the previous FoxGen `FOXGEN_MINIAPP_PUBLIC_URL` / callback URL configuration. The resolved hostname is still checked against the known NEUROMIX/Tanya domain deny-list before deployment.
+Never reuse NEUROMIX/Tanya credentials or data plane as an implicit shortcut.
 
-`python scripts/validate_happyfox_env.py .env .env.postgres` is a mandatory fail-closed preflight. It rejects known NEUROMIX/Tanya domains, SQLite production, a shared legacy Redis prefix, missing provider/webhook secrets and incomplete selected-payment-provider credentials.
+## Canonical runtime identity
 
-## Server preparation
-
-The existing FoxGen production SSH target can be reused. Keep the checkout at the repository production variable `DEPLOY_PATH` (the established environment may use a non-default path).
-
-1. Back up the previous FoxGen data and `.env`.
-2. Create a dedicated PostgreSQL database/user for HappyFox.
-3. Allocate a dedicated Redis database and set `REDIS_PREFIX=foxgen_happyfox`.
-4. Migrate the server `.env` to the HappyFox runtime contract without replacing working production secrets blindly.
-5. Configure the HappyFox backend and Mini App DNS/TLS before the first deployment.
-6. Optionally set the GitHub production variable `MINIAPP_FRONTEND_DOMAIN`; otherwise ensure the public Mini App URL is present in the server `.env`.
-7. Run the validator before changing any running service.
-
-## Deployment
-
-Production deployment is automatic. Every successful `CI` run triggered by a push to `main` starts `.github/workflows/deploy-production.yml` for that exact verified `main` SHA. Manual dispatch remains available for an explicitly requested `main` SHA.
-
-The deploy job fails closed before touching production if required SSH secrets, deployment variables, the resolved HappyFox Mini App domain, repository provenance, or the isolated runtime environment are invalid. Existing production SSH/environment configuration is reused instead of requiring duplicate GitHub variables.
-
-The remote deployment is intentionally split into two guarded wrappers:
-
-- `scripts/deploy_happyfox.sh` — validates product/data-plane isolation, then invokes the proven tanyapi Docker deployment lifecycle with HappyFox service/container identities;
-- `scripts/deploy_happyfox_miniapp.sh` — requires a resolved non-Tanya frontend domain, forces `NEXT_PUBLIC_PRODUCT_ID=happyfox`, and invokes the proven static Next.js deployment script.
-
-Expected runtime identities:
-
-- Compose project: `foxgen-happyfox`;
-- container: `foxgen-happyfox-bot`;
-- rollback service (if intentionally installed): `foxgen-happyfox.service`;
-- product id: `happyfox`.
-
-## Acceptance smoke
-
-After deploy:
-
-```bash
-cd "$DEPLOY_PATH"
-python scripts/validate_happyfox_env.py .env .env.postgres
-docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' foxgen-happyfox-bot
-curl -fsS "$WEBHOOK_HOST/health"
-curl -fsS "https://$MINIAPP_FRONTEND_DOMAIN/mini-app/revision.txt"
+```text
+Product ID:       happyfox
+Compose project:  foxgen-happyfox
+Container:        foxgen-happyfox-bot
+Database:         happyfox
+Redis prefix:     foxgen_happyfox
+Production branch: main
 ```
 
-Then open the HappyFox bot in Telegram and verify:
+Public URLs are environment configuration. Current production origin is documented in the root README/handoff.
 
-1. `/start` shows HappyFox copy and opens only the HappyFox Mini App.
-2. Telegram auth/bootstrap succeeds.
-3. Create image/video flows render their actual backend options.
-4. Upload/reference flow works.
-5. A low-cost generation reaches history/result delivery.
-6. Balance/payment surface uses the HappyFox account only.
-7. Feed/profile/support/partner surfaces load without NEUROMIX branding or URLs.
+## Preflight
 
-Do not cut over DNS or point the bot menu at a build until the full isolated production configuration passes the validator and the intended exact SHA is ready for rollout.
+Use:
+
+```bash
+python scripts/validate_happyfox_env.py .env .env.happyfox.runtime .env.postgres
+```
+
+Expected fail-closed checks include product identity, PostgreSQL, Redis isolation, selected payment/provider credentials and known forbidden legacy domains/namespaces.
+
+## Base cutover sequence
+
+1. Prepare isolated PostgreSQL/Redis.
+2. Configure HappyFox `.env` from `.env.happyfox.example` without copying secrets from another product.
+3. Configure Nginx/TLS for public origin and Mini App.
+4. Configure Telegram webhook for the HappyFox bot.
+5. Configure provider/payment webhooks required by the selected production integrations.
+6. Merge change to `main` through CI.
+7. Run exact-SHA production deploy.
+8. Verify public `/health` and Mini App revision.
+9. Smoke Telegram start/bootstrap/generation/balance/payment paths.
+10. Record deploy SHA/run.
+
+## Payment cutover
+
+HappyFox supports multiple payment integrations, but channels may present different subsets.
+
+Telegram general UI can keep configured providers including CryptoBot.
+
+Instagram handoff is intentionally:
+
+```text
+YooKassa
+Lava Top -> card / SBP
+```
+
+Do not delete CryptoBot globally to enforce the Instagram subset.
+
+HappyFox Lava offer IDs must be configured from HappyFox environment and must not reuse imported Tanya offer IDs.
+
+## Instagram dark deploy
+
+Instagram should first be deployed dark:
+
+```dotenv
+INSTAGRAM_ENABLED=0
+```
+
+This verifies that new code can coexist with Telegram/Mini App without registering the Meta routes/worker.
+
+## Instagram live cutover
+
+### External prerequisites
+
+- Professional Instagram Creator/Business account;
+- Meta app configured for Instagram Login;
+- required permissions/access for basic profile, messages, comments and content publishing;
+- public HTTPS HappyFox webhook;
+- valid Instagram user access token and professional account ID.
+
+### Runtime variables
+
+```dotenv
+INSTAGRAM_ENABLED=1
+INSTAGRAM_APP_ID=...
+INSTAGRAM_APP_SECRET=...
+INSTAGRAM_VERIFY_TOKEN=...
+INSTAGRAM_ACCESS_TOKEN=...
+INSTAGRAM_IG_USER_ID=...
+INSTAGRAM_API_VERSION=v24.0
+INSTAGRAM_WEBHOOK_PATH=/instagram/webhook
+INSTAGRAM_SUBSCRIBED_FIELDS=messages,messaging_postbacks,comments
+```
+
+### Verification before enable
+
+1. GET webhook verification returns `hub.challenge` only for the configured verify token.
+2. Invalid `X-Hub-Signature-256` POST is rejected.
+3. Valid signed webhook normalizes correctly.
+4. `/{ig_user_id}/subscribed_apps` includes `messages,messaging_postbacks,comments`.
+5. Meta access token can send a reply in a user-initiated conversation.
+6. Public media URL used for result/publishing is HTTPS and reachable by Meta.
+
+### Enable and deploy
+
+Change production runtime configuration to `INSTAGRAM_ENABLED=1`, then deploy/restart the exact tested `main` SHA. Do not enable by modifying application source or bypassing GitHub release evidence.
+
+### Live smoke
+
+- RU user receives Russian flow after meaningful Russian text;
+- EN user receives English flow after meaningful English text;
+- attachment-first entry is bilingual until language is known;
+- first successful photo uses Seedream 5 Pro High and is free;
+- failed first photo preserves entitlement;
+- second photo asks for linked balance/paid confirmation;
+- Video immediately shows paid top-up before accepting reference;
+- YooKassa top-up path works;
+- Lava Top card/SBP path works;
+- `Продолжить` and `Continue` resume paid video after balance check;
+- comment acquisition goes to Direct chooser;
+- duplicate webhook does not duplicate charge/provider submit/result delivery.
+
+## Instagram rollback
+
+If Instagram causes an incident and Telegram remains healthy:
+
+1. set `INSTAGRAM_ENABLED=0`;
+2. redeploy/restart verified HappyFox runtime;
+3. verify Telegram/Mini App health;
+4. preserve DB job state for investigation;
+5. do not delete Instagram identities/promotions/jobs as an emergency action unless data repair is explicitly required.
+
+## Full rollback
+
+For a broader application incident, redeploy a previously verified HappyFox `main` SHA with compatible schema/data backup.
+
+Never use `banano_kling` runtime/database as a rollback target.
+
+## Evidence to retain
+
+- main SHA;
+- CI run;
+- deploy run;
+- health/revision result;
+- Telegram smoke;
+- Instagram activation flag and smoke if enabled;
+- Meta subscription fields (without secrets/tokens).

@@ -1,30 +1,16 @@
 # HappyFox production handoff
 
-Status: production-ready and independently deployed as of 2026-08-30.
-
-This document closes the delivery scope tracked by issue #142. It records the production boundary and the evidence used for handoff without storing any secrets.
+Status: HappyFox is an independently deployed product in `Bambale0/foxgen` with production source of truth `main`.
 
 ## Product boundary
 
-HappyFox lives in `Bambale0/foxgen` and is operated independently from NEUROMIX / `Bambale0/banano_kling`.
+The production core was imported from `Bambale0/banano_kling` at the recorded migration point, but HappyFox is operationally independent after that point.
 
-The imported production-core provenance remains:
+Do not reuse NEUROMIX/Tanya credentials, domains, PostgreSQL data, Redis namespace, media storage, payment offers or deployment infrastructure.
 
-```text
-Bambale0/banano_kling@36f92a0504f849c0c591652a880410e33a1c89aa
-```
-
-The pre-cutover FoxGen implementation remains available only as rollback/reference history:
-
-```text
-legacy/foxgen-pre-tanyapi-20260820
-```
-
-Stable internal provider/model/database identifiers inherited from the core may retain `banana_*` / `banano_*` names for compatibility. They are not permission to reuse NEUROMIX credentials, domains or data.
+Legacy FoxGen remains reference-only history under `legacy/foxgen-pre-tanyapi-20260820`.
 
 ## Production identity
-
-Verified production topology:
 
 ```text
 Product ID:       happyfox
@@ -34,68 +20,117 @@ Compose project:  foxgen-happyfox
 Container:        foxgen-happyfox-bot
 Database:         happyfox
 Redis namespace:  foxgen_happyfox
+Production branch: main
 ```
 
-Production credentials are supplied through the HappyFox runtime environment and are not committed to the repository. The canonical configuration contract is `.env.happyfox.example`.
+Configuration contract: `.env.happyfox.example`.
 
-`python scripts/validate_happyfox_env.py .env .env.happyfox.runtime .env.postgres` is the fail-closed isolation gate. Deployment must stop if known Tanya/NEUROMIX domains, a shared legacy Redis namespace, SQLite production storage, or incomplete selected-provider credentials are detected.
+Isolation gate:
 
-## Acceptance evidence
-
-Baseline accepted before handoff closure:
-
-```text
-Commit:      6790f7fbe56cc9ac4fa8a585f245e1e9b1d9471b
-CI run:      33302471114
-Deploy run:  33302637128
+```bash
+python scripts/validate_happyfox_env.py .env .env.happyfox.runtime .env.postgres
 ```
 
-CI passed all release gates for that exact commit:
-
-- backend regression and runtime compilation;
-- HappyFox product normalization and Ruff delta checks;
-- Mini App locked dependency audit, lint and production static export;
-- critical browser journeys in Chromium;
-- Telegram startup coverage in Chromium and iPhone WebKit;
-- production Docker image build and runtime verification.
-
-The exact-SHA production deployment then passed:
-
-- repository provenance validation;
-- isolated HappyFox runtime preflight;
-- dedicated PostgreSQL/Redis preparation and validation;
-- healthy `foxgen-happyfox-bot` container check;
-- public `/health` smoke;
-- deployed Mini App `revision.txt` equality with the expected commit;
-- `foxgen/production-deploy` success status publication.
-
-A transient reverse-proxy `502` observed immediately after container replacement recovered inside the deployment smoke window; the workflow completed only after the public health endpoint returned successfully.
-
-## Release rule after handoff
-
-The accepted production path is:
+## Release contract
 
 ```text
 feature branch
-  -> PR
-  -> CI green
-  -> merge to main
-  -> CI green on exact main SHA
-  -> isolated HappyFox preflight
-  -> exact-SHA backend + Mini App deploy
-  -> health + revision smoke
+ -> PR to main
+ -> exact-head CI green
+ -> merge
+ -> exact-main CI green
+ -> isolated HappyFox preflight
+ -> exact-SHA deploy
+ -> health/revision smoke
 ```
 
-Do not deploy arbitrary working-tree state and do not deploy HappyFox changes through `banano_kling` infrastructure.
+The historical `dev -> tanyapi` process belongs to the source repository history and is not a HappyFox release path.
+
+## Current channel architecture
+
+HappyFox now has two product delivery contours over one core:
+
+```text
+Telegram Bot + Mini App -> full product surface
+Instagram -> creator acquisition/Direct/comments adapter
+```
+
+Instagram does not create a separate provider stack or balance ledger.
+
+## Instagram delivered contract
+
+Implemented in `main`:
+
+- Meta Instagram Login transport and signed webhook verification;
+- message/postback/comment normalization and idempotency;
+- channel-neutral Instagram identity mapping;
+- secure one-time Telegram account linking;
+- first successful Instagram **photo** free entitlement;
+- Photo -> Seedream 5 Pro High (`seedream/5-pro-image-to-image`), paid follow-ups 2.5 🐾;
+- Video -> Seedance 2.5 (`bytedance/seedance-2-5`), always paid;
+- video selection enters top-up flow before reference upload;
+- Instagram top-up handoff exposes YooKassa and Lava Top only;
+- Telegram retains its configured payment providers including CryptoBot;
+- `Продолжить / Continue` resumes paid flow after balance verification;
+- RU/EN automatic language detection and persisted per-Instagram-identity language;
+- durable provider task/result/delivery checkpoints and refund/promotion recovery.
+
+Canonical specification: `docs/instagram-channel.md`.
+
+## Instagram runtime status
+
+Instagram code can be deployed as part of HappyFox while remaining inactive. Runtime route/worker registration is gated by:
+
+```dotenv
+INSTAGRAM_ENABLED=1
+```
+
+The repository example remains fail-closed with `INSTAGRAM_ENABLED=0` until Meta credentials, permissions/access and live webhook validation are ready.
+
+Do not report Instagram as live merely because its code is present in the production image.
+
+## CI acceptance
+
+The release gate for HappyFox includes:
+
+- backend runtime compile;
+- HappyFox product normalization;
+- Ruff delta checks;
+- safe regression suite including Instagram tests;
+- Mini App dependency audit/lint/static export;
+- Chromium critical journeys;
+- Telegram startup on Chromium and iPhone WebKit;
+- production Docker exact-source image and runtime verification.
+
+For channel activation additionally run live Meta webhook/Direct smoke described in `instagram-channel.md`.
+
+## Billing boundary
+
+HappyFox has one shared ledger. Channel UX chooses how payment is presented.
+
+```text
+Instagram: YooKassa + Lava Top
+Telegram: configured Telegram payment providers, CryptoBot included when enabled
+```
+
+Do not remove or globally disable a Telegram provider because it is intentionally hidden in Instagram.
 
 ## Operations and rollback
 
-Operational details and first-server/cutover instructions are maintained in `docs/happyfox-production-cutover.md`.
+General production runbook: `docs/production-deployment.md`.
 
-Rollback should restore a previously verified `foxgen` commit/release and its compatible HappyFox data backup. Never use a NEUROMIX runtime or database as a HappyFox rollback target.
+Cutover/Instagram activation: `docs/happyfox-production-cutover.md`.
 
-## Remaining work outside delivery finalization
+Instagram-only containment:
 
-Repository-wide epics and technical-debt issues remain independent of the HappyFox handoff. In particular, the historical mypy baseline and future product/integration work should continue in separate issues/PRs rather than reopening the cutover boundary.
+```dotenv
+INSTAGRAM_ENABLED=0
+```
 
-The next product integration may extend the shared generation domain, but Telegram and any future external channel (for example Instagram) must remain channel adapters over the same HappyFox core instead of duplicating generation/billing/provider logic.
+then redeploy/restart the verified HappyFox version.
+
+General rollback must target a previously verified `foxgen` SHA and compatible HappyFox data backup, never a NEUROMIX runtime/database.
+
+## Documentation rule
+
+Future changes to models, Instagram pricing/free entitlement, language behavior, Meta fields/permissions, payment handoff or release process must update the canonical docs/FSM/QA/tracemaps in the same PR.

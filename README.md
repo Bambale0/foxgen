@@ -1,105 +1,133 @@
 # HappyFox
 
-HappyFox — отдельный Telegram AI-продукт: бот + Mini App для генерации изображений и видео, работы с референсами, историей, публикациями, балансом, платежами, партнёрской программой и административным контуром.
+HappyFox — самостоятельный AI-продукт в `Bambale0/foxgen`: Telegram Bot + Telegram Mini App + Instagram Creator/Business channel поверх общего generation/billing core.
 
-## Основа проекта
+## Product boundary
 
-С 20 августа 2026 `Bambale0/foxgen` использует проверенное production-ядро `Bambale0/banano_kling/tanyapi` вместо прежней параллельной реализации FoxGen.
+С 20 августа 2026 `foxgen` использует проверенное production-ядро, перенесённое из `Bambale0/banano_kling`, но после точки переноса HappyFox является отдельным продуктом и не должен использовать NEUROMIX/Tanya credentials, domains, databases, Redis namespace, media storage или deploy infrastructure.
 
-Точка импорта зафиксирована в [`MIGRATION_SOURCE.md`](MIGRATION_SOURCE.md):
+Источник переноса: [`MIGRATION_SOURCE.md`](MIGRATION_SOURCE.md). Legacy FoxGen сохранён только как reference history в `legacy/foxgen-pre-tanyapi-20260820`.
 
-```text
-Bambale0/banano_kling@36f92a0504f849c0c591652a880410e33a1c89aa
-```
-
-Старый FoxGen сохранён в ветке:
+## Каналы
 
 ```text
-legacy/foxgen-pre-tanyapi-20260820
+                    HappyFox core
+                         │
+        ┌────────────────┴────────────────┐
+        │                                 │
+Telegram Bot + Mini App             Instagram channel
+        │                                 │
+full product UI                   creator acquisition/DM
+        │                                 │
+        └──────── generation + billing ───┘
 ```
 
-NEUROMIX и HappyFox после точки импорта — независимые продукты в независимых репозиториях. Изменения HappyFox не должны деплоиться в `banano_kling` и не должны использовать его product credentials/data plane.
+Telegram остаётся полным продуктовым интерфейсом. Instagram — отдельный adapter для acquisition, Direct и comment-driven creator flow; он не дублирует provider или billing core.
+
+### Instagram contract
+
+- первый шаг всегда `Фото / Photo` или `Видео / Video`;
+- фото: **Seedream 5 Pro**, provider `seedream/5-pro-image-to-image`, quality `high`, 1:1;
+- первая **успешная фото-генерация** для Instagram identity бесплатна;
+- следующие фото оплачиваются по обычному HappyFox pricing; текущий Instagram photo contract — **2.5 🐾**;
+- видео: **Seedance 2.5**, provider `bytedance/seedance-2-5`, 720p, 9:16;
+- видео всегда платное: при выборе `Видео / Video` сначала показывается top-up offer, media reference до готового баланса не принимается;
+- Instagram top-up handoff показывает только **YooKassa** и **Lava Top**; Lava поддерживает card/SBP;
+- Telegram сохраняет собственные текущие способы оплаты, включая **CryptoBot**;
+- после оплаты пользователь возвращается в Direct и пишет `Продолжить / Continue`;
+- RU/EN определяется автоматически по первому осмысленному тексту и хранится для Instagram identity; `English`/`Русский` переключают язык явно.
+
+Полная спецификация: [`docs/instagram-channel.md`](docs/instagram-channel.md).
 
 ## Архитектура
 
 ```text
-Telegram Bot / Telegram WebView
-            │
-            ├── Next.js 16 + React 19 Mini App
-            │       ├── auth/bootstrap
-            │       ├── create image/video/motion
-            │       ├── uploads/references
-            │       ├── history/task status
-            │       ├── feed/profile/remix
-            │       └── billing/partner/support
-            │
-            └── Python / aiogram / aiohttp backend
-                    ├── generation lifecycle
-                    ├── provider adapters
-                    ├── payment webhooks
-                    ├── PostgreSQL-compatible data layer
-                    ├── Redis FSM/cache/locks
-                    ├── media delivery
-                    └── internal admin APIs
+Telegram Updates ───────┐
+Telegram Mini App ──────┼─> Python/aiogram/aiohttp core
+Instagram Webhooks ─────┘       ├─ generation lifecycle
+                                ├─ provider adapters
+                                ├─ billing/ledger
+                                ├─ PostgreSQL
+                                ├─ Redis FSM/cache/idempotency
+                                ├─ media delivery
+                                └─ internal/admin API
+
+Next.js 16 / React 19 Mini App -> static export -> HappyFox public origin
 ```
 
-Проверенные provider/database/model IDs сохраняются ради совместимости. Пользовательский бренд, credentials, домены, платежные офферы, support/admin config и data-plane identifiers принадлежат HappyFox и изолируются отдельно.
+Ключевые Instagram modules:
 
-## Стек
+```text
+bot/instagram_api.py                 Meta transport, HMAC, normalization, client
+bot/channel_identity.py              channel-neutral identity mapping
+bot/channel_link.py                  one-time Telegram account link
+bot/channel_promotions.py            first-photo entitlement
+bot/instagram_i18n.py                RU/EN detection + persisted language
+bot/instagram_creator_generation.py  Photo/Video orchestrator
+bot/instagram_seedream_generation.py Seedream 5 Pro flow
+bot/instagram_video_generation.py    Seedance 2.5 flow
+bot/instagram_generation.py          durable jobs/worker/checkpoints
+bot/handlers/instagram_account_link.py Telegram top-up handoff
+```
 
-- Python 3.12;
-- aiogram 3 + aiohttp;
-- PostgreSQL в production;
-- Redis;
-- Next.js 16 + React 19 + TypeScript;
-- Playwright browser E2E;
-- Docker Compose;
-- Nginx/static Next export;
+## Production identity
+
+```text
+Product ID:       happyfox
+Public origin:    https://alena.chillcreative.ru
+Mini App:         https://alena.chillcreative.ru/mini-app/
+Compose project:  foxgen-happyfox
+Container:        foxgen-happyfox-bot
+Database:         happyfox
+Redis namespace:  foxgen_happyfox
+Production branch: main
+```
+
+`main` — единственный production source of truth. Production deployment always uses exact tested SHA through `.github/workflows/deploy-production.yml`.
+
+## Instagram live status
+
+Instagram code is part of the production source, but the channel is fail-closed and is registered only when:
+
+```dotenv
+INSTAGRAM_ENABLED=1
+```
+
+Before enabling live runtime, configure Meta Instagram Login credentials, webhook verification/signature handling and subscriptions. Default/example configuration keeps `INSTAGRAM_ENABLED=0`.
+
+## Meta integration contract
+
+Primary setup: **Instagram API with Instagram Login** on `graph.instagram.com`, for Professional Creator/Business accounts. Required permissions for the implemented contour:
+
+```text
+instagram_business_basic
+instagram_business_manage_messages
+instagram_business_manage_comments
+instagram_business_content_publish
+```
+
+Current runtime default API version is `v24.0`; webhook subscription fields are `messages,messaging_postbacks,comments`.
+
+## Stack
+
+- Python 3.12, aiogram 3, aiohttp;
+- PostgreSQL production data plane;
+- Redis FSM/cache/idempotency;
+- Next.js 16, React 19, TypeScript;
+- Playwright Chromium + iPhone WebKit gates;
+- Docker Compose + Nginx;
 - GitHub Actions CI/CD.
 
-## Основные каталоги
+## Pricing and ledger
 
-```text
-bot/                         backend, handlers, Mini App API, providers
-frontend/miniapp-v0/         production Next/React Mini App
-data/                        price/model runtime data
-scripts/                     deploy, migrations, diagnostics
-static/uploads/              media root
-ops/                         infrastructure assets
-tests/                       backend regression/integration tests
-.github/workflows/           HappyFox CI and exact-SHA deployment
-```
+User-facing unit is **🐾**. Pricing source is `data/price.json` + pricing helpers/services. Do not hardcode Telegram or video prices in channel adapters when the same price exists in the shared pricing core.
 
-## Product configuration
+Instagram-specific fixed model contract is in `bot/instagram_model_contract.py`:
 
-Backend product source:
+- Seedream 5 Pro High: 2.5 🐾 paid price;
+- Seedance 2.5: cost resolved from shared Telegram/HappyFox video pricing for duration/quality.
 
-```text
-bot/product.py
-```
-
-Frontend product source:
-
-```text
-frontend/miniapp-v0/lib/product.ts
-```
-
-HappyFox defaults:
-
-```text
-PRODUCT_ID=happyfox
-NEXT_PUBLIC_PRODUCT_ID=happyfox
-```
-
-Пользователю баланс и стоимость показываются в **🐾 лапках**. Внутренний compatibility-ledger импортированного production-ядра по-прежнему хранит расчётную единицу как кредит; текущий pricing contract сохраняет курс:
-
-```text
-1 внутренний кредит = 10 ₽
-```
-
-Числовая модель ценообразования импортированного production-ядра сохраняется; HappyFox меняет product presentation и собственные платежные/административные настройки, а не алгоритм списаний.
-
-## Локальные проверки
+## Local verification
 
 Backend:
 
@@ -119,101 +147,46 @@ npm ci
 npm audit --omit=dev --audit-level=high
 npm run lint
 npm run build
-npx playwright install --with-deps chromium
-rm -rf .e2e-server
-mkdir -p .e2e-server/mini-app
-cp -R out/. .e2e-server/mini-app/
-node e2e/critical-flows.mjs
 ```
 
-## CI
-
-`.github/workflows/ci.yml` является merge/release gate и проверяет:
-
-1. backend dependencies/compile;
-2. HappyFox product normalization;
-3. Ruff для нового HappyFox Python delta;
-4. полный safe regression suite;
-5. locked frontend dependencies и production dependency audit;
-6. lint + production Next static export;
-7. наличие HappyFox branding/logo;
-8. Chromium critical browser journeys;
-9. production Docker image build и runtime imports.
-
-## Production isolation
-
-Перед первым production deploy обязательно подготовить отдельные HappyFox:
-
-- Telegram bot token;
-- backend/webhook domain;
-- Mini App domain;
-- PostgreSQL database/user;
-- Redis DB/prefix;
-- KIE/provider webhook secrets;
-- payment credentials/offers;
-- support contact/admin IDs;
-- media/static origin.
-
-Шаблон:
-
-```text
-.env.happyfox.example
-```
-
-Fail-closed preflight:
+Instagram regression subset:
 
 ```bash
-python scripts/validate_happyfox_env.py .env .env.postgres
+pytest -q \
+  tests/test_instagram_transport.py \
+  tests/test_instagram_channel.py \
+  tests/test_instagram_creator_flow.py \
+  tests/test_instagram_generation.py \
+  tests/test_instagram_model_contract.py \
+  tests/test_instagram_i18n.py \
+  tests/test_instagram_account_link.py \
+  tests/test_instagram_account_link_router.py
 ```
 
-Validator запрещает известные Tanya/NEUROMIX домены, общий legacy Redis namespace, SQLite в production и неполные credentials выбранного payment provider.
-
-Особенно важно: HappyFox **не использует импортированные Lava offer IDs** из старого product config. При `PAYMENT_PROVIDER=lava` все HappyFox `LAVA_OFFER_ID_*` должны быть заданы через environment.
-
-Полный runbook: [`docs/happyfox-production-cutover.md`](docs/happyfox-production-cutover.md).
-
-Фактическое production-состояние и acceptance evidence для передачи проекта: [`docs/happyfox-handoff.md`](docs/happyfox-handoff.md).
-
-## Deploy
-
-Production workflow:
+## Release path
 
 ```text
-.github/workflows/deploy-production.yml
+feature/fix/docs branch
+  -> PR to main
+  -> CI green
+  -> merge
+  -> CI green on exact main SHA
+  -> isolated HappyFox preflight
+  -> exact-SHA deploy
+  -> health/revision smoke
 ```
 
-Обычный путь:
+Never deploy arbitrary working-tree state and never deploy HappyFox through `banano_kling` infrastructure.
 
-```text
-feature branch
-    → PR to main
-    → CI green
-    → merge exact tested commit
-    → CI on main
-    → HappyFox production preflight
-    → exact-SHA backend + Mini App deploy
-    → health/revision smoke
-```
+## Documentation
 
-Runtime identities:
+Start with [`docs/README.md`](docs/README.md). Key documents:
 
-```text
-Compose project: foxgen-happyfox
-Container:       foxgen-happyfox-bot
-Product:         happyfox
-Redis prefix:    foxgen_happyfox (recommended)
-```
-
-Deployment status публикуется в GitHub context:
-
-```text
-foxgen/production-deploy
-```
-
-## Безопасность миграции
-
-Не делать массовый rename технических `banana_*`, `banano_*`, provider IDs, callback values или существующих database enums только ради брендинга. Они являются compatibility surface и меняются лишь отдельной миграцией с тестами.
-
-Не переносить `.env` из NEUROMIX целиком. HappyFox credentials должны создаваться отдельно.
-
-Не возвращать старую экспериментальную FoxGen архитектуру из legacy-ветки. Если в ней есть полезная функция, переносить её точечно поверх текущего tanyapi-derived core с regression/browser E2E.
+- [`docs/instagram-channel.md`](docs/instagram-channel.md) — Instagram product/FSM/Meta/live activation;
+- [`docs/architecture.md`](docs/architecture.md) — current channel-neutral architecture;
+- [`docs/environment.md`](docs/environment.md) — env contract;
+- [`docs/development-deployment.md`](docs/development-deployment.md) — development/release flow;
+- [`docs/production-deployment.md`](docs/production-deployment.md) — production deploy/runbook;
+- [`FSM_USER_FLOWS.md`](FSM_USER_FLOWS.md) — user state machines;
+- [`QA_AUDIT_CHECKLIST.md`](QA_AUDIT_CHECKLIST.md) — release QA contract;
+- [`docs/happyfox-handoff.md`](docs/happyfox-handoff.md) — production boundary and handoff evidence.

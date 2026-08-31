@@ -1,490 +1,259 @@
-# Troubleshooting NEUROMIX
+# HappyFox troubleshooting
 
-## 1. Метод диагностики
+Use current `main`, deployment evidence and canonical docs. Historical NEUROMIX/Tanya commands are not valid production instructions for HappyFox.
 
-Всегда разделяйте проблему на слой:
+## 1. “Code is merged but production behaves old”
 
-1. Telegram client/WebView;
-2. frontend HTML/CSS/JS;
-3. frontend Nginx/proxy;
-4. backend public Nginx/TLS;
-5. aiohttp runtime;
-6. database/Redis;
-7. provider/payment API;
-8. media/Cloudflare/origin.
+Check in order:
 
-Не начинайте с массового restart или очистки файлов. Сначала определите слой.
+1. exact merge/main SHA;
+2. main CI for that SHA;
+3. `Deploy HappyFox production` target SHA/conclusion;
+4. public health/static revision.
 
-## 2. Frontend deploy завис на `npm ci`
+A merged PR or green PR CI alone does not prove production was updated.
 
-### Симптом
+## 2. Public health fails
 
-Последняя строка похожа на:
+Check:
+
+- deployment target matches expected SHA;
+- container/runtime health;
+- Nginx/upstream/TLS;
+- PostgreSQL connectivity;
+- Redis availability;
+- recent deployment logs.
+
+Do not immediately modify Nginx or server checkout before confirming which layer is failing.
+
+## 3. Mini App returns 401/403 in curl
+
+Telegram Mini App APIs validate Telegram authentication data. A manual request without valid `initData` can correctly fail authentication while the backend is healthy.
+
+Distinguish expected auth rejection from timeout/5xx/network failure.
+
+## 4. Instagram webhook route is missing/404
+
+First check:
+
+```dotenv
+INSTAGRAM_ENABLED
+```
+
+When `0`, Instagram route/worker registration is intentionally skipped. This is not a routing bug.
+
+If live is expected, verify production runtime actually has `INSTAGRAM_ENABLED=1` and the Meta variables set.
+
+## 5. Meta GET webhook verification fails
+
+Check:
+
+- public HTTPS path matches `INSTAGRAM_WEBHOOK_PATH`;
+- Meta callback URL points to the correct HappyFox origin;
+- `hub.verify_token` equals the configured `INSTAGRAM_VERIFY_TOKEN`;
+- proxy forwards query parameters;
+- the correct production version is deployed.
+
+Never log/share the verify token value.
+
+## 6. Meta POST webhook signature fails
+
+The runtime verifies `X-Hub-Signature-256` using HMAC-SHA256 over the **raw request body** and `INSTAGRAM_APP_SECRET`.
+
+Check:
+
+- correct Meta app secret is deployed;
+- reverse proxy does not alter/decompress/re-encode body unexpectedly;
+- signature header reaches aiohttp;
+- test signs the exact raw bytes sent.
+
+Do not weaken signature validation or parse/re-serialize JSON before HMAC comparison.
+
+## 7. Instagram event processed twice
+
+Check Redis/idempotency state and stable event ID normalization.
+
+Never solve duplicates by globally ignoring repeated user text; the same prompt can be legitimate. Deduplicate Meta delivery events using event identity/idempotency.
+
+Financial/generation side effects must also be durable/idempotent independently.
+
+## 8. Instagram replies in wrong language
+
+Language is persisted per Instagram identity.
+
+User can explicitly send:
 
 ```text
-Installing locked frontend dependencies
-npm warn deprecated ...
+English
+Русский
 ```
 
-и долго нет нового вывода.
+If wrong behavior remains:
 
-`deprecated` warning сам по себе не является ошибкой.
+- verify identity ID/account ID;
+- inspect `instagram_channel_languages` safely;
+- confirm new copy goes through `instagram_i18n.py`;
+- confirm selection parser recognized `Photo/Фото` or `Video/Видео`.
 
-### Проверить процессы
+Attachment-first flow should be bilingual until language is known.
 
-```bash
-ssh root@91.200.84.187 '
-ps -eo pid,ppid,etime,%cpu,%mem,stat,cmd \
-  | grep -E "[n]pm ci|[n]ode|[n]ext build|install_miniapp|[c]dn.sh"
-'
-```
+## 9. First photo is not free
 
-### Проверить ресурсы
+Expected rule: only first **successful Instagram photo** is free.
 
-```bash
-ssh root@91.200.84.187 '
-free -h
-df -h /
-df -i /
-'
-```
+Check:
 
-### Проверить registry
+- promotion exists for the Instagram identity;
+- status/reservation is not stale or consumed;
+- user did not already receive a successful free result;
+- relinking to a different Telegram account must not reset entitlement.
 
-```bash
-ssh root@91.200.84.187 '
-getent hosts registry.npmjs.org
-curl -4 -I --connect-timeout 10 --max-time 20 https://registry.npmjs.org/
-npm config get registry
-'
-```
+If a provider failed terminally, the promotion should be released/preserved.
 
-Ожидаемый registry:
+## 10. Free photo was consumed after provider failure
+
+Trace promotion reservation key and generation job.
+
+Expected:
 
 ```text
-https://registry.npmjs.org/
+reserve -> provider terminal fail -> release
 ```
 
-### Npm logs
+Consumption belongs after successful media delivery/finalization path, not provider submit.
 
-```bash
-ssh root@91.200.84.187 '
-LAST=$(ls -t /root/.npm/_logs/*.log 2>/dev/null | head -n1)
-[ -n "$LAST" ] && tail -n 200 "$LAST" || echo "npm log not found"
-'
-```
+Do not manually recreate a second promotion row without understanding the unique identity constraint.
 
-### Безопасно остановить зависший install
+## 11. Video accepts a reference before payment
 
-```bash
-ssh root@91.200.84.187 '
-PIDS=$(pgrep -f "npm ci" || true)
-if [ -n "$PIDS" ]; then
-  kill -TERM $PIDS
-  sleep 5
-  kill -KILL $PIDS 2>/dev/null || true
-fi
-'
-```
+This is a product regression.
 
-### Ручная проверка
-
-```bash
-ssh root@91.200.84.187 '
-set -e
-cd /opt/banano-kling-src/frontend/miniapp-v0
-rm -rf node_modules
-npm cache verify
-npm ci --no-audit --no-fund --foreground-scripts --loglevel verbose
-'
-```
-
-Если ручной install успешен, повторить normal remote deploy.
-
-## 3. После `Ctrl+C` получена ошибка строки 562, код 255
-
-Это типичный результат прерванной SSH-команды `cdn.sh`.
+Expected:
 
 ```text
-Ошибка на строке 562, код 255
+Video -> video:awaiting_topup -> top-up/Continue -> sufficient balance -> ask reference
 ```
 
-Код `255` в этом контексте означает, что SSH session завершилась с ошибкой или была прервана пользователем. Он не доказывает отдельную ошибку приложения.
+A media message in `video:awaiting_topup` must not bypass the paywall. Check `instagram_creator_generation` / video state handler and corresponding regression test.
 
-После прерывания:
+## 12. Continue/Продолжить does not resume video
 
-1. проверить оставшиеся процессы на frontend host;
-2. остановить только зависший `npm ci`, если он остался;
-3. проверить текущую опубликованную версию;
-4. изучить `/var/log/banano-miniapp-cdn.log`;
-5. повторить deploy после устранения причины.
+Check:
 
-## 4. Frontend deploy завершился, но видна старая версия
+1. Instagram identity is linked to a HappyFox user;
+2. shared balance is sufficient for current Seedance price;
+3. draft state is video top-up/resume state;
+4. RU/EN command normalizer recognizes input;
+5. pricing resolves from shared HappyFox video pricing.
 
-### Причины
+If balance is insufficient, remaining in paywall is expected.
 
-- Telegram WebView держит старый document;
-- Cloudflare/browser cache;
-- deploy собрал старый commit;
-- checkout frontend host не обновился;
-- HTML обновился, но старые assets ещё в памяти WebView.
+## 13. Instagram payment chooser shows CryptoBot or Stars
 
-### Проверить commit
+Instagram-specific handoff should expose only:
 
-```bash
-sudo bash cdn.sh --remote-status tanyafrontend
+```text
+YooKassa
+Lava Top
 ```
 
-Либо:
+Check `bot/handlers/instagram_account_link.py`.
 
-```bash
-ssh root@91.200.84.187 '
-git -C /opt/banano-kling-src branch --show-current
-git -C /opt/banano-kling-src log -1 --oneline
-'
+Do **not** fix this by removing CryptoBot/Stars from the global Telegram payment system. Telegram keeps its configured providers independently.
+
+## 14. Instagram YooKassa unavailable
+
+Check YooKassa service enablement/credentials and available packages. Instagram reuses existing production YooKassa handlers rather than a second checkout implementation.
+
+Verify webhook/transaction behavior with the normal payment diagnostics.
+
+## 15. Lava Top package/method unavailable
+
+Check:
+
+- Lava service enabled;
+- HappyFox `LAVA_OFFER_ID_*` for the selected package;
+- RUB currency/offer resolution;
+- card/SBP callbacks route to existing Lava production handlers.
+
+Never fall back to imported Tanya offer IDs.
+
+## 16. Telegram CryptoBot disappeared after Instagram change
+
+That is a regression. Instagram restriction must not remove CryptoBot from Telegram.
+
+Check whether shared/global payment keyboard/provider configuration was modified instead of only Instagram account-link handoff.
+
+## 17. Paid generation charged twice
+
+P0/P1 financial issue.
+
+Trace:
+
+```text
+Instagram event ID
+job ID
+transaction/charge
+provider_task_id
+retry attempts
 ```
 
-### Проверить title снаружи
+Expected: durable job prepared before charge, then one charge and one provider submit. Retry with a persisted provider task ID must poll the same task.
 
-```bash
-curl -fsS https://cdn.chillcreative.ru/mini-app/ \
-  | grep -o '<title>[^<]*</title>'
+Do not manually refund/credit until duplicate transaction state is understood.
+
+## 18. Provider generation runs twice after restart
+
+Check `provider_task_id` persistence. If it exists, worker should resume polling that provider task instead of calling createTask again.
+
+A job with `result_url` should retry delivery without regeneration.
+
+## 19. Result delivered twice
+
+Check `result_url` and `delivered_at_epoch` checkpoint. Local finalization retries after a saved delivery checkpoint should not intentionally re-send.
+
+Note: there is an unavoidable distributed-systems ambiguity if Meta accepts a send and the process crashes before the local delivery checkpoint commits. Do not promise absolute exactly-once remote delivery.
+
+## 20. Paid provider failure did not refund
+
+Trace job billing mode/cost/transaction and terminal provider status.
+
+Expected terminal paid failure -> refund once. Transient/pending provider state should normally remain queued/retry without premature refund if the same external task may still succeed.
+
+## 21. Instagram comments do not start generation
+
+Expected behavior is acquisition, not direct generation:
+
+```text
+comment keyword -> private invite -> Direct -> Photo/Video chooser
 ```
 
-Если curl показывает NEUROMIX, а Telegram — старое, полностью закрыть Mini App и открыть снова. Иногда требуется закрыть сам Telegram client.
+Meta private reply has platform restrictions; it is not an unlimited cold-DM channel.
 
-## 5. Белый или пустой экран Mini App
+## 22. Instagram live needs emergency disable
 
-### Проверить HTML
+If Telegram/Mini App are healthy:
 
-```bash
-curl -fsSI https://cdn.chillcreative.ru/mini-app/
+```dotenv
+INSTAGRAM_ENABLED=0
 ```
 
-### Проверить assets из текущего HTML
+Redeploy/restart the verified version. This is preferred over rolling back unrelated application changes.
 
-```bash
-curl -fsS https://cdn.chillcreative.ru/mini-app/ \
-  | grep -oE '/mini-app/_next/static/[^" ]+\.(js|css)' \
-  | sort -u
+Preserve identity/promotion/job data for investigation.
+
+## 23. Safe diagnostics
+
+Never paste full `.env`, access tokens, app secrets, payment secrets, Telegram bot token, signed request headers or unredacted user data.
+
+Capture:
+
+```text
+exact SHA
+deploy run
+channel
+sanitized event/job/transaction ID
+state/status
+expected vs actual
+minimal sanitized logs
 ```
-
-Каждый asset должен отвечать `200`.
-
-### Частая причина
-
-Старая WebView-сессия загрузила старый HTML, а deploy удалил старые hashed chunks. Поэтому обычный deploy не должен использовать `rsync --delete`.
-
-## 6. Бесконечный loader NEUROMIX
-
-Проверить:
-
-- загружен ли `telegram-web-app.js`;
-- получает ли frontend Telegram `initData`;
-- отвечает ли bootstrap;
-- нет ли JS exception;
-- нет ли 404 на chunks;
-- нет ли backend timeout.
-
-API proxy smoke:
-
-```bash
-curl -i -X POST \
-  https://cdn.chillcreative.ru/mini-app/api/bootstrap \
-  -H 'Content-Type: application/json' \
-  --data '{}'
-```
-
-Auth error ожидаем. `502/504` означает инфраструктурную проблему.
-
-Backend logs:
-
-```bash
-journalctl -u banano-kling.service -n 200 --no-pager
-```
-
-## 7. На секунду появляется Telegram gate
-
-Нормальная логика:
-
-- пока `state.isLoading=true`, показывается `MiniAppLoader`;
-- gate появляется только после завершённой неуспешной проверки входа.
-
-Если gate мигает:
-
-- убедиться, что deployed commit содержит отдельный `mini-app-loader.tsx`;
-- проверить, что shell проверяет `state.isLoading` до `mode === locked`;
-- исключить старый frontend cache;
-- проверить current HTML/assets commit.
-
-## 8. Bootstrap возвращает 401
-
-## 9. Подозрение на реферальную накрутку
-
-### Симптом
-
-- у партнёра пачками появляются рефералы за секунды;
-- в логах появляются `reason=hourly_limit`, `reason=daily_limit` или `reason=burst_autoban`;
-- админы получают alert `Автобан по реферальному антифроду`.
-
-### Что смотреть
-
-1. Telegram admin UI: `Партнёры -> Burst autobans`;
-2. карточку партнёра и его `referral_code`;
-3. последние события в `referral_events`;
-4. связанный `source` и `start_param`.
-
-### Проверка в БД
-
-```sql
-SELECT created_at, visitor_telegram_id, clicked_referrer_id, clicked_code, reason, source, start_param
-FROM referral_events
-WHERE clicked_referrer_id = <user_id>
-ORDER BY created_at DESC
-LIMIT 100;
-```
-
-### Интерпретация
-
-- `source=start` и `start_param=ref_CODE` обычно означает прямой deep link `/start ref_CODE`;
-- `burst_autoban` означает, что партнёр уже автоматически заблокирован;
-- `blocked_referrer` после этого означает повторные попытки по уже забаненному партнёру.
-
-### Дальше
-
-- проверить, не попал ли под бан честный burst из внешней рекламы;
-- если это false positive, снять бан вручную через админку пользователя;
-- если это накрутка, оставить бан и при необходимости добавить код в `REFERRAL_ANTIFRAUD_BLOCK_CODES`.
-
-### Нормально
-
-- запрос сделан через curl без Telegram `initData`;
-- Mini App открыт обычной ссылкой без browser auth.
-
-### Ненормально
-
-- Mini App открыт внутри Telegram, но initData пустой/невалидный;
-- BOT_TOKEN не соответствует боту, который открыл Mini App;
-- системное время backend сильно отличается;
-- frontend не отправляет auth payload;
-- Nginx удаляет нужные headers/body.
-
-Проверить время:
-
-```bash
-timedatectl status
-```
-
-## 9. Frontend API возвращает 502
-
-Проверить backend public health:
-
-```bash
-curl -v https://tanyapi.chillcreative.ru/health
-```
-
-Проверить frontend Nginx config:
-
-```bash
-ssh root@91.200.84.187 'nginx -t'
-```
-
-Проверить SNI/Host upstream и TLS verification. Secure frontend installer должен проксировать на HTTPS backend domain, а не raw IP:1888.
-
-## 10. Backend service не запускается
-
-```bash
-systemctl status banano-kling.service --no-pager
-journalctl -u banano-kling.service -n 300 --no-pager
-```
-
-Проверить:
-
-- syntax errors;
-- missing env;
-- занятый port;
-- database connection;
-- import errors;
-- permissions;
-- invalid provider configuration на startup.
-
-Port:
-
-```bash
-ss -ltnp | grep ':1888'
-```
-
-Python syntax:
-
-```bash
-cd /root/tanya/banano_kling
-. venv/bin/activate
-python -m py_compile $(find bot tests scripts -name '*.py')
-```
-
-## 11. Webhook Telegram не приходит
-
-Проверить public endpoint и Nginx logs. Убедиться, что Cloudflare/proxy settings не ломают POST.
-
-Проверить webhook info через Telegram API безопасным способом без публикации token в истории. Token лучше читать из env внутри локального script.
-
-Проверить:
-
-- `WEBHOOK_HOST`;
-- `WEBHOOK_PATH`;
-- TLS certificate;
-- Nginx route;
-- backend service;
-- firewall;
-- allowed updates и secret token, если используется.
-
-## 12. Media URL 404
-
-Проверить наличие файла в source:
-
-```bash
-test -f /root/tanya/banano_kling/static/uploads/<path>
-```
-
-Проверить bind mount:
-
-```bash
-findmnt /var/www/media.chillcreative.ru/uploads
-```
-
-Проверить путь через mount:
-
-```bash
-test -f /var/www/media.chillcreative.ru/uploads/<path>
-```
-
-Проверить Nginx alias/root semantics и trailing slash.
-
-## 13. Media 403
-
-Причины:
-
-- Nginx worker не может читать target;
-- bind mount отсутствует;
-- parent permissions;
-- security module;
-- Cloudflare rule/WAF.
-
-Не выдавать `www-data` право прохода через `/root`. Восстановить bind mount в `/var/www/...`.
-
-## 14. `CF-Cache-Status: DYNAMIC` или `BYPASS`
-
-Проверить:
-
-- orange cloud включён;
-- request host — `media.chillcreative.ru`;
-- path соответствует `/uploads/feed/*`;
-- origin не отдаёт `no-store` для feed;
-- Cache Rule включена и expression корректно;
-- cookies/auth headers не заставляют обходить cache;
-- файл имеет cacheable response status/content.
-
-Первый request может быть MISS. Повторный должен показать ожидаемое изменение статуса, если edge cache применим.
-
-## 15. HTTP/3 всё ещё включён
-
-Проверить:
-
-```bash
-curl -sSI https://media.chillcreative.ru/uploads/feed/<file> \
-  | grep -i '^alt-svc:'
-```
-
-Если рекламируется `h3`, проверить Cloudflare Network settings и API token permissions. Изменение может применяться не мгновенно на всех edges.
-
-## 16. Проблема только у части VPN
-
-Собрать отдельно:
-
-- DNS A/AAAA;
-- IPv4 request;
-- IPv6 request;
-- HTTP/2 request;
-- response headers;
-- route trace пользователя;
-- время DNS/connect/TLS/TTFB.
-
-```bash
-curl -4 -o /dev/null -sS \
-  -w 'v4 dns=%{time_namelookup} connect=%{time_connect} tls=%{time_appconnect} ttfb=%{time_starttransfer} total=%{time_total}\n' \
-  https://media.chillcreative.ru/uploads/feed/<file>
-
-curl -6 -o /dev/null -sS \
-  -w 'v6 dns=%{time_namelookup} connect=%{time_connect} tls=%{time_appconnect} ttfb=%{time_starttransfer} total=%{time_total}\n' \
-  https://media.chillcreative.ru/uploads/feed/<file>
-```
-
-Если IPv6 не настроен на origin, не добавлять origin AAAA record. Cloudflare edge может обслуживать IPv6 пользователей при корректном proxied A record.
-
-## 17. Превью слишком тяжёлые
-
-Запустить preview builder на конкретной директории согласно help script. Проверить WebP output и фактический размер:
-
-```bash
-find static/uploads/feed/thumbs -type f -name '*.webp' -printf '%s %p\n' \
-  | sort -nr \
-  | head -n 30
-```
-
-Цель 50–200 КБ является практической, а не абсолютной: сложные изображения могут потребовать снижения dimensions/quality.
-
-## 18. Результат в Telegram есть, в Mini App pending
-
-Проверить:
-
-- task ID совпадает;
-- backend DB status обновлён;
-- bootstrap/task-detail возвращает completed result;
-- frontend sync работает при visible/focus;
-- initData не истёк;
-- media URL доступен.
-
-Не подменять pending mock-данными: frontend должен показывать подтверждённое backend состояние.
-
-## 19. Платёж pending
-
-Проверить:
-
-- активный `PAYMENT_PROVIDER`;
-- transaction row;
-- webhook route;
-- signature validation;
-- provider status;
-- reconcile loop;
-- idempotency marker.
-
-Не начислять баланс вручную до сверки provider payment ID и существующих transactions.
-
-## 20. Redis недоступен
-
-```bash
-redis-cli -u "$REDIS_URL" ping
-```
-
-Если runtime перешёл на memory fallback:
-
-- бот может продолжить работу;
-- активные FSM состояния будут потеряны при restart;
-- multiple-instance runtime становится небезопасным.
-
-## 21. Быстрый сбор диагностического пакета
-
-```bash
-{
-  date -Is
-  hostname
-  git -C /root/tanya/banano_kling branch --show-current
-  git -C /root/tanya/banano_kling log -1 --oneline
-  systemctl show banano-kling.service -p ActiveState -p SubState -p NRestarts
-  curl -sS -o /dev/null -w 'backend=%{http_code}\n' https://tanyapi.chillcreative.ru/health
-  curl -sS -o /dev/null -w 'frontend=%{http_code}\n' https://cdn.chillcreative.ru/mini-app/
-  nginx -t 2>&1
-} | tee /tmp/neuromix-diagnostic.txt
-```
-
-Перед передачей файла проверить, что в нём нет secrets или персональных данных.

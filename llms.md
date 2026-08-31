@@ -1,170 +1,224 @@
-# Neuromix Bot — Краткое руководство / Audit
+# HappyFox — agent brief
 
-## Описание проекта
+Updated: 2026-08-31.
 
-Telegram-бот для генерации изображений и видео через нейросети (Kling, Veo, Seedance, Wan2.7 и др.). Работает на aiogram 3, aiohttp webhooks, Redis, PostgreSQL/SQLite.
+Repository: `Bambale0/foxgen`
+Production source: `main`
+Product: **HappyFox**
 
-Бот: @Neuromixx_bot
-Репозиторий: git@github.com:Bambale0/banano_kling.git
+This file is a concise context brief for coding/review agents. Canonical human docs start at `README.md` and `docs/README.md`.
 
----
+## Product boundary
 
-## Архитектура
+HappyFox is independent from NEUROMIX/Tanya/`Bambale0/banano_kling` after the recorded core import.
 
-```
-bot/
-├── main.py              # Точка входа, webhooks, роутеры
-├── config.py            # Конфигурация из переменных окружения
-├── database.py          # Все операции с БД (6.5k строк)
-├── db.py                # Прокси для SQLite/PostgreSQL (aiosqlite/asyncpg)
-├── keyboards.py         # Клавиатуры Telegram
-├── miniapp.py           # Mini App на aiohttp + Jinja2
-├── miniapp_links.py     # Генерация глубоких ссылок
-├── states.py            # FSM состояния
-├── handlers/
-│   ├── common.py        # Основные обработчики (5k строк)
-│   ├── generation.py    # Генерация изображений/видео
-│   ├── batch_generation.py
-│   ├── payments.py      # Платежи (Lava, YooKassa, CryptoBot, TBank, etc.)
-│   ├── admin.py         # Админка
-│   └── image_analyzer.py
-├── services/
-│   ├── kling_service.py # Kling AI
-│   ├── veo_service.py
-│   ├── seedance_service.py
-│   ├── wan27_service.py
-│   ├── gemini_service.py
-│   ├── gpt_image_service.py
-│   ├── nano_banana_2_service.py
-│   ├── subscription_service.py
-│   └── ... (другие сервисы)
-└── utils/
-    ├── help_texts.py
-    ├── validators.py
-    └── user_facing_errors.py
+Never reuse another product's:
 
-frontend/miniapp-v0/     # Mini App на Next.js + shadcn/ui
-scripts/                 # Скрипты миграции, бэкапа, деплоя
-docs/                    # Документация
+- bot token;
+- domains;
+- PostgreSQL/Redis data plane;
+- media storage;
+- payment offers/credentials;
+- provider webhook secrets;
+- deploy environment.
+
+Production identity:
+
+```text
+public origin: https://alena.chillcreative.ru
+mini app:      https://alena.chillcreative.ru/mini-app/
+compose:       foxgen-happyfox
+container:     foxgen-happyfox-bot
+database:      happyfox
+redis prefix:  foxgen_happyfox
+branch:        main
 ```
 
----
+## Architecture
 
-## Финансовая модель
-
-- **Тарифы**: `data/price.json` — прайс-лист на генерации
-- **Внутренняя валюта**: `🍌 бананы` (1 рубль = 1 банан у.е.)
-- **Партнёрка**: 30% с рефералов 1 уровня, 7% со 2 уровня
-- **Платежи**: Lava, YooKassa, CryptoBot, TBank, Telegram Stars
-
----
-
-## Аудит реферальной системы
-
-### Выявленные проблемы (07.2026)
-
-| # | Проблема | Уровень | Статус |
-|---|----------|---------|--------|
-| 1 | Неатомарность: создание пользователя и привязка реферала — разные транзакции | CRITICAL | 🔴 |
-| 2 | Существующий пользователь (без `referred_by`) не может быть привязан к рефереру | HIGH | 🔴 |
-| 3 | Нет команды диагностики `/check_ref` | MEDIUM | 🔴 |
-| 4 | Нет повторной обработки при падении между `get_or_create_user` и `_activate_referral_code` | CRITICAL | 🔴 |
-| 5 | Антифрод не логирует нормальные рефералы (только блокировки) | LOW | 🔴 |
-
-### Как работает реферальная ссылка
-
-1. Пользователь переходит по `https://t.me/Neuromixx_bot?start=ref_JXZWPGFA`
-2. Telegram шлёт боту `/start ref_JXZWPGFA`
-3. `cmd_start()`:
-   - Вызывает `get_or_create_user()` → создаётся пользователь **без реферрера**
-   - Вызывает `_activate_referral_code()` → пытается привязать реферрера
-4. `process_referral()` проверяет: код существует? пользователь существует? не сам себя? уже платил? не заблокирован? не превысил лимит?
-5. Если всё ОК — обновляет `referred_by` и добавляет записи в `referrals`
-
-### Почему рефералы НЕ засчитываются
-
-#### 1. Главная проблема: разрыв между созданием и привязкой
-```python
-# cmd_start():
-user = await get_or_create_user(message.from_user.id)  # Создаётся юзер
-# ... если здесь ошибка, перезапуск, race condition ...
-referral_bonus_text = await _activate_referral_code(...)  # Пытается привязать
-```
-Между этими двумя вызовами может произойти что угодно. Если бот упал — пользователь создан, но реферал потерян навсегда.
-
-#### 2. Пользователь уже существует
-Если человек когда-либо заходил в бота (даже год назад), `get_or_create_user()` возвращает существующего пользователя с `referred_by IS NULL` (потому что реферал не привязался тогда).
-
-#### 3. Антифрод может блокировать нормальных пользователей
-`REFERRAL_ANTIFRAUD_MAX_PER_HOUR = 30` — если реферрер привёл 30+ человек за час, все следующие блокируются. При 1700 подписчиках и месяце рекламы — это возможно.
-
-### Что исправлено
-
-✅ **get_or_create_user()** теперь принимает `referral_code` и создаёт пользователя сразу с `referred_by` в одной транзакции
-✅ **process_referral()** исправлен: разрешена привязка существующих пользователей (если `referred_by IS NULL` и нет оплат)
-✅ **cmd_start()** передаёт referral_code прямо в get_or_create_user для атомарности
-✅ Добавлена команда `/check_ref <CODE>` для диагностики
-✅ Добавлено детальное логирование
-✅ Создан этот файл аудита
-
----
-
-## Todo (ближайшие задачи)
-
-- [x] Исправить get_or_create_user — атомарная транзакция с реферальным кодом
-- [x] Исправить process_referral — разрешить привязку существующих пользователей (если referred_by IS NULL)
-- [x] Добавить команду /check_ref для диагностики
-- [x] Настроить подробное логирование реферальных событий
-- [ ] Проверить, работает ли startapp=ref_CODE через Mini App
-- [ ] Тестирование: создать тест на сквозную проверку реферальной цепочки
-- [ ] Добавить метрики в Prometheus (если есть)
-
----
-
-## Запуск и деплой
-
-```bash
-# Запуск бота
-./start.sh          # или systemctl start banano-kling
-
-# Рестарт
-./restart.sh
-
-# Логи
-journalctl -u banano-kling.service -n 200 --no-pager
-
-# Проверка БД (production)
-python scripts/check_postgres_runtime.py
-
-# Бэкап
-SEND_BACKUP_TO_ADMINS=0 ./scripts/backup_db.sh
-
-# Тесты
-python -m pytest tests/
+```text
+Telegram Bot + Mini App ─┐
+                         ├─> shared HappyFox generation/billing/data core
+Instagram channel ───────┘
 ```
 
----
+Channels are adapters. Do not duplicate ledger/provider lifecycle in Instagram.
 
-## Важные константы
+Stack: Python 3.12, aiogram 3, aiohttp, PostgreSQL, Redis, Next.js 16/React 19, Playwright, Docker, GitHub Actions.
 
-```python
-PARTNER_LEVEL1_PERCENT = 30       # % с покупок рефералов 1 уровня
-PARTNER_LEVEL2_PERCENT = 7        # % с покупок рефералов 2 уровня
-PARTNER_NEW_USER_BONUS = 15       # бананов новому пользователю
-PARTNER_INVITER_BONUS = 3         # бананов пригласившему
-REFERRAL_ANTIFRAUD_MAX_PER_HOUR = 30
-REFERRAL_ANTIFRAUD_MAX_PER_DAY = 120
+## Instagram transport
+
+Main files:
+
+```text
+bot/instagram_api.py
+bot/instagram_channel.py
+bot/internal_api.py
+bot/channel_identity.py
+bot/channel_link.py
+bot/channel_promotions.py
+bot/instagram_i18n.py
+bot/instagram_creator_generation.py
+bot/instagram_seedream_generation.py
+bot/instagram_video_generation.py
+bot/instagram_generation.py
+bot/handlers/instagram_account_link.py
 ```
 
----
+Meta contract:
 
-## Полезные ссылки
+```text
+Instagram API with Instagram Login
+graph.instagram.com
+default API: v24.0
+webhook: /instagram/webhook
+fields: messages,messaging_postbacks,comments
+```
 
-- Документация API: `docs/`
-- Партнёрская программа: `/ref` или `/earn` в боте
-- Админка: `/admin`
+Permissions expected:
 
----
+```text
+instagram_business_basic
+instagram_business_manage_messages
+instagram_business_manage_comments
+instagram_business_content_publish
+```
 
-*Последнее обновление: 02.07.2026*
-*Создано для понимания проекта в параллельных чатах*
+Webhook POST must verify raw-body `X-Hub-Signature-256` HMAC-SHA256. Redis idempotency is required. Do not weaken fail-closed behavior.
+
+Runtime is dark unless:
+
+```dotenv
+INSTAGRAM_ENABLED=1
+```
+
+Example/default stays `0` until live Meta config is ready.
+
+## Instagram creator product contract
+
+First step always:
+
+```text
+Photo / Фото
+Video / Видео
+```
+
+### Photo
+
+```text
+model:       Seedream 5 Pro
+product key: seedream_5_pro
+provider:    seedream/5-pro-image-to-image
+quality:     high
+ratio:       1:1
+paid cost:   2.5 🐾
+```
+
+Only first **successful Instagram photo** is free per Instagram external identity. Provider failure releases the reservation; relinking accounts cannot reset the gift.
+
+Later photo: reference -> prompt -> paid confirm -> charge once -> durable job -> result. Terminal paid failure refunds once.
+
+### Video
+
+```text
+model:       Seedance 2.5
+product key: seedance_2_5
+provider:    bytedance/seedance-2-5
+resolution:  720p
+ratio:       9:16
+price:       shared HappyFox/Telegram Seedance pricing
+```
+
+Video is always paid.
+
+```text
+Video selected
+ -> immediate top-up/paywall
+ -> do NOT accept new reference yet
+ -> user pays
+ -> Continue / Продолжить
+ -> verify linked balance
+ -> ask photo/video reference
+ -> prompt
+ -> confirm price
+ -> charge/provider/result
+```
+
+## Language
+
+Instagram auto-detects/persists RU/EN per identity.
+
+- Russian meaningful text -> `ru`;
+- English meaningful text -> `en`;
+- attachment-first -> bilingual chooser;
+- `English` / `Русский` explicitly switch;
+- all new Instagram user-facing copy should use `bot/instagram_i18n.py`.
+
+## Identity/linking
+
+Never fabricate Telegram IDs for Instagram users.
+
+`channel_identities` maps channel/account/external user to optional HappyFox `users.id`.
+
+Paid flow links through one-time hashed `iglink_*` token in Telegram. Linked identity shares the same HappyFox balance/history.
+
+## Payments
+
+One shared ledger.
+
+Instagram handoff deliberately exposes only:
+
+```text
+YooKassa
+Lava Top (card/SBP)
+```
+
+Telegram keeps its configured payment providers. **CryptoBot must remain in Telegram when enabled.** Do not globally delete it to satisfy Instagram UX.
+
+After top-up user returns to Instagram and sends `Continue / Продолжить`; backend rechecks actual shared balance.
+
+## Durable job rules
+
+Instagram generation job safety:
+
+- prepare job before financial/promotion side effect;
+- persist provider task ID immediately after submit;
+- retry/restart resumes same provider task;
+- persist result URL before delivery retry;
+- persist delivery checkpoint after successful send;
+- terminal paid failure -> refund once;
+- terminal free-photo failure -> release promotion;
+- no free video.
+
+Do not claim perfect exactly-once Meta delivery across remote-send/local-checkpoint crash ambiguity.
+
+## Release process
+
+```text
+branch -> PR main -> exact-head CI green -> merge
+       -> main CI green -> exact-SHA production deploy -> health/revision smoke
+```
+
+Required gates include backend regression/Ruff, Mini App build, Chromium+iPhone WebKit and production Docker runtime.
+
+Do not claim deployed/live until exact SHA/deploy is verified. “Instagram code is on production” and “Instagram live is enabled” are different statements.
+
+## Documentation sources
+
+Canonical:
+
+```text
+README.md
+docs/README.md
+docs/instagram-channel.md
+docs/architecture.md
+docs/environment.md
+docs/development-deployment.md
+docs/production-deployment.md
+FSM_USER_FLOWS.md
+QA_AUDIT_CHECKLIST.md
+tracemap_generation.md
+tracemap_payments.md
+```
+
+Provider API snapshots and old NEUROMIX documents can be historical/reference-only. Runtime code/tests win on conflicts.

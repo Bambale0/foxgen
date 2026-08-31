@@ -1,16 +1,16 @@
-# Exact-SHA frontend deployment
+# Exact-SHA frontend deployment — HappyFox
 
-The production frontend workflow validates a commit on GitHub-hosted runners first
-and falls back to the self-hosted `nuromix` runner only for trusted pushes.
+HappyFox no longer has a separate legacy frontend release source. The Mini App is released from the same verified `foxgen/main` SHA as the backend.
 
-The remote deployment must publish the exact commit that passed CI. It therefore:
+Required evidence:
 
-1. resets `/opt/banano-kling-src` to `GITHUB_SHA`;
-2. invokes `scripts/install_miniapp_frontend_https_host.sh` directly instead of
-   `cdn.sh`, because `cdn.sh` refreshes `origin/tanyapi` internally;
-3. verifies that the checkout SHA did not change during deployment;
-4. compares the built `out/index.html` with the deployed `index.html`;
-5. checks the public health endpoint and Mini App HTTP response.
+```text
+PR head SHA -> CI green
+main merge SHA -> main CI green
+Deploy HappyFox production target -> same verified main SHA
+Mini App revision -> deployment SHA
+```
 
-This prevents a newer untested commit from being picked up between CI completion
-and the remote frontend build.
+Canonical instructions: `production-deployment.md` and `production_auto_deploy.md`.
+
+Do not deploy frontend files from an old NEUROMIX/Tanya branch/profile independently of the verified HappyFox release unless an explicit emergency procedure documents the divergence and restores exact-SHA consistency immediately afterward.
