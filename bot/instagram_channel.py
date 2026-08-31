@@ -12,7 +12,11 @@ from bot.channel_promotions import (
 )
 from bot.instagram_api import InstagramClient, InstagramEvent, InstagramSettings
 from bot.instagram_generation import InstagramGenerationService
-from bot.instagram_i18n import resolve_instagram_language, tr
+from bot.instagram_i18n import (
+    detect_instagram_language,
+    resolve_instagram_language,
+    tr,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +51,18 @@ def _message_attachments(event: InstagramEvent) -> list[dict[str, Any]]:
     if not isinstance(attachments, list):
         return []
     return [item for item in attachments if isinstance(item, dict)]
+
+
+async def _resolve_language_safe(identity_id: int, text: str | None) -> str:
+    try:
+        return await resolve_instagram_language(identity_id, text)
+    except Exception:
+        logger.warning(
+            "Instagram language preference could not be persisted: identity=%s",
+            identity_id,
+            exc_info=True,
+        )
+        return detect_instagram_language(text)
 
 
 class InstagramChannelAdapter:
@@ -108,7 +124,7 @@ class InstagramChannelAdapter:
                 event.event_id,
             )
             return
-        language = await resolve_instagram_language(identity.id, event.text)
+        language = await _resolve_language_safe(identity.id, event.text)
         await self.client.private_reply(
             event.account_id,
             comment_id,
@@ -120,7 +136,7 @@ class InstagramChannelAdapter:
         event: InstagramEvent,
         identity: ChannelIdentity,
     ) -> None:
-        language = await resolve_instagram_language(identity.id, event.text)
+        language = await _resolve_language_safe(identity.id, event.text)
         link = ""
         if self.account_link_factory is not None:
             link = (await self.account_link_factory(identity)).strip()
@@ -138,7 +154,7 @@ class InstagramChannelAdapter:
         *,
         first_image_free: bool,
     ) -> None:
-        language = await resolve_instagram_language(identity.id, event.text)
+        language = await _resolve_language_safe(identity.id, event.text)
         attachments = _message_attachments(event)
         attachment_types = {
             str(item.get("type") or "").strip().lower() for item in attachments
@@ -172,7 +188,7 @@ class InstagramChannelAdapter:
         *,
         first_image_free: bool,
     ) -> None:
-        language = await resolve_instagram_language(identity.id, event.text)
+        language = await _resolve_language_safe(identity.id, event.text)
         postback = event.payload.get("postback")
         payload = (
             str(postback.get("payload") or "") if isinstance(postback, dict) else ""
@@ -200,7 +216,7 @@ class InstagramChannelAdapter:
         if identity is None:
             return
 
-        await resolve_instagram_language(identity.id, event.text)
+        await _resolve_language_safe(identity.id, event.text)
         if event.kind == "comments":
             await self._handle_comment(event, identity)
             return
