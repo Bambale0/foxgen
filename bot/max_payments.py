@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
-import time
 import uuid
 from dataclasses import dataclass
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
@@ -388,7 +386,11 @@ class MaxYooKassaService:
             ),
         )
         self.catalog = catalog
-        self.enabled = bool(self.shop_id and self.secret_key and self.return_url.startswith("https://"))
+        self.enabled = bool(
+            self.shop_id
+            and self.secret_key
+            and self.return_url.startswith("https://")
+        )
         self._session = session
         self._own_session = session is None
 
@@ -567,7 +569,10 @@ class MaxYooKassaService:
                 amount_rub=order.amount_rub,
                 payment_provider="yookassa",
                 provider_order_id=order.provider_payment_id,
-                metadata={"buyer_max_user_id": order.max_user_id, "order_id": order.order_id},
+                metadata={
+                    "buyer_max_user_id": order.max_user_id,
+                    "order_id": order.order_id,
+                },
             )
 
         level2 = await _get_referrer(level1)
@@ -586,7 +591,10 @@ class MaxYooKassaService:
                 amount_rub=order.amount_rub,
                 payment_provider="yookassa",
                 provider_order_id=order.provider_payment_id,
-                metadata={"buyer_max_user_id": order.max_user_id, "order_id": order.order_id},
+                metadata={
+                    "buyer_max_user_id": order.max_user_id,
+                    "order_id": order.order_id,
+                },
             )
 
     async def complete_order(self, order_id: str) -> dict[str, Any]:
@@ -594,7 +602,12 @@ class MaxYooKassaService:
         if order is None:
             return {"ok": False, "status": "not_found"}
         if order.status == "completed":
-            return {"ok": True, "status": "completed", "already_completed": True, "order": order}
+            return {
+                "ok": True,
+                "status": "completed",
+                "already_completed": True,
+                "order": order,
+            }
         if order.status == "failed":
             return {"ok": False, "status": "failed", "order": order}
         if not order.provider_payment_id:
@@ -615,7 +628,12 @@ class MaxYooKassaService:
                 order.order_id,
                 reason,
             )
-            return {"ok": False, "status": "verification_failed", "reason": reason, "order": order}
+            return {
+                "ok": False,
+                "status": "verification_failed",
+                "reason": reason,
+                "order": order,
+            }
 
         balance = await apply_max_balance_delta(
             order.max_user_id,
@@ -642,6 +660,8 @@ class MaxYooKassaService:
         results: list[dict[str, Any]] = []
         for order in await _pending_orders(limit):
             result = await self.complete_order(order.order_id)
-            if result.get("status") == "completed" and not result.get("already_completed"):
+            if result.get("status") == "completed" and not result.get(
+                "already_completed"
+            ):
                 results.append(result)
         return results
