@@ -1,250 +1,310 @@
-# FSM, экраны, callback-контракт и пользовательские флоу
+# HappyFox FSM and user flows
 
-Этот документ описывает обязательную FSM-архитектуру, экраны, callback-контракты и пользовательские сценарии для Telegram Bot + Mini App.
+This document is the canonical state-flow map for Telegram Bot + Mini App + Instagram creator channel.
 
-Нельзя делать просто набор команд. Продукт должен работать как пошаговый Telegram Bot + Mini App с понятными экранами, состояниями, callback-кнопками и сохранением промежуточных параметров в FSM.
+## 1. Core rule
 
----
+Channel UI may differ, but generation/billing side effects must stay durable and shared. Temporary Telegram wizard data belongs in `FSMContext`; Instagram creator state is persisted in Instagram session/job tables because it must survive webhook retries and process restarts.
 
-## 1. Обязательная FSM-структура
+## 2. Telegram FSM groups
 
-Файл: `bot/states.py`
+Main state groups remain:
 
-Группы состояний:
-- `GenerationStates` — всё создание фото/видео
-- `PaymentStates` — пополнение баланса
-- `AdminStates` — админка
-- `BatchGenerationStates` — батч-генерация
-- `ImageAnalyzerStates` — промпт по фото
+- `GenerationStates` — image/video creation;
+- `PaymentStates` — balance/top-up;
+- `AdminStates` — admin contour;
+- `BatchGenerationStates` — batch generation;
+- `ImageAnalyzerStates` — prompt-from-photo;
+- feature-specific states in their respective handlers.
 
-Правило: новые экраны **не хранят данные в глобальных переменных**. Все временные параметры — в `FSMContext`.
+Do not store per-user temporary wizard state in process globals.
 
----
+## 3. Telegram main flows
 
-## 2. Базовая структура FSM data
+### Photo
 
-### Фото-флоу
-```python
-def default_image_flow_data():
-    return {
-        "generation_type": "image",
-        "img_service": "banana_pro",
-        "img_ratio": "1:1",
-        "img_count": 1,
-        "img_quality": "2K",
-        "img_nsfw_checker": False,
-        "nsfw_enabled": False,
-        "reference_images": [],
-        "img_flow_step": "select_model",
-        "preset_id": "new",
-        "user_prompt": "",
-    }
+```text
+/start
+ -> Create photo
+ -> model
+ -> optional references
+ -> ratio/quality/count/options
+ -> prompt
+ -> balance validation/charge
+ -> provider job
+ -> result
+ -> repeat/publish/library/animate
 ```
 
-### Видео-флоу
-```python
-def default_video_flow_data():
-    return {
-        "generation_type": "video",
-        "video_flow_step": "select_model",
-        "v_type": "text", "v_model": "v3_pro",
-        "v_duration": 5, "v_ratio": "16:9",
-        "v_image_url": None,
-        "reference_images": [],
-        "v_reference_videos": [],
-        "avatar_audio_url": None,
-        "user_prompt": "",
-        "grok_mode": "normal", "grok_resolution": "480p",
-        "veo_generation_type": "TEXT_2_VIDEO",
-        "veo_translation": True, "veo_resolution": "720p",
-        "veo_seed": None, "veo_watermark": "",
-        "kling_negative_prompt": "", "kling_cfg_scale": 0.5,
-        "omni_resolution": "720p", "omni_seed": None,
-        "omni_audio_ids": [], "omni_character_ids": [],
-        "omni_base_voice": "achernar",
-        "omni_voice_name": "", "omni_voice_description": "",
-        "omni_example_dialogue": "", "omni_character_name": "",
-        "omni_character_audio_ids": [],
-    }
+### Video
+
+```text
+/start
+ -> Create video
+ -> model
+ -> generation type
+ -> references/media
+ -> duration/ratio/model options
+ -> prompt
+ -> balance validation/charge
+ -> provider job
+ -> result
+ -> repeat/publish/library
 ```
 
----
+### Balance
 
-## 3. Главный экран
-
-Обязательные кнопки:
-- 🚀 Открыть Mini App
-- 🖼 Создать фото
-- 🎬 Создать видео
-- 🎯 Motion Control
-- 📸 Промпт по фото
-- 🎞 Промпт по видео
-- 🖼 Лента
-- 📚 Библиотека промптов
-- 🤖 AI-помощник
-- 🍌 Баланс
-- 💬 Поддержка
-- 🤝 Партнёрам
-- ⋯ Ещё
-
----
-
-## 4. Фото-флоу
-
-```
-Главное меню → Создать фото
-→ выбор модели
-→ загрузка/пропуск референсов
-→ экран настроек (ratio/quality/count)
-→ ввод prompt
-→ проверка баланса → списание
-→ generation_task → provider → webhook → результат
-→ кнопки: повторить / опубликовать / в библиотеку / анимировать
+```text
+Balance
+ -> Top up
+ -> package/promo
+ -> provider
+ -> pending transaction/payment URL
+ -> signed provider webhook
+ -> shared balance credit
+ -> notification
 ```
 
-### Callback-контракт:
-```
-create_image_text_new    image_change_model
-model_banana_pro         model_banana_2
-model_nano_banana_2_lite model_seedream_edit
-model_grok_i2i           model_flux_pro
-model_wan_27
-img_ref_continue_new     ref_skip_new
-ref_saved_library
-img_ratio_1_1            img_ratio_16_9
-img_ratio_9_16           img_ratio_4_3
-img_ratio_3_4
-img_quality_2k           img_quality_4k
-img_quality_basic        img_quality_high
-img_count_1              img_count_2
-img_count_4              img_count_6
+Telegram payment UI uses the providers enabled for Telegram. CryptoBot remains valid here when configured.
+
+### Mini App
+
+```text
+Telegram WebView
+ -> initData
+ -> /mini-app/api/bootstrap
+ -> live UI
+ -> create/history/feed/profile/billing actions
 ```
 
----
+Browser/open-outside-Telegram fallback is separate from normal Telegram WebView auth.
 
-## 5. Видео-флоу
+## 4. Instagram durable state model
 
-Типы: `text | imgtxt | video | avatar | motion | audio | character`
+Instagram does not use Telegram `FSMContext` as its primary state store.
 
-### Callback-контракт:
-```
-create_video_new          video_change_model
-video_change_media        video_media_continue
-video_media_skip
-v_model_v3_pro            v_model_v3_std
-v_model_v26_pro           v_model_grok_imagine
-v_model_grok_imagine_v15  v_model_seedance_2
-v_model_gemini_omni       v_model_veo3
-v_model_veo3_fast         v_model_veo3_lite
-v_model_glow
-v_type_text               v_type_imgtxt
-v_type_video              v_type_avatar
-v_type_motion
-ratio_16_9                ratio_9_16
-ratio_1_1
-video_dur_4/5/6/8/10/15
-kling_negative_prompt_edit  kling_cfg_scale_edit
-veo_translation_toggle      veo_resolution_720p/1080p/4k
-veo_seed_edit               veo_watermark_edit
-omni_mode_video/audio/character  omni_resolution_720p/1080p/4k
-omni_seed_edit              omni_audio_ids_edit
-omni_character_ids_edit
+Key persisted data:
+
+```text
+channel_identities
+instagram_channel_languages
+instagram_generation_sessions
+instagram_generation_jobs
+channel promotion/link tables
 ```
 
----
+Session state contains selected creator kind, media/prompt draft and resume step. Jobs contain billing mode, provider task/result/delivery checkpoints and retry state.
 
-## 6. Референсы
+## 5. Instagram entry
 
-Загрузка photo/document (JPEG, PNG, WEBP), видео. Публичный URL. Лимит по модели. Библиотека сохранённых.
+Every creator interaction starts from creation-type choice unless a valid in-progress session already dictates the next step.
 
-Callback'и:
-```
-ref_skip_new        img_ref_continue_new
-vid_ref_continue_new  ref_saved_library
-savedref_nav_{index}  savedref_use_{reference_id}
-savedref_delete_{reference_id}_{index}  savedref_close
+```text
+IG_START
+ -> Фото / Photo
+ -> Видео / Video
 ```
 
----
+If first interaction is attachment-only and language is unknown, show a bilingual chooser. Media must not bypass creation-type selection.
 
-## 7. Оплаты и баланс
+## 6. Instagram language FSM
 
-```
-Главное меню → Баланс
-→ Пополнить → выбор пакета → промокод → способ оплаты
-→ pending transaction → payment URL
-→ webhook провайдера → проверка подписи → начисление → уведомление
-```
-
-Callback'и:
-```
-menu_balance     menu_topup
-choose_pay_{package_id}  topup_enter_promo
-topup_remove_promo
-buy_stars_{package_id}   buy_crypto_{package_id}
-buy_yookassa_{package_id}  buy_lava_{package_id}
-check_payment_{transaction_id}
+```text
+no stored language
+ -> meaningful RU text -> ru persisted
+ -> meaningful EN text -> en persisted
+ -> media only -> bilingual copy, language remains unknown
 ```
 
----
+Explicit switch:
 
-## 8. Админка
-
-Разделы: Статистика, Пользователи, Партнёры, Финансы/рефы, Цены, Промокоды, Промпты, ИИ-админ, Рассылка, Подписка на канал
-
-Callback'и: `admin_stats, admin_users, admin_partners, admin_finance, admin_prices, admin_promocodes, admin_prompts, admin_ai, admin_broadcast, admin_required_subscription_toggle, admin_back`
-
----
-
-## 9. Экранный контракт
-
-Каждый экран: `render() + keyboard() + callback handler + state transition`
-
-### Паттерн:
-```python
-async def show_some_screen(callback, state):
-    data = await state.get_data()
-    text = build_some_screen_text(data)
-    keyboard = get_some_screen_keyboard(data)
-    await callback.message.edit_text(text, reply_markup=keyboard, parse_mode="HTML")
-    await state.set_state(SomeStates.some_state)
-
-@router.callback_query(F.data == "some_continue")
-async def some_continue(callback, state):
-    await state.update_data(some_step_completed=True)
-    await show_next_screen(callback, state)
-    await callback.answer()
+```text
+English -> en
+Русский -> ru
 ```
 
----
+`Photo/Фото` and `Video/Видео` can establish language. New Instagram user-facing strings must use `bot/instagram_i18n.py`.
 
-## 10. Router order
+## 7. Instagram photo FSM
 
-Специфичные роутеры → общие:
-```python
-dp.include_router(generation_router)
-dp.include_router(image_analyzer_router)
-dp.include_router(admin_router)
-dp.include_router(payments_router)
-dp.include_router(batch_generation_router)
-dp.include_router(common_router)  # последним!
+Model:
+
+```text
+Seedream 5 Pro
+provider: seedream/5-pro-image-to-image
+quality: high
+ratio: 1:1
+paid price: 2.5 🐾
 ```
 
----
+### First successful photo — free
 
-## 11. Feed, repeat, remix
+```text
+IG_START
+ -> Photo
+ -> IG_PHOTO_WAIT_REFERENCE_FREE
+ -> image reference
+ -> IG_PHOTO_WAIT_PROMPT_FREE
+ -> prompt
+ -> reserve first-photo entitlement
+ -> IG_PHOTO_GENERATING_FREE
+ -> provider/result delivery success
+ -> consume entitlement
+ -> IG_PHOTO_RESULT_FREE
+ -> top-up/continue offer
+```
 
-После результата: Повторить, Новый prompt, Анимировать, В ленту, В библиотеку, Показать prompt/референсы
+Failure before successful result delivery:
 
-Repeat восстанавливает request_data из generation_tasks в FSM.
+```text
+provider terminal failure
+ -> release entitlement
+ -> free attempt remains available
+```
 
----
+### Paid photo
 
-## 12. Критерий готовности UX
+```text
+Photo
+ -> promotion already consumed
+ -> if unlinked: account-link/top-up handoff
+ -> if linked: reference
+ -> prompt
+ -> IG_PHOTO_CONFIRM_PAID
+ -> YES/ДА
+ -> deduct 2.5 🐾
+ -> durable job
+ -> result
+```
 
-Пользователь проходит без ручных команд:
-1. /start → Создать фото → модель → референсы → настройки → prompt → результат
-2. /start → Создать видео → модель → тип → файлы → настройки → prompt → результат
-3. /start → Баланс → Пополнить → пакет → оплата → бананы
-4. /start → Лента → открыть → повторить/ремикснуть
-5. /admin → статистика → цены → промокоды → рассылка
+Insufficient balance returns to top-up/resume instead of provider submit.
+
+Terminal provider failure after charge -> refund once.
+
+## 8. Instagram video FSM
+
+Model:
+
+```text
+Seedance 2.5
+provider: bytedance/seedance-2-5
+resolution: 720p
+ratio: 9:16
+price: shared HappyFox/Telegram Seedance pricing
+```
+
+**Video is always paid.**
+
+```text
+IG_START
+ -> Video
+ -> IG_VIDEO_AWAITING_TOPUP
+ -> show YooKassa/Lava Top handoff
+ -> do not accept/store new media reference
+ -> user pays in Telegram
+ -> returns to Direct
+ -> Continue / Продолжить
+ -> verify linked user + sufficient balance
+ -> IG_VIDEO_WAIT_SOURCE
+ -> image/video reference
+ -> IG_VIDEO_WAIT_PROMPT
+ -> prompt
+ -> IG_VIDEO_CONFIRM_PAID
+ -> YES/ДА
+ -> charge
+ -> IG_VIDEO_GENERATING
+ -> result
+```
+
+If balance is still low on `Continue`, remain in paywall state.
+
+If provider fails terminally after charge, refund once.
+
+## 9. Instagram top-up/account-link FSM
+
+```text
+paid action requires account/balance
+ -> create one-time iglink token
+ -> Telegram /start iglink_<token>
+ -> consume token
+ -> bind Instagram identity to HappyFox user
+ -> show Instagram-specific top-up providers
+```
+
+Instagram-specific Telegram handoff:
+
+```text
+YooKassa -> package -> existing YooKassa handler
+Lava Top -> package -> card/SBP -> existing Lava handler
+```
+
+After payment:
+
+```text
+return to Direct -> Continue / Продолжить -> balance re-check -> resume saved flow
+```
+
+Do not expose CryptoBot in this Instagram handoff, and do not remove CryptoBot from the normal Telegram payment menu.
+
+## 10. Instagram comment acquisition
+
+```text
+comment keyword/intention
+ -> normalized comment event
+ -> one private-reply invitation
+ -> user enters Direct
+ -> Photo/Video chooser
+```
+
+Comment reply is acquisition only; it does not skip creator FSM or payment rules.
+
+## 11. Durable job FSM
+
+Simplified job states:
+
+```text
+prepared
+ -> queued
+ -> processing
+ -> result persisted
+ -> delivered/finalized
+```
+
+Retry paths:
+
+```text
+processing + provider_task_id -> resume same provider task
+result persisted + delivery error -> retry delivery without regeneration
+successful delivery + local finalization error -> retry finalization without re-sending when checkpoint exists
+```
+
+Financial/promotion invariants:
+
+- prepare before side effect;
+- one charge per paid job;
+- one refund on terminal paid failure;
+- free-photo reserve -> consume only after success;
+- free-photo reserve -> release on terminal failure;
+- no free video path.
+
+## 12. User-visible cancel/confirm controls
+
+RU/EN inputs accepted by channel-specific normalizers should include the documented confirmation/cancel vocabulary (`ДА/НЕТ`, `YES/NO`, `Продолжить/Continue`) without changing the stored model/billing contract.
+
+## 13. Router ordering
+
+Specific routers must win before broad fallback handlers. The Instagram `/start iglink_*` Telegram router must run before a generic legacy `/start` handler.
+
+## 14. Completion criteria
+
+A release is UX-complete when these paths work without undocumented commands:
+
+1. Telegram photo create -> result.
+2. Telegram video create -> result.
+3. Telegram top-up through configured provider -> balance.
+4. Telegram Mini App bootstrap -> create/history/feed/balance.
+5. Instagram RU first photo -> free result -> top-up offer.
+6. Instagram EN photo -> English follow-ups.
+7. Instagram Video -> immediate paywall -> YooKassa/Lava -> Continue -> reference -> paid result.
+8. Instagram comment invite -> Direct -> chooser.
+9. Provider/retry failure does not double-charge, consume free entitlement incorrectly or duplicate provider submit.
