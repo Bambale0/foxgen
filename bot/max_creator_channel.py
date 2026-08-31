@@ -5,7 +5,11 @@ import html
 import logging
 from typing import Any
 
-from bot.max_api import MaxApiError, callback_button, inline_keyboard
+from bot.max_api import (
+    MaxApiError,
+    callback_button,
+    inline_keyboard,
+)
 from bot.max_channel import (
     MaxChannelService,
     _format_cost,
@@ -124,7 +128,7 @@ def _video_duration(update: dict[str, Any]) -> int | None:
             if value in (None, ""):
                 continue
             try:
-                seconds = int(round(float(value)))
+                seconds = round(float(value))
             except (TypeError, ValueError):
                 continue
             if seconds > 0:
@@ -164,7 +168,13 @@ class MaxCreatorChannelService(MaxChannelService):
             if not isinstance(payload, dict):
                 continue
             if _media_urls(
-                {"message": {"body": {"attachments": [attachment]}}}
+                {
+                    "message": {
+                        "body": {
+                            "attachments": [attachment],
+                        }
+                    }
+                }
             )[1]:
                 continue
             token = _video_token(payload)
