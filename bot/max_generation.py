@@ -24,7 +24,6 @@ from bot.max_store import (
 from bot.services.gemini_omni_service import gemini_omni_service
 from bot.services.gpt_image_service import gpt_image_service
 from bot.services.grok_service import grok_service
-from bot.services.kie_market_service import kie_market_service
 from bot.services.kling_service import kling_service
 from bot.services.nano_banana_2_service import nano_banana_2_service
 from bot.services.nano_banana_pro_service import nano_banana_pro_service
