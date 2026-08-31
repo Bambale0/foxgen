@@ -12,14 +12,12 @@ from bot.instagram_generation import get_instagram_draft, update_instagram_draft
 from bot.instagram_i18n import resolve_instagram_language, tr
 from bot.instagram_model_contract import normalize_instagram_creation_kind
 from bot.instagram_seedream_generation import InstagramSeedream5ProService
-from bot.instagram_video_generation import (
-    InstagramVideoGenerationService,
-    video_state_parts,
-)
+from bot.instagram_video_generation import video_state_parts
+from bot.instagram_video_i18n import LocalizedInstagramVideoGenerationService
 from bot.instagram_video_state import ensure_instagram_video_draft
 
 
-class InstagramCreatorGenerationService(InstagramVideoGenerationService):
+class InstagramCreatorGenerationService(LocalizedInstagramVideoGenerationService):
     """Choose photo/video first, then delegate to the matching durable flow."""
 
     async def _ask_creation_kind(
