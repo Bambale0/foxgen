@@ -1,300 +1,258 @@
-# Senior QA Audit Checklist
+# HappyFox QA and release checklist
 
-Полный чеклист для глубокого аудита проекта: ботов, Mini App, API, платежей, БД, webhook, безопасности.
+Use this checklist for release audits of `Bambale0/foxgen`. Production source of truth is `main`.
 
----
+## 1. Release evidence
 
-## 0. Контекст проекта
-
-Определи фактический стек:
-- backend: Python / aiogram / aiohttp / FastAPI
-- bot: Telegram Bot, webhook или polling
-- frontend: Mini App (JS/TS)
-- внешние API: генерация изображений/видео, платежи
-- БД: SQLite / PostgreSQL
-- deploy: systemd, nginx, Docker
-
----
-
-## 1. Карта связей
-
-Для каждого элемента проверь:
-```
-Источник → Действие → Параметры → Куда передаются → Где валидируются → Где сохраняются → Где используются → Риск
-```
-
-Покрой:
-- Telegram commands, callback_data, inline buttons, reply keyboards
-- Deep links, Mini App links
-- Frontend routes, backend endpoints, webhook endpoints
-- Payment callbacks, external API calls
-- File upload/download, admin actions, background jobs
-
-Особое внимание:
-- Есть ли кнопка, но нет обработчика?
-- Есть ли обработчик, но нет кнопки?
-- callback_data отличается от ожидаемого?
-- URL строится без нужного query-параметра?
-- Backend ожидает параметр, который frontend не передаёт?
-- Внешний API требует поле, которое код не отправляет?
-- Ответ API парсится по старой схеме?
-- Статус задачи не обновляется?
-- Ошибка API не обрабатывается?
-
----
-
-## 2. Аудит ссылок, кнопок и параметров
-
-Для каждой ссылки/кнопки:
-1. Где создаётся?
-2. Какой текст видит пользователь?
-3. Какой action/callback/url вызывается?
-4. Какие параметры должны передаваться?
-5. Какие параметры реально передаются?
-6. Кто принимает эти параметры?
-7. Совпадают ли имена и типы?
-8. Что будет, если параметра нет / пустой / чужой?
-9. Есть ли тест на этот сценарий?
-10. Есть ли логирование ошибки?
-
-Ищи дефекты:
-- `task_id` создаётся, но не передаётся в callback
-- callback ожидает `generation_id`, а кнопка шлёт `task_id`
-- ссылка содержит `user_id`, а backend ожидает `telegram_id`
-- кнопка ведёт в старый handler
-- frontend route есть, backend route отсутствует
-- параметр передаётся строкой, код ожидает int
-- id берётся из FSM, но FSM уже очищен
-- callback_data превышен лимит Telegram
-- параметр не экранируется
-- пользователь может подменить id и получить чужие данные
-
----
-
-## 3. Аудит внешних API и payload
-
-Для каждого API:
-```
-Provider → Method → Endpoint → Required fields → Current payload → Missing/Wrong → Обработка ответа → Ошибки
-```
-
-Проверь:
-- URL endpoint, HTTP method, headers, auth, API key
-- content-type, required/optional fields, default values
-- enum values, типы данных, вложенные объекты
-- image_url/audio_url/video_url, callback_url, webhook_url
-- timeout, retry, rate limit
-- error mapping, idempotency
-- логирование request_id/task_id
-- безопасное хранение секретов
-- обработку 400/401/403/404/409/422/429/500
-- парсинг ответа, сохранение external_task_id
-- polling, webhook update, финальный статус
-- возврат средств при ошибке
-
-Ищи дефекты:
-- поле называется `callbackUrl`, а отправляется `callback_url`
-- локальный путь вместо публичного URL
-- API требует `image_url`, код отправляет `image`
-- API требует список, код отправляет строку
-- duration как int, а API ожидает string enum
-- model name устарел
-- negative_prompt не передаётся
-- webhook принимает один формат, провайдер шлёт другой
-- task_id не сохраняется
-- повторный webhook повторно начисляет/списывает
-- ошибка API оставляет задачу в статусе processing навсегда
-
----
-
-## 4. Бизнес-логика
-
-Entity lifecycle для каждой сущности:
-- User, Balance, Transaction, Plan/Tariff, GenerationTask
-- Payment, Referral, AdminAction, File/Asset
-- ProviderRequest, ProviderResult
-
-Для каждой:
-- Как создаётся? Какие статусы? Кто может менять?
-- Какие переходы разрешены/запрещены?
-- Что при ошибке / повторном событии / отмене / timeout?
-- Что при ручном админском вмешательстве?
-
-Инварианты:
-- Баланс не может стать отрицательным
-- Оплата не должна начисляться дважды
-- Генерация не должна списывать дважды
-- Пользователь не должен видеть чужие задачи
-- Обычный пользователь не должен вызывать admin-функции
-- Статус задачи не должен застревать
-- Результат не должен выдаваться до успешной оплаты
-- Возврат должен быть связан с исходной транзакцией
-- Webhook должен быть идемпотентным
-- Реферальный бонус не должен начисляться повторно
-- Удаление задачи не должно ломать историю
-
----
-
-## 5. Smoke-проверки
+Before calling a change production-ready:
 
 ```text
-[ ] Установка зависимостей
-[ ] Импорт всех модулей
-[ ] Запуск приложения
-[ ] Чтение .env
-[ ] Подключение к БД
-[ ] Применение миграций
-[ ] Старт Telegram bot/webhook
-[ ] Healthcheck
-[ ] Открытие Mini App
-[ ] /start → главное меню
-[ ] Создание тестовой задачи
-[ ] Тестовый платёж
-[ ] Webhook обработка
-[ ] Админская команда
-[ ] Graceful shutdown
+[ ] PR targets main
+[ ] exact PR head SHA is known
+[ ] backend regression is green on that head
+[ ] Ruff HappyFox delta is green
+[ ] Mini App lint/build is green
+[ ] Chromium critical journeys are green
+[ ] iPhone WebKit Telegram startup is green
+[ ] production Docker exact-source build/runtime is green
+[ ] PR head was not changed after the successful run
+[ ] merged main SHA is known
+[ ] main CI is green on that SHA
+[ ] production deploy target equals that SHA
+[ ] public health/revision smoke is green
 ```
 
----
+A green CI run for an older SHA is not release evidence for a newer head.
 
-## 6. Regression-матрица
-
-Обязательные flows:
-1. Новый пользователь → /start → регистрация → главное меню
-2. Пополнение баланса → баланс обновился → транзакция записана
-3. Создание генерации → баланс списан → задача создана → payload ушёл в API
-4. API success → результат сохранён → пользователь получил файл
-5. API error → задача failed → деньги возвращены или статус обработан
-6. Повторное нажатие кнопки → нет двойного списания
-7. Webhook дважды → нет двойного начисления
-8. История → только свои задачи
-9. Админ → корректные агрегаты
-10. Обычный пользователь → admin callback = отказ
-11. Старые callback_data → не ломают, дают понятную ошибку
-12. Старые записи БД после миграции → не падает
-
----
-
-## 7. Unit-тесты (должны быть)
-
-- Расчёт цены, списание/начисление баланса
-- Проверка прав, генерация/парсинг callback_data
-- Сборка payload, валидация prompt
-- Валидация файлов (размер, mime-type)
-- Парсинг ответа API, обработка статусов
-- Форматирование сообщений, расчёт реферального бонуса
-- Idempotency ключи, переходы статусов
-- Сериализация/десериализация
-
----
-
-## 8. Security
+## 2. Product isolation
 
 ```text
-[ ] Секреты в репозитории
-[ ] .env в git
-[ ] Токены в логах
-[ ] SQL injection
-[ ] Command injection
-[ ] Path traversal
-[ ] SSRF через URL картинки/файла
-[ ] IDOR — доступ к чужим id
-[ ] CSRF для web endpoints
-[ ] Проверка подписи webhook
-[ ] Проверка Telegram initData для Mini App
-[ ] Admin bypass
-[ ] Open redirect
-[ ] Небезопасные CORS
-[ ] Небезопасный file upload
-[ ] Слишком подробные ошибки пользователю
-[ ] Rate limiting
-[ ] Audit log для админов
-[ ] Хранение платёжных данных
-[ ] Повторное проведение webhook
-[ ] Idempotency
+[ ] PRODUCT_ID=happyfox
+[ ] no NEUROMIX/Tanya bot token reuse
+[ ] HappyFox PostgreSQL database is isolated
+[ ] HappyFox Redis DB/prefix is isolated
+[ ] HappyFox domains/media storage are isolated
+[ ] HappyFox Lava offers come from HappyFox env
+[ ] no production SQLite
+[ ] secrets are absent from Git/logs/docs
 ```
 
----
-
-## 9. БД и миграции
+## 3. Telegram regression
 
 ```text
-[ ] Модели соответствуют миграциям
-[ ] Индексы на частых запросах
-[ ] Unique constraints (payment_id, task_id)
-[ ] Foreign keys
-[ ] Nullable поля
-[ ] Default values
-[ ] Enum/status поля
-[ ] ORM и SQL не расходятся
-[ ] Транзакции для атомарных операций
-[ ] Гонки при обновлении баланса
-[ ] Двойное списание
-[ ] Orphan records
-[ ] Timezone
-[ ] created_at/updated_at
-[ ] Soft delete
-[ ] Rollback миграций
+[ ] /start -> main menu
+[ ] Mini App bootstrap with valid Telegram initData
+[ ] expected auth failure without valid initData
+[ ] create photo -> charge -> provider -> result
+[ ] create video -> charge -> provider -> result
+[ ] provider terminal failure -> correct refund behavior
+[ ] repeat/remix/history uses own task only
+[ ] balance -> package -> payment -> shared balance update
+[ ] CryptoBot remains available in Telegram when configured
+[ ] YooKassa/Lava/Stars behavior matches configured Telegram UI
+[ ] admin routes remain restricted
 ```
 
----
+## 4. Instagram transport/security
 
-## 10. Специфичные проверки
+When `INSTAGRAM_ENABLED=0`:
 
-### Telegram Bot:
-- /start, deep links, reply/inline keyboard
-- callback_data, FSM states, возврат назад
-- Повторное нажатие, устаревшие callback
-- edit_message vs send_message
-- Лимит длины callback_data
-- Права админов, обработка blocked bot
-- Webhook secret, allowed_updates
-- Конфликт polling/webhook
-- user_id/chat_id confusion
-- Race condition при двойном клике
-
-### Платежи:
-- Уникальность provider_payment_id
-- Idempotency webhook, подпись webhook
-- Повторный webhook, отменённый платёж
-- pending → success, success → повторный success
-- failed, refund, частичная оплата
-- Неверная сумма/валюта
-- Связь transaction ↔ user, payment ↔ invoice
-
-### AI-генерация:
-- Prompt validation, negative_prompt
-- Aspect_ratio, duration, model, quality, seed
-- Reference images, image_url (публичность)
-- Mime-type, размер файла
-- Provider task id, polling, webhook
-- Result URL, download, save history
-- Retry, refund on fail
-- Stuck processing, moderation/safety error
-
----
-
-## Severity
-
-- **P0** — деньги, безопасность, полная неработоспособность, потеря данных
-- **P1** — ключевой пользовательский flow сломан
-- **P2** — частичная поломка, edge case, плохая обработка ошибок
-- **P3** — улучшение, refactor, UX, техдолг
-
----
-
-## Формат финального вывода
-
+```text
+[ ] Instagram routes/worker are not registered
+[ ] Telegram/Mini App are unaffected
 ```
-Готово к production: да/нет
-Главная причина: ...
-Топ-5 исправлений перед релизом:
-  1. ...
-  2. ...
-Минимальный test suite перед merge:
-  - ...
-Что проверить вручную:
-  - ...
-Что автоматизировать в CI:
-  - ...
+
+When testing the Instagram implementation:
+
+```text
+[ ] GET webhook verification checks verify token/challenge
+[ ] POST verifies raw-body X-Hub-Signature-256 HMAC-SHA256
+[ ] invalid signature fails closed
+[ ] messages normalize correctly
+[ ] postbacks normalize correctly
+[ ] comments normalize correctly
+[ ] outgoing echoes do not loop back into generation
+[ ] duplicate webhook event is idempotent
+[ ] Redis/idempotency failure does not silently process duplicates
+```
+
+## 5. Instagram language RU/EN
+
+```text
+[ ] Russian meaningful text -> ru persisted
+[ ] English meaningful text -> en persisted
+[ ] attachment-first -> bilingual Photo/Video chooser
+[ ] Фото -> Russian flow
+[ ] Photo -> English flow
+[ ] Видео -> Russian video flow
+[ ] Video -> English video flow
+[ ] English explicitly switches existing RU session
+[ ] Русский explicitly switches existing EN session
+[ ] Продолжить and Continue both resume the relevant paid flow
+[ ] no new Instagram user-facing hard-coded RU-only copy bypasses instagram_i18n
+```
+
+## 6. Instagram photo contract
+
+Canonical model:
+
+```text
+Seedream 5 Pro
+provider: seedream/5-pro-image-to-image
+quality: high
+ratio: 1:1
+paid price: 2.5 🐾
+```
+
+Checklist:
+
+```text
+[ ] first successful Instagram photo is free
+[ ] entitlement is keyed to Instagram identity, not Telegram account
+[ ] account relink cannot reset the gift
+[ ] duplicate/concurrent request cannot reserve two free generations
+[ ] provider failure releases free reservation
+[ ] failed free attempt remains available
+[ ] successful result consumes entitlement only after delivery checkpoint
+[ ] second/later photo is paid
+[ ] paid photo confirmation shows 2.5 🐾
+[ ] paid charge happens once
+[ ] terminal paid failure refunds once
+```
+
+## 7. Instagram video contract
+
+Canonical model:
+
+```text
+Seedance 2.5
+provider: bytedance/seedance-2-5
+resolution: 720p
+ratio: 9:16
+price: shared HappyFox/Telegram pricing
+```
+
+Checklist:
+
+```text
+[ ] video has no free entitlement
+[ ] choosing Video immediately enters paywall/top-up state
+[ ] media sent before top-up is not accepted as a new reference
+[ ] top-up copy points to YooKassa/Lava Top
+[ ] Continue with insufficient balance stays in paywall
+[ ] Continue with sufficient linked balance asks for photo/video reference
+[ ] reference -> prompt -> price confirmation -> charge -> provider
+[ ] terminal provider failure refunds once
+[ ] retry does not create a second provider task
+```
+
+## 8. Instagram account link/top-up
+
+```text
+[ ] iglink token is random and stored only as digest
+[ ] token expires
+[ ] token is one-use
+[ ] used token cannot silently relink another account
+[ ] linked identity uses shared HappyFox balance/history
+[ ] Instagram top-up provider chooser contains YooKassa
+[ ] Instagram top-up provider chooser contains Lava Top
+[ ] Instagram chooser does not expose CryptoBot
+[ ] Instagram chooser does not expose Telegram Stars
+[ ] Lava Top supports package -> card
+[ ] Lava Top supports package -> SBP
+[ ] YooKassa reuses existing production payment handler
+[ ] Telegram normal payment UI still keeps CryptoBot when enabled
+[ ] successful payment updates the same HappyFox ledger used by generation
+```
+
+## 9. Durable Instagram job invariants
+
+```text
+[ ] durable job exists before charge/promotion side effect
+[ ] provider task ID persists immediately after submit
+[ ] restart/retry resumes same provider task
+[ ] result URL persists before delivery retry
+[ ] delivery checkpoint persists after successful send
+[ ] local finalization retry does not intentionally regenerate
+[ ] local finalization retry does not intentionally re-send when delivered checkpoint exists
+[ ] paid retry does not double-charge
+[ ] refund cannot be applied twice
+[ ] free promotion cannot be consumed twice
+```
+
+Do not claim mathematically exactly-once remote delivery across a crash between Meta accepting a message and local checkpoint commit.
+
+## 10. Payment/webhook safety
+
+For each enabled provider:
+
+```text
+[ ] signature/auth validation
+[ ] provider payment ID uniqueness
+[ ] pending -> success transition
+[ ] duplicate success webhook is idempotent
+[ ] amount/currency/package validation
+[ ] transaction belongs to correct HappyFox user
+[ ] no double credit
+[ ] failures are user-friendly and logged safely
+```
+
+## 11. Data/security
+
+```text
+[ ] no secrets committed
+[ ] no tokens in exception/user output
+[ ] PostgreSQL constraints/indexes match runtime usage
+[ ] channel identity uniqueness is enforced
+[ ] payment/generation ownership prevents IDOR
+[ ] public media URL validation prevents obviously invalid local URLs
+[ ] webhook HMAC uses raw body
+[ ] internal API HMAC remains separate from Meta webhook auth
+[ ] admin permissions are enforced server-side
+[ ] file paths/uploads resist traversal
+```
+
+## 12. Manual live smoke for Instagram activation
+
+Only after Meta credentials/access are configured and change control allows live activation:
+
+```text
+[ ] INSTAGRAM_ENABLED=1 deployed on exact green SHA
+[ ] webhook subscribed fields: messages,messaging_postbacks,comments
+[ ] RU Direct smoke
+[ ] EN Direct smoke
+[ ] first free photo result
+[ ] second photo paid flow
+[ ] video immediate paywall before reference
+[ ] YooKassa top-up/resume
+[ ] Lava card/SBP top-up/resume
+[ ] comment -> private invite -> Direct chooser
+[ ] duplicate test event does not duplicate business side effect
+```
+
+Rollback smoke:
+
+```text
+[ ] INSTAGRAM_ENABLED=0 disables Instagram without breaking Telegram/Mini App
+```
+
+## 13. Severity
+
+- **P0** — money/security/data loss/full outage.
+- **P1** — core Telegram/Instagram creator flow broken.
+- **P2** — partial flow or recovery/edge-case defect.
+- **P3** — UX/refactor/documentation improvement.
+
+## 14. Final audit format
+
+```text
+Production-ready: yes/no
+Exact tested SHA: ...
+Main SHA: ...
+Deploy SHA/run: ...
+Blocking defects: ...
+Telegram smoke: ...
+Instagram dark/live status: ...
+Payment invariants: ...
+Manual checks still required: ...
 ```
