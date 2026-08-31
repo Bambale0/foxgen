@@ -1,22 +1,38 @@
 from __future__ import annotations
 
-from typing import Any
+from dataclasses import dataclass
+from typing import Any, Protocol
 from urllib.parse import quote
 
-from bot.max_api import MaxApiError, MaxClient, MaxSettings
+from bot.max_api import MaxApiError
 
 
-class MaxCreatorClient(MaxClient):
-    """MAX client extensions needed by creator input flows."""
+class MaxVideoTransport(Protocol):
+    async def _request_json(
+        self,
+        method: str,
+        path: str,
+        **kwargs: Any,
+    ) -> dict[str, Any]: ...
 
-    def __init__(self, settings: MaxSettings, **kwargs: Any) -> None:
-        super().__init__(settings, **kwargs)
+
+@dataclass(frozen=True)
+class MaxResolvedVideo:
+    url: str
+    duration_seconds: int | None
+
+
+class MaxCreatorClient:
+    """Creator-specific MAX API adapter over the shared authenticated client."""
+
+    def __init__(self, transport: MaxVideoTransport) -> None:
+        self.transport = transport
 
     async def get_video_details(self, video_token: str) -> dict[str, Any]:
         token = str(video_token or "").strip()
         if not token:
-            raise ValueError("MAX video token is required")
-        return await self._request_json(
+            raise MaxApiError("MAX video token is required")
+        return await self.transport._request_json(
             "GET",
             f"/videos/{quote(token, safe='')}",
         )
@@ -36,6 +52,8 @@ class MaxCreatorClient(MaxClient):
             preferred_keys = (
                 "download",
                 "download_url",
+                "mp4_1080",
+                "mp4_720",
                 "mp4",
                 "url",
                 "play",
@@ -53,14 +71,19 @@ class MaxCreatorClient(MaxClient):
                     return found
         return ""
 
-    async def resolve_video_token(self, video_token: str) -> tuple[str, int | None]:
+    async def resolve_video_attachment(self, video_token: str) -> MaxResolvedVideo:
         details = await self.get_video_details(video_token)
         url = self.first_https_url(details.get("urls") or details)
         if not url:
             raise MaxApiError("MAX video details did not contain a downloadable URL")
+
         raw_duration = details.get("duration")
         try:
-            duration = int(raw_duration) if raw_duration is not None else None
+            duration = (
+                round(float(raw_duration))
+                if raw_duration not in (None, "")
+                else None
+            )
         except (TypeError, ValueError):
             duration = None
-        return url, duration
+        return MaxResolvedVideo(url=url, duration_seconds=duration)
