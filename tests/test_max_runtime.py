@@ -4,7 +4,11 @@ import pytest
 from aiohttp import web
 
 from bot.max_api import MAX_UPDATE_TYPES, MaxSettings
-from bot.max_runtime import MaxRuntimeSettings, _ensure_max_subscription, setup_max_runtime
+from bot.max_runtime import (
+    MaxRuntimeSettings,
+    _ensure_max_subscription,
+    setup_max_runtime,
+)
 
 
 class FakeSubscriptionClient:
@@ -25,7 +29,10 @@ def test_max_runtime_is_dark_by_default(monkeypatch) -> None:
     app = web.Application()
     setup_max_runtime(app)
     assert "max_client" not in app
-    assert all(getattr(route.resource, "canonical", "") != "/max/webhook" for route in app.router.routes())
+    assert all(
+        getattr(route.resource, "canonical", "") != "/max/webhook"
+        for route in app.router.routes()
+    )
 
 
 def test_enabled_max_runtime_requires_explicit_public_contract(monkeypatch) -> None:
