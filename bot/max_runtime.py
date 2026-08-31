@@ -9,9 +9,9 @@ from urllib.parse import urlparse
 from aiohttp import web
 
 from bot.max_api import MAX_UPDATE_TYPES, MaxClient, MaxSettings, setup_max_routes
-from bot.max_creator_channel import MaxCreatorChannelService
-from bot.max_creator_generation import MaxCreatorGenerationService
 from bot.max_generation import install_max_generation_worker
+from bot.max_omni_audio import MaxOmniGenerationService
+from bot.max_omni_channel import MaxOmniChannelService
 from bot.max_payments import MaxYooKassaService, ensure_max_payment_schema
 
 logger = logging.getLogger(__name__)
@@ -136,14 +136,14 @@ def setup_max_runtime(app: web.Application) -> None:
         raise RuntimeError(
             "MAX_ENABLED=1 requires YooKassa credentials and MAX_PAYMENT_RETURN_URL"
         )
-    channel = MaxCreatorChannelService(
+    channel = MaxOmniChannelService(
         settings=settings,
         client=client,
         payments=payments,
         bot_name=runtime.bot_name,
         support_contact=runtime.support_contact,
     )
-    generation = MaxCreatorGenerationService(client)
+    generation = MaxOmniGenerationService(client)
 
     setup_max_routes(app, settings=settings, event_handler=channel.handle_update)
     app["max_client"] = client
@@ -173,8 +173,6 @@ def setup_max_runtime(app: web.Application) -> None:
             await payments.close()
             await client.close()
 
-    # Install transport lifecycle first so generation workers stop before the shared
-    # MAX HTTP client is closed during cleanup.
     app.cleanup_ctx.append(runtime_ctx)
     install_max_generation_worker(app, generation)
 
