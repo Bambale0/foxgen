@@ -12,6 +12,7 @@ from bot.channel_promotions import (
 )
 from bot.instagram_api import InstagramClient, InstagramEvent, InstagramSettings
 from bot.instagram_generation import InstagramGenerationService
+from bot.instagram_i18n import resolve_instagram_language, tr
 
 logger = logging.getLogger(__name__)
 
@@ -93,7 +94,11 @@ class InstagramChannelAdapter:
     def _is_acquisition_comment(self, text: str) -> bool:
         return bool(_normalized_words(text) & self.comment_keywords)
 
-    async def _handle_comment(self, event: InstagramEvent) -> None:
+    async def _handle_comment(
+        self,
+        event: InstagramEvent,
+        identity: ChannelIdentity,
+    ) -> None:
         if not self._is_acquisition_comment(event.text):
             return
         comment_id = str(event.payload.get("id") or "").strip()
@@ -103,11 +108,11 @@ class InstagramChannelAdapter:
                 event.event_id,
             )
             return
+        language = await resolve_instagram_language(identity.id, event.text)
         await self.client.private_reply(
             event.account_id,
             comment_id,
-            "Привет! 👋 Напиши мне в Direct — сначала выберем, что создать: "
-            "📸 фото или 🎬 видео. Первое фото бесплатно 🎁, видео — платно.",
+            tr(language, "comment_invite"),
         )
 
     async def _send_account_link(
@@ -115,85 +120,75 @@ class InstagramChannelAdapter:
         event: InstagramEvent,
         identity: ChannelIdentity,
     ) -> None:
+        language = await resolve_instagram_language(identity.id, event.text)
         link = ""
         if self.account_link_factory is not None:
             link = (await self.account_link_factory(identity)).strip()
-        if link:
-            text = (
-                "Бесплатная первая фото-генерация уже использована ✅\n\n"
-                "Дальше генерации идут по обычным ценам HappyFox. Чтобы продолжить, "
-                "привяжи Instagram к HappyFox и пополни общий баланс тем же способом, "
-                "что в Telegram.\n\n"
-                f"Пополнить и продолжить: {link}\n\n"
-                "После оплаты вернись сюда и напиши «Продолжить»."
-            )
-        else:
-            text = (
-                "Бесплатная первая фото-генерация уже использована ✅\n\n"
-                "Дальше действуют обычные цены HappyFox. Для следующих генераций "
-                "нужен общий баланс, но ссылка сейчас недоступна. Попробуй чуть позже."
-            )
-        await self.client.send_text(event.account_id, event.sender_id, text)
+        suffix = f"\n\n{link}" if link else ""
+        await self.client.send_text(
+            event.account_id,
+            event.sender_id,
+            tr(language, "account_link", suffix=suffix),
+        )
 
     async def _handle_message(
         self,
         event: InstagramEvent,
+        identity: ChannelIdentity,
         *,
         first_image_free: bool,
     ) -> None:
+        language = await resolve_instagram_language(identity.id, event.text)
         attachments = _message_attachments(event)
         attachment_types = {
             str(item.get("type") or "").strip().lower() for item in attachments
         }
         if "image" in attachment_types:
-            free_line = " Первая фото-генерация будет бесплатно 🎁" if first_image_free else ""
+            key = "photo_received_free" if first_image_free else "photo_received_paid"
             await self.client.send_text(
                 event.account_id,
                 event.sender_id,
-                "Фото получил 📸" + free_line + " Теперь напиши, что хочешь получить.",
+                tr(language, key),
             )
             return
         if "video" in attachment_types:
             await self.client.send_text(
                 event.account_id,
                 event.sender_id,
-                "Видео создаётся платно 🎬 Сначала напиши «Видео» — предложу пополнить "
-                "баланс и только после оплаты попрошу референс.",
+                tr(language, "ask_kind" if language else "ask_kind_bilingual"),
             )
             return
 
-        free_line = " Первое фото бесплатно 🎁; видео — платно." if first_image_free else ""
         await self.client.send_text(
             event.account_id,
             event.sender_id,
-            "Что хочешь создать: 📸 Фото или 🎬 Видео? Напиши «Фото» или «Видео»."
-            + free_line,
+            tr(language, "ask_kind" if language else "ask_kind_bilingual"),
         )
 
     async def _handle_postback(
         self,
         event: InstagramEvent,
+        identity: ChannelIdentity,
         *,
         first_image_free: bool,
     ) -> None:
+        language = await resolve_instagram_language(identity.id, event.text)
         postback = event.payload.get("postback")
         payload = (
             str(postback.get("payload") or "") if isinstance(postback, dict) else ""
         )
         if payload in {"CREATE_IMAGE", "CREATE_PHOTO"}:
-            free_line = " Первая фото-генерация будет бесплатно 🎁" if first_image_free else ""
+            key = "photo_selected" if first_image_free else "send_photo_first"
             await self.client.send_text(
                 event.account_id,
                 event.sender_id,
-                "📸 Фото выбрано. Пришли исходное фото и коротко опиши результат."
-                + free_line,
+                tr(language, key),
             )
         elif payload in {"CREATE_VIDEO", "CREATE_REEL"}:
             await self.client.send_text(
                 event.account_id,
                 event.sender_id,
-                "🎬 Видео — платно. Напиши «Видео» в Direct: сначала предложу "
-                "пополнить баланс, затем попрошу фото или видео-референс.",
+                tr(language, "ask_kind" if language else "ask_kind_bilingual"),
             )
 
     async def handle_event(self, event: InstagramEvent) -> None:
@@ -205,8 +200,9 @@ class InstagramChannelAdapter:
         if identity is None:
             return
 
+        await resolve_instagram_language(identity.id, event.text)
         if event.kind == "comments":
-            await self._handle_comment(event)
+            await self._handle_comment(event, identity)
             return
 
         if (
@@ -224,10 +220,18 @@ class InstagramChannelAdapter:
             return
 
         if event.kind == "message":
-            await self._handle_message(event, first_image_free=first_image_free)
+            await self._handle_message(
+                event,
+                identity,
+                first_image_free=first_image_free,
+            )
             return
         if event.kind == "postback":
-            await self._handle_postback(event, first_image_free=first_image_free)
+            await self._handle_postback(
+                event,
+                identity,
+                first_image_free=first_image_free,
+            )
 
 
 def build_instagram_event_handler(
