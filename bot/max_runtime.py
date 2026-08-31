@@ -12,7 +12,7 @@ from bot.max_api import MAX_UPDATE_TYPES, MaxClient, MaxSettings, setup_max_rout
 from bot.max_generation import install_max_generation_worker
 from bot.max_omni_audio import MaxOmniGenerationService
 from bot.max_payments import MaxYooKassaService, ensure_max_payment_schema
-from bot.max_suno_channel import MaxSunoChannelService
+from bot.max_suno_full_channel import MaxSunoFullChannelService
 from bot.suno_jobs import install_suno_worker
 
 logger = logging.getLogger(__name__)
@@ -122,8 +122,6 @@ async def _max_payment_reconcile_loop(
 
 def setup_max_runtime(app: web.Application) -> None:
     """Composition root for MAX plus the channel-agnostic durable Suno worker."""
-    # Telegram Suno also uses this worker. Internal API always calls this
-    # composition root, therefore install it before the MAX feature flag check.
     install_suno_worker(app)
 
     settings = MaxSettings.from_env()
@@ -141,7 +139,7 @@ def setup_max_runtime(app: web.Application) -> None:
         raise RuntimeError(
             "MAX_ENABLED=1 requires YooKassa credentials and MAX_PAYMENT_RETURN_URL"
         )
-    channel = MaxSunoChannelService(
+    channel = MaxSunoFullChannelService(
         settings=settings,
         client=client,
         payments=payments,
