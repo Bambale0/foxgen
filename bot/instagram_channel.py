@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import re
+import sqlite3
 from collections.abc import Awaitable, Callable
 from typing import Any
 
@@ -56,7 +57,7 @@ def _message_attachments(event: InstagramEvent) -> list[dict[str, Any]]:
 async def _resolve_language_safe(identity_id: int, text: str | None) -> str:
     try:
         return await resolve_instagram_language(identity_id, text)
-    except Exception as error:
+    except sqlite3.IntegrityError as error:
         logger.warning(
             "Instagram language preference could not be persisted: identity=%s error=%s",
             identity_id,
