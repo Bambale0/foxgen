@@ -6,8 +6,9 @@ import logging
 import os
 import re
 import time
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import Any, Awaitable, Callable
+from typing import Any
 
 import aiohttp
 from aiohttp import web
@@ -44,7 +45,7 @@ class MaxSettings:
     mini_app_url: str = ""
 
     @classmethod
-    def from_env(cls) -> "MaxSettings":
+    def from_env(cls) -> MaxSettings:
         enabled = str(os.getenv("MAX_ENABLED", "0")).strip().lower() in {
             "1",
             "true",
