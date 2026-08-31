@@ -4,7 +4,11 @@ import pytest
 
 from bot import database
 from bot.max_api import MaxSettings
-from bot.max_generation import MaxGenerationRetry, enqueue_max_generation, get_max_generation_job
+from bot.max_generation import (
+    MaxGenerationRetry,
+    enqueue_max_generation,
+    get_max_generation_job,
+)
 from bot.max_omni_audio import (
     MaxOmniGenerationService,
     enqueue_max_omni_audio,
