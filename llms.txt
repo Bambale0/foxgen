@@ -1,96 +1,91 @@
-# LLaMA-Factory Compatible Model Registry
-# auto-generated from bot configuration
-# Last updated: 2026-05-09
+# HappyFox current model/channel registry
+# Updated: 2026-08-31
+# This file is intentionally concise and is NOT an exhaustive Telegram model catalog.
+# Runtime model/pricing configuration and tests are the source of truth.
 
-## Image Generation Models
+## Product
+product_id: happyfox
+repository: Bambale0/foxgen
+production_branch: main
+user_currency: paws (🐾)
 
-### Nano Banana Pro (`banana_pro`)
-- **Description**: Universal quality image model
-- **Ratios**: 1:1, 16:9, 9:16, 4:3, 3:4, 3:2, 2:3
-- **Max references**: 9
-- **Requires reference**: No
+## Channels
 
-### Nano Banana 2 (`banana_2`)
-- **Description**: New version with better detail and colors
-- **Ratios**: 1:1, 16:9, 9:16, 4:3, 3:4, 3:2, 2:3
-- **Max references**: 9
-- **Requires reference**: No
+### Telegram
+- Full HappyFox product surface: bot + Mini App.
+- Model catalog is broader and runtime-driven.
+- Payment providers are configuration-driven.
+- CryptoBot remains available when configured.
 
-### Seedream 4.5 Edit (`seedream_edit`)
-- **Description**: Strong edit from source images
-- **Ratios**: 1:1, 9:16, 16:9, 3:4, 4:3, 2:3, 3:2, 21:9
-- **Max references**: 9
-- **Requires reference**: Yes
+### Instagram
+- Instagram API with Instagram Login.
+- Creator/Business professional account contour.
+- Runtime registration requires INSTAGRAM_ENABLED=1.
+- Default/example configuration keeps INSTAGRAM_ENABLED=0.
+- Languages: Russian + English, auto-detected and persisted per Instagram identity.
 
-### GPT Image 2 (`flux_pro`)
-- **Description**: Detailed generation and soft img2img
-- **Ratios**: auto, 1:1, 9:16, 16:9, 3:4, 4:3, 2:3
-- **Max references**: 9
-- **Requires reference**: No
+## Instagram Photo
+name: Seedream 5 Pro
+product_key: seedream_5_pro
+provider_model: seedream/5-pro-image-to-image
+quality: high
+aspect_ratio: 1:1
+paid_cost_paws: 2.5
+free_rule: first successful Instagram photo only
+failure_rule: failed provider generation preserves free entitlement
 
-### Grok Imagine (`grok_imagine_i2i`)
-- **Description**: I2I scenario for vivid transformations
-- **Ratios**: 1:1, 16:9, 9:16, 4:3, 3:4, 3:2, 2:3
-- **Max references**: 9
-- **Requires reference**: Yes
+## Instagram Video
+name: Seedance 2.5
+product_key: seedance_2_5
+provider_model: bytedance/seedance-2-5
+resolution: 720p
+aspect_ratio: 9:16
+price_source: shared HappyFox/Telegram Seedance pricing
+free_rule: never free
+entry_rule: show top-up/paywall before accepting a new reference
+resume_words: Продолжить | Continue
 
-### Wan 2.7 Pro (`wan_27`)
-- **Description**: Generation and editing via Wan 2.7
-- **Ratios**: 1:1, 16:9, 9:16, 4:3, 3:4, 21:9
-- **Max references**: 9
-- **Requires reference**: No
+## Instagram Payments
+instagram_topup_providers:
+- YooKassa
+- Lava Top
 
-### Nano Banana (`nanobanana`)
-- **Description**: Fast budget model for everyday tasks
-- **Ratios**: 1:1, 16:9, 9:16, 4:3, 3:4
-- **Max references**: 9
-- **Requires reference**: No
+lava_methods:
+- card
+- SBP
 
-## Video Generation Models
+important: Instagram payment-provider visibility is channel-specific. Do not remove CryptoBot from Telegram.
 
-### Kling 3.0 (`v3_pro`)
-- **Description**: Flagship video mode
-- **Durations**: 5 sec, 10 sec, 15 sec
-- **Ratios**: 16:9, 9:16, 1:1
-- **Supported types**: text, imgtxt, video
-- **Max image refs**: 9
-- **Max video refs**: 9
+## Instagram Meta transport
+host: https://graph.instagram.com
+api_version_default: v24.0
+webhook_path: /instagram/webhook
+subscribed_fields: messages,messaging_postbacks,comments
+permissions:
+- instagram_business_basic
+- instagram_business_manage_messages
+- instagram_business_manage_comments
+- instagram_business_content_publish
+security:
+- GET verify token challenge
+- raw-body X-Hub-Signature-256 HMAC-SHA256
+- Redis event idempotency
 
-### Kling v3 (`v3_std`)
-- **Description**: Faster and cheaper for everyday video
-- **Durations**: 5 sec, 10 sec, 15 sec
-- **Ratios**: 16:9, 9:16, 1:1
-- **Supported types**: text, imgtxt, video
-- **Max image refs**: 9
-- **Max video refs**: 9
+## Durable generation
+- persist job before billing/promotion side effect
+- persist provider_task_id after submit
+- retry same provider task after restart
+- persist result_url before delivery retry
+- persist delivered checkpoint after successful send
+- paid terminal failure refunds once
+- free-photo terminal failure releases entitlement
 
-### Kling 2.5 Turbo Pro (`v26_pro`)
-- **Description**: Good for image-to-video
-- **Durations**: 5 sec, 10 sec
-- **Ratios**: 16:9, 9:16, 1:1
-- **Supported types**: text, imgtxt
-- **Max image refs**: 9
-- **Max video refs**: 9
-- **CFG Scale**: Yes
-- **Negative prompt**: Yes
-
-### Grok Imagine Video (`grok_imagine`)
-- **Description**: Long videos from photos
-- **Durations**: 6 sec, 10 sec, 20 sec, 30 sec
-- **Ratios**: 16:9, 9:16, 1:1, 3:2, 2:3
-- **Supported types**: imgtxt
-- **Max image refs**: 9
-- **Max video refs**: 9
-- **Grok modes**: normal, fun, spicy
-
-### Kling Glow (`glow`)
-- **Description**: Cost-effective for long videos
-- **Durations**: 5 sec, 10 sec, 15 sec
-- **Ratios**: 16:9, 9:16, 1:1
-- **Supported types**: text, video
-- **Max image refs**: 9
-- **Max video refs**: 9
-
-## Removed Models
-
-- **OpenRouter** (`openrouter/free`) - removed 2026-05-09 (not needed for OpenClaw integration)
+## Canonical docs
+- README.md
+- docs/instagram-channel.md
+- docs/architecture.md
+- docs/environment.md
+- FSM_USER_FLOWS.md
+- QA_AUDIT_CHECKLIST.md
+- tracemap_generation.md
+- tracemap_payments.md
