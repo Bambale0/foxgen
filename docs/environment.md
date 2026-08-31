@@ -1,327 +1,229 @@
-# Переменные окружения NEUROMIX
+# HappyFox environment contract
 
-Документ описывает группы env-переменных ветки `tanyapi`. Полный программный источник истины — `bot/config.py`.
+Programmatic sources of truth are `bot/config.py`, channel settings classes and `.env.happyfox.example`.
 
-## 1. Общие правила
+## Rules
 
-- production `.env` хранится вне Git;
-- права файла — `600`, владелец — пользователь systemd service или root;
-- перед изменением создаётся backup;
-- секреты нельзя печатать в issue, документацию, CI logs и shell screenshots;
-- пустое значение не всегда равно выключенной функции: проверять код и feature flags;
-- после изменения runtime-переменной обычно требуется restart `banano-kling.service`;
-- frontend static build использует только переменные, начинающиеся с `NEXT_PUBLIC_`, и встраивает их на этапе сборки.
+- Production secrets live outside Git.
+- Never copy NEUROMIX/Tanya `.env` wholesale into HappyFox.
+- Production uses PostgreSQL, not SQLite.
+- Redis namespace/data plane must be isolated for HappyFox.
+- Secret values must never appear in issues, docs or CI logs.
+- `NEXT_PUBLIC_*` values are public bundle data and must not contain secrets.
+- Changing runtime env normally requires an exact-SHA redeploy/restart.
 
-## 2. Рекомендуемый production skeleton
+## Canonical production skeleton
 
 ```dotenv
-# Telegram
-BOT_TOKEN=REPLACE_ME
+PRODUCT_ID=happyfox
+BOT_TOKEN=
+ADMIN_IDS=
+SUPPORT_CONTACT=
 
-# Public backend
-WEBHOOK_HOST=https://tanyapi.chillcreative.ru
+WEBHOOK_HOST=https://api.happyfox.example
 WEBHOOK_PATH=/webhook
 WEBHOOK_BIND_HOST=127.0.0.1
 WEBHOOK_PORT=1888
+MINI_APP_URL=https://app.happyfox.example/mini-app/
+STATIC_BASE_URL=https://media.happyfox.example
 
-# Mini App
-MINI_APP_PATH=/mini-app
-MINI_APP_URL=https://cdn.chillcreative.ru/mini-app/
-STATIC_BASE_URL=https://media.chillcreative.ru
+DATABASE_URL=postgresql://happyfox:change-me@127.0.0.1:5432/happyfox
+REDIS_URL=redis://127.0.0.1:6379/3
+REDIS_PREFIX=foxgen_happyfox
 
-# Storage
-DATABASE_URL=REPLACE_ME
-REDIS_URL=redis://127.0.0.1:6379/0
-REDIS_PREFIX=neuromix
-
-# Security
-INTERNAL_API_SECRET=REPLACE_ME
-HEALTH_CHECK_SECRET=REPLACE_ME
-
-# Providers and payments
-KIE_AI_API_KEY=REPLACE_ME
-PAYMENT_PROVIDER=REPLACE_ME
-
-# Admin
-ADMIN_IDS=123456789
+KIE_AI_API_KEY=
+KIE_AI_WEBHOOK_PATH=/webhook/kie_ai
+KIE_AI_WEBHOOK_SECRET=
+INTERNAL_API_SECRET=
+HEALTH_CHECK_SECRET=
 ```
 
-Это шаблон, а не готовый `.env`: конкретный набор providers/payments зависит от включённого production-функционала.
+Use `.env.happyfox.example` as the actual template.
 
-## 3. Telegram
+## Telegram
 
-### `BOT_TOKEN`
+`BOT_TOKEN` identifies the HappyFox Telegram bot and is also used for Telegram Web App authentication/signature logic.
 
-Токен Telegram-бота. Обязателен для webhook, initData validation и Telegram API.
+`ADMIN_IDS` is a comma-separated allow-list for admin functionality.
 
-Никогда не использовать один token одновременно в двух активных production runtimes без понимания webhook/polling conflict.
+Do not reuse one bot token in competing active runtimes.
 
-### `ADMIN_IDS`
+## Public HTTP
 
-Список Telegram ID через запятую:
-
-```dotenv
-ADMIN_IDS=123456789,987654321
-```
-
-Пробелы допустимы только если parser их обрабатывает; безопаснее писать без пробелов.
-
-## 4. Backend HTTP и webhook
-
-### `WEBHOOK_HOST`
-
-Публичная база backend:
+Recommended:
 
 ```dotenv
-WEBHOOK_HOST=https://tanyapi.chillcreative.ru
-```
-
-Без trailing slash.
-
-### `WEBHOOK_PATH`
-
-Telegram webhook path:
-
-```dotenv
+WEBHOOK_HOST=https://<happyfox-backend-origin>
 WEBHOOK_PATH=/webhook
-```
-
-Должен совпадать с Nginx route и установленным webhook Telegram.
-
-### `WEBHOOK_BIND_HOST`
-
-Рекомендуемое production-значение:
-
-```dotenv
 WEBHOOK_BIND_HOST=127.0.0.1
-```
-
-Frontend обращается к backend через `https://tanyapi.chillcreative.ru`, поэтому открывать aiohttp наружу не требуется.
-
-### `WEBHOOK_PORT`
-
-Локальный порт aiohttp:
-
-```dotenv
 WEBHOOK_PORT=1888
 ```
 
-Если значение меняется, обновить backend Nginx upstream и health commands.
+The aiohttp port should normally remain private behind Nginx/reverse proxy.
 
-## 5. Mini App
+`MINI_APP_URL` is the public Telegram Mini App URL.
 
-### `MINI_APP_PATH`
+`STATIC_BASE_URL` is the public base used when generated/uploaded media must be reachable from external providers.
 
-Base path API/static fallback:
+## Data plane
 
-```dotenv
-MINI_APP_PATH=/mini-app
-```
-
-Frontend export также собирается с `/mini-app` basePath.
-
-### `MINI_APP_URL`
-
-Публичный URL, который открывает Telegram:
+Production:
 
 ```dotenv
-MINI_APP_URL=https://cdn.chillcreative.ru/mini-app/
+DATABASE_URL=postgresql://...
+REDIS_URL=redis://...
+REDIS_PREFIX=foxgen_happyfox
 ```
 
-Trailing slash рекомендуется сохранить.
+The production validator must reject SQLite and known shared/legacy Redis namespaces.
 
-### `STATIC_BASE_URL`
+## Instagram
 
-Публичная база сохранённых uploads:
+Instagram routes are fail-closed. Code may be deployed while the channel remains inactive.
+
+Default:
 
 ```dotenv
-STATIC_BASE_URL=https://media.chillcreative.ru
+INSTAGRAM_ENABLED=0
 ```
 
-Backend формирует URLs вида:
+Live configuration:
+
+```dotenv
+INSTAGRAM_ENABLED=1
+INSTAGRAM_APP_ID=
+INSTAGRAM_APP_SECRET=
+INSTAGRAM_VERIFY_TOKEN=
+INSTAGRAM_ACCESS_TOKEN=
+INSTAGRAM_IG_USER_ID=
+INSTAGRAM_API_VERSION=v24.0
+INSTAGRAM_WEBHOOK_PATH=/instagram/webhook
+INSTAGRAM_REQUEST_TIMEOUT_SECONDS=30
+INSTAGRAM_IDEMPOTENCY_TTL_SECONDS=604800
+INSTAGRAM_SUBSCRIBED_FIELDS=messages,messaging_postbacks,comments
+```
+
+Meaning:
+
+- `APP_ID` — Meta app identifier;
+- `APP_SECRET` — used for webhook HMAC verification; secret;
+- `VERIFY_TOKEN` — private value used for GET webhook verification;
+- `ACCESS_TOKEN` — Instagram user access token; secret;
+- `IG_USER_ID` — professional Instagram account ID;
+- `API_VERSION` — Graph API version used by the client;
+- `WEBHOOK_PATH` — public route registered in aiohttp/Nginx;
+- `IDEMPOTENCY_TTL_SECONDS` — duplicate-event protection lifetime;
+- `SUBSCRIBED_FIELDS` — fields used with `/{ig_user_id}/subscribed_apps`.
+
+Do not set `INSTAGRAM_ENABLED=1` until public webhook, signature verification, permissions/access level and live subscription have been tested.
+
+## Meta permissions
+
+Current Instagram Login contour expects:
 
 ```text
-https://media.chillcreative.ru/uploads/...
+instagram_business_basic
+instagram_business_manage_messages
+instagram_business_manage_comments
+instagram_business_content_publish
 ```
 
-Не добавлять `/uploads` в значение, если код уже добавляет этот segment.
+These permissions are external Meta app configuration, not environment variables.
 
-### `PERSIST_PROVIDER_RESULTS`
+## Generation providers
 
-Включает сохранение provider result в локальное storage там, где поддерживается. Перед включением проверить disk capacity и cleanup policy.
+KIE/provider secrets remain shared application infrastructure, not Instagram-specific credentials. Instagram Seedream 5 Pro and Seedance 2.5 use the same provider layer as HappyFox core.
 
-## 6. Database
+Do not introduce a second Instagram-only KIE key unless isolation is an explicit operational requirement.
 
-### `DATABASE_URL`
+## Payments
 
-Формат зависит от выбранного backend.
+HappyFox may contain several payment integrations. Availability is determined by runtime configuration and handler/service enablement.
 
-SQLite example:
+### YooKassa
 
 ```dotenv
-DATABASE_URL=sqlite:///bot.db
+YOOKASSA_SHOP_ID=
+YOOKASSA_SECRET_KEY=
+YOOKASSA_RETURN_URL=https://app.happyfox.example/mini-app/
+YOOKASSA_WEBHOOK_PATH=/yookassa/webhook
+YOOKASSA_REQUEST_TIMEOUT_SECONDS=30
+YOOKASSA_PENDING_TTL_HOURS=168
 ```
 
-PostgreSQL example:
+### Lava Top
 
 ```dotenv
-DATABASE_URL=postgresql://USER:PASSWORD@127.0.0.1:5432/DBNAME
+LAVA_API_KEY=
+LAVA_WEBHOOK_SECRET=
+LAVA_OFFER_ID_MINI=
+LAVA_OFFER_ID_START=
+LAVA_OFFER_ID_OPTIMAL=
+LAVA_OFFER_ID_PRO=
+LAVA_OFFER_ID_STUDIO=
+LAVA_OFFER_ID_BUSINESS=
 ```
 
-Не копировать примерные credentials. Перед переключением использовать migration/verification scripts и документацию PostgreSQL.
+HappyFox must use its own Lava offer IDs from environment, never imported Tanya/NEUROMIX offers.
 
-## 7. Redis
-
-### `REDIS_URL`
+### CryptoBot
 
 ```dotenv
-REDIS_URL=redis://127.0.0.1:6379/0
+CRYPTOBOT_API_TOKEN=
 ```
 
-При недоступности Redis runtime может использовать in-memory fallback. Это ухудшает устойчивость FSM к restart.
+CryptoBot remains a valid Telegram payment integration. Instagram's account-link/top-up UI intentionally does **not** expose CryptoBot; that is a channel UX restriction, not removal of the Telegram provider.
 
-### `REDIS_PREFIX`
-
-Namespace keys:
+### Telegram Stars
 
 ```dotenv
-REDIS_PREFIX=neuromix
+TELEGRAM_STARS_ENABLED=1
+TELEGRAM_STARS_PER_RUB=1
+TELEGRAM_STARS_FLAT_FEE=0
 ```
 
-При совместном Redis нескольких окружений использовать разные prefixes.
+Again, Instagram handoff may intentionally hide Stars while Telegram keeps them enabled.
 
-## 8. Security
+## Payment provider separation
 
-### `INTERNAL_API_SECRET`
+Do not interpret `PAYMENT_PROVIDER` as permission to remove other working Telegram integrations. Some flows use a selected primary provider while other configured payment handlers coexist.
 
-Секрет внутренних API. Должен быть длинным случайным значением.
-
-### `HEALTH_CHECK_SECRET`
-
-Если установлен, health route может требовать bearer token. Мониторинг нужно обновить одновременно.
-
-### Provider webhook secrets
-
-Возможные группы:
-
-- `KIE_AI_WEBHOOK_SECRET`;
-- `KIE_WEBHOOK_HMAC_KEY`;
-- `REPLICATE_WEBHOOK_SECRET`;
-- `LAVA_WEBHOOK_SECRET`;
-- другие secrets, присутствующие в `bot/config.py`.
-
-Наличие переменной не подтверждает включённый provider. Проверять route registration и active config.
-
-## 9. Providers
-
-Часто используемые ключи:
-
-- `KIE_AI_API_KEY`;
-- `KLING_API_KEY`;
-- `PIAPI_API_KEY`;
-- `GEMINI_API_KEY`;
-- `NANOBANANA_API_KEY`;
-- `FREEPIK_API_KEY`;
-- `NOVITA_API_KEY`;
-- `REPLICATE_API_TOKEN`;
-- Nano Banana fallback keys/base URLs.
-
-Правила:
-
-- один ключ — одна строка без кавычек, если shell syntax их не требует;
-- после ротации проверить и direct request, и webhook completion;
-- не логировать request headers;
-- fallback provider должен быть явно проверен, а не считаться рабочим из-за заполненной переменной.
-
-## 10. Payments
-
-### `PAYMENT_PROVIDER`
-
-Выбирает активный основной provider там, где это предусмотрено кодом.
-
-Возможные группы конфигурации:
-
-- CryptoBot: `CRYPTOBOT_*`;
-- Lava: `LAVA_*`;
-- Telegram Stars: `TELEGRAM_STARS_*`;
-- FreeKassa: `FREEKASSA_*`;
-- T-Bank legacy: `TBANK_*`.
-
-В репозитории могут оставаться legacy integrations. Не включать provider только потому, что переменные существуют.
-
-## 11. Partner programme
-
-- `PARTNER_OFFER_URL`;
-- `PARTNER_RULES_URL`;
-- `PARTNER_MIN_WITHDRAWAL_RUB`.
-
-Изменение minimum withdrawal должно быть согласовано с UI и business rules.
-
-## 12. Logging
-
-Возможные runtime flags:
-
-```dotenv
-BANANO_DISABLE_FILE_LOGGING=0
-BANANO_LOG_TO_STDOUT=1
-```
-
-Технический prefix `BANANO_*` legacy и не является пользовательским брендом.
-
-## 13. Frontend build variables
-
-Frontend может использовать:
-
-- `NEXT_EXPORT=1` — выставляется build script автоматически;
-- `NEXT_PUBLIC_MINIAPP_BASE_PATH=/mini-app`;
-- runtime/public bot username variables, если они поддерживаются `lib/api.ts`.
-
-`NEXT_PUBLIC_*` не должны содержать secrets: они попадают в клиентский bundle.
-
-## 14. Cloudflare deploy variables
-
-Для `scripts/deploy_media_origin.sh`:
+Instagram contract is specifically:
 
 ```text
-DOMAIN=media.chillcreative.ru
-ZONE_NAME=chillcreative.ru
-ORIGIN_IPV4=144.76.188.75
-PROJECT_DIR=/root/tanya/banano_kling
-UPLOADS_DIR=/root/tanya/banano_kling/static/uploads
-APP_SERVICE=banano-kling.service
-CF_API_TOKEN_FILE=/root/.secrets/cloudflare-media.token
-BACKFILL_WEBP=1
-RUN_RENEWAL_DRY_RUN=1
+YooKassa + Lava Top
 ```
 
-Обычно они передаются окружением запуска и не обязаны находиться в application `.env`.
+Telegram contract is the configured Telegram payment menu, including CryptoBot when enabled.
 
-## 15. Безопасное изменение `.env`
+## Frontend build env
+
+Typical public variables include:
+
+```dotenv
+NEXT_PUBLIC_PRODUCT_ID=happyfox
+NEXT_PUBLIC_MINIAPP_BASE_PATH=/mini-app
+```
+
+Anything beginning `NEXT_PUBLIC_` can be read by users.
+
+## Validation
+
+Before production deploy:
 
 ```bash
-cd /root/tanya/banano_kling
-
-BACKUP="/root/backups/neuromix/env-$(date +%Y%m%d-%H%M%S)"
-install -d -m 700 /root/backups/neuromix
-cp -a .env "$BACKUP"
-chmod 600 "$BACKUP"
-
-nano .env
-
-sudo systemctl restart banano-kling.service
-sudo systemctl is-active banano-kling.service
-curl -fsS http://127.0.0.1:1888/health
-journalctl -u banano-kling.service -n 100 --no-pager
+python scripts/validate_happyfox_env.py .env .env.happyfox.runtime .env.postgres
 ```
 
-## 16. Проверка без раскрытия секретов
+The preflight is expected to fail when product isolation or selected provider credentials are incomplete.
 
-Показывать только имена заполненных переменных:
+## Safe secret inventory
+
+When diagnosing, print only whether keys are set, never values:
 
 ```bash
 python3 - <<'PY'
 from pathlib import Path
-
 for line in Path('.env').read_text().splitlines():
     line = line.strip()
     if not line or line.startswith('#') or '=' not in line:
@@ -331,4 +233,15 @@ for line in Path('.env').read_text().splitlines():
 PY
 ```
 
-Никогда не отправлять полный вывод `.env` в чат или issue.
+## Instagram activation change control
+
+Turning `INSTAGRAM_ENABLED` from `0` to `1` is a production channel activation. Record:
+
+- exact deployed SHA;
+- Meta app/account used;
+- webhook verification result;
+- subscribed fields;
+- RU and EN live smoke;
+- first-free-photo smoke;
+- paid video top-up/resume smoke;
+- rollback action (`INSTAGRAM_ENABLED=0` + redeploy/restart).
