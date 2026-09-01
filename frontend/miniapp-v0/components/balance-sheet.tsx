@@ -221,6 +221,7 @@ export function BalanceSheet() {
                     const pricePerPaw = Math.round(pkg.price_rub / pkg.credits)
                     const starsPrice = pkg.price_stars ?? pkg.price_rub
                     const hasLava = Boolean(pkg.lava_offer_id || pkg.lava_currency)
+                    const lavaLabel = pkg.lava_currency?.toUpperCase() === 'EUR' ? 'EUR' : 'Lava'
                     const starsLoading = loadingPayment === `${pkg.id}:telegram_stars`
                     const lavaLoading = loadingPayment === `${pkg.id}:lava`
                     const yookassaLoading = loadingPayment === `${pkg.id}:yookassa`
@@ -286,7 +287,7 @@ export function BalanceSheet() {
                               ) : (
                                 <Coins className="h-3.5 w-3.5" />
                               )}
-                              Lava
+                              {lavaLabel}
                             </Button>
                           ) : null}
                           <Button

@@ -290,11 +290,11 @@ def _payment_package_payload(package: dict[str, Any]) -> dict[str, Any]:
 
 def _miniapp_package_lava_offer_config(package: dict[str, Any]) -> tuple[str, str]:
     package_id = str(package.get("id") or "")
+    currency = str(package.get("lava_currency") or "RUB").strip().upper() or "RUB"
     offer_id = str(package.get("lava_offer_id") or "").strip()
     if offer_id:
-        currency = str(package.get("lava_currency") or "RUB").strip().upper() or "RUB"
         return offer_id, currency
-    return config.lava_offer_id_for_package(package_id), "RUB"
+    return config.lava_offer_id_for_package(package_id), currency
 
 
 IMAGE_MODELS = (

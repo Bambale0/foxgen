@@ -771,15 +771,33 @@ def get_payment_packages_keyboard(packages: list, promo_active: bool = False):
     return builder.as_markup()
 
 
-def get_payment_method_keyboard(package_id: str, has_crypto: bool = True, has_lava: bool = False, has_stars: bool = True, lava_price_usd: float | None = None) -> types.InlineKeyboardMarkup:
+def get_payment_method_keyboard(
+    package_id: str,
+    has_crypto: bool = True,
+    has_lava: bool = False,
+    has_stars: bool = True,
+    lava_price_usd: float | None = None,
+    has_yookassa: bool = False,
+    lava_currency: str = "RUB",
+) -> types.InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
+    if has_yookassa:
+        builder.button(
+            text="💳 ЮKassa · ₽ / СБП",
+            callback_data=f"buy_yookassa_{package_id}",
+        )
+    if has_lava:
+        currency = str(lava_currency or "RUB").strip().upper()
+        if currency == "EUR":
+            lava_text = "💶 EUR"
+        else:
+            lava_suffix = f" · ${lava_price_usd:g}" if lava_price_usd else ""
+            lava_text = f"💳 Lava Top{lava_suffix}"
+        builder.button(text=lava_text, callback_data=f"buy_lava_{package_id}")
     if has_stars:
         builder.button(text="⭐ Telegram Stars", callback_data=f"buy_stars_{package_id}")
     if has_crypto:
         builder.button(text="₿ Криптовалюта (CryptoBot)", callback_data=f"buy_crypto_{package_id}")
-    if has_lava:
-        lava_suffix = f" · ${lava_price_usd:g}" if lava_price_usd else ""
-        builder.button(text=f"Оплата картой {lava_suffix}", callback_data=f"buy_lava_{package_id}")
     builder.button(text="◀️ Назад", callback_data="menu_topup")
     builder.adjust(1)
     return builder.as_markup()
