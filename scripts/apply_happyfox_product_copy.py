@@ -265,25 +265,34 @@ def _patch_payments() -> None:
     )
 
     old_offer = """def _package_lava_offer_config(package: dict) -> tuple[str, str]:
-    package_id = str(package.get(\"id\") or \"\")
-    offer_id = str(package.get(\"lava_offer_id\") or \"\").strip()
+    package_id = str(package.get("id") or "")
+    currency = str(package.get("lava_currency") or "").strip().upper()
+    offer_id = str(package.get("lava_offer_id") or "").strip()
     if offer_id:
-        currency = str(package.get(\"lava_currency\") or \"RUB\").strip().upper() or \"RUB\"
         return offer_id, currency
-    return config.lava_offer_id_for_package(package_id), \"RUB\"
+    return (
+        config.lava_offer_id_for_package(package_id),
+        currency or config.lava_currency_for_package(package_id),
+    )
 """
     new_offer = """def _package_lava_offer_config(package: dict) -> tuple[str, str]:
-    package_id = str(package.get(\"id\") or \"\")
-    if product.product_id == \"happyfox\":
+    package_id = str(package.get("id") or "")
+    if product.product_id == "happyfox":
         # Product credentials must come from the HappyFox environment only.
-        return config.lava_offer_id_for_package(package_id), \"RUB\"
+        return (
+            config.lava_offer_id_for_package(package_id),
+            config.lava_currency_for_package(package_id),
+        )
 
-    offer_id = str(package.get(\"lava_offer_id\") or \"\").strip()
+    currency = str(package.get("lava_currency") or "").strip().upper()
+    offer_id = str(package.get("lava_offer_id") or "").strip()
     if offer_id:
-        currency = str(package.get(\"lava_currency\") or \"RUB\").strip().upper() or \"RUB\"
         return offer_id, currency
-    return config.lava_offer_id_for_package(package_id), \"RUB\"
-"""
+    return (
+        config.lava_offer_id_for_package(package_id),
+        currency or config.lava_currency_for_package(package_id),
+    )
+    """
     if old_offer in text:
         text = text.replace(old_offer, new_offer, 1)
     elif new_offer not in text:
