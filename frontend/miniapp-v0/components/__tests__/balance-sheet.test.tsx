@@ -29,6 +29,7 @@ describe('BalanceSheet', () => {
             price_rub: 150,
             price_stars: 120,
             lava_offer_id: 'lava-offer-mini',
+            lava_currency: 'EUR',
             description: 'Для пробы',
           },
         ],
@@ -44,14 +45,14 @@ describe('BalanceSheet', () => {
     } as ReturnType<typeof useApp>)
   })
 
-  it('renders Lava and YooKassa actions for packages with Lava offer id', () => {
+  it('renders EUR and YooKassa actions for packages with an EUR offer', () => {
     render(<BalanceSheet />)
 
     expect(screen.getByRole('button', { name: 'ЮKassa' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Lava' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'EUR' })).toBeInTheDocument()
   })
 
-  it('creates a Lava payment when the Lava button is pressed', async () => {
+  it('creates an EUR payment when the EUR button is pressed', async () => {
     mockedCreatePayment.mockResolvedValue({
       ok: true,
       provider: 'lava',
@@ -63,9 +64,9 @@ describe('BalanceSheet', () => {
     const openSpy = jest.spyOn(window, 'open').mockReturnValue({} as Window)
 
     render(<BalanceSheet />)
-    fireEvent.click(screen.getByRole('button', { name: 'Lava' }))
+    fireEvent.click(screen.getByRole('button', { name: 'EUR' }))
 
-    expect(await screen.findByRole('button', { name: 'Lava' })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: 'EUR' })).toBeInTheDocument()
     expect(mockedCreatePayment).toHaveBeenCalledWith({ packageId: 'mini', provider: 'lava' })
 
     openSpy.mockRestore()

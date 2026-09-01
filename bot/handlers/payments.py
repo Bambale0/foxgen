@@ -59,11 +59,11 @@ router = Router()
 
 def _package_lava_offer_config(package: dict) -> tuple[str, str]:
     package_id = str(package.get("id") or "")
+    currency = str(package.get("lava_currency") or "RUB").strip().upper() or "RUB"
     offer_id = str(package.get("lava_offer_id") or "").strip()
     if offer_id:
-        currency = str(package.get("lava_currency") or "RUB").strip().upper() or "RUB"
         return offer_id, currency
-    return config.lava_offer_id_for_package(package_id), "RUB"
+    return config.lava_offer_id_for_package(package_id), currency
 
 
 def _is_ignored_telegram_error(error: Exception) -> bool:
@@ -693,18 +693,21 @@ async def choose_payment_method(callback: types.CallbackQuery, state: FSMContext
         return
 
     has_crypto = cryptobot_service.enabled
-    lava_offer_id, _lava_currency = _package_lava_offer_config(package)
+    lava_offer_id, lava_currency = _package_lava_offer_config(package)
     has_lava = lava_service.enabled and bool(lava_offer_id)
+    has_yookassa = yookassa_service.enabled
     has_stars = bool(config.TELEGRAM_STARS_ENABLED)
 
-    if not has_crypto and not has_lava and not has_stars:
+    if not has_crypto and not has_lava and not has_yookassa and not has_stars:
         await callback.message.edit_text(
             "❌ Платёжные системы временно недоступны.\nОбратитесь в поддержку.",
             reply_markup=get_back_keyboard("menu_topup"),
         )
         return
 
-    available_count = sum(1 for value in (has_crypto, has_lava, has_stars) if value)
+    available_count = sum(
+        1 for value in (has_crypto, has_lava, has_yookassa, has_stars) if value
+    )
     if available_count == 1:
         await callback.answer()
         if has_stars:
@@ -712,6 +715,9 @@ async def choose_payment_method(callback: types.CallbackQuery, state: FSMContext
             return await initiate_payment(fake, state)
         if has_crypto:
             fake = callback.model_copy(update={"data": f"buy_crypto_{package_id}"})
+            return await initiate_payment(fake, state)
+        if has_yookassa:
+            fake = callback.model_copy(update={"data": f"buy_yookassa_{package_id}"})
             return await initiate_payment(fake, state)
         fake = callback.model_copy(update={"data": f"buy_lava_{package_id}"})
         return await initiate_payment(fake, state)
@@ -737,7 +743,12 @@ async def choose_payment_method(callback: types.CallbackQuery, state: FSMContext
         f"Сумма: <code>{package['price_rub']}</code>₽ / <code>{stars_amount}</code>⭐"
         f"{bonus_text}",
         reply_markup=get_payment_method_keyboard(
-            package_id, has_crypto, has_lava, has_stars=has_stars
+            package_id,
+            has_crypto,
+            has_lava,
+            has_stars=has_stars,
+            has_yookassa=has_yookassa,
+            lava_currency=lava_currency,
         ),
         parse_mode="HTML",
     )
