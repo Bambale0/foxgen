@@ -17,7 +17,6 @@ from bot.handlers.payments import (
     _get_selected_promo,
     _package_lava_offer_config,
     _promo_bonus_for_package,
-    initiate_payment as _legacy_initiate_payment,
 )
 from bot.keyboards import get_back_keyboard, get_payment_confirmation_keyboard
 from bot.payment_utils import (
@@ -266,11 +265,7 @@ async def show_direct_payment_methods(
     )
     has_freekassa = bool(freekassa_service.enabled)
     has_yookassa = bool(yookassa_service.enabled)
-    has_eur = bool(
-        lava_service.enabled
-        and lava_offer_id
-        and str(lava_currency or "").upper() == "EUR"
-    )
+    has_eur = bool(lava_service.enabled and lava_offer_id)
     has_stars = bool(config.TELEGRAM_STARS_ENABLED)
     has_crypto = bool(cryptobot_service.enabled)
 
@@ -333,14 +328,15 @@ async def show_direct_payment_methods(
 async def handle_eur_checkout(
     callback: types.CallbackQuery, state: FSMContext
 ) -> None:
-    """Create a Lava EUR invoice via the legacy flow."""
+    """Create a Lava EUR invoice for any package with a configured Lava offer."""
     package_id = callback.data.replace("buy_eur_", "", 1)
     package = preset_manager.get_package(package_id)
     if not package:
         await callback.answer("Пакет не найден", show_alert=True)
         return
-    offer_id, currency = _package_lava_offer_config(package)
-    if not lava_service.enabled or not offer_id or str(currency or "").upper() != "EUR":
+
+    offer_id, _ = _package_lava_offer_config(package)
+    if not lava_service.enabled or not offer_id:
         await callback.message.edit_text(
             "💶 EUR сейчас недоступен для этого пакета. "
             "Выберите другой способ оплаты.",
@@ -349,9 +345,87 @@ async def handle_eur_checkout(
         )
         await callback.answer()
         return
-    return await _legacy_initiate_payment(
-        callback.model_copy(update={"data": f"buy_lava_{package_id}"}), state
+
+    promo = await _get_selected_promo(state)
+    package_bonus = package_bonus_credits(package)
+    promo_bonus = _promo_bonus_for_package(promo, package)
+    total_credits = total_package_credits(package, promo_bonus)
+    order_id = f"{callback.from_user.id}_{int(time.time() * 1000)}_{package_id}"
+
+    result = await lava_service.create_invoice(
+        email=config.LAVA_DEFAULT_EMAIL,
+        offer_id=offer_id,
+        currency="EUR",
+        buyer_language="RU",
+        client_utm={
+            "telegram_id": str(callback.from_user.id),
+            "order_id": order_id,
+            "package_id": package_id,
+            "payment_mode": "eur",
+        },
     )
+    if not result.get("ok"):
+        logger.error(
+            "Lava EUR invoice creation failed: user=%s package=%s status=%s error=%s",
+            callback.from_user.id,
+            package_id,
+            result.get("status"),
+            _format_lava_error(result),
+        )
+        await callback.message.edit_text(
+            "Не удалось создать оплату в EUR. Попробуйте ещё раз или выберите другой способ.",
+            reply_markup=get_back_keyboard("menu_topup"),
+            parse_mode="HTML",
+        )
+        await callback.answer()
+        return
+
+    invoice_id = lava_service.extract_invoice_id(result)
+    contract_id = lava_service.extract_contract_id(result)
+    payment_url = lava_service.extract_payment_url(result)
+    if not invoice_id or not payment_url:
+        await callback.message.edit_text(
+            "Не удалось получить ссылку на оплату в EUR. Выберите другой способ.",
+            reply_markup=get_back_keyboard("menu_topup"),
+            parse_mode="HTML",
+        )
+        await callback.answer()
+        return
+
+    user = await get_or_create_user(callback.from_user.id)
+    payment_id = contract_id or str(invoice_id)
+    created = await create_transaction(
+        order_id=order_id,
+        user_id=user.id,
+        payment_id=payment_id,
+        provider="lava",
+        credits=total_credits,
+        amount_rub=float(package["price_rub"]),
+        status="pending",
+        promo_code_id=promo.id if promo and promo_bonus > 0 else None,
+        promo_code=promo.code if promo and promo_bonus > 0 else None,
+        promo_bonus_credits=promo_bonus,
+    )
+    if not created:
+        await callback.message.edit_text(
+            "Платёж создан, но бот не смог сохранить заказ. "
+            "Не оплачивайте эту ссылку и выберите пакет заново.",
+            reply_markup=get_back_keyboard("menu_topup"),
+            parse_mode="HTML",
+        )
+        await callback.answer()
+        return
+
+    await callback.message.edit_text(
+        "💶 <b>Оплата банковской картой (EUR, Lava)</b>\n"
+        f"• Пакет: <code>{html.escape(str(package['name']))}</code>\n"
+        f"• Бананов: <code>{total_credits}</code>🍌\n"
+        f"• Сумма: <code>{package['price_rub']}</code> ₽ / EUR\n\n"
+        "Нажмите кнопку ниже и завершите оплату.",
+        reply_markup=get_payment_confirmation_keyboard(payment_url, order_id),
+        parse_mode="HTML",
+    )
+    await callback.answer()
 
 
 @router.callback_query(F.data.startswith("buy_lava_"))
