@@ -26,7 +26,6 @@
       "name": "Оптимальный",
       "credits": 50,
       "price_rub": 500,
-      "lava_currency": "EUR",
       "bonus_credits": 0,
       "popular": true,
       "description": "Лучшее соотношение цена/количество",
@@ -37,7 +36,6 @@
       "name": "Про",
       "credits": 100,
       "price_rub": 1000,
-      "lava_currency": "EUR",
       "bonus_credits": 0,
       "description": "Для активных пользователей",
       "price_usd": 15.4
@@ -47,7 +45,6 @@
       "name": "Студия",
       "credits": 200,
       "price_rub": 1950,
-      "lava_currency": "EUR",
       "bonus_credits": 0,
       "description": "Для частой генерации",
       "price_usd": 29.5
@@ -57,7 +54,6 @@
       "name": "Бизнес",
       "credits": 500,
       "price_rub": 4900,
-      "lava_currency": "EUR",
       "bonus_credits": 0,
       "description": "Выгодно для регулярной работы",
       "price_usd": 75.0

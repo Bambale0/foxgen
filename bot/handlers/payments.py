@@ -59,11 +59,14 @@ router = Router()
 
 def _package_lava_offer_config(package: dict) -> tuple[str, str]:
     package_id = str(package.get("id") or "")
-    currency = str(package.get("lava_currency") or "RUB").strip().upper() or "RUB"
+    currency = str(package.get("lava_currency") or "").strip().upper()
     offer_id = str(package.get("lava_offer_id") or "").strip()
     if offer_id:
         return offer_id, currency
-    return config.lava_offer_id_for_package(package_id), currency
+    return (
+        config.lava_offer_id_for_package(package_id),
+        currency or config.lava_currency_for_package(package_id),
+    )
 
 
 def _is_ignored_telegram_error(error: Exception) -> bool:
