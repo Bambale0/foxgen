@@ -320,6 +320,7 @@ def build_runtime_values(
         "LAVA_OFFER_ID_PRO",
         "LAVA_OFFER_ID_STUDIO",
         "LAVA_OFFER_ID_BUSINESS",
+        "LAVA_CURRENCY",
         "CRYPTOBOT_API_TOKEN",
         "TBANK_TERMINAL_KEY",
         "TBANK_SECRET_KEY",

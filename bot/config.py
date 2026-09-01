@@ -90,6 +90,7 @@ class Config:
     LAVA_OFFER_ID_PRO: str = os.getenv("LAVA_OFFER_ID_PRO", "")
     LAVA_OFFER_ID_STUDIO: str = os.getenv("LAVA_OFFER_ID_STUDIO", "")
     LAVA_OFFER_ID_BUSINESS: str = os.getenv("LAVA_OFFER_ID_BUSINESS", "")
+    LAVA_CURRENCY: str = os.getenv("LAVA_CURRENCY", "RUB").strip().upper() or "RUB"
     LAVA_WEBHOOK_SECRET: str = os.getenv("LAVA_WEBHOOK_SECRET", "")
     LAVA_PENDING_TTL_HOURS: int = int(os.getenv("LAVA_PENDING_TTL_HOURS", "24"))
 
@@ -288,6 +289,10 @@ class Config:
             "business": self.LAVA_OFFER_ID_BUSINESS,
         }
         return mapping.get(package_id, "")
+
+    def lava_currency_for_package(self, package_id: str) -> str:
+        del package_id
+        return self.LAVA_CURRENCY
 
     @property
     def has_freekassa(self) -> bool:

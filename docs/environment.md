@@ -162,6 +162,7 @@ LAVA_OFFER_ID_OPTIMAL=
 LAVA_OFFER_ID_PRO=
 LAVA_OFFER_ID_STUDIO=
 LAVA_OFFER_ID_BUSINESS=
+LAVA_CURRENCY=RUB
 ```
 
 HappyFox must use its own Lava offer IDs from environment, never imported Tanya/NEUROMIX offers.
