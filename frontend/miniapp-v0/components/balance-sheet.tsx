@@ -220,7 +220,9 @@ export function BalanceSheet() {
                   {paymentPackages.map((pkg) => {
                     const pricePerPaw = Math.round(pkg.price_rub / pkg.credits)
                     const starsPrice = pkg.price_stars ?? pkg.price_rub
+                    const hasLava = Boolean(pkg.lava_offer_id || pkg.lava_currency)
                     const starsLoading = loadingPayment === `${pkg.id}:telegram_stars`
+                    const lavaLoading = loadingPayment === `${pkg.id}:lava`
                     const yookassaLoading = loadingPayment === `${pkg.id}:yookassa`
                     return (
                       <div
@@ -271,6 +273,22 @@ export function BalanceSheet() {
                             )}
                             ЮKassa
                           </Button>
+                          {hasLava ? (
+                            <Button
+                              onClick={() => handleTopup(pkg.id, 'lava')}
+                              disabled={Boolean(loadingPayment)}
+                              variant="outline"
+                              size="sm"
+                              className="w-full"
+                            >
+                              {lavaLoading ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <Coins className="h-3.5 w-3.5" />
+                              )}
+                              Lava
+                            </Button>
+                          ) : null}
                           <Button
                             onClick={() => handleTopup(pkg.id, 'telegram_stars')}
                             disabled={Boolean(loadingPayment)}

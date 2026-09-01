@@ -281,6 +281,10 @@ def _saved_reference_payload(reference: SavedReference) -> dict[str, Any]:
 def _payment_package_payload(package: dict[str, Any]) -> dict[str, Any]:
     payload = dict(package)
     payload["price_stars"] = package_stars_amount(package)
+    offer_id, currency = _miniapp_package_lava_offer_config(package)
+    if offer_id:
+        payload["lava_offer_id"] = offer_id
+        payload["lava_currency"] = currency
     return payload
 
 
