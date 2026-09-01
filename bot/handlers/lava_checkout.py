@@ -28,6 +28,7 @@ from bot.services.cryptobot_service import cryptobot_service
 from bot.services.freekassa_service import freekassa_service
 from bot.services.lava_service import lava_service
 from bot.services.preset_manager import preset_manager
+from bot.services.yookassa_service import yookassa_service
 from bot.states import PaymentStates
 
 logger = logging.getLogger(__name__)
@@ -158,10 +159,16 @@ def _payment_options_keyboard(
     direct_rub: bool,
     crypto: bool,
     freekassa: bool,
+    yookassa: bool,
 ) -> types.InlineKeyboardMarkup:
     """Show every enabled payment method as an independent option."""
 
     builder = InlineKeyboardBuilder()
+    if yookassa:
+        builder.button(
+            text="💳 ЮKassa · ₽ / СБП",
+            callback_data=f"buy_yookassa_{package_id}",
+        )
     if freekassa:
         builder.button(
             text="🇷🇺 РФ — KASSA (резерв)",
@@ -251,10 +258,19 @@ async def show_direct_payment_methods(
         and str(lava_currency or "").upper() == "RUB"
     )
     has_freekassa = bool(freekassa_service.enabled)
+    has_yookassa = bool(yookassa_service.enabled)
     has_stars = bool(config.TELEGRAM_STARS_ENABLED)
     has_crypto = bool(cryptobot_service.enabled)
 
-    if not any((has_direct_rub, has_freekassa, has_stars, has_crypto)):
+    if not any(
+        (
+            has_direct_rub,
+            has_freekassa,
+            has_yookassa,
+            has_stars,
+            has_crypto,
+        )
+    ):
         await callback.message.edit_text(
             "❌ Способы оплаты временно недоступны. Обратитесь в поддержку.",
             reply_markup=get_back_keyboard("menu_topup"),
@@ -292,6 +308,7 @@ async def show_direct_payment_methods(
             direct_rub=has_direct_rub,
             crypto=has_crypto,
             freekassa=has_freekassa,
+            yookassa=has_yookassa,
         ),
         parse_mode="HTML",
     )

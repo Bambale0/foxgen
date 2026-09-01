@@ -37,6 +37,7 @@ from bot.handlers.payments import (
     _package_lava_offer_config,
     _promo_bonus_for_package,
     _transaction_promo_text,
+    initiate_payment as _legacy_initiate_payment,
 )
 from bot.keyboards import get_back_keyboard, get_main_menu_keyboard
 from bot.payment_utils import (
@@ -53,6 +54,7 @@ from bot.services.freekassa_service import (
 )
 from bot.services.lava_service import lava_service
 from bot.services.preset_manager import preset_manager
+from bot.services.yookassa_service import yookassa_service
 
 logger = logging.getLogger(__name__)
 router = Router()
@@ -371,6 +373,12 @@ async def initiate_freekassa_payment(
     callback: types.CallbackQuery, state: FSMContext
 ):
     """Create a signed KASSA checkout for the explicitly selected method."""
+
+    if callback.data.startswith("buy_yookassa_") and yookassa_service.enabled:
+        # The text bot exposes a real YooKassa button. When YooKassa is
+        # configured, route the legacy/yookassa callback to the real payment
+        # flow instead of the KASSA fallback.
+        return await _legacy_initiate_payment(callback, state)
 
     if not freekassa_service.api_enabled:
         await callback.message.edit_text(
