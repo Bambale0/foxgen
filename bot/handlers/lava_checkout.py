@@ -17,6 +17,7 @@ from bot.handlers.payments import (
     _get_selected_promo,
     _package_lava_offer_config,
     _promo_bonus_for_package,
+    initiate_payment as _legacy_initiate_payment,
 )
 from bot.keyboards import get_back_keyboard, get_payment_confirmation_keyboard
 from bot.payment_utils import (
@@ -160,6 +161,7 @@ def _payment_options_keyboard(
     crypto: bool,
     freekassa: bool,
     yookassa: bool,
+    eur: bool,
 ) -> types.InlineKeyboardMarkup:
     """Show every enabled payment method as an independent option."""
 
@@ -168,6 +170,11 @@ def _payment_options_keyboard(
         builder.button(
             text="💳 ЮKassa · ₽ / СБП",
             callback_data=f"buy_yookassa_{package_id}",
+        )
+    if eur:
+        builder.button(
+            text="💶 EUR",
+            callback_data=f"buy_eur_{package_id}",
         )
     if freekassa:
         builder.button(
@@ -259,6 +266,11 @@ async def show_direct_payment_methods(
     )
     has_freekassa = bool(freekassa_service.enabled)
     has_yookassa = bool(yookassa_service.enabled)
+    has_eur = bool(
+        lava_service.enabled
+        and lava_offer_id
+        and str(lava_currency or "").upper() == "EUR"
+    )
     has_stars = bool(config.TELEGRAM_STARS_ENABLED)
     has_crypto = bool(cryptobot_service.enabled)
 
@@ -267,6 +279,7 @@ async def show_direct_payment_methods(
             has_direct_rub,
             has_freekassa,
             has_yookassa,
+            has_eur,
             has_stars,
             has_crypto,
         )
@@ -309,10 +322,36 @@ async def show_direct_payment_methods(
             crypto=has_crypto,
             freekassa=has_freekassa,
             yookassa=has_yookassa,
+            eur=has_eur,
         ),
         parse_mode="HTML",
     )
     await callback.answer()
+
+
+@router.callback_query(F.data.startswith("buy_eur_"))
+async def handle_eur_checkout(
+    callback: types.CallbackQuery, state: FSMContext
+) -> None:
+    """Create a Lava EUR invoice via the legacy flow."""
+    package_id = callback.data.replace("buy_eur_", "", 1)
+    package = preset_manager.get_package(package_id)
+    if not package:
+        await callback.answer("Пакет не найден", show_alert=True)
+        return
+    offer_id, currency = _package_lava_offer_config(package)
+    if not lava_service.enabled or not offer_id or str(currency or "").upper() != "EUR":
+        await callback.message.edit_text(
+            "💶 EUR сейчас недоступен для этого пакета. "
+            "Выберите другой способ оплаты.",
+            reply_markup=get_back_keyboard("menu_topup"),
+            parse_mode="HTML",
+        )
+        await callback.answer()
+        return
+    return await _legacy_initiate_payment(
+        callback.model_copy(update={"data": f"buy_lava_{package_id}"}), state
+    )
 
 
 @router.callback_query(F.data.startswith("buy_lava_"))
