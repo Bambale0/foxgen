@@ -1,0 +1,39 @@
+name: Refresh browserslist lockfile
+
+on:
+  push:
+    branches:
+      - fix/unify-suno-main-menu
+
+permissions:
+  contents: write
+
+jobs:
+  refresh-lock:
+    if: ${{ !contains(github.event.head_commit.message, 'chore(deps): patch browserslist') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/miniapp-v0/package-lock.json
+      - name: Refresh patched transitive dependency
+        working-directory: frontend/miniapp-v0
+        run: npm update browserslist@4.28.8 --package-lock-only --ignore-scripts
+      - name: Verify production audit
+        working-directory: frontend/miniapp-v0
+        run: npm audit --omit=dev --audit-level=high
+      - name: Commit generated lockfile
+        run: |
+          set -Eeuo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add frontend/miniapp-v0/package-lock.json
+          git diff --cached --quiet && exit 0
+          git commit -m "chore(deps): patch browserslist audit"
+          git push origin HEAD:fix/unify-suno-main-menu
