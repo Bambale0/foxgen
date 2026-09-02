@@ -3,7 +3,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-
 from scripts.patch_happyfox_reverse_proxy import patch_text
 
 
