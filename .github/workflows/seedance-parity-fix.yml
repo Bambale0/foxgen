@@ -40,6 +40,11 @@ jobs:
               "        except (RuntimeError, ValueError, TypeError, KeyError, OSError) as error:\n            await self._finalize_failure(job, error)\n",
               1,
           )
+          text = text.replace(
+              "        user_id, telegram_id, _credits = billing\n",
+              "        _user_id, telegram_id, _credits = billing\n",
+              1,
+          )
           text = "\n".join(
               line
               for line in text.splitlines()
