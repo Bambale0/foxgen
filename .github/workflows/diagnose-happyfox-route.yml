@@ -20,7 +20,7 @@ jobs:
       DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
       DEPLOY_USER: ${{ vars.DEPLOY_USER || 'root' }}
       DEPLOY_PORT: ${{ vars.DEPLOY_PORT || '22' }}
-      MINIAPP_FRONTEND_DOMAIN: ${{ vars.MINIAPP_FRONTEND_DOMAIN }}
+      DEPLOY_PATH: ${{ vars.DEPLOY_PATH || '/root/foxgen' }}
     steps:
       - name: Configure pinned SSH
         shell: bash
@@ -35,8 +35,7 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          : "${MINIAPP_FRONTEND_DOMAIN:?MINIAPP_FRONTEND_DOMAIN is required}"
-          printf -v quoted_domain '%q' "$MINIAPP_FRONTEND_DOMAIN"
+          printf -v quoted_path '%q' "$DEPLOY_PATH"
           ssh \
             -i "$HOME/.ssh/id_ed25519" \
             -p "$DEPLOY_PORT" \
@@ -45,16 +44,40 @@ jobs:
             -o StrictHostKeyChecking=yes \
             -o ConnectTimeout=15 \
             "$DEPLOY_USER@$DEPLOY_HOST" \
-            "bash -s -- $quoted_domain" <<'REMOTE'
+            "bash -s -- $quoted_path" <<'REMOTE'
           set -Eeuo pipefail
-          domain="$1"
+          project_dir="$1"
+          runtime="$project_dir/.env.happyfox.runtime"
+          domain="$(python3 - "$runtime" <<'PY'
+          import sys
+          from pathlib import Path
+          from urllib.parse import urlparse
+          path = Path(sys.argv[1])
+          values = {}
+          for raw in path.read_text(encoding='utf-8').splitlines():
+              line = raw.strip()
+              if not line or line.startswith('#') or '=' not in line:
+                  continue
+              key, value = line.split('=', 1)
+              value = value.strip()
+              if len(value) >= 2 and value[0] == value[-1] and value[0] in {'\'', '"'}:
+                  value = value[1:-1]
+              values[key.strip()] = value
+          value = values.get('WEBHOOK_HOST') or values.get('MINI_APP_URL') or ''
+          host = urlparse(value if '://' in value else f'//{value}').hostname or ''
+          if not host:
+              raise SystemExit('could not resolve runtime hostname')
+          print(host)
+          PY
+          )"
+
           echo "DOMAIN=$domain"
           echo "PUBLIC_HEALTH_STATUS=$(curl -ksS -o /tmp/hf-health-body -w '%{http_code}' --max-time 15 https://$domain/health || true)"
           printf 'PUBLIC_HEALTH_BODY='; head -c 200 /tmp/hf-health-body 2>/dev/null | tr '\n' ' '; echo
           echo "PUBLIC_MINIAPP_STATUS=$(curl -ksS -o /dev/null -w '%{http_code}' --max-time 15 https://$domain/mini-app/ || true)"
 
           echo '--- docker containers ---'
-          docker ps --format '{{.Names}} {{.Status}} {{.Networks}}' | grep -E 'foxgen|nginx|artflow' || true
+          docker ps -a --format '{{.Names}} {{.Status}} {{.Networks}}' | grep -E 'foxgen|nginx|artflow' || true
 
           echo '--- reverse proxy networks ---'
           docker inspect artflow-nginx-1 --format '{{range $k,$v := .NetworkSettings.Networks}}{{$k}} {{end}}' || true
@@ -62,7 +85,7 @@ jobs:
           docker inspect foxgen-happyfox-bot --format '{{range $k,$v := .NetworkSettings.Networks}}{{$k}} {{end}}' || true
 
           echo '--- nginx matching server/health lines ---'
-          docker exec artflow-nginx-1 sh -lc "nginx -T 2>&1 | grep -n -E 'server_name|location .*health|proxy_pass|foxgen-happyfox|$domain' | head -n 240" || true
+          docker exec artflow-nginx-1 sh -lc "nginx -T 2>&1 | grep -n -E 'server_name|location .*health|proxy_pass|foxgen-happyfox|$domain' | head -n 260" || true
 
           echo '--- proxy-to-backend probes ---'
           for target in \
