@@ -22,6 +22,7 @@ VIDEO_LABELS = {
     "v26_pro": "🌀 Kling 2.5 Turbo",
     "grok_imagine": "🧠 Grok Imagine",
     "grok_imagine_v15": "🧠 Grok Imagine 1.5 🔥",
+    "seedance_2_5": "🔥🆕 Seedance 2.5",
     "seedance_2": "🎞 Seedance 2.0",
     "gemini_omni": "🔷 Gemini Omni",
     "veo3": "🎥 Veo 3.1 Quality",
@@ -121,7 +122,11 @@ def _video_price_label(
     *,
     duration: int = 5,
 ) -> str:
-    quality = "720p" if model.startswith("veo3") or model == "gemini_omni" else None
+    quality = (
+        "720p"
+        if model.startswith("veo3") or model in {"gemini_omni", "seedance_2_5"}
+        else None
+    )
     try:
         cost = catalog.video_cost(model, duration=duration, quality=quality)
         return f"от {_format_amount(cost)} 🐾"
