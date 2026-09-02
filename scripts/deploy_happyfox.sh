@@ -223,23 +223,39 @@ if [ "$ACTION" != "deploy" ]; then
   exec bash scripts/deploy_backend_docker.sh "$ACTION"
 fi
 
-# Repair/normalize the persisted nginx config while the legacy API is still
-# running. This also makes a previous failed cutover recoverable before we stop
-# any legacy containers.
+# Normalize the persisted nginx config before touching the backend. During the
+# first migration the legacy API is still available and remains the rollback
+# target. On every later HappyFox deploy that legacy container is intentionally
+# gone, so keep nginx on the stable HappyFox container name and repair any new
+# public routes there before replacing the container image.
 if ! reverse_proxy_exists; then
   echo "[happyfox-deploy] Reverse proxy container is missing: $HAPPYFOX_REVERSE_PROXY_CONTAINER" >&2
   exit 1
 fi
 backup_reverse_proxy_config
-if ! restore_proxy_to_legacy; then
-  echo "[happyfox-deploy] Refusing cutover with an invalid legacy proxy route" >&2
-  exit 1
+if docker inspect "$legacy_api_container" >/dev/null 2>&1; then
+  if ! restore_proxy_to_legacy; then
+    echo "[happyfox-deploy] Refusing cutover with an invalid legacy proxy route" >&2
+    exit 1
+  fi
+else
+  echo "[happyfox-deploy] Legacy API absent; preparing existing HappyFox proxy route"
+  if ! patch_reverse_proxy_target "$HAPPYFOX_NEW_UPSTREAM_TARGET"; then
+    echo "[happyfox-deploy] Failed to normalize existing HappyFox reverse proxy" >&2
+    exit 1
+  fi
+  if ! reload_reverse_proxy; then
+    echo "[happyfox-deploy] Existing HappyFox reverse proxy did not validate/reload" >&2
+    exit 1
+  fi
+  # A completed cutover has no legacy app containers to stop or restart.
+  export CUTOVER_STOP_CONTAINERS=""
 fi
 
 if ! bash scripts/deploy_backend_docker.sh deploy; then
   echo "[happyfox-deploy] Docker cutover failed before reverse proxy switch" >&2
-  # deploy_backend_docker.sh restores the legacy containers on its own. Keep
-  # the proxy explicitly pinned to the legacy API as a second safety layer.
+  # On the initial cutover, keep the proxy explicitly pinned to the legacy API.
+  # On later redeploys there is no legacy container, so this is a safe no-op.
   restore_proxy_to_legacy || true
   exit 1
 fi
@@ -263,3 +279,17 @@ if ! curl -fsS --retry 8 --retry-delay 2 --retry-all-errors \
 fi
 
 echo "[happyfox-deploy] PUBLIC_HEALTH_OK ${PUBLIC_ORIGIN}/health"
+
+# The MAX webhook is secret-protected. A public POST without the secret must
+# reach the HappyFox MAX route and return 401. A 404 here means nginx or the
+# runtime registration is still wrong even if the generic health check is green.
+max_webhook_status="$(
+  curl -sS -o /dev/null -w '%{http_code}' \
+    -X POST --max-time 15 "${PUBLIC_ORIGIN}/max/webhook" || true
+)"
+if [ "$max_webhook_status" != "401" ]; then
+  echo "[happyfox-deploy] Public MAX webhook route check failed: expected 401, got ${max_webhook_status:-transport-error}" >&2
+  exit 1
+fi
+
+echo "[happyfox-deploy] MAX_WEBHOOK_ROUTE_OK ${PUBLIC_ORIGIN}/max/webhook"
