@@ -17,6 +17,7 @@ MAX_IMAGE_MODELS = (
 )
 MAX_VIDEO_TYPES: dict[str, tuple[str, ...]] = {
     "text": (
+        "seedance_2_5",
         "v3_pro",
         "v3_std",
         "v26_pro",
@@ -27,6 +28,7 @@ MAX_VIDEO_TYPES: dict[str, tuple[str, ...]] = {
         "veo3_lite",
     ),
     "imgtxt": (
+        "seedance_2_5",
         "v3_pro",
         "v3_std",
         "v26_pro",
@@ -37,6 +39,7 @@ MAX_VIDEO_TYPES: dict[str, tuple[str, ...]] = {
         "veo3_fast",
     ),
     "video": (
+        "seedance_2_5",
         "seedance_2",
         "glow",
         "gemini_omni",
@@ -60,7 +63,6 @@ class MaxPresetManager(PresetManager):
         models: dict[str, float] = {}
         for key in MAX_IMAGE_MODELS:
             if key == "seedream_5_pro":
-                # Telegram currently exposes the base Seedream 5 Pro entry at 2 🐾.
                 models[key] = 2.0
             else:
                 models[key] = float(self.get_generation_cost(key))
