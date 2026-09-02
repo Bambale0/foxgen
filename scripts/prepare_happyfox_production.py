@@ -13,6 +13,31 @@ RUNTIME_ENV_NAME = ".env.happyfox.runtime"
 DEFAULT_DATABASE_NAME = "happyfox"
 DEFAULT_POSTGRES_CONTAINER = "foxgen-postgres-1"
 DEFAULT_REDIS_CONTAINER = "foxgen-redis-1"
+_TRUE_VALUES = {"1", "true", "yes", "on"}
+_CHANNEL_RUNTIME_KEYS = (
+    "SUPPORT_CONTACT",
+    "INSTAGRAM_ENABLED",
+    "INSTAGRAM_APP_ID",
+    "INSTAGRAM_APP_SECRET",
+    "INSTAGRAM_VERIFY_TOKEN",
+    "INSTAGRAM_ACCESS_TOKEN",
+    "INSTAGRAM_IG_USER_ID",
+    "INSTAGRAM_API_VERSION",
+    "INSTAGRAM_WEBHOOK_PATH",
+    "INSTAGRAM_REQUEST_TIMEOUT_SECONDS",
+    "INSTAGRAM_IDEMPOTENCY_TTL_SECONDS",
+    "INSTAGRAM_SUBSCRIBED_FIELDS",
+    "MAX_ENABLED",
+    "MAX_ACCESS_TOKEN",
+    "MAX_WEBHOOK_SECRET",
+    "MAX_WEBHOOK_URL",
+    "MAX_WEBHOOK_PATH",
+    "MAX_API_BASE",
+    "MAX_BOT_NAME",
+    "MAX_MINI_APP_URL",
+    "MAX_PAYMENT_RETURN_URL",
+    "MAX_PAYMENT_RECONCILE_SECONDS",
+)
 
 
 def parse_env(path: Path) -> dict[str, str]:
@@ -254,10 +279,10 @@ def build_runtime_values(
     def current_or_legacy(current: str, legacy_key: str) -> str:
         return existing.get(current, "").strip() or legacy.get(legacy_key, "").strip()
 
-    def payment_value(key: str) -> str:
-        # Operators may configure HappyFox payment credentials in either the
+    def protected_value(key: str) -> str:
+        # Operators may configure HappyFox-only protected values in either the
         # generated runtime overlay or the protected server .env. Never invent
-        # or copy a different product's provider credentials.
+        # or copy a differently named legacy product credential.
         return existing.get(key, "").strip() or legacy.get(key, "").strip()
 
     webhook_host = current_or_legacy("WEBHOOK_HOST", "FOXGEN_KIE_CALLBACK_BASE_URL").rstrip("/")
@@ -330,13 +355,26 @@ def build_runtime_values(
         "FREEKASSA_API_KEY",
     )
     for key in payment_keys:
-        value = payment_value(key)
+        value = protected_value(key)
+        if value:
+            values[key] = value
+
+    for key in _CHANNEL_RUNTIME_KEYS:
+        value = protected_value(key)
         if value:
             values[key] = value
 
     if values.get("YOOKASSA_SHOP_ID") and values.get("YOOKASSA_SECRET_KEY"):
         values.setdefault("YOOKASSA_WEBHOOK_PATH", "/yookassa/webhook")
         values.setdefault("YOOKASSA_RETURN_URL", mini_app_url)
+
+    if values.get("MAX_ENABLED", "").strip().lower() in _TRUE_VALUES:
+        max_webhook_path = values.get("MAX_WEBHOOK_PATH", "").strip() or "/max/webhook"
+        if not max_webhook_path.startswith("/"):
+            raise RuntimeError("MAX_WEBHOOK_PATH must start with /")
+        values["MAX_WEBHOOK_PATH"] = max_webhook_path
+        values["MAX_WEBHOOK_URL"] = f"{webhook_host}{max_webhook_path}"
+        values["MAX_MINI_APP_URL"] = mini_app_url
 
     admin_ids = current_or_legacy("ADMIN_IDS", "FOXGEN_ADMIN_SUPERUSER_IDS")
     if admin_ids:
