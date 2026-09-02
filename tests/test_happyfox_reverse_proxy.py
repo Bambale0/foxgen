@@ -53,7 +53,18 @@ server {{
 """
 
 
-def test_patch_adds_public_health_and_switches_to_new_backend() -> None:
+def _config_with_health_only(target: str = "foxgen-happyfox-bot:8080") -> str:
+    return _config(target).replace(
+        "    location ^~ /mini-app/api/ {\n",
+        "    location = /health {\n"
+        "        proxy_pass http://happyfox_backend;\n"
+        "    }\n\n"
+        "    location ^~ /mini-app/api/ {\n",
+        1,
+    )
+
+
+def test_patch_adds_public_health_max_webhook_and_switches_to_new_backend() -> None:
     patched, changed = _patch_text(
         _config("172.20.0.6:8080"),
         domain=DOMAIN,
@@ -64,18 +75,35 @@ def test_patch_adds_public_health_and_switches_to_new_backend() -> None:
     assert "server foxgen-happyfox-bot:8080;" in patched
     assert "server 172.20.0.6:8080;" not in patched
     assert patched.count("location = /health {") == 2
+    assert patched.count("location = /max/webhook {") == 1
     domain_block = patched.split(f"server_name {DOMAIN};", 2)[2]
     assert "proxy_pass http://happyfox_backend;" in domain_block
+    assert "proxy_set_header X-Max-Bot-Api-Secret $http_x_max_bot_api_secret;" in domain_block
     assert domain_block.index("location = /health") < domain_block.index(
+        "location = /max/webhook"
+    )
+    assert domain_block.index("location = /max/webhook") < domain_block.index(
         "location ^~ /mini-app/api/"
     )
 
 
+def test_patch_repairs_existing_health_only_config_with_max_webhook() -> None:
+    patched, changed = _patch_text(
+        _config_with_health_only(),
+        domain=DOMAIN,
+        target="foxgen-happyfox-bot:8080",
+    )
+
+    assert changed is True
+    assert patched.count("location = /health {") == 2
+    assert patched.count("location = /max/webhook {") == 1
+
+
 def test_patch_can_switch_back_to_legacy_api_address() -> None:
-    with_health, _ = _patch_text(_config(), domain=DOMAIN)
+    with_routes, _ = _patch_text(_config(), domain=DOMAIN)
 
     patched, changed = _patch_text(
-        with_health,
+        with_routes,
         domain=DOMAIN,
         target="172.20.0.6:8080",
     )
@@ -84,6 +112,7 @@ def test_patch_can_switch_back_to_legacy_api_address() -> None:
     assert "server 172.20.0.6:8080;" in patched
     assert "server foxgen-happyfox-bot:8080;" not in patched
     assert patched.count("location = /health {") == 2
+    assert patched.count("location = /max/webhook {") == 1
 
 
 def test_patch_is_idempotent_for_same_target() -> None:
