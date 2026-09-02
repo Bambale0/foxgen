@@ -29,6 +29,7 @@ legacy_background_containers=(
 )
 REVERSE_PROXY_CONFIG_SOURCE=""
 LEGACY_UPSTREAM_TARGET=""
+LEGACY_ROLLBACK_AVAILABLE=0
 PUBLIC_ORIGIN=""
 PUBLIC_DOMAIN=""
 
@@ -64,10 +65,7 @@ resolve_legacy_upstream_target() {
     return 0
   fi
 
-  docker inspect "$legacy_api_container" >/dev/null 2>&1 || {
-    echo "[happyfox-deploy] Legacy API container is missing: $legacy_api_container" >&2
-    return 1
-  }
+  docker inspect "$legacy_api_container" >/dev/null 2>&1 || return 1
 
   local legacy_ip=""
   legacy_ip="$(
@@ -87,12 +85,10 @@ if not address:
     raise SystemExit(1)
 print(address)
 '
-  )" || {
-    echo "[happyfox-deploy] Could not resolve legacy API address on $HAPPYFOX_BACKEND_NETWORK" >&2
-    return 1
-  }
+  )" || return 1
 
   LEGACY_UPSTREAM_TARGET="${legacy_ip}:8080"
+  return 0
 }
 
 backup_reverse_proxy_config() {
@@ -126,7 +122,7 @@ restore_proxy_to_legacy() {
     echo "[happyfox-deploy] Reverse proxy container is unavailable" >&2
     return 1
   fi
-  if ! resolve_legacy_upstream_target; then
+  if [ -z "$LEGACY_UPSTREAM_TARGET" ] && ! resolve_legacy_upstream_target; then
     return 1
   fi
   if ! patch_reverse_proxy_target "$LEGACY_UPSTREAM_TARGET"; then
@@ -168,6 +164,14 @@ rollback_legacy_app() {
   done
 
   echo "[happyfox-deploy] Legacy FoxGen runtime restored"
+}
+
+rollback_if_available() {
+  if [ "$LEGACY_ROLLBACK_AVAILABLE" = "1" ]; then
+    rollback_legacy_app || true
+  else
+    echo "[happyfox-deploy] No usable legacy rollback target; keeping HappyFox runtime online" >&2
+  fi
 }
 
 resolve_public_origin() {
@@ -223,23 +227,29 @@ if [ "$ACTION" != "deploy" ]; then
   exec bash scripts/deploy_backend_docker.sh "$ACTION"
 fi
 
-# Normalize the persisted nginx config before touching the backend. During the
-# first migration the legacy API is still available and remains the rollback
-# target. On every later HappyFox deploy that legacy container is intentionally
-# gone, so keep nginx on the stable HappyFox container name and repair any new
-# public routes there before replacing the container image.
+# Normalize the persisted nginx config before touching the backend. A legacy
+# container object is not enough to be a rollback target: after cutover Docker
+# may retain a stopped foxgen-api-1 with no address on foxgen_backend. Only a
+# successfully resolved legacy network target is considered usable.
 if ! reverse_proxy_exists; then
   echo "[happyfox-deploy] Reverse proxy container is missing: $HAPPYFOX_REVERSE_PROXY_CONTAINER" >&2
   exit 1
 fi
 backup_reverse_proxy_config
-if docker inspect "$legacy_api_container" >/dev/null 2>&1; then
-  if ! restore_proxy_to_legacy; then
-    echo "[happyfox-deploy] Refusing cutover with an invalid legacy proxy route" >&2
+if resolve_legacy_upstream_target; then
+  LEGACY_ROLLBACK_AVAILABLE=1
+  if ! patch_reverse_proxy_target "$LEGACY_UPSTREAM_TARGET"; then
+    echo "[happyfox-deploy] Failed to prepare legacy reverse proxy route" >&2
     exit 1
   fi
+  if ! reload_reverse_proxy; then
+    echo "[happyfox-deploy] Legacy reverse proxy configuration did not validate/reload" >&2
+    exit 1
+  fi
+  echo "[happyfox-deploy] Reverse proxy points to usable legacy API at $LEGACY_UPSTREAM_TARGET"
 else
-  echo "[happyfox-deploy] Legacy API absent; preparing existing HappyFox proxy route"
+  LEGACY_UPSTREAM_TARGET=""
+  echo "[happyfox-deploy] No usable legacy API target; preparing existing HappyFox proxy route"
   if ! patch_reverse_proxy_target "$HAPPYFOX_NEW_UPSTREAM_TARGET"; then
     echo "[happyfox-deploy] Failed to normalize existing HappyFox reverse proxy" >&2
     exit 1
@@ -248,32 +258,32 @@ else
     echo "[happyfox-deploy] Existing HappyFox reverse proxy did not validate/reload" >&2
     exit 1
   fi
-  # A completed cutover has no legacy app containers to stop or restart.
+  # A completed cutover has no usable legacy app containers to stop/restart.
   export CUTOVER_STOP_CONTAINERS=""
 fi
 
 if ! bash scripts/deploy_backend_docker.sh deploy; then
   echo "[happyfox-deploy] Docker cutover failed before reverse proxy switch" >&2
-  # On the initial cutover, keep the proxy explicitly pinned to the legacy API.
-  # On later redeploys there is no legacy container, so this is a safe no-op.
-  restore_proxy_to_legacy || true
+  if [ "$LEGACY_ROLLBACK_AVAILABLE" = "1" ]; then
+    restore_proxy_to_legacy || true
+  fi
   exit 1
 fi
 
 if ! patch_reverse_proxy_target "$HAPPYFOX_NEW_UPSTREAM_TARGET"; then
-  rollback_legacy_app || true
+  rollback_if_available
   echo "[happyfox-deploy] Failed to configure HappyFox reverse proxy target" >&2
   exit 1
 fi
 if ! reload_reverse_proxy; then
-  rollback_legacy_app || true
+  rollback_if_available
   echo "[happyfox-deploy] Reverse proxy configuration validation/reload failed" >&2
   exit 1
 fi
 
 if ! curl -fsS --retry 8 --retry-delay 2 --retry-all-errors \
   --max-time 15 "${PUBLIC_ORIGIN}/health" >/dev/null; then
-  rollback_legacy_app || true
+  rollback_if_available
   echo "[happyfox-deploy] Public backend health check failed" >&2
   exit 1
 fi
