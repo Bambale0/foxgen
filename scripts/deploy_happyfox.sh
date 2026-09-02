@@ -12,8 +12,7 @@ export PRODUCT_ID=happyfox
 export REDIS_PREFIX="${REDIS_PREFIX:-foxgen_happyfox}"
 export HAPPYFOX_BACKEND_NETWORK="${HAPPYFOX_BACKEND_NETWORK:-foxgen_backend}"
 export HAPPYFOX_REVERSE_PROXY_CONTAINER="${HAPPYFOX_REVERSE_PROXY_CONTAINER:-artflow-nginx-1}"
-export HAPPYFOX_REVERSE_PROXY_CONFIG_DEST="${HAPPYFOX_REVERSE_PROXY_CONFIG_DEST:-/etc/nginx/conf.d/default.conf}"
-export HAPPYFOX_LEGACY_UPSTREAM_TARGET="${HAPPYFOX_LEGACY_UPSTREAM_TARGET:-foxgen-api-1:8080}"
+export HAPPYFOX_LEGACY_UPSTREAM_TARGET="${HAPPYFOX_LEGACY_UPSTREAM_TARGET:-}"
 export HAPPYFOX_NEW_UPSTREAM_TARGET="${HAPPYFOX_NEW_UPSTREAM_TARGET:-${CONTAINER_NAME}:8080}"
 export SKIP_BACKUP=1
 export CUTOVER_STOP_CONTAINERS="${CUTOVER_STOP_CONTAINERS:-foxgen-api-1
@@ -29,6 +28,7 @@ legacy_background_containers=(
   foxgen-worker-1
 )
 REVERSE_PROXY_CONFIG_SOURCE=""
+LEGACY_UPSTREAM_TARGET=""
 PUBLIC_ORIGIN=""
 PUBLIC_DOMAIN=""
 
@@ -56,6 +56,43 @@ discover_reverse_proxy_config() {
     echo "[happyfox-deploy] Reverse proxy config source is missing: $REVERSE_PROXY_CONFIG_SOURCE" >&2
     return 1
   }
+}
+
+resolve_legacy_upstream_target() {
+  if [ -n "$HAPPYFOX_LEGACY_UPSTREAM_TARGET" ]; then
+    LEGACY_UPSTREAM_TARGET="$HAPPYFOX_LEGACY_UPSTREAM_TARGET"
+    return 0
+  fi
+
+  docker inspect "$legacy_api_container" >/dev/null 2>&1 || {
+    echo "[happyfox-deploy] Legacy API container is missing: $legacy_api_container" >&2
+    return 1
+  }
+
+  local legacy_ip=""
+  legacy_ip="$(
+    docker inspect "$legacy_api_container" \
+      | python3 -c '
+import json
+import os
+import sys
+
+payload = json.load(sys.stdin)
+network = os.environ["HAPPYFOX_BACKEND_NETWORK"]
+try:
+    address = payload[0]["NetworkSettings"]["Networks"][network]["IPAddress"]
+except (IndexError, KeyError, TypeError):
+    raise SystemExit(1)
+if not address:
+    raise SystemExit(1)
+print(address)
+'
+  )" || {
+    echo "[happyfox-deploy] Could not resolve legacy API address on $HAPPYFOX_BACKEND_NETWORK" >&2
+    return 1
+  }
+
+  LEGACY_UPSTREAM_TARGET="${legacy_ip}:8080"
 }
 
 backup_reverse_proxy_config() {
@@ -89,7 +126,10 @@ restore_proxy_to_legacy() {
     echo "[happyfox-deploy] Reverse proxy container is unavailable" >&2
     return 1
   fi
-  if ! patch_reverse_proxy_target "$HAPPYFOX_LEGACY_UPSTREAM_TARGET"; then
+  if ! resolve_legacy_upstream_target; then
+    return 1
+  fi
+  if ! patch_reverse_proxy_target "$LEGACY_UPSTREAM_TARGET"; then
     echo "[happyfox-deploy] Failed to switch reverse proxy back to legacy API" >&2
     return 1
   fi
@@ -97,7 +137,7 @@ restore_proxy_to_legacy() {
     echo "[happyfox-deploy] Legacy reverse proxy configuration did not validate/reload" >&2
     return 1
   fi
-  echo "[happyfox-deploy] Reverse proxy points to legacy API"
+  echo "[happyfox-deploy] Reverse proxy points to legacy API at $LEGACY_UPSTREAM_TARGET"
 }
 
 rollback_legacy_app() {
