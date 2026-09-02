@@ -1,0 +1,67 @@
+name: Seedance parity fix
+
+on:
+  push:
+    branches:
+      - feat/seedance-25-official-flow
+
+permissions:
+  contents: write
+
+jobs:
+  fix-and-test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: feat/seedance-25-official-flow
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Install test tooling
+        run: |
+          pip install --quiet ruff pytest pytest-asyncio pytest-mock
+          pip install --quiet -r requirements.txt
+      - name: Remove stale legacy provider field
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("bot/instagram_video_generation.py")
+          text = path.read_text(encoding="utf-8")
+          text = text.replace('                output_format="mp4",\n', '')
+          path.write_text(text, encoding="utf-8")
+          PY
+      - name: Ruff new parity delta
+        run: |
+          python -m ruff check \
+            bot/max_catalog.py \
+            bot/max_ui.py \
+            bot/max_runtime.py \
+            bot/max_seedance25.py \
+            bot/instagram_model_contract.py \
+            bot/instagram_seedance25_official.py \
+            bot/instagram_creator_generation.py \
+            bot/instagram_video_generation.py \
+            tests/test_seedance25_channel_parity.py \
+            --fix
+          git diff --check
+      - name: Targeted tests
+        env:
+          BOT_TOKEN: 123456:TEST_TOKEN_FOR_CI_ONLY
+          PYTHONPATH: ${{ github.workspace }}
+          PRODUCT_ID: happyfox
+        run: |
+          pytest -q tests/test_seedance25_official_contract.py tests/test_seedance25_channel_parity.py
+      - name: Commit deterministic fixes
+        run: |
+          if git diff --quiet; then
+            echo "No deterministic fixes"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add bot tests
+          git commit -m "fix(seedance): harden MAX and Instagram parity"
+          git push origin HEAD:feat/seedance-25-official-flow
