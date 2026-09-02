@@ -6,21 +6,36 @@ on:
       - feat/seedance-25-official-flow
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   diff:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: feat/seedance-25-official-flow
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - run: pip install --quiet ruff
-      - run: |
+      - name: Apply Ruff fixes
+        run: |
           python -m ruff check \
             bot/handlers/seedance_25_new_priority.py \
             bot/handlers/seedance_25_official_contract.py \
             bot/services/seedance_25_service.py \
             tests/test_seedance25_official_contract.py \
-            --fix --diff || true
+            --fix
+          git diff --check
+      - name: Commit exact Ruff delta
+        run: |
+          if git diff --quiet; then
+            echo "No Ruff changes"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add bot/handlers/seedance_25_new_priority.py bot/handlers/seedance_25_official_contract.py bot/services/seedance_25_service.py tests/test_seedance25_official_contract.py
+          git commit -m "style(seedance): apply Ruff fixes"
+          git push origin HEAD:feat/seedance-25-official-flow
