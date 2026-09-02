@@ -11,10 +11,10 @@ from __future__ import annotations
 from functools import wraps
 from typing import Any
 
-from aiohttp import web
 from aiogram import types
 from aiogram.fsm.context import FSMContext
 from aiogram.utils.keyboard import InlineKeyboardBuilder
+from aiohttp import web
 
 from bot.config import config
 from bot.services.preset_manager import preset_manager
@@ -415,6 +415,7 @@ def _sanitize_model_list(models: list[dict[str, Any]]) -> list[dict[str, Any]]:
 def install_seedance_25_official_contract() -> None:
     """Install the current KIE contract as the last Seedance compatibility layer."""
     import bot.miniapp as miniapp_module
+
     from . import seedance_25_new_priority as priority_module
 
     if getattr(generation_module, "_seedance_25_official_contract_installed", False):
