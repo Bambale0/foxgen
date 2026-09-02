@@ -71,14 +71,14 @@ jobs:
           )"
           echo "DOMAIN=$domain"
           echo "PUBLIC_HEALTH_STATUS=$(curl -ksS -o /dev/null -w '%{http_code}' --max-time 15 https://$domain/health || true)"
-          echo "PUBLIC_MINIAPP_STATUS=$(curl -ksS -o /dev/null -w '%{http_code}' --max-time 15 https://$domain/mini-app/ || true)"
-          echo '--- /etc/nginx/conf.d/default.conf ---'
-          docker exec artflow-nginx-1 sh -lc 'sed -n "1,260p" /etc/nginx/conf.d/default.conf' || true
-          echo '--- nginx conf.d files ---'
-          docker exec artflow-nginx-1 sh -lc 'ls -la /etc/nginx/conf.d' || true
-          echo '--- network state ---'
-          docker inspect artflow-nginx-1 --format '{{range $k,$v := .NetworkSettings.Networks}}{{$k}} {{end}}' || true
-          docker ps -a --format '{{.Names}} {{.Status}} {{.Networks}}' | grep -E 'foxgen|nginx|artflow' || true
+          echo '--- nginx mounts ---'
+          docker inspect artflow-nginx-1 --format '{{range .Mounts}}{{println .Type .Source "->" .Destination "rw=" .RW}}{{end}}'
+          echo '--- default.conf source candidate ---'
+          docker inspect artflow-nginx-1 --format '{{range .Mounts}}{{if eq .Destination "/etc/nginx/conf.d/default.conf"}}{{println .Source}}{{end}}{{end}}'
+          echo '--- compose metadata ---'
+          docker inspect artflow-nginx-1 --format 'project={{index .Config.Labels "com.docker.compose.project"}} working_dir={{index .Config.Labels "com.docker.compose.project.working_dir"}} config_files={{index .Config.Labels "com.docker.compose.project.config_files"}}'
+          echo '--- default.conf around alena health/webhook ---'
+          docker exec artflow-nginx-1 sh -lc 'grep -n -E "server_name alena|location = /health|location = /webhook|location / \{|happyfox_backend" /etc/nginx/conf.d/default.conf' || true
           REMOTE
 
       - name: Remove SSH key
