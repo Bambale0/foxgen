@@ -5,7 +5,6 @@ import type { UploadedFile } from './types'
 
 export type Seedance25Scenario = 'text' | 'first_frame' | 'first_last' | 'multimodal'
 export type Seedance25Resolution = '480p' | '720p'
-export type Seedance25OutputFormat = 'mp4' | 'mov'
 
 const DIRECT_VIDEO_UPLOAD_BYTES = 45 * 1024 * 1024
 const VIDEO_CHUNK_BYTES = 7 * 1024 * 1024
@@ -17,11 +16,8 @@ export interface Seedance25GeneratePayload {
   ratio: 'adaptive' | '16:9' | '9:16' | '1:1' | '4:3' | '3:4' | '21:9'
   duration: number
   resolution: Seedance25Resolution
-  outputFormat: Seedance25OutputFormat
   generateAudio: boolean
   returnLastFrame: boolean
-  webSearch: boolean
-  nsfwChecker: boolean
   firstFrameUrl?: string | null
   lastFrameUrl?: string | null
   referenceImages?: string[]
@@ -84,57 +80,47 @@ export async function uploadSeedance25Video(file: File): Promise<UploadedFile> {
   const chunkUrls: string[] = []
   const chunkCount = Math.ceil(file.size / VIDEO_CHUNK_BYTES)
 
-  try {
-    for (let index = 0; index < chunkCount; index += 1) {
-      const start = index * VIDEO_CHUNK_BYTES
-      const end = Math.min(file.size, start + VIDEO_CHUNK_BYTES)
-      const blob = file.slice(start, end, contentType)
-      const chunkFile = new File(
-        [blob],
-        `${file.name}.part-${String(index + 1).padStart(3, '0')}-of-${String(chunkCount).padStart(3, '0')}`,
-        { type: contentType, lastModified: file.lastModified },
-      )
-      const uploaded = await uploadFile('seedance25_video_chunk' as any, chunkFile)
-      chunkUrls.push(uploaded.url)
-    }
-
-    const response = await fetch(`${getApiBasePath()}/generate-video`, {
-      method: 'POST',
-      headers: {
-        Accept: 'application/json',
-        'Content-Type': 'application/json',
-      },
-      cache: 'no-store',
-      credentials: 'same-origin',
-      body: JSON.stringify({
-        init_data: initData,
-        start_param_fallback: getStartParamFallback(),
-        v_model: 'seedance_2_5',
-        seedance25_upload_only: true,
-        seedance25_chunk_urls: chunkUrls,
-        seedance25_original_filename: file.name,
-        seedance25_original_size: file.size,
-      }),
-    })
-    const data = await parseJsonResponse<Seedance25UploadAssemblyResponse>(
-      response,
-      'Не удалось собрать большое видео Seedance 2.5.',
+  for (let index = 0; index < chunkCount; index += 1) {
+    const start = index * VIDEO_CHUNK_BYTES
+    const end = Math.min(file.size, start + VIDEO_CHUNK_BYTES)
+    const blob = file.slice(start, end, contentType)
+    const chunkFile = new File(
+      [blob],
+      `${file.name}.part-${String(index + 1).padStart(3, '0')}-of-${String(chunkCount).padStart(3, '0')}`,
+      { type: contentType, lastModified: file.lastModified },
     )
-    return {
-      id: data.reference?.id ? String(data.reference.id) : `seedance25_${Date.now()}_${Math.random().toString(36).slice(2)}`,
-      name: data.filename,
-      url: data.url,
-      type: 'video',
-      size: file.size,
-      saved_reference_id: data.reference?.id ? String(data.reference.id) : null,
-      created_at: data.reference?.created_at || null,
-      source: data.reference?.source || 'miniapp_seedance25',
-    }
-  } catch (error) {
-    // The backend removes all uploaded chunks once it receives the assembly
-    // manifest. If a network failure happens before that point, generic upload
-    // cleanup will remove temporary chunk files later.
-    throw error
+    const uploaded = await uploadFile('seedance25_video_chunk' as any, chunkFile)
+    chunkUrls.push(uploaded.url)
+  }
+
+  const response = await fetch(`${getApiBasePath()}/generate-video`, {
+    method: 'POST',
+    headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+    cache: 'no-store',
+    credentials: 'same-origin',
+    body: JSON.stringify({
+      init_data: initData,
+      start_param_fallback: getStartParamFallback(),
+      v_model: 'seedance_2_5',
+      seedance25_upload_only: true,
+      seedance25_chunk_urls: chunkUrls,
+      seedance25_original_filename: file.name,
+      seedance25_original_size: file.size,
+    }),
+  })
+  const data = await parseJsonResponse<Seedance25UploadAssemblyResponse>(
+    response,
+    'Не удалось собрать большое видео Seedance 2.5.',
+  )
+  return {
+    id: data.reference?.id ? String(data.reference.id) : `seedance25_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+    name: data.filename,
+    url: data.url,
+    type: 'video',
+    size: file.size,
+    saved_reference_id: data.reference?.id ? String(data.reference.id) : null,
+    created_at: data.reference?.created_at || null,
+    source: data.reference?.source || 'miniapp_seedance25',
   }
 }
 
@@ -146,10 +132,7 @@ export async function generateSeedance25(
 
   const response = await fetch(`${getApiBasePath()}/generate-video`, {
     method: 'POST',
-    headers: {
-      Accept: 'application/json',
-      'Content-Type': 'application/json',
-    },
+    headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
     cache: 'no-store',
     credentials: 'same-origin',
     body: JSON.stringify({
@@ -167,11 +150,8 @@ export async function generateSeedance25(
       v_ratio: payload.ratio,
       v_duration: payload.duration,
       seedance25_resolution: payload.resolution,
-      seedance25_output_format: payload.outputFormat,
       seedance25_generate_audio: payload.generateAudio,
       seedance25_return_last_frame: payload.returnLastFrame,
-      seedance25_web_search: payload.webSearch,
-      seedance25_nsfw_checker: payload.nsfwChecker,
       seedance25_first_frame_url: payload.firstFrameUrl || null,
       seedance25_last_frame_url: payload.lastFrameUrl || null,
       reference_images: payload.referenceImages || [],
