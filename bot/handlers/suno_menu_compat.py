@@ -16,8 +16,16 @@ def _append_row(markup: InlineKeyboardMarkup, button: InlineKeyboardButton, *, b
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
+def _has_music_entry(markup: InlineKeyboardMarkup) -> bool:
+    return any(
+        button.callback_data in {"happyfox_music", "menu_suno"}
+        for row in markup.inline_keyboard
+        for button in row
+    )
+
+
 def install_suno_menu_compat(common_module, admin_module, keyboards_module) -> None:
-    """Add Suno entry points without duplicating the legacy keyboard monolith."""
+    """Keep one Suno entry in the user menu and add Suno pricing to admin."""
     global _INSTALLED
     if _INSTALLED:
         return
@@ -27,6 +35,8 @@ def install_suno_menu_compat(common_module, admin_module, keyboards_module) -> N
 
     def main_with_suno(*args, **kwargs):
         markup = original_main(*args, **kwargs)
+        if _has_music_entry(markup):
+            return markup
         return _append_row(
             markup,
             InlineKeyboardButton(text="🎵 Suno · музыка", callback_data="menu_suno"),

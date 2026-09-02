@@ -37,6 +37,21 @@ async def _queued(message: types.Message, state: FSMContext, operation: str, req
     )
 
 
+@router.callback_query(F.data == "happyfox_music")
+async def happyfox_music_entry(callback: types.CallbackQuery, state: FSMContext) -> None:
+    """Open the real Suno Studio from HappyFox's primary music button."""
+    from bot.handlers.suno import suno_menu_keyboard
+
+    await state.clear()
+    await callback.answer()
+    if callback.message:
+        await callback.message.edit_text(
+            "🎵 <b>Suno Studio</b>\n\nМузыка, вокал, каверы и профессиональная обработка в одном разделе.",
+            reply_markup=await suno_menu_keyboard(),
+            parse_mode="HTML",
+        )
+
+
 @router.callback_query(F.data == "suno:lyrics")
 async def lyrics_entry(callback: types.CallbackQuery, state: FSMContext) -> None:
     await state.set_state(SunoPriorityStates.lyrics)
