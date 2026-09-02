@@ -217,6 +217,30 @@ PY
   )"
 }
 
+runtime_flag_enabled() {
+  local key="$1"
+  python3 - "$PROJECT_DIR/.env.happyfox.runtime" "$key" <<'PY'
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+key = sys.argv[2]
+true_values = {"1", "true", "yes", "on"}
+for raw_line in path.read_text(encoding="utf-8").splitlines():
+    line = raw_line.strip()
+    if not line or line.startswith("#") or "=" not in line:
+        continue
+    candidate, value = line.split("=", 1)
+    if candidate.strip() != key:
+        continue
+    value = value.strip()
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+        value = value[1:-1]
+    raise SystemExit(0 if value.strip().lower() in true_values else 1)
+raise SystemExit(1)
+PY
+}
+
 python3 scripts/prepare_happyfox_production.py "$PROJECT_DIR"
 python3 scripts/canonicalize_happyfox_runtime.py "$PROJECT_DIR/.env.happyfox.runtime"
 python3 scripts/validate_happyfox_env.py .env .env.happyfox.runtime .env.postgres
@@ -290,16 +314,63 @@ fi
 
 echo "[happyfox-deploy] PUBLIC_HEALTH_OK ${PUBLIC_ORIGIN}/health"
 
-# The MAX webhook is secret-protected. A public POST without the secret must
-# reach the HappyFox MAX route and return 401. A 404 here means nginx or the
-# runtime registration is still wrong even if the generic health check is green.
+# Prove that nginx owns the MAX exact path even before checking application
+# authentication. The route rejects non-POST methods at nginx with 403.
+max_ingress_status="$(
+  curl -sS -o /dev/null -w '%{http_code}' \
+    -X PUT --max-time 15 "${PUBLIC_ORIGIN}/max/webhook" || true
+)"
+if [ "$max_ingress_status" != "403" ]; then
+  echo "[happyfox-deploy] Public MAX ingress check failed: expected 403, got ${max_ingress_status:-transport-error}" >&2
+  exit 1
+fi
+
+# MAX is a production channel for HappyFox. A POST without its secret must
+# reach the registered aiohttp route and fail closed with 401.
 max_webhook_status="$(
   curl -sS -o /dev/null -w '%{http_code}' \
     -X POST --max-time 15 "${PUBLIC_ORIGIN}/max/webhook" || true
 )"
 if [ "$max_webhook_status" != "401" ]; then
-  echo "[happyfox-deploy] Public MAX webhook route check failed: expected 401, got ${max_webhook_status:-transport-error}" >&2
+  echo "[happyfox-deploy] Public MAX webhook runtime check failed: expected 401, got ${max_webhook_status:-transport-error}" >&2
   exit 1
 fi
 
 echo "[happyfox-deploy] MAX_WEBHOOK_ROUTE_OK ${PUBLIC_ORIGIN}/max/webhook"
+
+# Instagram has both Meta's GET verification challenge and signed POST events.
+# nginx must own the exact path regardless of whether the channel is enabled.
+instagram_ingress_status="$(
+  curl -sS -o /dev/null -w '%{http_code}' \
+    -X PUT --max-time 15 "${PUBLIC_ORIGIN}/instagram/webhook" || true
+)"
+if [ "$instagram_ingress_status" != "403" ]; then
+  echo "[happyfox-deploy] Public Instagram ingress check failed: expected 403, got ${instagram_ingress_status:-transport-error}" >&2
+  exit 1
+fi
+
+echo "[happyfox-deploy] INSTAGRAM_WEBHOOK_INGRESS_OK ${PUBLIC_ORIGIN}/instagram/webhook"
+
+if runtime_flag_enabled INSTAGRAM_ENABLED; then
+  instagram_verify_status="$(
+    curl -sS -o /dev/null -w '%{http_code}' \
+      --max-time 15 "${PUBLIC_ORIGIN}/instagram/webhook" || true
+  )"
+  if [ "$instagram_verify_status" != "403" ]; then
+    echo "[happyfox-deploy] Instagram GET verification route check failed: expected 403 without challenge, got ${instagram_verify_status:-transport-error}" >&2
+    exit 1
+  fi
+
+  instagram_post_status="$(
+    curl -sS -o /dev/null -w '%{http_code}' \
+      -H 'Content-Type: application/json' \
+      -d '{}' --max-time 15 "${PUBLIC_ORIGIN}/instagram/webhook" || true
+  )"
+  if [ "$instagram_post_status" != "401" ]; then
+    echo "[happyfox-deploy] Instagram POST signature route check failed: expected 401 without signature, got ${instagram_post_status:-transport-error}" >&2
+    exit 1
+  fi
+  echo "[happyfox-deploy] INSTAGRAM_WEBHOOK_RUNTIME_OK ${PUBLIC_ORIGIN}/instagram/webhook"
+else
+  echo "[happyfox-deploy] Instagram runtime disabled; ingress route is ready"
+fi
