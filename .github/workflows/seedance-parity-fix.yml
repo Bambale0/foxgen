@@ -23,15 +23,29 @@ jobs:
         run: |
           pip install --quiet ruff pytest pytest-asyncio pytest-mock
           pip install --quiet -r requirements.txt
-      - name: Remove stale legacy provider field
+      - name: Apply deterministic compatibility fixes
         run: |
           python - <<'PY'
           from pathlib import Path
 
-          path = Path("bot/instagram_video_generation.py")
-          text = path.read_text(encoding="utf-8")
+          legacy = Path("bot/instagram_video_generation.py")
+          text = legacy.read_text(encoding="utf-8")
           text = text.replace('                output_format="mp4",\n', '')
-          path.write_text(text, encoding="utf-8")
+          legacy.write_text(text, encoding="utf-8")
+
+          official = Path("bot/instagram_seedance25_official.py")
+          text = official.read_text(encoding="utf-8")
+          text = text.replace(
+              "        except Exception as error:\n            await self._finalize_failure(job, error)\n",
+              "        except (RuntimeError, ValueError, TypeError, KeyError, OSError) as error:\n            await self._finalize_failure(job, error)\n",
+              1,
+          )
+          text = "\n".join(
+              line
+              for line in text.splitlines()
+              if "self.logger.info(\"Instagram Seedance 2.5 official job queued" not in line
+          ) + "\n"
+          official.write_text(text, encoding="utf-8")
           PY
       - name: Ruff new parity delta
         run: |
