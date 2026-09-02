@@ -291,7 +291,7 @@ def official_scenario_payload(data: dict[str, Any], prompt: str) -> dict[str, An
     return {
         "scenario": scenario,
         "prompt": str(prompt or "").strip(),
-        "duration": _normalized_duration(data.get("v_duration", 5)),
+        "duration": int(data.get("v_duration", 5) or 5),
         "ratio": ratio,
         "resolution": str(data.get("seedance25_resolution") or "720p").strip().lower(),
         "first_frame": str(first or "").strip() or None,
