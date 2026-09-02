@@ -2,7 +2,6 @@ from pathlib import Path
 
 import pytest
 
-
 DOMAIN = "alena.xn--e1aikcel5c5a.online"
 
 
