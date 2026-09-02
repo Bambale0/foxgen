@@ -9,8 +9,8 @@ from __future__ import annotations
 from functools import wraps
 from typing import Any
 
-from aiohttp import web
 from aiogram import types
+from aiohttp import web
 
 from bot.services.preset_manager import preset_manager
 
@@ -110,8 +110,6 @@ def install_seedance_25_new_priority() -> None:
     if getattr(generation_module, "_seedance_25_new_priority_installed", False):
         return
 
-    # The public-release wrapper resolves these globals at call time, so switch
-    # its public copy to the brighter product label as well.
     if not hasattr(public_release, "_public_model_meta_original"):
         public_release._public_model_meta_original = public_release._public_model_meta
     public_release._seedance_public_button_text = _priority_button_text
