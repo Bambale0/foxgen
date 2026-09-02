@@ -3,18 +3,22 @@ from pathlib import Path
 from bot.instagram_model_contract import instagram_video_cost
 from bot.instagram_seedance25_official import (
     _decode_config,
-    _default_config as instagram_default_config,
     _scenario_from_text,
 )
+from bot.instagram_seedance25_official import (
+    _default_config as instagram_default_config,
+)
 from bot.max_catalog import MAX_VIDEO_TYPES, max_preset_manager
+from bot.max_omni_audio import MaxOmniGenerationService
 from bot.max_seedance25 import (
     MODEL_KEY,
     MaxSeedance25ChannelService,
     MaxSeedance25GenerationService,
+)
+from bot.max_seedance25 import (
     _default_config as max_default_config,
 )
 from bot.max_suno_full_channel import MaxSunoFullChannelService
-from bot.max_omni_audio import MaxOmniGenerationService
 
 
 def test_max_catalog_exposes_seedance25_for_all_video_entry_types():

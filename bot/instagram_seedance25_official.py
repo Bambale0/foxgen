@@ -13,7 +13,10 @@ from bot.instagram_i18n import resolve_instagram_language
 from bot.instagram_model_contract import INSTAGRAM_VIDEO_MODEL, instagram_video_cost
 from bot.instagram_seedream_generation import InstagramSeedream5ProService
 from bot.instagram_video_i18n import LocalizedInstagramVideoGenerationService
-from bot.services.seedance_25_service import get_seedance25_callback_url, seedance_25_service
+from bot.services.seedance_25_service import (
+    get_seedance25_callback_url,
+    seedance_25_service,
+)
 
 _STAGE_PREFIX = "s25"
 _SUCCESS = frozenset({"success", "succeeded", "completed", "done", "finished"})
@@ -291,7 +294,7 @@ class InstagramSeedance25OfficialService(LocalizedInstagramVideoGenerationServic
         if billing is None or billing[2] < cost:
             await self.enter_video_paywall(identity, event)
             return True
-        user_id, telegram_id, _credits = billing
+        _user_id, telegram_id, _credits = billing
         job = generation.InstagramGenerationJob(
             id=uuid.uuid4().hex,
             identity_id=identity.id,
@@ -323,7 +326,6 @@ class InstagramSeedance25OfficialService(LocalizedInstagramVideoGenerationServic
             raise
         await _save_config(identity.id, data, _stage("generating"), prompt=draft.prompt)
         await self.client.send_text(event.account_id, event.sender_id, _bilingual(language, f"{cost:g} 🐾 списано ✅ Seedance 2.5 запущена.", f"{cost:g} 🐾 charged ✅ Seedance 2.5 started."))
-        self.logger.info("Instagram Seedance 2.5 official job queued: job=%s user=%s", job.id, user_id) if hasattr(self, "logger") else None
         return True
 
     async def handle_video_message(self, identity: ChannelIdentity, event: InstagramEvent) -> bool:
@@ -508,7 +510,7 @@ class InstagramSeedance25OfficialService(LocalizedInstagramVideoGenerationServic
             await self._finalize_success(job)
         except generation.InstagramGenerationRetry as error:
             await generation._retry_job(job.id, str(error))
-        except Exception as error:
+        except (RuntimeError, ValueError, TypeError, KeyError, OSError) as error:
             await self._finalize_failure(job, error)
 
     async def _finalize_failure(self, job: generation.InstagramGenerationJob, error: Exception) -> None:
