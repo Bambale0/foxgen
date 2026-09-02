@@ -10,9 +10,8 @@ from aiohttp import web
 
 from bot.max_api import MAX_UPDATE_TYPES, MaxClient, MaxSettings, setup_max_routes
 from bot.max_generation import install_max_generation_worker
-from bot.max_omni_audio import MaxOmniGenerationService
 from bot.max_payments import MaxYooKassaService, ensure_max_payment_schema
-from bot.max_suno_full_channel import MaxSunoFullChannelService
+from bot.max_seedance25 import MaxSeedance25ChannelService, MaxSeedance25GenerationService
 from bot.suno_jobs import install_suno_worker
 
 logger = logging.getLogger(__name__)
@@ -139,14 +138,14 @@ def setup_max_runtime(app: web.Application) -> None:
         raise RuntimeError(
             "MAX_ENABLED=1 requires YooKassa credentials and MAX_PAYMENT_RETURN_URL"
         )
-    channel = MaxSunoFullChannelService(
+    channel = MaxSeedance25ChannelService(
         settings=settings,
         client=client,
         payments=payments,
         bot_name=runtime.bot_name,
         support_contact=runtime.support_contact,
     )
-    generation = MaxOmniGenerationService(client)
+    generation = MaxSeedance25GenerationService(client)
 
     setup_max_routes(app, settings=settings, event_handler=channel.handle_update)
     app["max_client"] = client
