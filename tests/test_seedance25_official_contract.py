@@ -136,15 +136,21 @@ def test_seedance25_frontend_does_not_send_stale_provider_fields():
         assert field not in source
 
 
-def test_seedance25_official_form_replaces_legacy_public_form():
-    bridge = Path("frontend/miniapp-v0/components/forms/seedance25-public-form.tsx").read_text(
-        encoding="utf-8"
-    )
-    official = Path("frontend/miniapp-v0/components/forms/seedance25-official-form.tsx").read_text(
-        encoding="utf-8"
-    )
-    assert "Seedance25OfficialForm as Seedance25PublicForm" in bridge
-    assert "webSearch" not in official
-    assert "nsfwChecker" not in official
-    assert "outputFormat" not in official
+def test_seedance25_official_form_replaces_legacy_public_and_admin_forms():
+    public_bridge = Path(
+        "frontend/miniapp-v0/components/forms/seedance25-public-form.tsx"
+    ).read_text(encoding="utf-8")
+    admin_bridge = Path(
+        "frontend/miniapp-v0/components/forms/seedance25-admin-form.tsx"
+    ).read_text(encoding="utf-8")
+    official = Path(
+        "frontend/miniapp-v0/components/forms/seedance25-official-form.tsx"
+    ).read_text(encoding="utf-8")
+
+    assert "Seedance25OfficialForm as Seedance25PublicForm" in public_bridge
+    assert "<Seedance25OfficialForm" in admin_bridge
+    assert "isAdmin" in admin_bridge
+    for stale in ("Seedance25OutputFormat", "outputFormat", "webSearch", "nsfwChecker"):
+        assert stale not in admin_bridge
+        assert stale not in official
     assert "min={4}" in official and "max={30}" in official
