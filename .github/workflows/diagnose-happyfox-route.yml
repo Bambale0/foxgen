@@ -31,11 +31,10 @@ jobs:
           printf '%s\n' "$DEPLOY_KNOWN_HOSTS" | tr -d '\r' > "$HOME/.ssh/known_hosts"
           chmod 0600 "$HOME/.ssh/id_ed25519" "$HOME/.ssh/known_hosts"
 
-      - name: Inspect production routing
+      - name: Inspect legacy routing target
         shell: bash
         run: |
           set -Eeuo pipefail
-          printf -v quoted_path '%q' "$DEPLOY_PATH"
           ssh \
             -i "$HOME/.ssh/id_ed25519" \
             -p "$DEPLOY_PORT" \
@@ -44,41 +43,14 @@ jobs:
             -o StrictHostKeyChecking=yes \
             -o ConnectTimeout=15 \
             "$DEPLOY_USER@$DEPLOY_HOST" \
-            "bash -s -- $quoted_path" <<'REMOTE'
+            'bash -s' <<'REMOTE'
           set -Eeuo pipefail
-          project_dir="$1"
-          runtime="$project_dir/.env.happyfox.runtime"
-          domain="$(python3 - "$runtime" <<'PY'
-          import sys
-          from pathlib import Path
-          from urllib.parse import urlparse
-          values = {}
-          for raw in Path(sys.argv[1]).read_text(encoding='utf-8').splitlines():
-              line = raw.strip()
-              if not line or line.startswith('#') or '=' not in line:
-                  continue
-              key, value = line.split('=', 1)
-              value = value.strip()
-              if len(value) >= 2 and value[0] == value[-1] and value[0] in {'\'', '"'}:
-                  value = value[1:-1]
-              values[key.strip()] = value
-          value = values.get('WEBHOOK_HOST') or values.get('MINI_APP_URL') or ''
-          host = urlparse(value if '://' in value else f'//{value}').hostname or ''
-          if not host:
-              raise SystemExit('could not resolve runtime hostname')
-          print(host)
-          PY
-          )"
-          echo "DOMAIN=$domain"
-          echo "PUBLIC_HEALTH_STATUS=$(curl -ksS -o /dev/null -w '%{http_code}' --max-time 15 https://$domain/health || true)"
-          echo '--- nginx mounts ---'
-          docker inspect artflow-nginx-1 --format '{{range .Mounts}}{{println .Type .Source "->" .Destination "rw=" .RW}}{{end}}'
-          echo '--- default.conf source candidate ---'
-          docker inspect artflow-nginx-1 --format '{{range .Mounts}}{{if eq .Destination "/etc/nginx/conf.d/default.conf"}}{{println .Source}}{{end}}{{end}}'
-          echo '--- compose metadata ---'
-          docker inspect artflow-nginx-1 --format 'project={{index .Config.Labels "com.docker.compose.project"}} working_dir={{index .Config.Labels "com.docker.compose.project.working_dir"}} config_files={{index .Config.Labels "com.docker.compose.project.config_files"}}'
-          echo '--- default.conf around alena health/webhook ---'
-          docker exec artflow-nginx-1 sh -lc 'grep -n -E "server_name alena|location = /health|location = /webhook|location / \{|happyfox_backend" /etc/nginx/conf.d/default.conf' || true
+          echo '--- legacy alena nginx block ---'
+          docker exec artflow-nginx-1 sh -lc 'sed -n "480,570p" /etc/nginx/conf.d/default.conf'
+          echo '--- legacy api inspect ---'
+          docker inspect foxgen-api-1 --format 'networks={{range $k,$v := .NetworkSettings.Networks}}{{$k}} {{end}} exposed={{json .Config.ExposedPorts}} ports={{json .NetworkSettings.Ports}}'
+          echo '--- legacy api aliases ---'
+          docker inspect foxgen-api-1 --format '{{range $k,$v := .NetworkSettings.Networks}}{{$k}} aliases={{json $v.Aliases}} ip={{$v.IPAddress}}{{println}}{{end}}'
           REMOTE
 
       - name: Remove SSH key
