@@ -9,14 +9,15 @@ from __future__ import annotations
 from functools import wraps
 from typing import Any
 
-from aiogram import types
 from aiohttp import web
+from aiogram import types
 
 from bot.services.preset_manager import preset_manager
 
 from . import generation as generation_module
 from . import seedance_25_fullstack as fullstack
 from . import seedance_25_public_release as public_release
+from .seedance_25_official_contract import install_seedance_25_official_contract
 
 MODEL_KEY = "seedance_2_5"
 MODEL_LABEL = "🔥🆕 NEW · Seedance 2.5"
@@ -139,3 +140,4 @@ def install_seedance_25_new_priority() -> None:
 
     miniapp_module.miniapp_bootstrap = prioritized_bootstrap
     generation_module._seedance_25_new_priority_installed = True
+    install_seedance_25_official_contract()
