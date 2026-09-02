@@ -11,13 +11,13 @@ from bot.instagram_creation_mode import (
 from bot.instagram_generation import get_instagram_draft, update_instagram_draft
 from bot.instagram_i18n import resolve_instagram_language, tr
 from bot.instagram_model_contract import normalize_instagram_creation_kind
+from bot.instagram_seedance25_official import InstagramSeedance25OfficialService
 from bot.instagram_seedream_generation import InstagramSeedream5ProService
 from bot.instagram_video_generation import video_state_parts
-from bot.instagram_video_i18n import LocalizedInstagramVideoGenerationService
 from bot.instagram_video_state import ensure_instagram_video_draft
 
 
-class InstagramCreatorGenerationService(LocalizedInstagramVideoGenerationService):
+class InstagramCreatorGenerationService(InstagramSeedance25OfficialService):
     """Choose photo/video first, then delegate to the matching durable flow."""
 
     async def _ask_creation_kind(
@@ -66,7 +66,8 @@ class InstagramCreatorGenerationService(LocalizedInstagramVideoGenerationService
         draft = await get_instagram_draft(identity.id)
         if draft is not None:
             video_stage, _media_type = video_state_parts(draft.state)
-            if draft.state == "generating" or video_stage == "generating":
+            seedance_stage = str(draft.state or "").split(":", 1)[1] if str(draft.state or "").startswith("s25:") else ""
+            if draft.state == "generating" or video_stage == "generating" or seedance_stage == "generating":
                 await self.client.send_text(
                     event.account_id,
                     event.sender_id,
