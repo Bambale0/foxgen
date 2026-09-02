@@ -54,14 +54,14 @@ server {{
 
 def test_patch_adds_public_health_and_switches_to_new_backend() -> None:
     patched, changed = patch_text(
-        _config("foxgen-api-1:8080"),
+        _config("172.20.0.6:8080"),
         domain=DOMAIN,
         target="foxgen-happyfox-bot:8080",
     )
 
     assert changed is True
     assert "server foxgen-happyfox-bot:8080;" in patched
-    assert "server foxgen-api-1:8080;" not in patched
+    assert "server 172.20.0.6:8080;" not in patched
     assert patched.count("location = /health {") == 2
     domain_block = patched.split(f"server_name {DOMAIN};", 2)[2]
     assert "proxy_pass http://happyfox_backend;" in domain_block
@@ -70,17 +70,17 @@ def test_patch_adds_public_health_and_switches_to_new_backend() -> None:
     )
 
 
-def test_patch_can_switch_back_to_legacy_api() -> None:
+def test_patch_can_switch_back_to_legacy_api_address() -> None:
     with_health, _ = patch_text(_config(), domain=DOMAIN)
 
     patched, changed = patch_text(
         with_health,
         domain=DOMAIN,
-        target="foxgen-api-1:8080",
+        target="172.20.0.6:8080",
     )
 
     assert changed is True
-    assert "server foxgen-api-1:8080;" in patched
+    assert "server 172.20.0.6:8080;" in patched
     assert "server foxgen-happyfox-bot:8080;" not in patched
     assert patched.count("location = /health {") == 2
 
@@ -123,14 +123,19 @@ def test_patch_requires_matching_happyfox_https_vhost() -> None:
 def test_deploy_script_keeps_public_health_gate_and_reversible_targets() -> None:
     script = Path("scripts/deploy_happyfox.sh").read_text(encoding="utf-8")
 
-    assert 'HAPPYFOX_LEGACY_UPSTREAM_TARGET:-foxgen-api-1:8080' in script
+    assert 'HAPPYFOX_LEGACY_UPSTREAM_TARGET:-}' in script
     assert 'HAPPYFOX_NEW_UPSTREAM_TARGET:-${CONTAINER_NAME}:8080' in script
+    assert 'os.environ["HAPPYFOX_BACKEND_NETWORK"]' in script
+    assert 'docker inspect "$legacy_api_container"' in script
+    assert 'LEGACY_UPSTREAM_TARGET="${legacy_ip}:8080"' in script
     assert 'Destination "/etc/nginx/conf.d/default.conf"' in script
     assert "scripts/patch_happyfox_reverse_proxy.py" in script
     assert '${PUBLIC_ORIGIN}/health' in script
 
-    legacy_restore = script.index('restore_proxy_to_legacy')
-    docker_cutover = script.rindex('bash scripts/deploy_backend_docker.sh deploy')
-    new_switch = script.rindex('patch_reverse_proxy_target "$HAPPYFOX_NEW_UPSTREAM_TARGET"')
+    legacy_restore = script.index("restore_proxy_to_legacy")
+    docker_cutover = script.rindex("bash scripts/deploy_backend_docker.sh deploy")
+    new_switch = script.rindex(
+        'patch_reverse_proxy_target "$HAPPYFOX_NEW_UPSTREAM_TARGET"'
+    )
     public_gate = script.rindex('${PUBLIC_ORIGIN}/health')
     assert legacy_restore < docker_cutover < new_switch < public_gate
