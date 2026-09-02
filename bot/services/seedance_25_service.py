@@ -1,12 +1,15 @@
-"""Kie.ai adapter for Bytedance Seedance 2.5.
+"""KIE.ai adapter for Bytedance Seedance 2.5.
 
-Implements the released Kie Market OpenAPI contract for
-``bytedance/seedance-2-5``. The media scenarios are deliberately kept
+The adapter mirrors the public KIE Market contract for
+``bytedance/seedance-2-5`` and deliberately keeps the three media scenarios
 mutually exclusive:
 
-1. text-to-video (no media inputs),
-2. first-frame / first+last-frame image-to-video,
-3. multimodal reference-to-video (images, videos and/or audio).
+* text-to-video,
+* image-to-video (first frame or first + last frame),
+* multimodal reference-to-video (images / videos / audio).
+
+Provider-specific fields that are not present in the current KIE Seedance 2.5
+contract are intentionally not sent.
 """
 
 from __future__ import annotations
@@ -22,25 +25,12 @@ logger = logging.getLogger(__name__)
 
 
 def get_seedance25_callback_url() -> str:
-    """Return a dedicated callback URL for Seedance 2.5.
-
-    Seedance 2.5 can return more than one result (video + requested last frame)
-    and can return MOV. A dedicated webhook lets us preserve those outputs
-    without changing the established generic Kie webhook behaviour.
-    """
+    """Return the dedicated Seedance 2.5 callback URL."""
     legacy = str(getattr(config, "kie_notification_url", "") or "").strip()
     if legacy:
         parts = urlsplit(legacy)
         if parts.scheme and parts.netloc:
-            return urlunsplit(
-                (
-                    parts.scheme,
-                    parts.netloc,
-                    "/webhook/kie_seedance25",
-                    "",
-                    "",
-                )
-            )
+            return urlunsplit((parts.scheme, parts.netloc, "/webhook/kie_seedance25", "", ""))
 
     host = str(getattr(config, "WEBHOOK_HOST", "") or "").strip().rstrip("/")
     if not host:
@@ -51,6 +41,8 @@ def get_seedance25_callback_url() -> str:
 
 
 class Seedance25Service(KlingService):
+    """Create Seedance 2.5 tasks through KIE's unified jobs API."""
+
     MODEL_NAME = "bytedance/seedance-2-5"
 
     ALLOWED_RATIOS = {
@@ -63,11 +55,9 @@ class Seedance25Service(KlingService):
         "adaptive",
     }
     ALLOWED_RESOLUTIONS = {"480p", "720p"}
-    ALLOWED_OUTPUT_FORMATS = {"mp4", "mov"}
 
     MIN_DURATION = 4
     MAX_DURATION = 30
-    AUTO_DURATION = -1
     MAX_PROMPT_LENGTH = 5000
 
     MAX_REFERENCE_IMAGES = 30
@@ -103,13 +93,11 @@ class Seedance25Service(KlingService):
     def normalize_duration(cls, duration: int | str | None) -> int:
         try:
             value = int(duration if duration is not None else 5)
-        except (TypeError, ValueError):
-            value = 5
-        if value == cls.AUTO_DURATION:
-            return value
+        except (TypeError, ValueError) as exc:
+            raise ValueError("Seedance 2.5 duration must be an integer") from exc
         if not cls.MIN_DURATION <= value <= cls.MAX_DURATION:
             raise ValueError(
-                f"Seedance 2.5 duration must be {cls.MIN_DURATION}-{cls.MAX_DURATION} seconds or -1 (auto)"
+                f"Seedance 2.5 duration must be {cls.MIN_DURATION}-{cls.MAX_DURATION} seconds"
             )
         return value
 
@@ -123,11 +111,7 @@ class Seedance25Service(KlingService):
         reference_video_urls: list[str],
         reference_audio_urls: list[str],
     ) -> str:
-        """Validate Kie's mutually-exclusive media scenarios.
-
-        Returns one of ``text``, ``first_frame``, ``first_last`` or
-        ``multimodal``.
-        """
+        """Validate KIE's mutually-exclusive media scenarios."""
         first = str(first_frame_url or "").strip()
         last = str(last_frame_url or "").strip()
         has_refs = bool(
@@ -162,12 +146,9 @@ class Seedance25Service(KlingService):
         reference_audio_urls: list[str] | None = None,
         return_last_frame: bool = False,
         generate_audio: bool = True,
-        output_format: str = "mp4",
-        web_search: bool = False,
-        nsfw_checker: bool = False,
         callBackUrl: str | None = None,
     ) -> dict[str, Any]:
-        """Create a Seedance 2.5 task through Kie's unified jobs endpoint."""
+        """Create a Seedance 2.5 task using the documented KIE payload."""
         if not self.kie_key:
             return {"success": False, "error": "KIE_AI_API_KEY is not configured"}
 
@@ -198,25 +179,11 @@ class Seedance25Service(KlingService):
         except ValueError as exc:
             return {"success": False, "error": str(exc)}
 
-        normalized_ratio = str(aspect_ratio or "adaptive").strip().lower()
-        if normalized_ratio not in self.ALLOWED_RATIOS:
-            return {
-                "success": False,
-                "error": f"Unsupported Seedance 2.5 aspect ratio: {normalized_ratio}",
-            }
-
         normalized_resolution = str(resolution or "720p").strip().lower()
         if normalized_resolution not in self.ALLOWED_RESOLUTIONS:
             return {
                 "success": False,
                 "error": f"Unsupported Seedance 2.5 resolution: {normalized_resolution}",
-            }
-
-        normalized_output = str(output_format or "mp4").strip().lower()
-        if normalized_output not in self.ALLOWED_OUTPUT_FORMATS:
-            return {
-                "success": False,
-                "error": f"Unsupported Seedance 2.5 output format: {normalized_output}",
             }
 
         first_frame = str(first_frame_url or "").strip() or None
@@ -233,6 +200,18 @@ class Seedance25Service(KlingService):
         except ValueError as exc:
             return {"success": False, "error": str(exc)}
 
+        normalized_ratio = str(aspect_ratio or "adaptive").strip().lower()
+        if normalized_ratio not in self.ALLOWED_RATIOS:
+            return {
+                "success": False,
+                "error": f"Unsupported Seedance 2.5 aspect ratio: {normalized_ratio}",
+            }
+
+        # Image-to-video follows the input frame ratio. Keep the request on
+        # adaptive so the provider does not receive a conflicting output ratio.
+        if scenario in {"first_frame", "first_last"}:
+            normalized_ratio = "adaptive"
+
         input_data: dict[str, Any] = {
             "prompt": normalized_prompt,
             "return_last_frame": bool(return_last_frame),
@@ -240,9 +219,6 @@ class Seedance25Service(KlingService):
             "resolution": normalized_resolution,
             "aspect_ratio": normalized_ratio,
             "duration": normalized_duration,
-            "output_format": normalized_output,
-            "web_search": bool(web_search),
-            "nsfw_checker": bool(nsfw_checker),
         }
 
         if first_frame:
@@ -256,10 +232,7 @@ class Seedance25Service(KlingService):
         if audio_urls:
             input_data["reference_audio_urls"] = audio_urls
 
-        payload: dict[str, Any] = {
-            "model": self.MODEL_NAME,
-            "input": input_data,
-        }
+        payload: dict[str, Any] = {"model": self.MODEL_NAME, "input": input_data}
 
         callback_url = str(callBackUrl or "").strip()
         legacy_callback = str(getattr(config, "kie_notification_url", "") or "").strip()
@@ -270,8 +243,8 @@ class Seedance25Service(KlingService):
 
         logger.info(
             "Seedance 2.5 request: scenario=%s duration=%s ratio=%s resolution=%s "
-            "refs(image=%s,video=%s,audio=%s) generated_audio=%s output=%s "
-            "web_search=%s nsfw_checker=%s return_last_frame=%s callback=%s",
+            "refs(image=%s,video=%s,audio=%s) generate_audio=%s "
+            "return_last_frame=%s callback=%s",
             scenario,
             normalized_duration,
             normalized_ratio,
@@ -280,17 +253,16 @@ class Seedance25Service(KlingService):
             len(video_urls),
             len(audio_urls),
             bool(generate_audio),
-            normalized_output,
-            bool(web_search),
-            bool(nsfw_checker),
             bool(return_last_frame),
             callback_url or "polling-only",
         )
+
         result = await self._kie_post("/api/v1/jobs/createTask", payload)
         if isinstance(result, dict):
             result.setdefault("success", bool(result.get("task_id")))
             result.setdefault("scenario", scenario)
             result.setdefault("provider_model", self.MODEL_NAME)
+            result.setdefault("aspect_ratio", normalized_ratio)
         return result
 
 
