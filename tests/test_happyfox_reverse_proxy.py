@@ -171,21 +171,32 @@ def test_deploy_script_keeps_public_health_gate_and_reversible_targets() -> None
     assert legacy_restore < docker_cutover < new_switch < public_gate
 
 
-def test_deploy_script_supports_redeploy_after_legacy_container_is_removed() -> None:
+def test_deploy_script_ignores_stale_legacy_container_without_network_target() -> None:
     script = Path("scripts/deploy_happyfox.sh").read_text(encoding="utf-8")
 
-    legacy_probe = 'if docker inspect "$legacy_api_container" >/dev/null 2>&1; then'
+    resolver_gate = "if resolve_legacy_upstream_target; then"
     redeploy_message = (
-        "[happyfox-deploy] Legacy API absent; preparing existing HappyFox proxy route"
+        "[happyfox-deploy] No usable legacy API target; preparing existing HappyFox proxy route"
     )
     new_target = 'patch_reverse_proxy_target "$HAPPYFOX_NEW_UPSTREAM_TARGET"'
     docker_deploy = "bash scripts/deploy_backend_docker.sh deploy"
 
-    assert legacy_probe in script
+    assert resolver_gate in script
+    assert "LEGACY_ROLLBACK_AVAILABLE=0" in script
+    assert "LEGACY_ROLLBACK_AVAILABLE=1" in script
     assert redeploy_message in script
     assert 'export CUTOVER_STOP_CONTAINERS=""' in script
+    assert script.index(resolver_gate) < script.index(redeploy_message)
     assert script.index(redeploy_message) < script.index(new_target, script.index(redeploy_message))
     assert script.index(new_target, script.index(redeploy_message)) < script.rindex(docker_deploy)
+
+
+def test_deploy_script_only_rolls_back_when_legacy_target_is_usable() -> None:
+    script = Path("scripts/deploy_happyfox.sh").read_text(encoding="utf-8")
+
+    assert 'if [ "$LEGACY_ROLLBACK_AVAILABLE" = "1" ]; then' in script
+    assert "rollback_if_available" in script
+    assert "No usable legacy rollback target; keeping HappyFox runtime online" in script
 
 
 def test_deploy_script_gates_public_max_webhook_route() -> None:
