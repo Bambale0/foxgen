@@ -1,0 +1,80 @@
+name: Diagnose HappyFox public route
+
+on:
+  push:
+    branches:
+      - fix/happyfox-public-backend-route
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment:
+      name: production
+    env:
+      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+      DEPLOY_SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
+      DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+      DEPLOY_USER: ${{ vars.DEPLOY_USER || 'root' }}
+      DEPLOY_PORT: ${{ vars.DEPLOY_PORT || '22' }}
+      MINIAPP_FRONTEND_DOMAIN: ${{ vars.MINIAPP_FRONTEND_DOMAIN }}
+    steps:
+      - name: Configure pinned SSH
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          install -d -m 0700 "$HOME/.ssh"
+          printf '%s\n' "$DEPLOY_SSH_PRIVATE_KEY" | tr -d '\r' > "$HOME/.ssh/id_ed25519"
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" | tr -d '\r' > "$HOME/.ssh/known_hosts"
+          chmod 0600 "$HOME/.ssh/id_ed25519" "$HOME/.ssh/known_hosts"
+
+      - name: Inspect production routing
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          : "${MINIAPP_FRONTEND_DOMAIN:?MINIAPP_FRONTEND_DOMAIN is required}"
+          printf -v quoted_domain '%q' "$MINIAPP_FRONTEND_DOMAIN"
+          ssh \
+            -i "$HOME/.ssh/id_ed25519" \
+            -p "$DEPLOY_PORT" \
+            -o BatchMode=yes \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            -o ConnectTimeout=15 \
+            "$DEPLOY_USER@$DEPLOY_HOST" \
+            "bash -s -- $quoted_domain" <<'REMOTE'
+          set -Eeuo pipefail
+          domain="$1"
+          echo "DOMAIN=$domain"
+          echo "PUBLIC_HEALTH_STATUS=$(curl -ksS -o /tmp/hf-health-body -w '%{http_code}' --max-time 15 https://$domain/health || true)"
+          printf 'PUBLIC_HEALTH_BODY='; head -c 200 /tmp/hf-health-body 2>/dev/null | tr '\n' ' '; echo
+          echo "PUBLIC_MINIAPP_STATUS=$(curl -ksS -o /dev/null -w '%{http_code}' --max-time 15 https://$domain/mini-app/ || true)"
+
+          echo '--- docker containers ---'
+          docker ps --format '{{.Names}} {{.Status}} {{.Networks}}' | grep -E 'foxgen|nginx|artflow' || true
+
+          echo '--- reverse proxy networks ---'
+          docker inspect artflow-nginx-1 --format '{{range $k,$v := .NetworkSettings.Networks}}{{$k}} {{end}}' || true
+          echo '--- happyfox networks ---'
+          docker inspect foxgen-happyfox-bot --format '{{range $k,$v := .NetworkSettings.Networks}}{{$k}} {{end}}' || true
+
+          echo '--- nginx matching server/health lines ---'
+          docker exec artflow-nginx-1 sh -lc "nginx -T 2>&1 | grep -n -E 'server_name|location .*health|proxy_pass|foxgen-happyfox|$domain' | head -n 240" || true
+
+          echo '--- proxy-to-backend probes ---'
+          for target in \
+            http://foxgen-happyfox-bot:1888/health \
+            http://foxgen-happyfox-bot/health \
+            http://127.0.0.1:1888/health; do
+            printf '%s => ' "$target"
+            docker exec artflow-nginx-1 sh -lc "wget -qO- --timeout=5 '$target'" 2>&1 | head -c 300 || true
+            echo
+          done
+          REMOTE
+
+      - name: Remove SSH key
+        if: always()
+        run: rm -f "$HOME/.ssh/id_ed25519"
