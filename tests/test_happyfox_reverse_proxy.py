@@ -169,3 +169,32 @@ def test_deploy_script_keeps_public_health_gate_and_reversible_targets() -> None
     )
     public_gate = script.rindex('${PUBLIC_ORIGIN}/health')
     assert legacy_restore < docker_cutover < new_switch < public_gate
+
+
+def test_deploy_script_supports_redeploy_after_legacy_container_is_removed() -> None:
+    script = Path("scripts/deploy_happyfox.sh").read_text(encoding="utf-8")
+
+    legacy_probe = 'if docker inspect "$legacy_api_container" >/dev/null 2>&1; then'
+    redeploy_message = (
+        "[happyfox-deploy] Legacy API absent; preparing existing HappyFox proxy route"
+    )
+    new_target = 'patch_reverse_proxy_target "$HAPPYFOX_NEW_UPSTREAM_TARGET"'
+    docker_deploy = "bash scripts/deploy_backend_docker.sh deploy"
+
+    assert legacy_probe in script
+    assert redeploy_message in script
+    assert 'export CUTOVER_STOP_CONTAINERS=""' in script
+    assert script.index(redeploy_message) < script.index(new_target, script.index(redeploy_message))
+    assert script.index(new_target, script.index(redeploy_message)) < script.rindex(docker_deploy)
+
+
+def test_deploy_script_gates_public_max_webhook_route() -> None:
+    script = Path("scripts/deploy_happyfox.sh").read_text(encoding="utf-8")
+
+    health_gate = script.rindex('${PUBLIC_ORIGIN}/health')
+    max_gate = script.rindex('${PUBLIC_ORIGIN}/max/webhook')
+
+    assert "max_webhook_status" in script
+    assert 'if [ "$max_webhook_status" != "401" ]; then' in script
+    assert "MAX_WEBHOOK_ROUTE_OK" in script
+    assert health_gate < max_gate
