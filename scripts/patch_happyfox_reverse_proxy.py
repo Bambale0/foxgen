@@ -16,6 +16,9 @@ _HEALTH_RE = re.compile(r"^\s*location\s*=\s*/health\s*\{", re.MULTILINE)
 _MAX_WEBHOOK_RE = re.compile(
     r"^\s*location\s*=\s*/max/webhook\s*\{", re.MULTILINE
 )
+_INSTAGRAM_WEBHOOK_RE = re.compile(
+    r"^\s*location\s*=\s*/instagram/webhook\s*\{", re.MULTILINE
+)
 _INSERT_BEFORE_RE = re.compile(
     r"^\s*location\s+\^~\s+/mini-app/api/\s*\{", re.MULTILINE
 )
@@ -144,6 +147,30 @@ def _max_webhook_location(upstream: str) -> str:
     )
 
 
+def _instagram_webhook_location(upstream: str) -> str:
+    return (
+        "    location = /instagram/webhook {\n"
+        f"        proxy_pass http://{upstream};\n"
+        "        proxy_http_version 1.1;\n"
+        "        proxy_set_header Connection \"\";\n"
+        "        proxy_set_header Host $host;\n"
+        "        proxy_set_header X-Real-IP $remote_addr;\n"
+        "        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n"
+        "        proxy_set_header X-Forwarded-Proto https;\n"
+        "        proxy_set_header X-Forwarded-Host $host;\n"
+        "        proxy_set_header X-Hub-Signature-256 $http_x_hub_signature_256;\n"
+        "        proxy_request_buffering off;\n"
+        "        proxy_connect_timeout 5s;\n"
+        "        proxy_send_timeout 30s;\n"
+        "        proxy_read_timeout 30s;\n"
+        "        client_max_body_size 1m;\n"
+        "        limit_except GET POST {\n"
+        "            deny all;\n"
+        "        }\n"
+        "    }\n\n"
+    )
+
+
 def patch_text(
     text: str,
     *,
@@ -166,6 +193,7 @@ def patch_text(
     server_target: tuple[int, int] | None = None
     health_present = False
     max_webhook_present = False
+    instagram_webhook_present = False
 
     for start, end in _server_ranges(text):
         block = text[start:end]
@@ -180,12 +208,13 @@ def patch_text(
         server_target = (start, end)
         health_present = bool(_HEALTH_RE.search(block))
         max_webhook_present = bool(_MAX_WEBHOOK_RE.search(block))
+        instagram_webhook_present = bool(_INSTAGRAM_WEBHOOK_RE.search(block))
 
     if server_target is None:
         raise ValueError(
             f"could not find HTTPS server block for {domain!r} using upstream {upstream!r}"
         )
-    if health_present and max_webhook_present:
+    if health_present and max_webhook_present and instagram_webhook_present:
         return text, changed
 
     start, end = server_target
@@ -199,6 +228,8 @@ def patch_text(
         additions += _health_location(upstream)
     if not max_webhook_present:
         additions += _max_webhook_location(upstream)
+    if not instagram_webhook_present:
+        additions += _instagram_webhook_location(upstream)
 
     absolute = start + insert_match.start()
     patched = text[:absolute] + additions + text[absolute:]
@@ -244,7 +275,7 @@ def patch_file(
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Patch HappyFox nginx upstream, health and MAX webhook routes"
+        description="Patch HappyFox nginx upstream, health and channel webhook routes"
     )
     parser.add_argument("config", type=Path)
     parser.add_argument("domain")

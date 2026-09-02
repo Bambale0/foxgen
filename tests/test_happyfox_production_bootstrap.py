@@ -57,6 +57,76 @@ def test_bootstrap_preserves_existing_current_runtime_values() -> None:
     assert values["REDIS_URL"].endswith("/7")
 
 
+def test_bootstrap_preserves_max_and_instagram_runtime_credentials() -> None:
+    values = build_runtime_values(
+        _legacy(),
+        {
+            "MAX_ENABLED": "1",
+            "MAX_ACCESS_TOKEN": "max-access",
+            "MAX_WEBHOOK_SECRET": "max-secret",
+            "MAX_WEBHOOK_URL": "https://stale.example/max/webhook",
+            "MAX_WEBHOOK_PATH": "/max/webhook",
+            "MAX_BOT_NAME": "happyfox_max",
+            "MAX_PAYMENT_RETURN_URL": "https://max.ru/happyfox?start=max_payment",
+            "INSTAGRAM_ENABLED": "1",
+            "INSTAGRAM_APP_ID": "ig-app",
+            "INSTAGRAM_APP_SECRET": "ig-secret",
+            "INSTAGRAM_VERIFY_TOKEN": "ig-verify",
+            "INSTAGRAM_ACCESS_TOKEN": "ig-access",
+            "INSTAGRAM_IG_USER_ID": "17890000000000000",
+            "INSTAGRAM_WEBHOOK_PATH": "/instagram/webhook",
+            "INSTAGRAM_SUBSCRIBED_FIELDS": "messages,messaging_postbacks,comments",
+        },
+        database_name="happyfox",
+        redis_db=2,
+    )
+
+    assert values["MAX_ENABLED"] == "1"
+    assert values["MAX_ACCESS_TOKEN"] == "max-access"
+    assert values["MAX_WEBHOOK_SECRET"] == "max-secret"
+    assert values["MAX_WEBHOOK_URL"] == "https://alena.chillcreative.ru/max/webhook"
+    assert values["MAX_MINI_APP_URL"] == "https://alena.chillcreative.ru/mini-app/"
+    assert values["INSTAGRAM_ENABLED"] == "1"
+    assert values["INSTAGRAM_APP_SECRET"] == "ig-secret"
+    assert values["INSTAGRAM_VERIFY_TOKEN"] == "ig-verify"
+    assert values["INSTAGRAM_ACCESS_TOKEN"] == "ig-access"
+    assert values["INSTAGRAM_IG_USER_ID"] == "17890000000000000"
+
+
+def test_bootstrap_recovers_channel_credentials_from_protected_server_env() -> None:
+    legacy = _legacy()
+    legacy.update(
+        {
+            "MAX_ENABLED": "1",
+            "MAX_ACCESS_TOKEN": "max-from-server-env",
+            "MAX_WEBHOOK_SECRET": "max-secret-from-server-env",
+            "MAX_WEBHOOK_PATH": "/max/webhook",
+            "MAX_BOT_NAME": "happyfox_max",
+            "MAX_PAYMENT_RETURN_URL": "https://max.ru/happyfox?start=max_payment",
+            "INSTAGRAM_ENABLED": "1",
+            "INSTAGRAM_APP_ID": "ig-app-from-server-env",
+            "INSTAGRAM_APP_SECRET": "ig-secret-from-server-env",
+            "INSTAGRAM_VERIFY_TOKEN": "ig-verify-from-server-env",
+            "INSTAGRAM_ACCESS_TOKEN": "ig-access-from-server-env",
+            "INSTAGRAM_IG_USER_ID": "17890000000000001",
+        }
+    )
+
+    values = build_runtime_values(
+        legacy,
+        {},
+        database_name="happyfox",
+        redis_db=8,
+    )
+
+    assert values["MAX_ACCESS_TOKEN"] == "max-from-server-env"
+    assert values["MAX_WEBHOOK_SECRET"] == "max-secret-from-server-env"
+    assert values["MAX_WEBHOOK_URL"] == "https://alena.chillcreative.ru/max/webhook"
+    assert values["INSTAGRAM_APP_SECRET"] == "ig-secret-from-server-env"
+    assert values["INSTAGRAM_ACCESS_TOKEN"] == "ig-access-from-server-env"
+    assert values["INSTAGRAM_IG_USER_ID"] == "17890000000000001"
+
+
 def test_bootstrap_preserves_explicit_yookassa_configuration() -> None:
     legacy = _legacy()
     legacy.update(
