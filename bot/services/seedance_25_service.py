@@ -15,7 +15,8 @@ contract are intentionally not sent.
 from __future__ import annotations
 
 import logging
-from typing import Any, Iterable
+from collections.abc import Iterable
+from typing import Any
 from urllib.parse import urlsplit, urlunsplit
 
 from bot.config import config
@@ -45,16 +46,10 @@ class Seedance25Service(KlingService):
 
     MODEL_NAME = "bytedance/seedance-2-5"
 
-    ALLOWED_RATIOS = {
-        "1:1",
-        "4:3",
-        "3:4",
-        "16:9",
-        "9:16",
-        "21:9",
-        "adaptive",
-    }
-    ALLOWED_RESOLUTIONS = {"480p", "720p"}
+    ALLOWED_RATIOS = frozenset(
+        {"1:1", "4:3", "3:4", "16:9", "9:16", "21:9", "adaptive"}
+    )
+    ALLOWED_RESOLUTIONS = frozenset({"480p", "720p"})
 
     MIN_DURATION = 4
     MAX_DURATION = 30
@@ -207,8 +202,6 @@ class Seedance25Service(KlingService):
                 "error": f"Unsupported Seedance 2.5 aspect ratio: {normalized_ratio}",
             }
 
-        # Image-to-video follows the input frame ratio. Keep the request on
-        # adaptive so the provider does not receive a conflicting output ratio.
         if scenario in {"first_frame", "first_last"}:
             normalized_ratio = "adaptive"
 
