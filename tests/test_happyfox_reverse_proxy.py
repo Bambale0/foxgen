@@ -3,10 +3,15 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from scripts.patch_happyfox_reverse_proxy import patch_text
 
 
 DOMAIN = "alena.xn--e1aikcel5c5a.online"
+
+
+def _patch_text(*args, **kwargs):
+    from scripts.patch_happyfox_reverse_proxy import patch_text
+
+    return patch_text(*args, **kwargs)
 
 
 def _config(target: str = "foxgen-happyfox-bot:8080") -> str:
@@ -52,7 +57,7 @@ server {{
 
 
 def test_patch_adds_public_health_and_switches_to_new_backend() -> None:
-    patched, changed = patch_text(
+    patched, changed = _patch_text(
         _config("172.20.0.6:8080"),
         domain=DOMAIN,
         target="foxgen-happyfox-bot:8080",
@@ -70,9 +75,9 @@ def test_patch_adds_public_health_and_switches_to_new_backend() -> None:
 
 
 def test_patch_can_switch_back_to_legacy_api_address() -> None:
-    with_health, _ = patch_text(_config(), domain=DOMAIN)
+    with_health, _ = _patch_text(_config(), domain=DOMAIN)
 
-    patched, changed = patch_text(
+    patched, changed = _patch_text(
         with_health,
         domain=DOMAIN,
         target="172.20.0.6:8080",
@@ -85,14 +90,14 @@ def test_patch_can_switch_back_to_legacy_api_address() -> None:
 
 
 def test_patch_is_idempotent_for_same_target() -> None:
-    first, changed = patch_text(
+    first, changed = _patch_text(
         _config(),
         domain=DOMAIN,
         target="foxgen-happyfox-bot:8080",
     )
     assert changed is True
 
-    second, changed = patch_text(
+    second, changed = _patch_text(
         first,
         domain=DOMAIN,
         target="foxgen-happyfox-bot:8080",
@@ -111,12 +116,12 @@ def test_patch_is_idempotent_for_same_target() -> None:
 )
 def test_patch_rejects_unsafe_inputs(domain: str, target: str) -> None:
     with pytest.raises(ValueError):
-        patch_text(_config(), domain=domain, target=target)
+        _patch_text(_config(), domain=domain, target=target)
 
 
 def test_patch_requires_matching_happyfox_https_vhost() -> None:
     with pytest.raises(ValueError, match="could not find HTTPS server block"):
-        patch_text(_config(), domain="missing.example")
+        _patch_text(_config(), domain="missing.example")
 
 
 def test_deploy_script_keeps_public_health_gate_and_reversible_targets() -> None:
