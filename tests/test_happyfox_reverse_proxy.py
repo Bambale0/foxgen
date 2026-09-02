@@ -64,7 +64,7 @@ def _config_with_health_only(target: str = "foxgen-happyfox-bot:8080") -> str:
     )
 
 
-def test_patch_adds_public_health_max_webhook_and_switches_to_new_backend() -> None:
+def test_patch_adds_public_health_channel_webhooks_and_switches_to_new_backend() -> None:
     patched, changed = _patch_text(
         _config("172.20.0.6:8080"),
         domain=DOMAIN,
@@ -76,18 +76,25 @@ def test_patch_adds_public_health_max_webhook_and_switches_to_new_backend() -> N
     assert "server 172.20.0.6:8080;" not in patched
     assert patched.count("location = /health {") == 2
     assert patched.count("location = /max/webhook {") == 1
+    assert patched.count("location = /instagram/webhook {") == 1
     domain_block = patched.split(f"server_name {DOMAIN};", 2)[2]
     assert "proxy_pass http://happyfox_backend;" in domain_block
     assert "proxy_set_header X-Max-Bot-Api-Secret $http_x_max_bot_api_secret;" in domain_block
+    assert "proxy_set_header X-Hub-Signature-256 $http_x_hub_signature_256;" in domain_block
+    assert "limit_except POST" in domain_block
+    assert "limit_except GET POST" in domain_block
     assert domain_block.index("location = /health") < domain_block.index(
         "location = /max/webhook"
     )
     assert domain_block.index("location = /max/webhook") < domain_block.index(
+        "location = /instagram/webhook"
+    )
+    assert domain_block.index("location = /instagram/webhook") < domain_block.index(
         "location ^~ /mini-app/api/"
     )
 
 
-def test_patch_repairs_existing_health_only_config_with_max_webhook() -> None:
+def test_patch_repairs_existing_health_only_config_with_channel_webhooks() -> None:
     patched, changed = _patch_text(
         _config_with_health_only(),
         domain=DOMAIN,
@@ -97,6 +104,7 @@ def test_patch_repairs_existing_health_only_config_with_max_webhook() -> None:
     assert changed is True
     assert patched.count("location = /health {") == 2
     assert patched.count("location = /max/webhook {") == 1
+    assert patched.count("location = /instagram/webhook {") == 1
 
 
 def test_patch_can_switch_back_to_legacy_api_address() -> None:
@@ -113,6 +121,7 @@ def test_patch_can_switch_back_to_legacy_api_address() -> None:
     assert "server foxgen-happyfox-bot:8080;" not in patched
     assert patched.count("location = /health {") == 2
     assert patched.count("location = /max/webhook {") == 1
+    assert patched.count("location = /instagram/webhook {") == 1
 
 
 def test_patch_is_idempotent_for_same_target() -> None:
@@ -203,9 +212,25 @@ def test_deploy_script_gates_public_max_webhook_route() -> None:
     script = Path("scripts/deploy_happyfox.sh").read_text(encoding="utf-8")
 
     health_gate = script.rindex('${PUBLIC_ORIGIN}/health')
-    max_gate = script.rindex('${PUBLIC_ORIGIN}/max/webhook')
+    max_ingress_gate = script.rindex('${PUBLIC_ORIGIN}/max/webhook', 0, script.rindex('${PUBLIC_ORIGIN}/max/webhook'))
+    max_runtime_gate = script.rindex('${PUBLIC_ORIGIN}/max/webhook')
 
+    assert "max_ingress_status" in script
     assert "max_webhook_status" in script
+    assert 'if [ "$max_ingress_status" != "403" ]; then' in script
     assert 'if [ "$max_webhook_status" != "401" ]; then' in script
     assert "MAX_WEBHOOK_ROUTE_OK" in script
-    assert health_gate < max_gate
+    assert health_gate < max_ingress_gate < max_runtime_gate
+
+
+def test_deploy_script_gates_instagram_ingress_and_enabled_runtime() -> None:
+    script = Path("scripts/deploy_happyfox.sh").read_text(encoding="utf-8")
+
+    assert "runtime_flag_enabled" in script
+    assert "instagram_ingress_status" in script
+    assert 'if [ "$instagram_ingress_status" != "403" ]; then' in script
+    assert "runtime_flag_enabled INSTAGRAM_ENABLED" in script
+    assert 'if [ "$instagram_verify_status" != "403" ]; then' in script
+    assert 'if [ "$instagram_post_status" != "401" ]; then' in script
+    assert "INSTAGRAM_WEBHOOK_INGRESS_OK" in script
+    assert "INSTAGRAM_WEBHOOK_RUNTIME_OK" in script
