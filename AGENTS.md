@@ -148,6 +148,33 @@ When a connected repository is available through GitHub tools, prefer repository
 
 ---
 
+## Mandatory Telegram ↔ MAX feature parity for HappyFox
+
+For HappyFox, any user-facing feature that is applicable to both messengers must be implemented in **Telegram and MAX in the same change/PR**. Do not ship one channel first and leave the other as implicit follow-up work.
+
+This parity rule applies to, at minimum:
+
+- new AI models and model visibility;
+- menu items and buttons;
+- callback actions and command handlers;
+- FSM states and creation flows;
+- generation settings and media/reference modes;
+- payment/top-up entry points when supported by both platforms;
+- user-visible copy, validation, errors, retries, and fallback behavior;
+- repeat/history/share flows and other public actions.
+
+For every applicable feature change:
+
+1. Inspect both Telegram and MAX entry points before editing.
+2. Update both channel surfaces and callback/handler wiring together.
+3. Add or update regression tests that prove the feature is exposed and actionable in both Telegram and MAX.
+4. During review, explicitly compare Telegram and MAX parity before calling the task complete.
+5. If a platform limitation makes exact parity impossible, document the exception in the PR/change with the concrete platform constraint and keep behavior as equivalent as the APIs allow.
+
+A feature that exists in only Telegram or only MAX is **not done** unless the user explicitly requested a single-channel feature or a documented platform limitation prevents parity.
+
+---
+
 ## Safety and destructive commands
 
 Never run destructive or high-risk commands unless the user explicitly requested and confirmed the exact action.
