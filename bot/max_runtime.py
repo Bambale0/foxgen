@@ -51,8 +51,9 @@ class MaxRuntimeSettings:
         parsed = urlparse(self.webhook_url)
         if parsed.path.rstrip("/") != settings.webhook_path.rstrip("/"):
             raise RuntimeError("MAX_WEBHOOK_URL path must match MAX_WEBHOOK_PATH")
-        if not self.bot_name:
-            raise RuntimeError("MAX_BOT_NAME is required when MAX_ENABLED=1")
+        # MAX_BOT_NAME is only needed to render referral deep links. Core menu,
+        # callbacks, generation and payments remain valid without it, so a lost
+        # display username must not take the entire production channel down.
         if not self.payment_return_url.startswith("https://"):
             raise RuntimeError(
                 "MAX_PAYMENT_RETURN_URL must be an HTTPS URL when MAX_ENABLED=1"
@@ -64,27 +65,42 @@ async def _ensure_max_subscription(
     *,
     webhook_url: str,
 ) -> None:
+    """Create or refresh the production webhook subscription.
+
+    MAX documents POST /subscriptions as the method for updating an existing
+    Webhook subscription. Re-posting the canonical URL on startup therefore
+    repairs a recovered/rotated secret and restores the complete update type
+    set instead of trusting an old subscription whose secret is not readable.
+    """
+
     payload = await client.get_subscriptions()
     subscriptions = payload.get("subscriptions") or []
     if not isinstance(subscriptions, list):
         subscriptions = []
+
+    existing = False
     for subscription in subscriptions:
         if not isinstance(subscription, dict):
             continue
         if str(subscription.get("url") or "").rstrip("/") != webhook_url.rstrip("/"):
             continue
+        existing = True
         declared = subscription.get("update_types") or []
         if isinstance(declared, list) and declared:
             missing = set(MAX_UPDATE_TYPES) - {str(item) for item in declared}
             if missing:
-                raise RuntimeError(
-                    "Existing MAX webhook subscription is missing update types: "
-                    + ", ".join(sorted(missing))
+                logger.warning(
+                    "Refreshing MAX webhook subscription missing update types: %s",
+                    ", ".join(sorted(missing)),
                 )
-        logger.info("MAX webhook subscription already active: %s", webhook_url)
-        return
+        break
+
     await client.create_subscription(webhook_url)
-    logger.info("MAX webhook subscription created: %s", webhook_url)
+    logger.info(
+        "MAX webhook subscription %s: %s",
+        "refreshed" if existing else "created",
+        webhook_url,
+    )
 
 
 async def _max_payment_reconcile_loop(
@@ -139,7 +155,7 @@ def setup_max_runtime(app: web.Application) -> None:
     payments = MaxYooKassaService(return_url=runtime.payment_return_url)
     if not payments.enabled:
         raise RuntimeError(
-            "MAX_ENABLED=1 requires YooKassa credentials and MAX_PAYMENT_RETURN_URL"
+            "MAX_ENABLED=1 requires YooKassa credentials and a valid return URL"
         )
     channel = MaxSeedance25ChannelService(
         settings=settings,
