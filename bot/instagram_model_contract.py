@@ -40,13 +40,13 @@ def instagram_photo_cost() -> float:
     return float(SEEDREAM_5_PRO_QUALITY_COSTS[INSTAGRAM_PHOTO_MODEL.quality])
 
 
-def instagram_video_cost(*, duration: int = 5) -> float:
-    """Use the same Seedance 2.5 pricing contract as Telegram."""
+def instagram_video_cost(*, duration: int = 5, resolution: str = "720p") -> float:
+    """Use the same Seedance 2.5 quality/seconds contract as Telegram."""
     return float(
         preset_manager.get_video_cost_with_quality(
             INSTAGRAM_VIDEO_MODEL.product_key,
             duration=duration,
-            quality=INSTAGRAM_VIDEO_MODEL.resolution,
+            quality=resolution,
         )
     )
 
