@@ -42,6 +42,7 @@ jobs:
       DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
       DEPLOY_SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
       DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+      MAX_ACCESS_TOKEN: ${{ secrets.MAX_ACCESS_TOKEN }}
       DEPLOY_USER: ${{ vars.DEPLOY_USER || 'root' }}
       DEPLOY_PORT: ${{ vars.DEPLOY_PORT || '22' }}
       DEPLOY_PATH: ${{ vars.DEPLOY_PATH || '/root/foxgen' }}
@@ -66,6 +67,7 @@ jobs:
           : "${DEPLOY_HOST:?Missing production secret DEPLOY_HOST}"
           : "${DEPLOY_SSH_PRIVATE_KEY:?Missing production secret DEPLOY_SSH_PRIVATE_KEY}"
           : "${DEPLOY_KNOWN_HOSTS:?Missing production secret DEPLOY_KNOWN_HOSTS}"
+          : "${MAX_ACCESS_TOKEN:?Missing production secret MAX_ACCESS_TOKEN}"
           : "${DEPLOY_USER:?Missing production variable DEPLOY_USER}"
           : "${DEPLOY_PORT:?Missing production variable DEPLOY_PORT}"
           : "${DEPLOY_PATH:?Missing production variable DEPLOY_PATH}"
@@ -73,6 +75,7 @@ jobs:
             echo "EXPECTED_SHA must be a full 40-character SHA" >&2
             exit 1
           }
+          echo "MAX_ACCESS_TOKEN configured=yes"
 
       - name: Check out exact deployment commit
         uses: actions/checkout@v6
@@ -100,6 +103,51 @@ jobs:
           printf '%s\n' "$DEPLOY_KNOWN_HOSTS" | tr -d '\r' > "$HOME/.ssh/known_hosts"
           chmod 0600 "$HOME/.ssh/id_ed25519" "$HOME/.ssh/known_hosts"
           ssh-keygen -y -f "$HOME/.ssh/id_ed25519" >/dev/null
+
+      - name: Stage protected MAX runtime seed
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          seed_file="$(mktemp)"
+          trap 'rm -f "$seed_file"' EXIT
+          chmod 0600 "$seed_file"
+          printf 'MAX_ACCESS_TOKEN=%s\n' "$MAX_ACCESS_TOKEN" > "$seed_file"
+
+          remote_seed_dir="${DEPLOY_PATH}/backups/channel-actions"
+          remote_seed_path="${remote_seed_dir}/.env.max.actions"
+          printf -v quoted_seed_dir '%q' "$remote_seed_dir"
+          printf -v quoted_seed_path '%q' "$remote_seed_path"
+
+          ssh \
+            -i "$HOME/.ssh/id_ed25519" \
+            -p "$DEPLOY_PORT" \
+            -o BatchMode=yes \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            -o ConnectTimeout=15 \
+            "$DEPLOY_USER@$DEPLOY_HOST" \
+            "install -d -m 0700 $quoted_seed_dir"
+
+          scp \
+            -i "$HOME/.ssh/id_ed25519" \
+            -P "$DEPLOY_PORT" \
+            -o BatchMode=yes \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            -o ConnectTimeout=15 \
+            "$seed_file" \
+            "$DEPLOY_USER@$DEPLOY_HOST:$remote_seed_path"
+
+          ssh \
+            -i "$HOME/.ssh/id_ed25519" \
+            -p "$DEPLOY_PORT" \
+            -o BatchMode=yes \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            -o ConnectTimeout=15 \
+            "$DEPLOY_USER@$DEPLOY_HOST" \
+            "chmod 0600 $quoted_seed_path"
+          echo "Protected MAX runtime seed staged"
 
       - name: Resolve HappyFox Mini App domain
         shell: bash
@@ -334,6 +382,8 @@ jobs:
 
           live_revision="$(curl -fsS --max-time 20 "https://${MINIAPP_FRONTEND_DOMAIN}/mini-app/revision.txt?revision=${EXPECTED_SHA}")"
           [ "$live_revision" = "$EXPECTED_SHA" ]
+
+          rm -f "$PROJECT_DIR/backups/channel-actions/.env.max.actions"
           REMOTE
 
       - name: Publish deployment summary
@@ -345,6 +395,7 @@ jobs:
             echo "- Commit: \`${EXPECTED_SHA}\`"
             echo "- Backend checkout: \`${DEPLOY_PATH}\`"
             echo "- Mini App: \`https://${MINIAPP_FRONTEND_DOMAIN}/mini-app/\`"
+            echo '- MAX: runtime secret sourced from the protected production environment and verified by webhook smoke gate'
             echo '- Database: isolated `happyfox` database on the established PostgreSQL service'
             echo '- Redis: isolated logical DB plus `foxgen_happyfox` namespace'
             echo '- Source core: `banano_kling/tanyapi@36f92a0504f849c0c591652a880410e33a1c89aa`'
