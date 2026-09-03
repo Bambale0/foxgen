@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import os
-import secrets
 import sys
 from pathlib import Path
+from secrets import token_urlsafe
 from urllib.parse import urlsplit
 
 
@@ -164,7 +164,7 @@ def recover(project_dir: Path) -> dict[str, str]:
         recovered.setdefault("MAX_API_BASE", MAX_DEFAULT_API_BASE)
         recovered.setdefault("MAX_WEBHOOK_PATH", MAX_DEFAULT_WEBHOOK_PATH)
         if not recovered.get("MAX_WEBHOOK_SECRET", "").strip():
-            recovered["MAX_WEBHOOK_SECRET"] = secrets.token_urlsafe(32)
+            recovered["MAX_WEBHOOK_SECRET"] = token_urlsafe(32)
             source_by_key["MAX_WEBHOOK_SECRET"] = "generated-on-server"
         _public_origin_defaults(recovered)
 
