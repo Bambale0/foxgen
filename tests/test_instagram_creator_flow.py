@@ -149,7 +149,7 @@ def test_video_choice_immediately_paywalls_and_rejects_media(tmp_path, monkeypat
     assert "референс пока не нужен" in client.messages[-1][2].lower()
 
 
-def test_video_accepts_reference_only_after_paid_continue(tmp_path, monkeypatch) -> None:
+def test_video_enters_full_seedance25_wizard_after_paid_continue(tmp_path, monkeypatch) -> None:
     identity = asyncio.run(_identity(tmp_path, monkeypatch, "igsid-video-paid"))
     client = _FakeClient()
     service = InstagramCreatorGenerationService(
@@ -176,13 +176,39 @@ def test_video_accepts_reference_only_after_paid_continue(tmp_path, monkeypatch)
 
     resumed = asyncio.run(get_instagram_draft(identity.id))
     assert resumed is not None
-    assert resumed.state == "video:waiting_source:"
-    assert "пришли фото или видео" in client.messages[-1][2].lower()
+    assert resumed.state == "s25:scenario"
+    assert "seedance 2.5" in client.messages[-1][2].lower()
+    assert "выбери сценарий" in client.messages[-1][2].lower()
+
+    assert asyncio.run(
+        service.handle_message(identity, _text_event("2", "igsid-video-paid"))
+    ) is True
+    assert asyncio.run(get_instagram_draft(identity.id)).state == "s25:resolution"
+
+    assert asyncio.run(
+        service.handle_message(identity, _text_event("720p", "igsid-video-paid"))
+    ) is True
+    assert asyncio.run(get_instagram_draft(identity.id)).state == "s25:duration"
+
+    assert asyncio.run(
+        service.handle_message(identity, _text_event("5", "igsid-video-paid"))
+    ) is True
+    assert asyncio.run(get_instagram_draft(identity.id)).state == "s25:audio"
+
+    assert asyncio.run(
+        service.handle_message(identity, _text_event("Да", "igsid-video-paid"))
+    ) is True
+    assert asyncio.run(get_instagram_draft(identity.id)).state == "s25:return_last"
+
+    assert asyncio.run(
+        service.handle_message(identity, _text_event("Нет", "igsid-video-paid"))
+    ) is True
+    assert asyncio.run(get_instagram_draft(identity.id)).state == "s25:first"
 
     assert asyncio.run(
         service.handle_message(identity, _image_event("igsid-video-paid"))
     ) is True
     draft = asyncio.run(get_instagram_draft(identity.id))
     assert draft is not None
-    assert draft.image_url == "https://cdn.example/source.jpg"
-    assert draft.state == "video:waiting_prompt:image"
+    assert draft.state == "s25:prompt"
+    assert "https://cdn.example/source.jpg" in draft.image_url

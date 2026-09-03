@@ -127,7 +127,7 @@ def test_english_photo_choice_persists_language_and_localizes_followups(
     assert "describe the result" in client.messages[-1][2].lower()
 
 
-def test_english_video_continue_resumes_paid_flow(tmp_path, monkeypatch) -> None:
+def test_english_video_continue_enters_seedance25_wizard(tmp_path, monkeypatch) -> None:
     identity = asyncio.run(_identity(tmp_path, monkeypatch, "igsid-en-video"))
     client = _FakeClient()
     service = InstagramCreatorGenerationService(
@@ -159,8 +159,12 @@ def test_english_video_continue_resumes_paid_flow(tmp_path, monkeypatch) -> None
     ) is True
     draft = asyncio.run(get_instagram_draft(identity.id))
     assert draft is not None
-    assert draft.state == "video:waiting_source:"
-    assert "now send a photo or video reference" in client.messages[-1][2].lower()
+    assert draft.state == "s25:scenario"
+    text = client.messages[-1][2].lower()
+    assert "seedance 2.5" in text
+    assert "choose a mode" in text
+    assert "first + last frame" in text
+    assert "image / video / audio references" in text
 
 
 def test_explicit_language_command_switches_existing_session(tmp_path, monkeypatch) -> None:

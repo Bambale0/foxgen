@@ -38,7 +38,8 @@ def test_max_pricing_is_a_separate_physical_snapshot() -> None:
     assert "banana_2" in manager.image_models()
     assert "v3_pro" in manager.video_models("text")
     assert "seedance_2" in manager.video_models("video")
-    assert "seedance_2_5" not in manager.video_models()
+    assert "seedance_2_5" in manager.video_models()
+    assert manager.video_cost("seedance_2_5", duration=5, quality="720p") == 30
     assert "seedance_2_5" in manager.get_price_config()["costs_reference"]["video_models"]
 
 
@@ -59,6 +60,7 @@ def test_max_video_selector_mirrors_telegram_scenario_matrix() -> None:
         if button["payload"].startswith("max:video:")
     ]
     assert text_payloads == [
+        "max:video:text:seedance_2_5",
         "max:video:text:v3_pro",
         "max:video:text:v3_std",
         "max:video:text:v26_pro",

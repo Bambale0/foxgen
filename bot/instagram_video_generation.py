@@ -439,7 +439,6 @@ class InstagramVideoGenerationService(InstagramSeedream5ProService):
                 first_frame_url=job.image_url if media_type == "image" else None,
                 reference_video_urls=[job.image_url] if media_type == "video" else None,
                 generate_audio=True,
-                output_format="mp4",
                 callBackUrl=None,
             )
             if not isinstance(response, dict):

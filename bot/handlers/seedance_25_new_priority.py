@@ -17,6 +17,7 @@ from bot.services.preset_manager import preset_manager
 from . import generation as generation_module
 from . import seedance_25_fullstack as fullstack
 from . import seedance_25_public_release as public_release
+from .seedance_25_official_contract import install_seedance_25_official_contract
 
 MODEL_KEY = "seedance_2_5"
 MODEL_LABEL = "🔥🆕 NEW · Seedance 2.5"
@@ -109,8 +110,6 @@ def install_seedance_25_new_priority() -> None:
     if getattr(generation_module, "_seedance_25_new_priority_installed", False):
         return
 
-    # The public-release wrapper resolves these globals at call time, so switch
-    # its public copy to the brighter product label as well.
     if not hasattr(public_release, "_public_model_meta_original"):
         public_release._public_model_meta_original = public_release._public_model_meta
     public_release._seedance_public_button_text = _priority_button_text
@@ -139,3 +138,4 @@ def install_seedance_25_new_priority() -> None:
 
     miniapp_module.miniapp_bootstrap = prioritized_bootstrap
     generation_module._seedance_25_new_priority_installed = True
+    install_seedance_25_official_contract()
