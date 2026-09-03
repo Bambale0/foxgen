@@ -8,7 +8,7 @@ _SERVER_START_RE = re.compile(r"^\s*server\s*\{")
 _SERVER_NAME_RE = re.compile(r"^\s*server_name\s+([^;]+);", re.MULTILINE)
 _LISTEN_443_RE = re.compile(r"^\s*listen\s+[^;]*\b443\b[^;]*;", re.MULTILINE)
 _MINIAPP_LOCATION_RE = re.compile(
-    r"^\s*location\s+(?:=|\^~|~\*?|@\S+\s+)?/mini-app/\s*\{",
+    r"^\s*location\s+(?:(?:=|\^~|~\*?)\s+)?/mini-app/\s*\{",
     re.MULTILINE,
 )
 _ALIAS_RE = re.compile(r"^\s*alias\s+([^;]+);", re.MULTILINE)
@@ -94,7 +94,8 @@ def resolve_miniapp_path(text: str, *, domain: str) -> str:
         root_matches = _ROOT_RE.findall(location)
         if not root_matches:
             # Nginx inherits a server-level root when the location has none.
-            root_matches = _ROOT_RE.findall(server_block[: server_block.find(location)])
+            before_location = server_block[: server_block.find(location)]
+            root_matches = _ROOT_RE.findall(before_location)
         if len(root_matches) != 1:
             raise ValueError(
                 "could not resolve exactly one alias/root for /mini-app/ location"
