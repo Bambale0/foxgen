@@ -75,3 +75,18 @@ def test_deploy_uses_runtime_post_smoke_not_edge_method_status() -> None:
     assert "max_webhook_status" in wrapper
     assert "max_ingress_status" not in wrapper
     assert "instagram_ingress_status" not in wrapper
+
+
+def test_production_workflow_bridges_max_token_without_logging_secret() -> None:
+    workflow = Path(".github/workflows/deploy-production.yml").read_text(encoding="utf-8")
+
+    assert "MAX_ACCESS_TOKEN: ${{ secrets.MAX_ACCESS_TOKEN }}" in workflow
+    assert 'Missing production secret MAX_ACCESS_TOKEN' in workflow
+    assert "Stage protected MAX runtime seed" in workflow
+    assert "backups/channel-actions/.env.max.actions" in workflow
+    assert "chmod 0600" in workflow
+    assert "MAX_ACCESS_TOKEN configured=yes" in workflow
+    assert "Protected MAX runtime seed staged" in workflow
+    assert 'echo "$MAX_ACCESS_TOKEN"' not in workflow
+    assert "cat $MAX_ACCESS_TOKEN" not in workflow
+    assert 'rm -f "$PROJECT_DIR/backups/channel-actions/.env.max.actions"' in workflow
