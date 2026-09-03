@@ -42,6 +42,7 @@ jobs:
       DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
       DEPLOY_SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
       DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+      HAPPYFOX_RUNTIME_ENV: ${{ secrets.HAPPYFOX_RUNTIME_ENV }}
       DEPLOY_USER: ${{ vars.DEPLOY_USER || 'root' }}
       DEPLOY_PORT: ${{ vars.DEPLOY_PORT || '22' }}
       DEPLOY_PATH: ${{ vars.DEPLOY_PATH || '/root/foxgen' }}
@@ -227,6 +228,40 @@ jobs:
 
           echo "Resolved HappyFox Mini App domain: ${resolved_domain} (${resolver_source:-unknown source})"
           echo "MINIAPP_FRONTEND_DOMAIN=${resolved_domain}" >> "$GITHUB_ENV"
+
+      - name: Sync HappyFox runtime overlay from GitHub secret
+        if: env.HAPPYFOX_RUNTIME_ENV != ''
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          if ! printf '%s\n' "$HAPPYFOX_RUNTIME_ENV" | grep -Eq "^MAX_ACCESS_TOKEN='[^']+'$"; then
+            echo "HAPPYFOX_RUNTIME_ENV secret is missing MAX_ACCESS_TOKEN" >&2
+            exit 1
+          fi
+          tmp_env="$(mktemp)"
+          printf '%s\n' "$HAPPYFOX_RUNTIME_ENV" > "$tmp_env"
+          trap 'rm -f "$tmp_env"' EXIT
+          chmod 600 "$tmp_env"
+          printf -v quoted_path '%q' "$DEPLOY_PATH"
+          printf -v quoted_port '%q' "$DEPLOY_PORT"
+          scp \
+            -i "$HOME/.ssh/id_ed25519" \
+            -P "$DEPLOY_PORT" \
+            -o BatchMode=yes \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            -o ConnectTimeout=15 \
+            "$tmp_env" "$DEPLOY_USER@$DEPLOY_HOST:$quoted_path/.env.happyfox.runtime"
+          ssh \
+            -i "$HOME/.ssh/id_ed25519" \
+            -p "$DEPLOY_PORT" \
+            -o BatchMode=yes \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            -o ConnectTimeout=15 \
+            "$DEPLOY_USER@$DEPLOY_HOST" \
+            "chmod 600 $quoted_path/.env.happyfox.runtime"
+          echo "Synced .env.happyfox.runtime from HAPPYFOX_RUNTIME_ENV secret (MAX protected values included)"
 
       - name: Preflight isolated HappyFox runtime
         shell: bash
