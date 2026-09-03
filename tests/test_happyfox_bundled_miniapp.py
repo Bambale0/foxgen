@@ -1,8 +1,11 @@
 import os
 from pathlib import Path
 
+import pytest
+
 from bot.env import _apply_runtime_defaults
 from scripts.canonicalize_happyfox_runtime import canonicalize
+from scripts.resolve_happyfox_miniapp_nginx_path import resolve_miniapp_path
 
 
 def test_runtime_canonicalizer_uses_happyfox_public_origin(tmp_path: Path) -> None:
@@ -87,13 +90,70 @@ def test_normalized_runtime_versions_webapp_and_keeps_commands_menu() -> None:
     assert "_mini_app_url_with_start_param" not in helper
 
 
+def test_resolve_miniapp_path_uses_effective_alias() -> None:
+    config = """
+server {
+    listen 443 ssl;
+    server_name alena.xn--e1aikcel5c5a.online;
+
+    location ^~ /mini-app/api/ {
+        proxy_pass http://happyfox_backend;
+    }
+
+    location /mini-app/ {
+        alias /srv/live-happyfox/;
+        try_files $uri $uri/ /mini-app/index.html;
+    }
+}
+"""
+
+    assert (
+        resolve_miniapp_path(config, domain="alena.xn--e1aikcel5c5a.online")
+        == "/srv/live-happyfox"
+    )
+
+
+def test_resolve_miniapp_path_accepts_location_modifier_and_root() -> None:
+    config = """
+server {
+    listen 443 ssl http2;
+    server_name happyfox.example;
+
+    location ^~ /mini-app/ {
+        root /srv/www;
+        try_files $uri $uri/ /mini-app/index.html;
+    }
+}
+"""
+
+    assert resolve_miniapp_path(config, domain="happyfox.example") == "/srv/www/mini-app"
+
+
+def test_resolve_miniapp_path_rejects_variable_alias() -> None:
+    config = """
+server {
+    listen 443 ssl;
+    server_name happyfox.example;
+    location /mini-app/ {
+        alias $dynamic_root/;
+    }
+}
+"""
+
+    with pytest.raises(ValueError, match="variable-based"):
+        resolve_miniapp_path(config, domain="happyfox.example")
+
+
 def test_production_miniapp_wrapper_publishes_and_verifies_exact_bundled_release() -> None:
     wrapper = Path("scripts/deploy_happyfox_miniapp.sh").read_text(encoding="utf-8")
 
     assert "deploy_miniapp_local.sh" not in wrapper
     assert 'BUNDLED_ROOT="/app/frontend/miniapp-v0/out"' in wrapper
+    assert 'NGINX_CONTAINER="${HAPPYFOX_REVERSE_PROXY_CONTAINER:-artflow-nginx-1}"' in wrapper
     assert 'docker cp "${BACKEND_CONTAINER}:${BUNDLED_ROOT}/." "$bundle_dir/"' in wrapper
-    assert 'cp -a "$bundle_dir/." "$MINIAPP_ROOT/"' in wrapper
+    assert "resolve_happyfox_miniapp_nginx_path.py" in wrapper
+    assert 'docker cp "$bundle_dir/." "${NGINX_CONTAINER}:${MINIAPP_ROOT}/"' in wrapper
+    assert "NGINX_STATIC_RELEASE_OK" in wrapper
     assert "container bundle revision mismatch" in wrapper
     assert "revision.txt?revision=" in wrapper
     assert "MOBILE_SAFARI_UA" in wrapper
