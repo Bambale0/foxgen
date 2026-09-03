@@ -3,13 +3,12 @@ set -Eeuo pipefail
 IFS=$'\n\t'
 umask 027
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 : "${MINIAPP_FRONTEND_DOMAIN:?MINIAPP_FRONTEND_DOMAIN is required for HappyFox}"
 EXPECTED_SHA="${1:-$(git rev-parse HEAD)}"
 BACKEND_CONTAINER="${HAPPYFOX_BACKEND_CONTAINER:-foxgen-happyfox-bot}"
+NGINX_CONTAINER="${HAPPYFOX_REVERSE_PROXY_CONTAINER:-artflow-nginx-1}"
 BUNDLED_ROOT="/app/frontend/miniapp-v0/out"
-PROFILE_FILE="/etc/foxgen-happyfox/profiles/${MINIAPP_FRONTEND_DOMAIN}.env"
-WEB_ROOT="/var/www/${MINIAPP_FRONTEND_DOMAIN}"
-MINIAPP_ROOT="${WEB_ROOT}/mini-app"
 
 case "${MINIAPP_FRONTEND_DOMAIN,,}" in
   *tanyapi.chillcreative.ru*|*cdn.chillcreative.ru*|*media.chillcreative.ru*|*tanyapp*|*neuromix*|*only_tany*)
@@ -23,24 +22,16 @@ esac
   exit 1
 }
 
-if [[ -f "$PROFILE_FILE" ]]; then
-  # The profile may override filesystem layout only. The public domain remains
-  # pinned above so stale/source-product hosts cannot survive a cutover.
-  # shellcheck disable=SC1090
-  source "$PROFILE_FILE"
-  WEB_ROOT="${WEB_ROOT:-/var/www/${MINIAPP_FRONTEND_DOMAIN}}"
-  MINIAPP_ROOT="${MINIAPP_ROOT:-${WEB_ROOT}/mini-app}"
-fi
-
 command -v docker >/dev/null || {
   echo "docker is required to publish the bundled HappyFox Mini App" >&2
   exit 1
 }
-
-docker inspect "$BACKEND_CONTAINER" >/dev/null 2>&1 || {
-  echo "HappyFox backend container is unavailable: $BACKEND_CONTAINER" >&2
-  exit 1
-}
+for container in "$BACKEND_CONTAINER" "$NGINX_CONTAINER"; do
+  docker inspect "$container" >/dev/null 2>&1 || {
+    echo "Required HappyFox container is unavailable: $container" >&2
+    exit 1
+  }
+done
 
 work="$(mktemp -d)"
 cleanup() { rm -rf "$work"; }
@@ -69,16 +60,38 @@ bundled_revision="$(tr -d '\r\n' < "$bundle_dir/revision.txt")"
   exit 1
 }
 
-# nginx serves the Mini App from the host web root while API calls are proxied
-# to the backend. Publish the exact static export bundled in the already-healthy
-# backend image so frontend and API can never drift to different commits.
-install -d -m 0755 "$MINIAPP_ROOT"
-cp -a "$bundle_dir/." "$MINIAPP_ROOT/"
-chown -R root:root "$MINIAPP_ROOT"
-find "$MINIAPP_ROOT" -type d -exec chmod 0755 {} +
-find "$MINIAPP_ROOT" -type f -exec chmod 0644 {} +
+# Resolve the filesystem path from the effective nginx configuration rather
+# than guessing a host web-root. The production reverse proxy can mount its
+# static tree at a container path unrelated to /var/www/<domain> on the host.
+if ! docker exec "$NGINX_CONTAINER" nginx -T > "$work/nginx.conf" 2> "$work/nginx-check.log"; then
+  echo "Could not read effective nginx configuration" >&2
+  exit 1
+fi
+MINIAPP_ROOT="$(
+  python3 "$SCRIPT_DIR/resolve_happyfox_miniapp_nginx_path.py" \
+    "$work/nginx.conf" "$MINIAPP_FRONTEND_DOMAIN"
+)"
+[[ "$MINIAPP_ROOT" == /* ]] || {
+  echo "Resolved nginx Mini App path is not absolute" >&2
+  exit 1
+}
 
-echo "[happyfox-miniapp] published exact bundled release: ${EXPECTED_SHA}"
+# Copy through the nginx container namespace. If the alias is backed by a bind
+# mount or volume, docker cp writes to that exact live mount; this avoids any
+# host/container path skew and makes the public static release match backend.
+docker exec "$NGINX_CONTAINER" mkdir -p "$MINIAPP_ROOT"
+docker cp "$bundle_dir/." "${NGINX_CONTAINER}:${MINIAPP_ROOT}/"
+
+nginx_revision="$(
+  docker exec "$NGINX_CONTAINER" cat "${MINIAPP_ROOT}/revision.txt" \
+    | tr -d '\r\n'
+)"
+[[ "$nginx_revision" == "$EXPECTED_SHA" ]] || {
+  echo "HappyFox nginx static revision mismatch after publish: expected=$EXPECTED_SHA actual=$nginx_revision" >&2
+  exit 1
+}
+
+echo "[happyfox-miniapp] NGINX_STATIC_RELEASE_OK revision=${EXPECTED_SHA}"
 
 BASE_URL="https://${MINIAPP_FRONTEND_DOMAIN}/mini-app"
 MOBILE_SAFARI_UA='Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 Safari/604.1'
