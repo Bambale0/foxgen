@@ -37,10 +37,10 @@ def test_max_runtime_is_dark_by_default(monkeypatch) -> None:
 
 def test_enabled_max_runtime_requires_explicit_public_contract(monkeypatch) -> None:
     monkeypatch.setenv("MAX_WEBHOOK_URL", "https://api.example.invalid/max/webhook")
-    monkeypatch.setenv("MAX_BOT_NAME", "happyfox_bot")
+    monkeypatch.delenv("MAX_BOT_NAME", raising=False)
     monkeypatch.setenv(
         "MAX_PAYMENT_RETURN_URL",
-        "https://max.ru/happyfox_bot?start=max_payment",
+        "https://api.example.invalid/mini-app/",
     )
     runtime = MaxRuntimeSettings.from_env()
     settings = MaxSettings(
@@ -49,19 +49,21 @@ def test_enabled_max_runtime_requires_explicit_public_contract(monkeypatch) -> N
         webhook_secret="valid_secret",
         webhook_path="/max/webhook",
     )
+    # A missing bot username may hide referral deep links, but it must not take
+    # down callbacks/generation/payment for the whole MAX channel.
     runtime.validate_enabled(settings)
 
     bad = MaxRuntimeSettings(
         webhook_url="https://api.example.invalid/wrong",
-        bot_name="happyfox_bot",
-        payment_return_url="https://max.ru/happyfox_bot?start=max_payment",
+        bot_name="",
+        payment_return_url="https://api.example.invalid/mini-app/",
         support_contact="",
     )
     with pytest.raises(RuntimeError, match="MAX_WEBHOOK_URL path"):
         bad.validate_enabled(settings)
 
 
-def test_max_subscription_is_created_once_and_requires_event_parity() -> None:
+def test_max_subscription_is_created_or_refreshed_with_event_parity() -> None:
     client = FakeSubscriptionClient()
     asyncio.run(
         _ensure_max_subscription(
@@ -85,7 +87,9 @@ def test_max_subscription_is_created_once_and_requires_event_parity() -> None:
             webhook_url="https://api.example.invalid/max/webhook",
         )
     )
-    assert existing.created == []
+    # POST /subscriptions is also MAX's update operation. Refreshing the same
+    # URL repairs a rotated/recovered webhook secret that GET cannot reveal.
+    assert existing.created == ["https://api.example.invalid/max/webhook"]
 
     incomplete = FakeSubscriptionClient(
         [
@@ -95,10 +99,10 @@ def test_max_subscription_is_created_once_and_requires_event_parity() -> None:
             }
         ]
     )
-    with pytest.raises(RuntimeError, match="missing update types"):
-        asyncio.run(
-            _ensure_max_subscription(
-                incomplete,
-                webhook_url="https://api.example.invalid/max/webhook",
-            )
+    asyncio.run(
+        _ensure_max_subscription(
+            incomplete,
+            webhook_url="https://api.example.invalid/max/webhook",
         )
+    )
+    assert incomplete.created == ["https://api.example.invalid/max/webhook"]

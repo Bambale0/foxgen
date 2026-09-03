@@ -212,25 +212,21 @@ def test_deploy_script_gates_public_max_webhook_route() -> None:
     script = Path("scripts/deploy_happyfox.sh").read_text(encoding="utf-8")
 
     health_gate = script.rindex('${PUBLIC_ORIGIN}/health')
-    max_ingress_gate = script.rindex('${PUBLIC_ORIGIN}/max/webhook', 0, script.rindex('${PUBLIC_ORIGIN}/max/webhook'))
     max_runtime_gate = script.rindex('${PUBLIC_ORIGIN}/max/webhook')
 
-    assert "max_ingress_status" in script
+    assert "max_ingress_status" not in script
     assert "max_webhook_status" in script
-    assert 'if [ "$max_ingress_status" != "403" ]; then' in script
     assert 'if [ "$max_webhook_status" != "401" ]; then' in script
     assert "MAX_WEBHOOK_ROUTE_OK" in script
-    assert health_gate < max_ingress_gate < max_runtime_gate
+    assert health_gate < max_runtime_gate
 
 
-def test_deploy_script_gates_instagram_ingress_and_enabled_runtime() -> None:
+def test_deploy_script_gates_instagram_enabled_runtime() -> None:
     script = Path("scripts/deploy_happyfox.sh").read_text(encoding="utf-8")
 
     assert "runtime_flag_enabled" in script
-    assert "instagram_ingress_status" in script
-    assert 'if [ "$instagram_ingress_status" != "403" ]; then' in script
+    assert "instagram_ingress_status" not in script
     assert "runtime_flag_enabled INSTAGRAM_ENABLED" in script
     assert 'if [ "$instagram_verify_status" != "403" ]; then' in script
     assert 'if [ "$instagram_post_status" != "401" ]; then' in script
-    assert "INSTAGRAM_WEBHOOK_INGRESS_OK" in script
     assert "INSTAGRAM_WEBHOOK_RUNTIME_OK" in script
