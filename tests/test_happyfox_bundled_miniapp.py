@@ -87,11 +87,21 @@ def test_normalized_runtime_versions_webapp_and_keeps_commands_menu() -> None:
     assert "_mini_app_url_with_start_param" not in helper
 
 
-def test_production_miniapp_wrapper_verifies_bundled_release() -> None:
+def test_production_miniapp_wrapper_publishes_and_verifies_exact_bundled_release() -> None:
     wrapper = Path("scripts/deploy_happyfox_miniapp.sh").read_text(encoding="utf-8")
+
     assert "deploy_miniapp_local.sh" not in wrapper
+    assert 'BUNDLED_ROOT="/app/frontend/miniapp-v0/out"' in wrapper
+    assert 'docker cp "${BACKEND_CONTAINER}:${BUNDLED_ROOT}/." "$bundle_dir/"' in wrapper
+    assert 'cp -a "$bundle_dir/." "$MINIAPP_ROOT/"' in wrapper
+    assert "container bundle revision mismatch" in wrapper
     assert "revision.txt?revision=" in wrapper
-    assert "bundled release verified" in wrapper
+    assert "MOBILE_SAFARI_UA" in wrapper
+    assert "iPhone" in wrapper
+    assert '"${BASE_URL}/api/bootstrap"' in wrapper
+    assert "400|401|403" in wrapper
+    assert "bootstrap ingress failed" in wrapper
+    assert "MOBILE_SAFARI_OK" in wrapper
 
 
 def test_happyfox_login_gate_uses_active_brand() -> None:
