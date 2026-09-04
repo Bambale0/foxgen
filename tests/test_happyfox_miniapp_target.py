@@ -1,5 +1,3 @@
-import pytest
-
 from scripts.resolve_happyfox_miniapp_nginx_target import resolve_miniapp_target
 
 
@@ -58,5 +56,9 @@ server {{
 }}
 """
 
-    with pytest.raises(ValueError, match="variable-based"):
+    try:
         resolve_miniapp_target(config, domain=DOMAIN)
+    except ValueError as exc:
+        assert "variable-based" in str(exc)
+    else:
+        raise AssertionError("variable proxy target must be rejected")
