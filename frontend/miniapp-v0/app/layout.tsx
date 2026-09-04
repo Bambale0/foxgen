@@ -55,11 +55,9 @@ export const metadata: Metadata = {
   description: BRAND_DESCRIPTION,
   applicationName: BRAND_NAME,
   generator: BRAND_NAME,
-  manifest: '/mini-app/manifest.webmanifest',
   icons: {
     icon: [
-      { url: BRAND_ICON, type: 'image/png', sizes: '512x512' },
-      { url: '/mini-app/happyfox-icon-192.png', type: 'image/png', sizes: '192x192' },
+      { url: BRAND_ICON, type: 'image/webp', sizes: '256x256' },
       { url: '/mini-app/icon-light-32x32.png', type: 'image/png', sizes: '32x32', media: '(prefers-color-scheme: light)' },
       { url: '/mini-app/icon-dark-32x32.png', type: 'image/png', sizes: '32x32', media: '(prefers-color-scheme: dark)' },
     ],
