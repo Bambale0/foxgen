@@ -4,14 +4,14 @@ import {
   ArrowRight,
   AudioLines,
   Check,
-  ImageIcon,
+  Image as ImageGlyph,
   Layers3,
   Sparkles,
   Video,
   WandSparkles,
 } from 'lucide-react'
 
-import { BRAND_DESCRIPTION, BRAND_LOGO, BRAND_NAME, TELEGRAM_APP_URL } from '@/lib/brand'
+import { BRAND_DESCRIPTION, BRAND_LOGO, BRAND_NAME, BRAND_SITE_LOGO, TELEGRAM_APP_URL } from '@/lib/brand'
 
 export const metadata: Metadata = {
   title: `${BRAND_NAME} — AI-контент в Telegram`,
@@ -22,7 +22,7 @@ const capabilities = [
   {
     title: 'Фото',
     description: 'Создание и редактирование изображений по идее или референсу.',
-    icon: ImageIcon,
+    icon: ImageGlyph,
   },
   {
     title: 'Видео',
@@ -73,14 +73,15 @@ export default function LandingPage() {
           className="flex items-center gap-3"
           aria-label={`${BRAND_NAME} — открыть приложение в Telegram`}
         >
-          <span className="relative size-11 overflow-hidden rounded-2xl border border-border/70 bg-card shadow-[0_12px_40px_rgba(255,106,0,0.12)]">
-            <Image src={BRAND_LOGO} alt="" fill priority sizes="44px" className="object-cover" />
-          </span>
-          <span>
-            <span className="block font-serif text-xl font-semibold leading-none">{BRAND_NAME}</span>
-            <span className="mt-1 block text-[10px] font-medium uppercase tracking-[0.2em] text-muted-foreground">
-              AI creation studio
-            </span>
+          <span className="relative h-20 w-20 shrink-0 sm:h-24 sm:w-24">
+            <Image
+              src={BRAND_SITE_LOGO}
+              alt={`${BRAND_NAME} — AI Regeneration`}
+              fill
+              priority
+              sizes="(min-width: 640px) 96px, 80px"
+              className="object-contain"
+            />
           </span>
         </a>
 
