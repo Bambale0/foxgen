@@ -96,8 +96,13 @@ def test_production_miniapp_wrapper_publishes_and_verifies_exact_bundled_release
     assert 'docker exec "$NGINX_CONTAINER" nginx -T' in wrapper
     assert "resolve_happyfox_miniapp_nginx_target.py" in wrapper
     assert 'case "$target_kind" in' in wrapper
-    assert 'HAPPYFOX_MINIAPP_CONTAINER' in wrapper
-    assert "frontend_roots" in wrapper
+    assert "HAPPYFOX_MINIAPP_CONTAINER" in wrapper
+    assert "frontend_mounts" in wrapper
+    assert "mount_type" in wrapper
+    assert "mount_source" in wrapper
+    assert "mount_rw" in wrapper
+    assert '"$mount_type" == "bind"' in wrapper
+    assert 'cp -a "$bundle_dir/." "$mount_source/"' in wrapper
     assert 'docker cp "$bundle_dir/." "${FRONTEND_CONTAINER}:${MINIAPP_ROOT}/"' in wrapper
     assert 'docker cp "$bundle_dir/." "${NGINX_CONTAINER}:${MINIAPP_ROOT}/"' in wrapper
     assert "container bundle revision mismatch" in wrapper
