@@ -7,7 +7,6 @@ from urllib.parse import urlsplit
 
 from scripts.resolve_happyfox_miniapp_nginx_path import (
     _LISTEN_443_RE,
-    _SERVER_NAME_RE,
     _SERVER_START_RE,
     _location_block,
     _named_block_ranges,
