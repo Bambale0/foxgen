@@ -14,7 +14,12 @@ from bot.max_api import callback_button, inline_keyboard, link_button
 from bot.max_assistant import max_ai_assistant_service
 from bot.max_channel import _format_cost, _message_text
 from bot.max_seedance25 import MaxSeedance25ChannelService
-from bot.max_store import clear_max_session, get_max_balance, get_max_session, save_max_session
+from bot.max_store import (
+    clear_max_session,
+    get_max_balance,
+    get_max_session,
+    save_max_session,
+)
 from bot.max_ui import (
     back_home_menu,
     image_model_menu,
@@ -381,7 +386,11 @@ class MaxProductChannelService(MaxSeedance25ChannelService):
             rendered = "У этой карточки пока нет текста prompt."
         else:
             visible = raw_prompt[:3000]
-            suffix = "\n\n<i>Текст сокращён до лимита сообщения MAX.</i>" if len(raw_prompt) > len(visible) else ""
+            suffix = (
+                "\n\n<i>Текст сокращён до лимита сообщения MAX.</i>"
+                if len(raw_prompt) > len(visible)
+                else ""
+            )
             rendered = f"<pre>{html.escape(visible)}</pre>{suffix}"
         await self._respond(
             user_id,
