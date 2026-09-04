@@ -151,6 +151,12 @@ publish_via_static_proxy() {
   # mutating Docker internals or weakening the container mount to rw.
   install -d -m 0755 "$static_root"
   cp -a "$bundle_dir/." "$static_root/"
+  # cp -a also preserves the staging directory mode. The staging tree is
+  # intentionally created under umask 027, so normalize the published root
+  # and descendants back to nginx-readable permissions after the copy.
+  chmod 0755 "$static_root"
+  find "$static_root" -type d -exec chmod 0755 {} +
+  find "$static_root" -type f -exec chmod a+r {} +
 
   local published_revision
   published_revision="$(tr -d '\r\n' < "$static_root/revision.txt")"
