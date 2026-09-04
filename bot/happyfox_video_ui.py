@@ -8,12 +8,16 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from bot.services.preset_manager import preset_manager
 
 STANDARD_VIDEO_TYPES = {"text", "imgtxt", "video"}
+DEDICATED_VIDEO_MODELS = {"seedance_2_5"}
 
 # HappyFox mirrors the v7_kate interaction contract, but only exposes models that
 # are already implemented by this runtime. Provider payloads remain owned by the
-# existing generation service.
+# existing generation service. Dedicated models can be shown in this selector,
+# but their callback opens the provider-specific flow instead of the generic
+# settings keyboard.
 VIDEO_TYPE_ROWS: dict[str, tuple[str, ...]] = {
     "text": (
+        "seedance_2_5",
         "v3_pro",
         "v3_std",
         "v26_pro",
@@ -24,6 +28,7 @@ VIDEO_TYPE_ROWS: dict[str, tuple[str, ...]] = {
         "veo3_lite",
     ),
     "imgtxt": (
+        "seedance_2_5",
         "v3_pro",
         "v3_std",
         "v26_pro",
@@ -34,6 +39,7 @@ VIDEO_TYPE_ROWS: dict[str, tuple[str, ...]] = {
         "veo3_fast",
     ),
     "video": (
+        "seedance_2_5",
         "seedance_2",
         "glow",
         "gemini_omni",
@@ -41,6 +47,7 @@ VIDEO_TYPE_ROWS: dict[str, tuple[str, ...]] = {
 }
 
 VIDEO_MODEL_LABELS = {
+    "seedance_2_5": "🔥🆕 Seedance 2.5",
     "v3_pro": "💎 Kling 3.0",
     "v3_std": "⚡ Kling v3",
     "v26_pro": "🌀 Kling 2.5 Turbo",
@@ -78,14 +85,18 @@ def is_video_model_compatible(v_type: str, model: str) -> bool:
 
 
 def compatible_video_model(v_type: str, model: str | None) -> str:
-    """Keep the current model when valid, otherwise choose the first valid model."""
+    """Keep a generic model when valid; never auto-enter a dedicated flow."""
     current = str(model or "")
-    if current and is_video_model_compatible(v_type, current):
-        return current
+    selector = _selector_model(current)
     models = VIDEO_TYPE_ROWS.get(v_type, ())
-    if not models:
-        return current or "v3_pro"
-    return models[0]
+
+    if current and selector in models and selector not in DEDICATED_VIDEO_MODELS:
+        return current
+
+    for candidate in models:
+        if candidate not in DEDICATED_VIDEO_MODELS:
+            return candidate
+    return current or "v3_pro"
 
 
 def _format_amount(value: float) -> str:
@@ -102,7 +113,7 @@ def _model_price_label(model: str) -> str:
             )
             return f"от {_format_amount(cost)}🐾"
 
-        quality = "720p" if model.startswith("veo3") else None
+        quality = "720p" if model == "seedance_2_5" or model.startswith("veo3") else None
         per_second = preset_manager.get_video_cost_per_second(model, duration, quality)
         return f"{_format_amount(per_second)}🐾/с"
     except PRICE_LOOKUP_ERRORS:

@@ -93,8 +93,11 @@ def test_production_miniapp_wrapper_publishes_and_verifies_exact_bundled_release
     assert "deploy_miniapp_local.sh" not in wrapper
     assert 'BUNDLED_ROOT="/app/frontend/miniapp-v0/out"' in wrapper
     assert 'docker cp "${BACKEND_CONTAINER}:${BUNDLED_ROOT}/." "$bundle_dir/"' in wrapper
-    assert 'cp -a "$bundle_dir/." "$MINIAPP_ROOT/"' in wrapper
+    assert 'docker exec "$NGINX_CONTAINER" nginx -T' in wrapper
+    assert "resolve_happyfox_miniapp_nginx_path.py" in wrapper
+    assert 'docker cp "$bundle_dir/." "${NGINX_CONTAINER}:${MINIAPP_ROOT}/"' in wrapper
     assert "container bundle revision mismatch" in wrapper
+    assert "NGINX_STATIC_RELEASE_OK" in wrapper
     assert "revision.txt?revision=" in wrapper
     assert "MOBILE_SAFARI_UA" in wrapper
     assert "iPhone" in wrapper
@@ -102,6 +105,22 @@ def test_production_miniapp_wrapper_publishes_and_verifies_exact_bundled_release
     assert "400|401|403" in wrapper
     assert "bootstrap ingress failed" in wrapper
     assert "MOBILE_SAFARI_OK" in wrapper
+
+
+def test_release_keeps_seedance_25_in_happyfox_telegram_video_selector() -> None:
+    source = Path("bot/happyfox_video_ui.py").read_text(encoding="utf-8")
+    dockerfile = Path("Dockerfile").read_text(encoding="utf-8")
+    smoke = Path("scripts/smoke_happyfox_telegram_seedance25.py").read_text(
+        encoding="utf-8"
+    )
+
+    assert '"seedance_2_5": "🔥🆕 Seedance 2.5"' in source
+    assert source.count('"seedance_2_5",') >= 3
+    assert 'callback_data=f"v_model_{model}"' in source
+    assert "TELEGRAM_SEEDANCE25_MENU_OK" in smoke
+    assert "get_create_video_keyboard" in smoke
+    assert "python -m scripts.smoke_happyfox_telegram_seedance25" in dockerfile
+    assert "python scripts/smoke_happyfox_telegram_seedance25.py" not in dockerfile
 
 
 def test_happyfox_login_gate_uses_active_brand() -> None:
