@@ -2,7 +2,7 @@
 
 import Image from 'next/image'
 import { ArrowRight, Gauge, Sparkles, WandSparkles } from 'lucide-react'
-import { BRAND_LOGO, BRAND_NAME } from '@/lib/brand'
+import { BRAND_ICON, BRAND_NAME } from '@/lib/brand'
 import { useApp } from '@/lib/app-context'
 import { QuickActionGrid } from '../quick-action-grid'
 import { TaskHistoryList } from '../task-history-list'
@@ -15,9 +15,9 @@ export function StudioTab() {
       <section className="fox-surface-accent relative overflow-hidden rounded-[28px] px-5 py-6 sm:px-6 sm:py-7">
         <div className="pointer-events-none absolute -right-10 -top-12 h-44 w-44 rounded-full border border-gold/20" />
         <div className="pointer-events-none absolute -right-20 top-3 h-56 w-56 rounded-full border border-gold/10" />
-        <div className="pointer-events-none absolute right-2 top-1/2 h-36 w-36 -translate-y-1/2 opacity-[0.12] sm:h-44 sm:w-44">
+        <div className="pointer-events-none absolute right-2 top-1/2 h-36 w-36 -translate-y-1/2 opacity-[0.14] sm:h-44 sm:w-44">
           <Image
-            src={BRAND_LOGO}
+            src={BRAND_ICON}
             alt=""
             fill
             sizes="176px"

@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from 'next'
-import { BRAND_DESCRIPTION, BRAND_LOGO, BRAND_NAME } from '@/lib/brand'
+import { BRAND_DESCRIPTION, BRAND_ICON, BRAND_NAME } from '@/lib/brand'
 import './globals.css'
 
 const telegramBootstrapScript = `
@@ -56,8 +56,13 @@ export const metadata: Metadata = {
   applicationName: BRAND_NAME,
   generator: BRAND_NAME,
   icons: {
-    icon: BRAND_LOGO,
-    apple: BRAND_LOGO,
+    icon: [
+      { url: BRAND_ICON, type: 'image/webp', sizes: '256x256' },
+      { url: '/mini-app/icon-light-32x32.png', type: 'image/png', sizes: '32x32', media: '(prefers-color-scheme: light)' },
+      { url: '/mini-app/icon-dark-32x32.png', type: 'image/png', sizes: '32x32', media: '(prefers-color-scheme: dark)' },
+    ],
+    apple: [{ url: '/mini-app/apple-icon.png', type: 'image/png', sizes: '180x180' }],
+    shortcut: ['/mini-app/favicon.ico'],
   },
 }
 

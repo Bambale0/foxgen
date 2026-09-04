@@ -3,7 +3,7 @@
 import Image from 'next/image'
 import { Coins, RefreshCw, Wifi } from 'lucide-react'
 import { useApp } from '@/lib/app-context'
-import { BRAND_LOGO, BRAND_NAME } from '@/lib/brand'
+import { BRAND_ICON, BRAND_NAME } from '@/lib/brand'
 import { cn } from '@/lib/utils'
 
 export function HeroHeader() {
@@ -15,9 +15,9 @@ export function HeroHeader() {
       <div className="mx-auto w-full max-w-[1180px]">
         <div className="glass-strong flex items-center justify-between gap-3 rounded-2xl border border-white/[0.07] px-3 py-2.5 shadow-[0_12px_42px_rgba(0,0,0,0.3)]">
           <div className="flex min-w-0 items-center gap-2.5">
-            <div className="relative h-9 w-9 shrink-0 overflow-hidden rounded-xl border border-gold/35 bg-gold/10 shadow-[0_0_24px_rgba(255,106,0,0.12)]">
+            <div className="relative h-9 w-9 shrink-0 overflow-hidden rounded-xl border border-gold/35 bg-black shadow-[0_0_24px_rgba(255,106,0,0.16)]">
               <Image
-                src={BRAND_LOGO}
+                src={BRAND_ICON}
                 alt={`${BRAND_NAME} logo`}
                 fill
                 priority

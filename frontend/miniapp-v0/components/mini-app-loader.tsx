@@ -21,17 +21,15 @@ export function MiniAppLoader() {
         <div className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full border border-gold/15" />
 
         <div className="relative flex flex-col items-center text-center">
-          <div className="relative mb-6 flex h-24 w-24 items-center justify-center">
-            <div className="absolute inset-0 rounded-full border border-gold/15 shadow-[0_0_44px_rgba(255,106,0,0.12)]" />
-            <div className="absolute inset-2 rounded-full border border-dashed border-gold/25" />
-            <div className="absolute inset-0 animate-spin rounded-full border-2 border-transparent border-r-gold/40 border-t-gold" />
-            <div className="relative h-16 w-16 overflow-hidden rounded-full border border-gold/30 bg-gold/10 shadow-[0_0_28px_rgba(255,106,0,0.14)]">
+          <div className="relative mb-6 h-44 w-44">
+            <div className="absolute -inset-3 animate-pulse rounded-[34px] border border-gold/15 shadow-[0_0_56px_rgba(255,106,0,0.18)]" />
+            <div className="relative h-full w-full overflow-hidden rounded-[28px] border border-gold/35 bg-black shadow-[0_0_34px_rgba(255,106,0,0.16)]">
               <Image
                 src={BRAND_LOGO}
                 alt={`${BRAND_NAME} logo`}
                 fill
                 priority
-                sizes="64px"
+                sizes="176px"
                 className="object-cover"
               />
             </div>
