@@ -1,6 +1,5 @@
 import type { Metadata } from 'next'
 import Image from 'next/image'
-import Link from 'next/link'
 import {
   ArrowRight,
   AudioLines,
@@ -12,7 +11,7 @@ import {
   WandSparkles,
 } from 'lucide-react'
 
-import { BRAND_DESCRIPTION, BRAND_LOGO, BRAND_NAME } from '@/lib/brand'
+import { BRAND_DESCRIPTION, BRAND_LOGO, BRAND_NAME, TELEGRAM_APP_URL } from '@/lib/brand'
 
 export const metadata: Metadata = {
   title: `${BRAND_NAME} — AI-контент в Telegram`,
@@ -54,6 +53,12 @@ const highlights = [
   'Готовые сценарии без лишних настроек',
 ]
 
+const telegramLinkProps = {
+  href: TELEGRAM_APP_URL,
+  target: '_blank',
+  rel: 'noreferrer',
+} as const
+
 export default function LandingPage() {
   return (
     <main className="relative min-h-screen overflow-hidden bg-background text-foreground">
@@ -63,7 +68,11 @@ export default function LandingPage() {
       />
 
       <header className="relative z-10 mx-auto flex w-full max-w-6xl items-center justify-between px-4 py-5 sm:px-6 lg:px-8">
-        <Link href="/" className="flex items-center gap-3" aria-label={`${BRAND_NAME} — открыть приложение`}>
+        <a
+          {...telegramLinkProps}
+          className="flex items-center gap-3"
+          aria-label={`${BRAND_NAME} — открыть приложение в Telegram`}
+        >
           <span className="relative size-11 overflow-hidden rounded-2xl border border-border/70 bg-card shadow-[0_12px_40px_rgba(255,106,0,0.12)]">
             <Image src={BRAND_LOGO} alt="" fill priority sizes="44px" className="object-cover" />
           </span>
@@ -73,20 +82,20 @@ export default function LandingPage() {
               AI creation studio
             </span>
           </span>
-        </Link>
+        </a>
 
         <nav className="hidden items-center gap-7 text-sm text-muted-foreground md:flex" aria-label="Основная навигация">
           <a href="#features" className="transition-colors hover:text-foreground">Возможности</a>
           <a href="#how" className="transition-colors hover:text-foreground">Как работает</a>
         </nav>
 
-        <Link
-          href="/"
+        <a
+          {...telegramLinkProps}
           className="inline-flex min-h-10 items-center justify-center rounded-xl border border-primary/35 bg-primary px-4 text-sm font-semibold text-primary-foreground shadow-[0_10px_30px_rgba(255,106,0,0.18)] transition-transform hover:-translate-y-0.5"
         >
           Открыть
           <ArrowRight className="ml-2 size-4" aria-hidden="true" />
-        </Link>
+        </a>
       </header>
 
       <section className="relative z-10 mx-auto grid w-full max-w-6xl gap-12 px-4 pb-20 pt-12 sm:px-6 sm:pt-20 lg:grid-cols-[1.05fr_0.95fr] lg:items-center lg:px-8 lg:pb-28 lg:pt-24">
@@ -106,13 +115,13 @@ export default function LandingPage() {
           </p>
 
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-            <Link
-              href="/"
+            <a
+              {...telegramLinkProps}
               className="inline-flex min-h-12 items-center justify-center rounded-2xl bg-primary px-6 font-semibold text-primary-foreground shadow-[0_16px_50px_rgba(255,106,0,0.22)] transition-transform hover:-translate-y-0.5"
             >
               Открыть HappyFox
               <ArrowRight className="ml-2 size-4" aria-hidden="true" />
-            </Link>
+            </a>
             <a
               href="#features"
               className="inline-flex min-h-12 items-center justify-center rounded-2xl border border-border bg-card/70 px-6 font-medium text-foreground backdrop-blur transition-colors hover:border-primary/35"
@@ -135,7 +144,11 @@ export default function LandingPage() {
 
         <div className="relative mx-auto w-full max-w-[31rem] lg:justify-self-end">
           <div aria-hidden="true" className="absolute -inset-8 rounded-[3rem] bg-primary/10 blur-3xl" />
-          <div className="relative rounded-[2rem] border border-border/70 bg-card/80 p-3 shadow-[0_28px_90px_rgba(0,0,0,0.45)] backdrop-blur-xl">
+          <a
+            {...telegramLinkProps}
+            aria-label="Открыть HappyFox в Telegram из демо"
+            className="relative block rounded-[2rem] border border-border/70 bg-card/80 p-3 shadow-[0_28px_90px_rgba(0,0,0,0.45)] backdrop-blur-xl transition-transform hover:-translate-y-1"
+          >
             <div className="rounded-[1.55rem] border border-border/60 bg-background/90 p-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2.5">
@@ -180,7 +193,7 @@ export default function LandingPage() {
                 </div>
               </div>
             </div>
-          </div>
+          </a>
         </div>
       </section>
 
@@ -236,13 +249,13 @@ export default function LandingPage() {
               <h2 className="mt-3 font-serif text-4xl font-semibold tracking-[-0.035em] sm:text-5xl">Твоя AI-студия уже внутри Telegram</h2>
               <p className="mt-4 max-w-xl text-base leading-7 text-muted-foreground">Открой HappyFox, выбери нужный сценарий и переходи сразу к созданию.</p>
             </div>
-            <Link
-              href="/"
+            <a
+              {...telegramLinkProps}
               className="inline-flex min-h-12 items-center justify-center rounded-2xl bg-primary px-6 font-semibold text-primary-foreground shadow-[0_16px_50px_rgba(255,106,0,0.22)] transition-transform hover:-translate-y-0.5"
             >
               Открыть HappyFox
               <ArrowRight className="ml-2 size-4" aria-hidden="true" />
-            </Link>
+            </a>
           </div>
         </div>
       </section>
