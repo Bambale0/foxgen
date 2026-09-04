@@ -63,12 +63,14 @@ def test_dynamic_keyboard_keeps_type_model_and_settings_on_one_screen(monkeypatc
     texts = _texts(markup)
 
     assert callbacks[:3] == ["v_type_text", "v_type_imgtxt", "v_type_video"]
+    assert "v_model_seedance_2_5" in callbacks
     assert "v_model_v3_pro" in callbacks
     assert "v_model_grok_imagine" not in callbacks
     assert "ratio_16_9" in callbacks
     assert "video_change_model" not in callbacks
     assert "video_change_media" not in callbacks
     assert any(text.startswith("✅ 💎 Kling 3.0") for text in texts)
+    assert any("Seedance 2.5" in text for text in texts)
     assert "Цена: 12🐾/с" in texts
     assert all("🍌" not in text for text in texts)
 
