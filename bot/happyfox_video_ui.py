@@ -90,11 +90,7 @@ def compatible_video_model(v_type: str, model: str | None) -> str:
     selector = _selector_model(current)
     models = VIDEO_TYPE_ROWS.get(v_type, ())
 
-    if (
-        current
-        and selector in models
-        and selector not in DEDICATED_VIDEO_MODELS
-    ):
+    if current and selector in models and selector not in DEDICATED_VIDEO_MODELS:
         return current
 
     for candidate in models:
