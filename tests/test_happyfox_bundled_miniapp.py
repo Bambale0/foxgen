@@ -95,12 +95,20 @@ def test_production_miniapp_wrapper_publishes_and_verifies_exact_bundled_release
     assert 'docker cp "${BACKEND_CONTAINER}:${BUNDLED_ROOT}/." "$bundle_dir/"' in wrapper
     assert 'docker exec "$NGINX_CONTAINER" nginx -T' in wrapper
     assert "resolve_happyfox_miniapp_nginx_path.py" in wrapper
-    assert 'docker cp "$bundle_dir/." "${NGINX_CONTAINER}:${MINIAPP_ROOT}/"' in wrapper
-    assert "container bundle revision mismatch" in wrapper
+    assert "--proxy-container" in wrapper
+    assert "resolve_static_bind_source" in wrapper
+    assert 'mount.get("Type") != "bind"' in wrapper
+    assert 'destination.endswith("/mini-app")' in wrapper
+    assert 'cp -a "$bundle_dir/." "$static_root/"' in wrapper
+    assert "STATIC_PROXY_RELEASE_OK" in wrapper
     assert "NGINX_STATIC_RELEASE_OK" in wrapper
+    assert "container bundle revision mismatch" in wrapper
     assert "revision.txt?revision=" in wrapper
     assert "MOBILE_SAFARI_UA" in wrapper
     assert "iPhone" in wrapper
+    assert "LANDING_OK" in wrapper
+    assert "happyfox-logo.svg" in wrapper
+    assert "startapp" in wrapper
     assert '"${BASE_URL}/api/bootstrap"' in wrapper
     assert "400|401|403" in wrapper
     assert "bootstrap ingress failed" in wrapper
