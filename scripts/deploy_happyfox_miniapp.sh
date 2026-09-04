@@ -104,17 +104,32 @@ case "$target_kind" in
       exit 1
     }
 
-    mapfile -t frontend_roots < <(
-      docker inspect -f '{{range .Mounts}}{{println .Destination}}{{end}}' "$FRONTEND_CONTAINER" \
-        | grep -E '/mini-app/?$' || true
+    mapfile -t frontend_mounts < <(
+      docker inspect -f '{{range .Mounts}}{{.Type}}|{{.Source}}|{{.Destination}}|{{.RW}}{{println}}{{end}}' "$FRONTEND_CONTAINER" \
+        | grep -E '\|[^|]*/mini-app/?\|(true|false)$' || true
     )
-    [[ "${#frontend_roots[@]}" -eq 1 ]] || {
-      echo "Expected exactly one /mini-app mount in $FRONTEND_CONTAINER, found ${#frontend_roots[@]}" >&2
+    [[ "${#frontend_mounts[@]}" -eq 1 ]] || {
+      echo "Expected exactly one /mini-app mount in $FRONTEND_CONTAINER, found ${#frontend_mounts[@]}" >&2
       exit 1
     }
-    MINIAPP_ROOT="${frontend_roots[0]%/}"
 
-    docker cp "$bundle_dir/." "${FRONTEND_CONTAINER}:${MINIAPP_ROOT}/"
+    IFS='|' read -r mount_type mount_source MINIAPP_ROOT mount_rw <<< "${frontend_mounts[0]}"
+    MINIAPP_ROOT="${MINIAPP_ROOT%/}"
+    mount_source="${mount_source%/}"
+
+    if [[ "$mount_rw" == "true" ]]; then
+      docker cp "$bundle_dir/." "${FRONTEND_CONTAINER}:${MINIAPP_ROOT}/"
+    elif [[ "$mount_type" == "bind" && "$mount_source" == /* ]]; then
+      # A read-only bind mount cannot be updated from inside the container.
+      # Publish atomically enough for static assets by writing the exact bundle
+      # to its host source; the running nginx container observes it immediately.
+      mkdir -p "$mount_source"
+      cp -a "$bundle_dir/." "$mount_source/"
+    else
+      echo "HappyFox frontend mount is read-only and not a writable host bind: type=$mount_type" >&2
+      exit 1
+    fi
+
     published_revision="$(
       docker exec "$FRONTEND_CONTAINER" cat "${MINIAPP_ROOT}/revision.txt" \
         | tr -d '\r\n'
