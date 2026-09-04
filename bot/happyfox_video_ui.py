@@ -113,11 +113,7 @@ def _model_price_label(model: str) -> str:
             )
             return f"от {_format_amount(cost)}🐾"
 
-        quality = (
-            "720p"
-            if model == "seedance_2_5" or model.startswith("veo3")
-            else None
-        )
+        quality = "720p" if model == "seedance_2_5" or model.startswith("veo3") else None
         per_second = preset_manager.get_video_cost_per_second(model, duration, quality)
         return f"{_format_amount(per_second)}🐾/с"
     except PRICE_LOOKUP_ERRORS:
