@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import os
-from urllib.parse import urlsplit
 
 import psycopg
 from psycopg import sql
@@ -33,8 +32,7 @@ def _postgres_dsn() -> str | None:
         return None
     if value.lower().startswith("postgresql+asyncpg://"):
         value = "postgresql://" + value[len("postgresql+asyncpg://") :]
-    parsed = urlsplit(value)
-    if parsed.scheme not in {"postgres", "postgresql"}:
+    if not value.lower().startswith(("postgres://", "postgresql://")):
         return None
     return value
 
