@@ -90,6 +90,7 @@ COPY --from=miniapp-builder --chown=app:app /build/miniapp/out /app/frontend/min
 RUN printf '%s\n' "${VCS_REF}" > /app/frontend/miniapp-v0/out/revision.txt \
     && python scripts/apply_visible_copy_fixes.py \
     && python scripts/apply_happyfox_product_copy.py \
+    && python scripts/smoke_happyfox_telegram_seedance25.py \
     && PYTHONPYCACHEPREFIX=/tmp/banano-pycache python -m compileall -q \
         bot/keyboards.py \
         bot/handlers/common.py \
