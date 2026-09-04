@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from scripts.resolve_happyfox_miniapp_nginx_target import resolve_miniapp_target
 
 
