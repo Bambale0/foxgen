@@ -60,38 +60,77 @@ bundled_revision="$(tr -d '\r\n' < "$bundle_dir/revision.txt")"
   exit 1
 }
 
-# Resolve the filesystem path from the effective nginx configuration rather
-# than guessing a host web-root. The production reverse proxy can mount its
-# static tree at a container path unrelated to /var/www/<domain> on the host.
+# Read the effective reverse-proxy config and follow the actual serving target.
+# HappyFox production may serve /mini-app/ from an nginx alias/root OR proxy it
+# to a dedicated static container (currently banano-miniapp). Publishing to a
+# guessed host path leaves Telegram/iOS on an old frontend while backend moves on.
 if ! docker exec "$NGINX_CONTAINER" nginx -T > "$work/nginx.conf" 2> "$work/nginx-check.log"; then
   echo "Could not read effective nginx configuration" >&2
   exit 1
 fi
-MINIAPP_ROOT="$(
-  python3 "$SCRIPT_DIR/resolve_happyfox_miniapp_nginx_path.py" \
+
+target="$(
+  python3 "$SCRIPT_DIR/resolve_happyfox_miniapp_nginx_target.py" \
     "$work/nginx.conf" "$MINIAPP_FRONTEND_DOMAIN"
 )"
-[[ "$MINIAPP_ROOT" == /* ]] || {
-  echo "Resolved nginx Mini App path is not absolute" >&2
-  exit 1
-}
+IFS=$'\t' read -r target_kind target_value <<< "$target"
 
-# Copy through the nginx container namespace. If the alias is backed by a bind
-# mount or volume, docker cp writes to that exact live mount; this avoids any
-# host/container path skew and makes the public static release match backend.
-docker exec "$NGINX_CONTAINER" mkdir -p "$MINIAPP_ROOT"
-docker cp "$bundle_dir/." "${NGINX_CONTAINER}:${MINIAPP_ROOT}/"
+case "$target_kind" in
+  filesystem)
+    MINIAPP_ROOT="$target_value"
+    [[ "$MINIAPP_ROOT" == /* ]] || {
+      echo "Resolved nginx Mini App path is not absolute" >&2
+      exit 1
+    }
 
-nginx_revision="$(
-  docker exec "$NGINX_CONTAINER" cat "${MINIAPP_ROOT}/revision.txt" \
-    | tr -d '\r\n'
-)"
-[[ "$nginx_revision" == "$EXPECTED_SHA" ]] || {
-  echo "HappyFox nginx static revision mismatch after publish: expected=$EXPECTED_SHA actual=$nginx_revision" >&2
-  exit 1
-}
+    docker exec "$NGINX_CONTAINER" mkdir -p "$MINIAPP_ROOT"
+    docker cp "$bundle_dir/." "${NGINX_CONTAINER}:${MINIAPP_ROOT}/"
 
-echo "[happyfox-miniapp] NGINX_STATIC_RELEASE_OK revision=${EXPECTED_SHA}"
+    published_revision="$(
+      docker exec "$NGINX_CONTAINER" cat "${MINIAPP_ROOT}/revision.txt" \
+        | tr -d '\r\n'
+    )"
+    [[ "$published_revision" == "$EXPECTED_SHA" ]] || {
+      echo "HappyFox nginx static revision mismatch after publish: expected=$EXPECTED_SHA actual=$published_revision" >&2
+      exit 1
+    }
+    echo "[happyfox-miniapp] NGINX_STATIC_RELEASE_OK revision=${EXPECTED_SHA}"
+    ;;
+
+  proxy)
+    FRONTEND_CONTAINER="${HAPPYFOX_MINIAPP_CONTAINER:-$target_value}"
+    docker inspect "$FRONTEND_CONTAINER" >/dev/null 2>&1 || {
+      echo "Resolved HappyFox Mini App proxy container is unavailable: $FRONTEND_CONTAINER" >&2
+      exit 1
+    }
+
+    mapfile -t frontend_roots < <(
+      docker inspect -f '{{range .Mounts}}{{println .Destination}}{{end}}' "$FRONTEND_CONTAINER" \
+        | grep -E '/mini-app/?$' || true
+    )
+    [[ "${#frontend_roots[@]}" -eq 1 ]] || {
+      echo "Expected exactly one /mini-app mount in $FRONTEND_CONTAINER, found ${#frontend_roots[@]}" >&2
+      exit 1
+    }
+    MINIAPP_ROOT="${frontend_roots[0]%/}"
+
+    docker cp "$bundle_dir/." "${FRONTEND_CONTAINER}:${MINIAPP_ROOT}/"
+    published_revision="$(
+      docker exec "$FRONTEND_CONTAINER" cat "${MINIAPP_ROOT}/revision.txt" \
+        | tr -d '\r\n'
+    )"
+    [[ "$published_revision" == "$EXPECTED_SHA" ]] || {
+      echo "HappyFox frontend proxy revision mismatch after publish: expected=$EXPECTED_SHA actual=$published_revision" >&2
+      exit 1
+    }
+    echo "[happyfox-miniapp] FRONTEND_PROXY_RELEASE_OK container=${FRONTEND_CONTAINER} root=${MINIAPP_ROOT} revision=${EXPECTED_SHA}"
+    ;;
+
+  *)
+    echo "Unsupported HappyFox Mini App target kind: ${target_kind:-empty}" >&2
+    exit 1
+    ;;
+esac
 
 BASE_URL="https://${MINIAPP_FRONTEND_DOMAIN}/mini-app"
 MOBILE_SAFARI_UA='Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 Safari/604.1'
