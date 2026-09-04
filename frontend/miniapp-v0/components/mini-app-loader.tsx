@@ -2,7 +2,7 @@
 
 import Image from 'next/image'
 import { LoaderCircle, Sparkles } from 'lucide-react'
-import { BRAND_LOGO, BRAND_NAME } from '@/lib/brand'
+import { BRAND_LOGO, BRAND_NAME, BRAND_SITE_LOGO } from '@/lib/brand'
 
 export function MiniAppLoader() {
   return (
@@ -21,7 +21,7 @@ export function MiniAppLoader() {
         <div className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full border border-gold/15" />
 
         <div className="relative flex flex-col items-center text-center">
-          <div className="relative mb-6 flex h-24 w-24 items-center justify-center">
+          <div className="relative mb-5 flex h-24 w-24 items-center justify-center">
             <div className="absolute inset-0 rounded-full border border-gold/15 shadow-[0_0_44px_rgba(255,106,0,0.12)]" />
             <div className="absolute inset-2 rounded-full border border-dashed border-gold/25" />
             <div className="absolute inset-0 animate-spin rounded-full border-2 border-transparent border-r-gold/40 border-t-gold" />
@@ -37,14 +37,22 @@ export function MiniAppLoader() {
             </div>
           </div>
 
+          <div className="relative mb-3 h-32 w-full max-w-[280px]">
+            <Image
+              src={BRAND_SITE_LOGO}
+              alt={`${BRAND_NAME} — AI Regeneration`}
+              fill
+              priority
+              sizes="280px"
+              className="object-contain"
+            />
+          </div>
+
           <div className="inline-flex items-center gap-1.5 rounded-full border border-gold/20 bg-gold/[0.07] px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.14em] text-gold">
             <Sparkles className="h-3 w-3" />
             Telegram Mini App
           </div>
-          <h1 className="mt-3 text-2xl font-black uppercase tracking-[0.12em] text-foreground">
-            {BRAND_NAME}
-          </h1>
-          <p className="mt-2 text-xs text-muted-foreground">
+          <p className="mt-3 text-xs text-muted-foreground">
             Подготавливаем вашу студию
           </p>
 
