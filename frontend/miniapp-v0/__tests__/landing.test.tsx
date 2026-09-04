@@ -31,7 +31,10 @@ describe('HappyFox landing', () => {
     ).toHaveAttribute('href', 'https://t.me/AlePolbot?startapp')
 
     expect(
-      container.querySelector('img[src="/mini-app/happyfox-logo.svg"]'),
+      container.querySelector('img[src="/mini-app/happyfox-brand.webp"]'),
+    ).toBeInTheDocument()
+    expect(
+      container.querySelector('img[src="/mini-app/happyfox-icon.webp"]'),
     ).toBeInTheDocument()
 
     expect(screen.getByRole('heading', { name: 'Фото' })).toBeInTheDocument()

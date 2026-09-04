@@ -5,6 +5,7 @@ type ProductConfig = {
   brandName: string
   brandDescription: string
   brandLogo: string
+  siteLogo: string
   telegramAppUrl: string
 }
 
@@ -26,7 +27,8 @@ const HAPPYFOX_PRODUCT: ProductConfig = {
   id: 'happyfox',
   brandName: 'HappyFox',
   brandDescription: 'HappyFox — создание фото, видео и AI-контента в Telegram',
-  brandLogo: `${MINIAPP_BASE_PATH}/happyfox-logo.svg`,
+  brandLogo: `${MINIAPP_BASE_PATH}/happyfox-icon.webp`,
+  siteLogo: `${MINIAPP_BASE_PATH}/happyfox-brand.webp`,
   telegramAppUrl: `https://t.me/${TELEGRAM_BOT_USERNAME}?startapp`,
 }
 
