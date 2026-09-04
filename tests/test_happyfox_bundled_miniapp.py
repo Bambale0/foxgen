@@ -94,9 +94,14 @@ def test_production_miniapp_wrapper_publishes_and_verifies_exact_bundled_release
     assert 'BUNDLED_ROOT="/app/frontend/miniapp-v0/out"' in wrapper
     assert 'docker cp "${BACKEND_CONTAINER}:${BUNDLED_ROOT}/." "$bundle_dir/"' in wrapper
     assert 'docker exec "$NGINX_CONTAINER" nginx -T' in wrapper
-    assert "resolve_happyfox_miniapp_nginx_path.py" in wrapper
+    assert "resolve_happyfox_miniapp_nginx_target.py" in wrapper
+    assert 'case "$target_kind" in' in wrapper
+    assert 'HAPPYFOX_MINIAPP_CONTAINER' in wrapper
+    assert "frontend_roots" in wrapper
+    assert 'docker cp "$bundle_dir/." "${FRONTEND_CONTAINER}:${MINIAPP_ROOT}/"' in wrapper
     assert 'docker cp "$bundle_dir/." "${NGINX_CONTAINER}:${MINIAPP_ROOT}/"' in wrapper
     assert "container bundle revision mismatch" in wrapper
+    assert "FRONTEND_PROXY_RELEASE_OK" in wrapper
     assert "NGINX_STATIC_RELEASE_OK" in wrapper
     assert "revision.txt?revision=" in wrapper
     assert "MOBILE_SAFARI_UA" in wrapper
