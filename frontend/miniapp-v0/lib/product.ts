@@ -5,17 +5,29 @@ type ProductConfig = {
   brandName: string
   brandDescription: string
   brandLogo: string
+  telegramAppUrl: string
 }
 
 const MINIAPP_BASE_PATH = String(process.env.NEXT_PUBLIC_MINIAPP_BASE_PATH || '/mini-app')
   .trim()
   .replace(/\/$/, '')
 
+const TELEGRAM_BOT_USERNAME = String(
+  process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME || 'AlePolbot',
+)
+  .trim()
+  .replace(/^@/, '')
+
+if (!/^[A-Za-z0-9_]+$/.test(TELEGRAM_BOT_USERNAME)) {
+  throw new Error('NEXT_PUBLIC_TELEGRAM_BOT_USERNAME must be a valid Telegram bot username')
+}
+
 const HAPPYFOX_PRODUCT: ProductConfig = {
   id: 'happyfox',
   brandName: 'HappyFox',
   brandDescription: 'HappyFox — создание фото, видео и AI-контента в Telegram',
-  brandLogo: `${MINIAPP_BASE_PATH}/happyfox-logo.webp`,
+  brandLogo: `${MINIAPP_BASE_PATH}/happyfox-logo.svg`,
+  telegramAppUrl: `https://t.me/${TELEGRAM_BOT_USERNAME}?startapp`,
 }
 
 function resolveProductId(): ProductId {
