@@ -4,7 +4,7 @@ import {
   ArrowRight,
   AudioLines,
   Check,
-  ImageIcon,
+  Image as ImageGlyph,
   Layers3,
   Sparkles,
   Video,
@@ -22,7 +22,7 @@ const capabilities = [
   {
     title: 'Фото',
     description: 'Создание и редактирование изображений по идее или референсу.',
-    icon: ImageIcon,
+    icon: ImageGlyph,
   },
   {
     title: 'Видео',
