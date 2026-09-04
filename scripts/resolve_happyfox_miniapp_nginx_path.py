@@ -13,6 +13,8 @@ _MINIAPP_LOCATION_RE = re.compile(
 )
 _ALIAS_RE = re.compile(r"^\s*alias\s+([^;]+);", re.MULTILINE)
 _ROOT_RE = re.compile(r"^\s*root\s+([^;]+);", re.MULTILINE)
+_PROXY_PASS_RE = re.compile(r"^\s*proxy_pass\s+http://([^/;\s]+)", re.MULTILINE)
+_CONTAINER_NAME_RE = re.compile(r"[A-Za-z0-9_.-]+")
 
 
 def _code_without_comment(line: str) -> str:
@@ -64,7 +66,7 @@ def _location_block(server_block: str) -> str:
     return server_block[start:end]
 
 
-def resolve_miniapp_path(text: str, *, domain: str) -> str:
+def _happyfox_server_block(text: str, *, domain: str) -> str:
     matched_servers: list[str] = []
     for start, end in _named_block_ranges(text, _SERVER_START_RE):
         block = text[start:end]
@@ -81,8 +83,11 @@ def resolve_miniapp_path(text: str, *, domain: str) -> str:
             f"expected exactly one HTTPS server for {domain!r} with /mini-app/, "
             f"found {len(matched_servers)}"
         )
+    return matched_servers[0]
 
-    server_block = matched_servers[0]
+
+def resolve_miniapp_path(text: str, *, domain: str) -> str:
+    server_block = _happyfox_server_block(text, domain=domain)
     location = _location_block(server_block)
 
     alias_matches = _ALIAS_RE.findall(location)
@@ -110,16 +115,57 @@ def resolve_miniapp_path(text: str, *, domain: str) -> str:
     return str(resolved)
 
 
+def resolve_miniapp_proxy_container(text: str, *, domain: str) -> str:
+    """Return the direct Docker-style host used by a proxied /mini-app/ route.
+
+    Production can serve the Mini App through a dedicated static nginx sidecar
+    instead of a filesystem alias in the public reverse proxy. This resolver is
+    deliberately strict: it accepts one direct http://host[:port] proxy target
+    and rejects variables, credentials and ambiguous proxy_pass directives.
+    """
+
+    server_block = _happyfox_server_block(text, domain=domain)
+    location = _location_block(server_block)
+    matches = _PROXY_PASS_RE.findall(location)
+    if len(matches) != 1:
+        raise ValueError(
+            "expected exactly one direct proxy_pass in /mini-app/ location, "
+            f"found {len(matches)}"
+        )
+
+    authority = matches[0].strip()
+    if "$" in authority or "@" in authority:
+        raise ValueError("dynamic or credentialed Mini App proxy targets are not supported")
+
+    host = authority
+    if ":" in authority:
+        host, port = authority.rsplit(":", 1)
+        if not port.isdigit() or not 1 <= int(port) <= 65535:
+            raise ValueError("Mini App proxy target has an invalid port")
+
+    if not _CONTAINER_NAME_RE.fullmatch(host):
+        raise ValueError("Mini App proxy target is not a safe container/service name")
+    return host
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Resolve the effective nginx filesystem path serving /mini-app/"
+        description="Resolve the effective nginx target serving /mini-app/"
     )
     parser.add_argument("config", type=Path)
     parser.add_argument("domain")
+    parser.add_argument(
+        "--proxy-container",
+        action="store_true",
+        help="resolve a direct proxy_pass host instead of a filesystem path",
+    )
     args = parser.parse_args()
 
     text = args.config.read_text(encoding="utf-8")
-    print(resolve_miniapp_path(text, domain=args.domain))
+    if args.proxy_container:
+        print(resolve_miniapp_proxy_container(text, domain=args.domain))
+    else:
+        print(resolve_miniapp_path(text, domain=args.domain))
     return 0
 
 
