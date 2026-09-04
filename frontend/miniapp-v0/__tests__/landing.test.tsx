@@ -10,13 +10,30 @@ jest.mock('next/image', () => ({
 import LandingPage from '@/app/landing/page'
 
 describe('HappyFox landing', () => {
-  it('renders the public HappyFox value proposition and primary CTA', () => {
-    render(<LandingPage />)
+  it('renders the public HappyFox value proposition and working Telegram CTAs', () => {
+    const { container } = render(<LandingPage />)
 
     expect(
       screen.getByRole('heading', { name: /Фото, видео и музыка — в одном HappyFox/i }),
     ).toBeInTheDocument()
-    expect(screen.getAllByRole('link', { name: /Открыть HappyFox/i }).length).toBeGreaterThan(0)
+
+    const telegramLinks = screen.getAllByRole('link').filter((link) =>
+      link.getAttribute('href')?.startsWith('https://t.me/AlePolbot?startapp'),
+    )
+    expect(telegramLinks.length).toBeGreaterThanOrEqual(4)
+    for (const link of telegramLinks) {
+      expect(link).toHaveAttribute('target', '_blank')
+      expect(link).toHaveAttribute('rel', 'noreferrer')
+    }
+
+    expect(
+      screen.getByRole('link', { name: 'Открыть HappyFox в Telegram из демо' }),
+    ).toHaveAttribute('href', 'https://t.me/AlePolbot?startapp')
+
+    expect(
+      container.querySelector('img[src="/mini-app/happyfox-logo.svg"]'),
+    ).toBeInTheDocument()
+
     expect(screen.getByRole('heading', { name: 'Фото' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Видео' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Музыка' })).toBeInTheDocument()
