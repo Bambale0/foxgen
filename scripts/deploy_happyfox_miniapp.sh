@@ -222,24 +222,26 @@ curl -fsSI --retry 5 --retry-delay 2 --retry-all-errors \
   -A "$MOBILE_SAFARI_UA" \
   "https://${MINIAPP_FRONTEND_DOMAIN}${asset}?revision=${EXPECTED_SHA}" >/dev/null
 
-# If this release contains the public landing, validate the exact assets and
-# Telegram launch link that previously regressed in production.
-if [[ -s "$bundle_dir/landing/index.html" && -s "$bundle_dir/happyfox-logo.svg" ]]; then
+# If this release contains the public landing, validate the exact branded WebP
+# assets and Telegram launch link that previously regressed in production.
+if [[ -s "$bundle_dir/landing/index.html" && -s "$bundle_dir/happyfox-brand.webp" && -s "$bundle_dir/happyfox-icon.webp" ]]; then
   curl -fsS --retry 5 --retry-delay 2 --retry-all-errors \
     --max-time 20 \
     -A "$MOBILE_SAFARI_UA" \
     "${BASE_URL}/landing/?revision=${EXPECTED_SHA}" > "$work/landing.html"
-  grep -Fq '/mini-app/happyfox-logo.svg' "$work/landing.html" || {
-    echo "HappyFox landing does not reference the valid SVG logo" >&2
+  grep -Fq '/mini-app/happyfox-brand.webp' "$work/landing.html" || {
+    echo "HappyFox landing does not reference the branded WebP logo" >&2
     exit 1
   }
   grep -Eq 'https://t\.me/[A-Za-z0-9_]+\?startapp' "$work/landing.html" || {
     echo "HappyFox landing has no Telegram Main Mini App launch link" >&2
     exit 1
   }
-  curl -fsSI --retry 5 --retry-delay 2 --retry-all-errors \
-    --max-time 20 \
-    "${BASE_URL}/happyfox-logo.svg?revision=${EXPECTED_SHA}" >/dev/null
+  for brand_asset in happyfox-brand.webp happyfox-icon.webp; do
+    curl -fsSI --retry 5 --retry-delay 2 --retry-all-errors \
+      --max-time 20 \
+      "${BASE_URL}/${brand_asset}?revision=${EXPECTED_SHA}" >/dev/null
+  done
   echo "[happyfox-miniapp] LANDING_OK ${BASE_URL}/landing/ revision=${EXPECTED_SHA}"
 fi
 
