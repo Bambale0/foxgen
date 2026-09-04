@@ -3,7 +3,8 @@ from __future__ import annotations
 import os
 from urllib.parse import urlsplit
 
-from psycopg import connect, sql
+import psycopg
+from psycopg import sql
 
 
 PROMPT_FEED_COLUMNS: tuple[tuple[str, str, str], ...] = (
@@ -45,7 +46,7 @@ def ensure_schema() -> int:
         return 0
 
     changed: list[str] = []
-    with connect(dsn, autocommit=True) as conn, conn.cursor() as cursor:
+    with psycopg.connect(dsn, autocommit=True) as conn, conn.cursor() as cursor:
         for table, column, definition in PROMPT_FEED_COLUMNS:
             cursor.execute("SELECT to_regclass(%s)", (table,))
             row = cursor.fetchone()
