@@ -13,7 +13,7 @@ _MINIAPP_LOCATION_RE = re.compile(
 )
 _ALIAS_RE = re.compile(r"^\s*alias\s+([^;]+);", re.MULTILINE)
 _ROOT_RE = re.compile(r"^\s*root\s+([^;]+);", re.MULTILINE)
-_PROXY_PASS_RE = re.compile(r"^\s*proxy_pass\s+http://([^/;\s]+)", re.MULTILINE)
+_PROXY_PASS_RE = re.compile(r"\bproxy_pass\s+http://([^/;\s]+)")
 _CONTAINER_NAME_RE = re.compile(r"[A-Za-z0-9_.-]+")
 
 
