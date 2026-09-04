@@ -100,6 +100,9 @@ def test_production_miniapp_wrapper_publishes_and_verifies_exact_bundled_release
     assert 'mount.get("Type") != "bind"' in wrapper
     assert 'destination.endswith("/mini-app")' in wrapper
     assert 'cp -a "$bundle_dir/." "$static_root/"' in wrapper
+    assert 'chmod 0755 "$static_root"' in wrapper
+    assert 'find "$static_root" -type d -exec chmod 0755 {} +' in wrapper
+    assert 'find "$static_root" -type f -exec chmod a+r {} +' in wrapper
     assert "STATIC_PROXY_RELEASE_OK" in wrapper
     assert "NGINX_STATIC_RELEASE_OK" in wrapper
     assert "container bundle revision mismatch" in wrapper
