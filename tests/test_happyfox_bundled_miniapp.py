@@ -110,12 +110,24 @@ def test_production_miniapp_wrapper_publishes_and_verifies_exact_bundled_release
     assert "MOBILE_SAFARI_UA" in wrapper
     assert "iPhone" in wrapper
     assert "LANDING_OK" in wrapper
-    assert "happyfox-logo.svg" in wrapper
+    assert "happyfox-brand.webp" in wrapper
+    assert "happyfox-icon.webp" in wrapper
     assert "startapp" in wrapper
     assert '"${BASE_URL}/api/bootstrap"' in wrapper
     assert "400|401|403" in wrapper
     assert "bootstrap ingress failed" in wrapper
     assert "MOBILE_SAFARI_OK" in wrapper
+
+
+def test_miniapp_loader_shows_icon_and_full_brand() -> None:
+    loader = Path("frontend/miniapp-v0/components/mini-app-loader.tsx").read_text(
+        encoding="utf-8"
+    )
+
+    assert "BRAND_LOGO" in loader
+    assert "BRAND_SITE_LOGO" in loader
+    assert "AI Regeneration" in loader
+    assert "Подготавливаем вашу студию" in loader
 
 
 def test_release_keeps_seedance_25_in_happyfox_telegram_video_selector() -> None:
