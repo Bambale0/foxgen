@@ -119,7 +119,8 @@ def test_release_keeps_seedance_25_in_happyfox_telegram_video_selector() -> None
     assert 'callback_data=f"v_model_{model}"' in source
     assert "TELEGRAM_SEEDANCE25_MENU_OK" in smoke
     assert "get_create_video_keyboard" in smoke
-    assert "python scripts/smoke_happyfox_telegram_seedance25.py" in dockerfile
+    assert "python -m scripts.smoke_happyfox_telegram_seedance25" in dockerfile
+    assert "python scripts/smoke_happyfox_telegram_seedance25.py" not in dockerfile
 
 
 def test_happyfox_login_gate_uses_active_brand() -> None:
