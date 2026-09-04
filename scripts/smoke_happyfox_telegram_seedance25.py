@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from bot import happyfox_video_ui
-from bot import keyboards
+from bot import happyfox_video_ui, keyboards
 
 EXPECTED_CALLBACK = "v_model_seedance_2_5"
 VIDEO_TYPES = ("text", "imgtxt", "video")
