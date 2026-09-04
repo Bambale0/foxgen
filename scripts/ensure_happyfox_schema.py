@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from urllib.parse import urlsplit
 
-import psycopg
+from psycopg import connect, sql
 
 
 PROMPT_FEED_COLUMNS: tuple[tuple[str, str, str], ...] = (
@@ -45,30 +45,29 @@ def ensure_schema() -> int:
         return 0
 
     changed: list[str] = []
-    with psycopg.connect(dsn, autocommit=True) as conn:
-        with conn.cursor() as cursor:
-            for table, column, definition in PROMPT_FEED_COLUMNS:
-                cursor.execute("SELECT to_regclass(%s)", (table,))
-                row = cursor.fetchone()
-                if not row or row[0] is None:
-                    continue
+    with connect(dsn, autocommit=True) as conn, conn.cursor() as cursor:
+        for table, column, definition in PROMPT_FEED_COLUMNS:
+            cursor.execute("SELECT to_regclass(%s)", (table,))
+            row = cursor.fetchone()
+            if not row or row[0] is None:
+                continue
 
-                cursor.execute(
-                    "SELECT 1 FROM information_schema.columns "
-                    "WHERE table_schema = current_schema() AND table_name = %s AND column_name = %s",
-                    (table, column),
-                )
-                if cursor.fetchone():
-                    continue
+            cursor.execute(
+                "SELECT 1 FROM information_schema.columns "
+                "WHERE table_schema = current_schema() AND table_name = %s AND column_name = %s",
+                (table, column),
+            )
+            if cursor.fetchone():
+                continue
 
-                cursor.execute(
-                    psycopg.sql.SQL("ALTER TABLE {} ADD COLUMN {} {}").format(
-                        psycopg.sql.Identifier(table),
-                        psycopg.sql.Identifier(column),
-                        psycopg.sql.SQL(definition),
-                    )
+            cursor.execute(
+                sql.SQL("ALTER TABLE {} ADD COLUMN {} {}").format(
+                    sql.Identifier(table),
+                    sql.Identifier(column),
+                    sql.SQL(definition),
                 )
-                changed.append(f"{table}.{column}")
+            )
+            changed.append(f"{table}.{column}")
 
     if changed:
         print("[happyfox-schema] added=" + ",".join(changed))
