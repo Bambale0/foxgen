@@ -1,5 +1,5 @@
-from pathlib import Path
 import subprocess
+from pathlib import Path
 
 
 def test_backup_script_is_valid_bash() -> None:
