@@ -108,7 +108,8 @@ class _CompatibilityPostgresConnection:
 
 
 @pytest.mark.asyncio
-async def test_postgres_schema_ddl_uses_raw_connection() -> None:
+async def test_postgres_schema_ddl_uses_raw_connection(monkeypatch) -> None:
+    monkeypatch.setattr(schema_migrations.db_backend, "is_postgres", lambda: True)
     connection = _CompatibilityPostgresConnection()
 
     await schema_migrations._ensure_migration_ledger(connection)
