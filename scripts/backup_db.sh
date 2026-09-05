@@ -117,7 +117,7 @@ send_archive_to_admins() {
     else
         archive_sha256="sha256sum not available"
     fi
-    caption="banano_kling DB backup
+    caption="HappyFox DB backup
 created: ${created_at}
 archive: ${archive_size}
 sha256: ${archive_sha256}
@@ -156,7 +156,7 @@ source: ${db_abs}"
             for part_file in "${part_files[@]}"; do
                 part_index=$((part_index + 1))
                 part_name="$(basename "$part_file")"
-                caption="banano_kling DB backup
+                caption="HappyFox DB backup
 created: ${created_at}
 archive: ${archive_size}
 part: ${part_index}/${part_count}
@@ -182,7 +182,7 @@ sha256: ${archive_sha256}"
     }
 
     created_at="$(date '+%Y-%m-%d %H:%M:%S %Z')"
-    archive_name="bot-db-$(date '+%Y%m%d_%H%M%S').tar.gz"
+    archive_name="happyfox-db-$(date '+%Y%m%d_%H%M%S').tar.gz"
     db_url="${DATABASE_URL:-$(read_env_value DATABASE_URL)}"
     db_path="${DATABASE_PATH:-$(read_env_value DATABASE_PATH)}"
     archive_member=""
@@ -192,6 +192,10 @@ sha256: ${archive_sha256}"
         postgres://*|postgresql://*)
             if ! command -v pg_dump >/dev/null 2>&1; then
                 echo "$(date '+%Y-%m-%d %H:%M:%S') postgres backup failed: pg_dump not found" >&2
+                exit 1
+            fi
+            if ! command -v pg_restore >/dev/null 2>&1; then
+                echo "$(date '+%Y-%m-%d %H:%M:%S') postgres backup failed: pg_restore not found" >&2
                 exit 1
             fi
 
@@ -242,10 +246,20 @@ PY
                 export PGSSLMODE
             fi
 
-            PGPASSWORD="$pg_password" pg_dump "${pg_args[@]}"
+            if ! PGPASSWORD="$pg_password" pg_dump "${pg_args[@]}"; then
+                rm -f "$TMP_PG_DUMP"
+                echo "$(date '+%Y-%m-%d %H:%M:%S') postgres backup failed: pg_dump returned non-zero" >&2
+                exit 1
+            fi
 
             if [ ! -s "$TMP_PG_DUMP" ]; then
                 echo "$(date '+%Y-%m-%d %H:%M:%S') postgres backup failed: empty dump" >&2
+                rm -f "$TMP_PG_DUMP"
+                exit 1
+            fi
+
+            if ! pg_restore --list "$TMP_PG_DUMP" >/dev/null; then
+                echo "$(date '+%Y-%m-%d %H:%M:%S') postgres backup failed: pg_restore could not read dump" >&2
                 rm -f "$TMP_PG_DUMP"
                 exit 1
             fi
@@ -259,7 +273,7 @@ PY
             db_abs="postgres DATABASE_URL"
 
             size="$(du -h "$LATEST_PG_DUMP" | awk '{print $1}')"
-            echo "$(date '+%Y-%m-%d %H:%M:%S') postgres backup updated: $LATEST_PG_DUMP ($size)"
+            echo "$(date '+%Y-%m-%d %H:%M:%S') postgres backup verified and updated: $LATEST_PG_DUMP ($size)"
             ;;
         *)
             if [ -z "$db_path" ]; then

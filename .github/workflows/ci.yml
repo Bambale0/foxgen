@@ -33,11 +33,12 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-      - name: Install dependencies
+          cache-dependency-path: requirements.lock
+      - name: Install locked dependencies
         run: |
           python -m pip install --quiet --upgrade pip
           pip install --quiet pytest pytest-asyncio pytest-mock ruff
-          pip install --quiet -r requirements.txt
+          pip install --quiet -r requirements.lock
           python -m pip check
       - name: Normalize product copy
         run: |
@@ -92,6 +93,23 @@ jobs:
             -q \
             --tb=short
 
+  python-security:
+    name: Python dependency audit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.lock
+      - name: Audit locked runtime dependencies
+        run: |
+          python -m pip install --quiet --upgrade pip
+          python -m pip install --quiet pip-audit==2.10.1
+          python -m pip_audit -r requirements.lock --strict
+
   miniapp:
     name: Mini App build and browser E2E
     runs-on: ubuntu-24.04
@@ -112,6 +130,8 @@ jobs:
         run: npm audit --omit=dev --audit-level=high
       - name: Lint
         run: npm run lint
+      - name: Unit and contract tests
+        run: npm test -- --runInBand
       - name: Build production static export
         run: npm run build
       - name: Verify HappyFox static export
@@ -139,6 +159,7 @@ jobs:
     timeout-minutes: 45
     needs:
       - backend
+      - python-security
       - miniapp
     steps:
       - uses: actions/checkout@v6
@@ -168,5 +189,6 @@ jobs:
           docker run --rm --entrypoint sh foxgen-happyfox-ci:${GITHUB_SHA} \
             -c '! grep -q "🏠 <b>NEUROMIX</b>" /app/bot/handlers/common.py'
           docker run --rm --entrypoint ffmpeg foxgen-happyfox-ci:${GITHUB_SHA} -version >/dev/null
-          docker run --rm --entrypoint pg_dump foxgen-happyfox-ci:${GITHUB_SHA} --version >/dev/null
+          docker run --rm --entrypoint sh foxgen-happyfox-ci:${GITHUB_SHA} \
+            -c 'pg_dump --version | grep -Eq "PostgreSQL\\) 17\\." && pg_restore --version | grep -Eq "PostgreSQL\\) 17\\."'
           docker run --rm --entrypoint sqlite3 foxgen-happyfox-ci:${GITHUB_SHA} --version >/dev/null

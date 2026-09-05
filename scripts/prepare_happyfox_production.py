@@ -314,6 +314,7 @@ def build_runtime_values(
         "DATABASE_URL": database_url,
         "REDIS_URL": redis_url,
         "REDIS_PREFIX": existing.get("REDIS_PREFIX", "").strip() or "foxgen_happyfox",
+        "PERSIST_PROVIDER_RESULTS": protected_value("PERSIST_PROVIDER_RESULTS") or "1",
         "KIE_AI_API_KEY": current_or_legacy("KIE_AI_API_KEY", "FOXGEN_KIE_API_KEY"),
         "KIE_AI_WEBHOOK_SECRET": current_or_legacy(
             "KIE_AI_WEBHOOK_SECRET", "FOXGEN_KIE_WEBHOOK_HMAC_KEY"
