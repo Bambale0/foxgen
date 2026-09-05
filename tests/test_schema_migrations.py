@@ -57,3 +57,63 @@ async def test_payment_identity_migration_enforces_provider_scoped_uniqueness() 
                 "INSERT INTO transactions(provider, payment_id) VALUES (?, ?)",
                 ("yookassa", "pay-1"),
             )
+
+
+class _NoRowsCursor:
+    async def fetchone(self):
+        return None
+
+
+class _RawCursor:
+    def __init__(self, statements: list[str]):
+        self._statements = statements
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb):
+        return False
+
+    async def execute(self, sql: str, parameters=None) -> None:
+        self._statements.append(" ".join(sql.split()))
+
+
+class _RawPostgresConnection:
+    def __init__(self):
+        self.statements: list[str] = []
+        self.commits = 0
+
+    def cursor(self) -> _RawCursor:
+        return _RawCursor(self.statements)
+
+    async def commit(self) -> None:
+        self.commits += 1
+
+
+class _CompatibilityPostgresConnection:
+    def __init__(self):
+        self._conn = _RawPostgresConnection()
+        self.row_factory = None
+
+    async def execute(self, sql: str, parameters=None):
+        normalized = sql.lstrip().upper()
+        if normalized.startswith(("CREATE TABLE ", "CREATE INDEX ", "CREATE UNIQUE INDEX ", "ALTER TABLE ")):
+            raise AssertionError("production schema DDL must bypass compatibility execute()")
+        if "FROM TRANSACTIONS" in normalized and "HAVING COUNT(*) > 1" in normalized:
+            return _NoRowsCursor()
+        raise AssertionError(f"unexpected compatibility SQL: {sql}")
+
+    async def commit(self) -> None:
+        await self._conn.commit()
+
+
+@pytest.mark.asyncio
+async def test_postgres_schema_ddl_uses_raw_connection() -> None:
+    connection = _CompatibilityPostgresConnection()
+
+    await schema_migrations._ensure_migration_ledger(connection)
+    await schema_migrations._payment_identity_unique_index(connection)
+
+    executed = "\n".join(connection._conn.statements)
+    assert "CREATE TABLE IF NOT EXISTS schema_migrations" in executed
+    assert "CREATE UNIQUE INDEX IF NOT EXISTS idx_transactions_provider_payment_id" in executed
