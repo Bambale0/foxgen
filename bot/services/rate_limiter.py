@@ -24,11 +24,11 @@ DEFAULT_RPM = 120
 WINDOW_SEC = 60
 CLEANUP_INTERVAL = 300  # 5 min
 
-_whitelist = set(
+_whitelist = {
     ip.strip()
     for ip in os.environ.get("RATE_LIMIT_WHITELIST", "").split(",")
     if ip.strip()
-)
+}
 
 
 class _SlidingWindowCounter:
