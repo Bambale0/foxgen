@@ -18,17 +18,18 @@ describe('HappyFox landing', () => {
     ).toBeInTheDocument()
 
     const telegramLinks = screen.getAllByRole('link').filter((link) =>
-      link.getAttribute('href')?.startsWith('https://t.me/AlePolbot?startapp'),
+      link.getAttribute('href') === 'https://t.me/AlePolbot',
     )
     expect(telegramLinks.length).toBeGreaterThanOrEqual(4)
     for (const link of telegramLinks) {
       expect(link).toHaveAttribute('target', '_blank')
       expect(link).toHaveAttribute('rel', 'noreferrer')
+      expect(link.getAttribute('href')).not.toContain('startapp')
     }
 
     expect(
       screen.getByRole('link', { name: 'Открыть HappyFox в Telegram из демо' }),
-    ).toHaveAttribute('href', 'https://t.me/AlePolbot?startapp')
+    ).toHaveAttribute('href', 'https://t.me/AlePolbot')
 
     expect(
       container.querySelector('img[src="/mini-app/happyfox-brand.webp"]'),
