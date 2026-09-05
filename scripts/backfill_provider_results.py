@@ -42,7 +42,7 @@ def _looks_external(url: str | None) -> bool:
     if not value.startswith(("http://", "https://")):
         return False
     base = str(getattr(config, "STATIC_BASE_URL", "") or "").strip().rstrip("/")
-    return not (base and value.startswith(base + "/static/uploads/"))
+    return not (base and value.startswith(base + "/uploads/"))
 
 
 async def _persist_many(urls: list[str], *, task_type: str) -> list[str]:
