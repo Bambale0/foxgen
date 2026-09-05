@@ -18,15 +18,28 @@ class Migration:
     apply: MigrationApply
 
 
+async def _execute_schema_ddl(connection: db_backend.Connection, statement: str) -> None:
+    if not db_backend.is_postgres():
+        await connection.execute(statement)
+        return
+
+    raw = getattr(connection, "_conn", None)
+    if raw is None:
+        raise RuntimeError("PostgreSQL connection does not expose migration handle")
+    async with raw.cursor() as cursor:
+        await cursor.execute(statement)
+
+
 async def _ensure_migration_ledger(connection: db_backend.Connection) -> None:
-    await connection.execute(
+    await _execute_schema_ddl(
+        connection,
         """
         CREATE TABLE IF NOT EXISTS schema_migrations (
             version INTEGER PRIMARY KEY,
             name TEXT NOT NULL,
             applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
-        """
+        """,
     )
     await connection.commit()
 
@@ -52,12 +65,13 @@ async def _payment_identity_unique_index(connection: db_backend.Connection) -> N
             f"count={duplicate['duplicate_count']}"
         )
 
-    await connection.execute(
+    await _execute_schema_ddl(
+        connection,
         """
         CREATE UNIQUE INDEX IF NOT EXISTS idx_transactions_provider_payment_id
         ON transactions(provider, payment_id)
         WHERE payment_id IS NOT NULL AND payment_id <> ''
-        """
+        """,
     )
 
 
