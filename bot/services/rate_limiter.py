@@ -69,17 +69,28 @@ _rate_limit = int(os.environ.get("RATE_LIMIT_RPM", str(DEFAULT_RPM)))
 
 
 def _client_ip(request: web.Request) -> str:
-    """Extract client IP from headers, falling back to remote address."""
+    """Resolve the client IP from the trusted HappyFox reverse proxy.
+
+    Production exposes the backend only on loopback and nginx always overwrites
+    X-Real-IP with ``$remote_addr``.  A client-controlled X-Forwarded-For value
+    must therefore never win over X-Real-IP, otherwise an attacker can rotate
+    the first XFF item and bypass the per-IP limiter.
+    """
+
+    real_ip = request.headers.get("X-Real-IP", "").strip()
+    if real_ip:
+        return real_ip
+
     forwarded = request.headers.get("X-Forwarded-For", "")
     if forwarded:
-        return forwarded.split(",")[0].strip()
-    real_ip = request.headers.get("X-Real-IP", "")
-    if real_ip:
-        return real_ip.strip()
-    peername = request.transport.get_extra_info("peername")
-    if peername:
-        return str(peername[0])
-    return "unknown"
+        return forwarded.split(",", 1)[0].strip()
+
+    transport = request.transport
+    if transport is not None:
+        peername = transport.get_extra_info("peername")
+        if peername:
+            return str(peername[0])
+    return str(request.remote or "unknown")
 
 
 @web.middleware
