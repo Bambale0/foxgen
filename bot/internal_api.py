@@ -191,6 +191,21 @@ def setup_internal_api(app: web.Application, secret: str, version: str = "") -> 
 
     app.middlewares.append(internal_auth_middleware)
 
+    async def schema_migration_ctx(_app: web.Application):
+        from bot.schema_migrations import run_schema_migrations
+
+        applied = await run_schema_migrations()
+        if applied:
+            logger.info(
+                "Applied HappyFox schema migrations: %s",
+                ", ".join(str(version) for version in applied),
+            )
+        yield
+
+    # Register first so production schema is verified/migrated before MAX or
+    # other channel cleanup contexts start workers against it.
+    app.cleanup_ctx.append(schema_migration_ctx)
+
     router = app.router
     router.add_get(f"{_INTERNAL_PREFIX}/health", handle_internal_health)
     router.add_get(f"{_INTERNAL_PREFIX}/stats", handle_internal_stats)
