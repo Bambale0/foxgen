@@ -29,7 +29,7 @@ const HAPPYFOX_PRODUCT: ProductConfig = {
   brandDescription: 'HappyFox — создание фото, видео и AI-контента в Telegram',
   brandLogo: `${MINIAPP_BASE_PATH}/happyfox-icon.webp`,
   siteLogo: `${MINIAPP_BASE_PATH}/happyfox-brand.webp`,
-  telegramAppUrl: `https://t.me/${TELEGRAM_BOT_USERNAME}?startapp`,
+  telegramAppUrl: `https://t.me/${TELEGRAM_BOT_USERNAME}`,
 }
 
 function resolveProductId(): ProductId {
