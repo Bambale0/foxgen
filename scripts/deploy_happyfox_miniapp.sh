@@ -223,7 +223,8 @@ curl -fsSI --retry 5 --retry-delay 2 --retry-all-errors \
   "https://${MINIAPP_FRONTEND_DOMAIN}${asset}?revision=${EXPECTED_SHA}" >/dev/null
 
 # If this release contains the public landing, validate the exact branded WebP
-# assets and Telegram launch link that previously regressed in production.
+# assets and a normal Telegram bot link. `?startapp` is reserved for a configured
+# Telegram Main Mini App and must not be used by the public landing CTA.
 if [[ -s "$bundle_dir/landing/index.html" && -s "$bundle_dir/happyfox-brand.webp" && -s "$bundle_dir/happyfox-icon.webp" ]]; then
   curl -fsS --retry 5 --retry-delay 2 --retry-all-errors \
     --max-time 20 \
@@ -233,10 +234,14 @@ if [[ -s "$bundle_dir/landing/index.html" && -s "$bundle_dir/happyfox-brand.webp
     echo "HappyFox landing does not reference the branded WebP logo" >&2
     exit 1
   }
-  grep -Eq 'https://t\.me/[A-Za-z0-9_]+\?startapp' "$work/landing.html" || {
-    echo "HappyFox landing has no Telegram Main Mini App launch link" >&2
+  grep -Eq 'https://t\.me/[A-Za-z0-9_]+' "$work/landing.html" || {
+    echo "HappyFox landing has no Telegram bot launch link" >&2
     exit 1
   }
+  if grep -Eq 'https://t\.me/[A-Za-z0-9_]+\?startapp' "$work/landing.html"; then
+    echo "HappyFox landing still contains an invalid Main Mini App startapp link" >&2
+    exit 1
+  fi
   for brand_asset in happyfox-brand.webp happyfox-icon.webp; do
     curl -fsSI --retry 5 --retry-delay 2 --retry-all-errors \
       --max-time 20 \
