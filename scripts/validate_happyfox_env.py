@@ -18,6 +18,7 @@ REQUIRED = (
     "BOT_TOKEN",
     "WEBHOOK_HOST",
     "MINI_APP_URL",
+    "STATIC_BASE_URL",
     "DATABASE_URL",
     "REDIS_URL",
     "REDIS_PREFIX",
@@ -34,6 +35,8 @@ LAVA_OFFER_KEYS = (
     "LAVA_OFFER_ID_STUDIO",
     "LAVA_OFFER_ID_BUSINESS",
 )
+
+_TRUE_VALUES = {"1", "true", "yes", "on"}
 
 
 def _parse_env_file(path: Path) -> dict[str, str]:
@@ -65,6 +68,10 @@ def load_values(paths: list[Path]) -> dict[str, str]:
     return values
 
 
+def _enabled(values: dict[str, str], key: str) -> bool:
+    return values.get(key, "").strip().lower() in _TRUE_VALUES
+
+
 def validate(values: dict[str, str]) -> list[str]:
     errors: list[str] = []
 
@@ -94,6 +101,8 @@ def validate(values: dict[str, str]) -> list[str]:
         "REDIS_URL",
         "SUPPORT_CONTACT",
         "YOOKASSA_RETURN_URL",
+        "MAX_WEBHOOK_URL",
+        "MAX_PAYMENT_RETURN_URL",
     ):
         value = values.get(key, "").strip().lower()
         if not value:
@@ -104,14 +113,44 @@ def validate(values: dict[str, str]) -> list[str]:
 
     webhook_host = values.get("WEBHOOK_HOST", "").strip()
     mini_app_url = values.get("MINI_APP_URL", "").strip()
+    static_base_url = values.get("STATIC_BASE_URL", "").strip()
     if webhook_host and not webhook_host.startswith("https://"):
         errors.append("WEBHOOK_HOST must use https://")
     if mini_app_url and not mini_app_url.startswith("https://"):
         errors.append("MINI_APP_URL must use https://")
+    if static_base_url and not static_base_url.startswith("https://"):
+        errors.append("STATIC_BASE_URL must use https://")
+
+    if not _enabled(values, "PERSIST_PROVIDER_RESULTS"):
+        errors.append(
+            "PERSIST_PROVIDER_RESULTS must be enabled in production so generation history does not depend on provider URLs"
+        )
 
     admin_ids = values.get("ADMIN_IDS", "").strip()
     if admin_ids and not re.fullmatch(r"\d+(?:\s*,\s*\d+)*", admin_ids):
         errors.append("ADMIN_IDS must be a comma-separated list of Telegram numeric IDs")
+
+    if _enabled(values, "MAX_ENABLED"):
+        for key in (
+            "MAX_ACCESS_TOKEN",
+            "MAX_WEBHOOK_SECRET",
+            "MAX_WEBHOOK_URL",
+            "MAX_BOT_NAME",
+            "MAX_PAYMENT_RETURN_URL",
+            "YOOKASSA_SHOP_ID",
+            "YOOKASSA_SECRET_KEY",
+        ):
+            if not values.get(key, "").strip():
+                errors.append(f"{key} is required when MAX_ENABLED=1")
+        max_bot_name = values.get("MAX_BOT_NAME", "").strip().lstrip("@")
+        if max_bot_name and not re.fullmatch(r"[A-Za-z0-9_]+", max_bot_name):
+            errors.append("MAX_BOT_NAME contains unsupported characters")
+        max_webhook_url = values.get("MAX_WEBHOOK_URL", "").strip()
+        if max_webhook_url and not max_webhook_url.startswith("https://"):
+            errors.append("MAX_WEBHOOK_URL must use https://")
+        max_payment_return_url = values.get("MAX_PAYMENT_RETURN_URL", "").strip()
+        if max_payment_return_url and not max_payment_return_url.startswith("https://"):
+            errors.append("MAX_PAYMENT_RETURN_URL must use https://")
 
     payment_provider = values.get("PAYMENT_PROVIDER", "lava").strip().lower()
     payment_requirements: dict[str, tuple[str, ...]] = {

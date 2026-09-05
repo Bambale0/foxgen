@@ -12,6 +12,7 @@ def _valid_env() -> dict[str, str]:
         "WEBHOOK_HOST": "https://api.happyfox.example",
         "MINI_APP_URL": "https://app.happyfox.example/mini-app/",
         "STATIC_BASE_URL": "https://media.happyfox.example",
+        "PERSIST_PROVIDER_RESULTS": "1",
         "DATABASE_URL": "postgresql://happyfox:secret@db:5432/happyfox",
         "REDIS_URL": "redis://redis:6379/3",
         "REDIS_PREFIX": "foxgen_happyfox",
@@ -46,6 +47,15 @@ def test_data_plane_must_be_happyfox_specific() -> None:
 
     assert "DATABASE_URL must point to PostgreSQL in production" in errors
     assert "REDIS_PREFIX must be HappyFox/FoxGen-specific" in errors
+
+
+def test_production_requires_durable_provider_results() -> None:
+    values = _valid_env()
+    values["PERSIST_PROVIDER_RESULTS"] = "0"
+
+    errors = validate(values)
+
+    assert any("PERSIST_PROVIDER_RESULTS must be enabled" in item for item in errors)
 
 
 def test_selected_payment_provider_requires_its_secrets() -> None:
@@ -96,6 +106,42 @@ def test_yookassa_rejects_insecure_return_url() -> None:
 
     errors = validate(values)
     assert "YOOKASSA_RETURN_URL (or MINI_APP_URL fallback) must use https://" in errors
+
+
+def test_enabled_max_requires_complete_identity_and_payment_config() -> None:
+    values = _valid_env()
+    values["MAX_ENABLED"] = "1"
+
+    errors = validate(values)
+
+    for key in (
+        "MAX_ACCESS_TOKEN",
+        "MAX_WEBHOOK_SECRET",
+        "MAX_WEBHOOK_URL",
+        "MAX_BOT_NAME",
+        "MAX_PAYMENT_RETURN_URL",
+        "YOOKASSA_SHOP_ID",
+        "YOOKASSA_SECRET_KEY",
+    ):
+        assert f"{key} is required when MAX_ENABLED=1" in errors
+
+
+def test_enabled_max_valid_configuration_passes() -> None:
+    values = _valid_env()
+    values.update(
+        {
+            "MAX_ENABLED": "1",
+            "MAX_ACCESS_TOKEN": "max-token",
+            "MAX_WEBHOOK_SECRET": "max-secret",
+            "MAX_WEBHOOK_URL": "https://api.happyfox.example/max/webhook",
+            "MAX_BOT_NAME": "happyfox_bot",
+            "MAX_PAYMENT_RETURN_URL": "https://max.ru/happyfox_bot?start=max_payment",
+            "YOOKASSA_SHOP_ID": "shop-123",
+            "YOOKASSA_SECRET_KEY": "secret",
+        }
+    )
+
+    assert validate(values) == []
 
 
 def test_happyfox_deploy_wrapper_overrides_imported_neuromix_runtime_names() -> None:
