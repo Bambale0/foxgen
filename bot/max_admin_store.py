@@ -1,21 +1,37 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import secrets
 from typing import Any
 
+from bot import database
 from bot import db as db_backend
 from bot.max_store import ensure_max_schema, ensure_max_user
+
+_SCHEMA_LOCK: asyncio.Lock | None = None
+_SCHEMA_READY: set[str] = set()
 
 
 def _invite_hash(token: str) -> str:
     return hashlib.sha256(str(token).encode("utf-8")).hexdigest()
 
 
-async def ensure_max_admin_schema() -> None:
-    """Create isolated MAX admin role and one-time invite tables."""
-    await ensure_max_schema()
-    statements = (
+def _schema_lock() -> asyncio.Lock:
+    global _SCHEMA_LOCK
+    if _SCHEMA_LOCK is None:
+        _SCHEMA_LOCK = asyncio.Lock()
+    return _SCHEMA_LOCK
+
+
+def _schema_key() -> str:
+    if db_backend.is_postgres():
+        return f"postgres:{db_backend.DATABASE_URL}:max-admin"
+    return f"sqlite:{database.DATABASE_PATH}:max-admin"
+
+
+def _schema_statements() -> tuple[str, ...]:
+    return (
         """
         CREATE TABLE IF NOT EXISTS max_admins (
             max_user_id BIGINT PRIMARY KEY,
@@ -36,10 +52,35 @@ async def ensure_max_admin_schema() -> None:
         )
         """,
     )
-    async with db_backend.connect() as db:
-        for statement in statements:
-            await db.execute(statement)
-        await db.commit()
+
+
+async def _create_postgres_schema(db: db_backend.Connection) -> None:
+    raw = getattr(db, "_conn", None)
+    if raw is None:
+        raise RuntimeError("PostgreSQL connection does not expose migration handle")
+    async with raw.cursor() as cursor:
+        for statement in _schema_statements():
+            await cursor.execute(statement)
+    await raw.commit()
+
+
+async def ensure_max_admin_schema() -> None:
+    """Create isolated MAX admin role and one-time invite tables."""
+    await ensure_max_schema()
+    key = _schema_key()
+    if key in _SCHEMA_READY:
+        return
+    async with _schema_lock():
+        if key in _SCHEMA_READY:
+            return
+        async with db_backend.connect() as db:
+            if db_backend.is_postgres():
+                await _create_postgres_schema(db)
+            else:
+                for statement in _schema_statements():
+                    await db.execute(statement)
+                await db.commit()
+        _SCHEMA_READY.add(key)
 
 
 async def grant_max_admin(
