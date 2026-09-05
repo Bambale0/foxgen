@@ -75,11 +75,43 @@ async def _payment_identity_unique_index(connection: db_backend.Connection) -> N
     )
 
 
+_PROMPT_FEED_COMPATIBILITY_DDL: tuple[str, ...] = (
+    "ALTER TABLE user_prompts ADD COLUMN IF NOT EXISTS source_generation_id BIGINT",
+    "ALTER TABLE user_prompts ADD COLUMN IF NOT EXISTS generation_settings TEXT DEFAULT '{}'",
+    "ALTER TABLE generation_tasks ADD COLUMN IF NOT EXISTS result_urls TEXT",
+    "ALTER TABLE generation_tasks ADD COLUMN IF NOT EXISTS is_public_feed BOOLEAN DEFAULT FALSE",
+    "ALTER TABLE generation_tasks ADD COLUMN IF NOT EXISTS is_profile_visible BOOLEAN DEFAULT FALSE",
+    "ALTER TABLE generation_tasks ADD COLUMN IF NOT EXISTS is_adult_content BOOLEAN DEFAULT FALSE",
+    "ALTER TABLE generation_tasks ADD COLUMN IF NOT EXISTS is_prompt_library BOOLEAN DEFAULT FALSE",
+    "ALTER TABLE generation_tasks ADD COLUMN IF NOT EXISTS source_feed_gen_id BIGINT",
+    "ALTER TABLE generation_tasks ADD COLUMN IF NOT EXISTS parent_generation_id BIGINT",
+    "ALTER TABLE generation_tasks ADD COLUMN IF NOT EXISTS action_type TEXT",
+    "ALTER TABLE generation_tasks ADD COLUMN IF NOT EXISTS likes_count INTEGER DEFAULT 0",
+    "ALTER TABLE generation_tasks ADD COLUMN IF NOT EXISTS shares_count INTEGER DEFAULT 0",
+    "ALTER TABLE generation_tasks ADD COLUMN IF NOT EXISTS feed_prompt_visible BOOLEAN DEFAULT FALSE",
+    "ALTER TABLE generation_tasks ADD COLUMN IF NOT EXISTS feed_references_visible BOOLEAN DEFAULT FALSE",
+    "ALTER TABLE generation_tasks ADD COLUMN IF NOT EXISTS feed_blurred BOOLEAN DEFAULT FALSE",
+    "ALTER TABLE generation_tasks ADD COLUMN IF NOT EXISTS feed_published_at TIMESTAMP",
+)
+
+
+async def _prompt_feed_compatibility_columns(
+    connection: db_backend.Connection,
+) -> None:
+    for statement in _PROMPT_FEED_COMPATIBILITY_DDL:
+        await _execute_schema_ddl(connection, statement)
+
+
 MIGRATIONS: tuple[Migration, ...] = (
     Migration(
         version=1,
         name="unique payment provider identity",
         apply=_payment_identity_unique_index,
+    ),
+    Migration(
+        version=2,
+        name="prompt feed compatibility columns",
+        apply=_prompt_feed_compatibility_columns,
     ),
 )
 
