@@ -131,7 +131,13 @@ async def claim_max_admin_invite(max_user_id: int, token: str) -> bool:
 
         used_by = row["used_by_max_user_id"]
         if used_by is not None:
-            return int(used_by) == int(max_user_id) and await is_max_admin(max_user_id)
+            if int(used_by) != int(max_user_id):
+                return False
+            admin_cursor = await db.execute(
+                "SELECT 1 FROM max_admins WHERE max_user_id = ? LIMIT 1",
+                (int(max_user_id),),
+            )
+            return await admin_cursor.fetchone() is not None
 
         update = await db.execute(
             """
