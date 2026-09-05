@@ -32,11 +32,12 @@ RUN apt-get update \
         zlib1g-dev \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt ./
+COPY requirements.lock ./
 
 RUN python -m venv /opt/venv \
     && /opt/venv/bin/python -m pip install --upgrade pip setuptools wheel \
-    && /opt/venv/bin/pip install -r requirements.txt
+    && /opt/venv/bin/pip install -r requirements.lock \
+    && /opt/venv/bin/python -m pip check
 
 
 FROM python:3.12-slim-bookworm AS runtime
@@ -63,15 +64,30 @@ ENV PATH="/opt/venv/bin:${PATH}" \
     WEBHOOK_BIND_HOST=0.0.0.0 \
     WEBHOOK_PORT=1888
 
+# Debian bookworm ships PostgreSQL 15 client tools. HappyFox production runs
+# PostgreSQL 17, so use the official PGDG repository to keep pg_dump/pg_restore
+# on the server major and prevent backup failures after successful deploys.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         ca-certificates \
         curl \
         ffmpeg \
         gzip \
-        postgresql-client \
         sqlite3 \
         util-linux \
+    && install -d -m 0755 /usr/share/postgresql-common/pgdg \
+    && curl -fsSL \
+        -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+        https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+    && printf '%s\n' \
+        'Types: deb' \
+        'URIs: https://apt.postgresql.org/pub/repos/apt' \
+        'Suites: bookworm-pgdg' \
+        'Components: main' \
+        'Signed-By: /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc' \
+        > /etc/apt/sources.list.d/pgdg.sources \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends postgresql-client-17 \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd --gid "${APP_GID}" app \
     && useradd --uid "${APP_UID}" --gid "${APP_GID}" --create-home --home-dir /home/app app
