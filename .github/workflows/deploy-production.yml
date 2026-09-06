@@ -41,7 +41,6 @@ jobs:
     env:
       DEPLOY_HOST: ${{ vars.HAPPYFOX_DEPLOY_HOST || '5.35.124.201' }}
       DEPLOY_SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
-      HAPPYFOX_RUNTIME_ENV: ${{ secrets.HAPPYFOX_RUNTIME_ENV }}
       DEPLOY_USER: ${{ vars.HAPPYFOX_DEPLOY_USER || 'root' }}
       DEPLOY_PORT: ${{ vars.HAPPYFOX_DEPLOY_PORT || '22' }}
       DEPLOY_PATH: ${{ vars.HAPPYFOX_DEPLOY_PATH || '/opt/happyfox/repo' }}
@@ -73,24 +72,6 @@ jobs:
             exit 1
           }
 
-      - name: Check out exact deployment commit
-        uses: actions/checkout@v6
-        with:
-          ref: ${{ env.EXPECTED_SHA }}
-          fetch-depth: 1
-
-      - name: Verify dedicated-host release files
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          grep -Fq 'Bambale0/banano_kling' MIGRATION_SOURCE.md
-          grep -Fq 'HappyFox' MIGRATION_SOURCE.md
-          grep -Fq 'PRODUCT_ID: happyfox' compose.backend.yml
-          test -s compose.infra.yml
-          test -s scripts/deploy_happyfox_dedicated.sh
-          test -s scripts/ensure_telegram_webhook.py
-          chmod +x scripts/deploy_happyfox_dedicated.sh
-
       - name: Configure pinned SSH for dedicated host
         shell: bash
         run: |
@@ -110,7 +91,7 @@ jobs:
           printf '%s\n' "$scan" > "$HOME/.ssh/known_hosts"
           chmod 0600 "$HOME/.ssh/known_hosts"
 
-      - name: Prepare exact main checkout on HappyFox host
+      - name: Sync exact main on HappyFox host with gh
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -131,39 +112,22 @@ jobs:
           cd "$project_dir"
           test -d .git
           test -f .env
+          test -f .env.happyfox.runtime
           test -f .env.happyfox.channels
+          command -v gh >/dev/null
+          gh auth status -h github.com >/dev/null
+          main_sha="$(gh api repos/Bambale0/foxgen/commits/main --jq .sha)"
+          [ "$main_sha" = "$expected_sha" ]
+          gh auth setup-git
           git fetch --prune origin main
           [ "$(git rev-parse origin/main)" = "$expected_sha" ]
           git switch main
           git reset --hard "$expected_sha"
           [ "$(git rev-parse HEAD)" = "$expected_sha" ]
+          test -s compose.infra.yml
+          test -s scripts/deploy_happyfox_dedicated.sh
+          test -s scripts/ensure_telegram_webhook.py
           REMOTE
-
-      - name: Sync protected HappyFox runtime overlay
-        if: env.HAPPYFOX_RUNTIME_ENV != ''
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          tmp_env="$(mktemp)"
-          trap 'rm -f "$tmp_env"' EXIT
-          printf '%s\n' "$HAPPYFOX_RUNTIME_ENV" > "$tmp_env"
-          chmod 0600 "$tmp_env"
-          scp \
-            -i "$HOME/.ssh/id_ed25519" \
-            -P "$DEPLOY_PORT" \
-            -o BatchMode=yes \
-            -o IdentitiesOnly=yes \
-            -o StrictHostKeyChecking=yes \
-            -o ConnectTimeout=15 \
-            "$tmp_env" "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/.env.happyfox.runtime"
-          ssh \
-            -i "$HOME/.ssh/id_ed25519" \
-            -p "$DEPLOY_PORT" \
-            -o BatchMode=yes \
-            -o IdentitiesOnly=yes \
-            -o StrictHostKeyChecking=yes \
-            "$DEPLOY_USER@$DEPLOY_HOST" \
-            "chmod 600 '$DEPLOY_PATH/.env.happyfox.runtime'"
 
       - name: Deploy exact HappyFox commit to dedicated host
         shell: bash
@@ -216,6 +180,8 @@ jobs:
             echo "- Commit: \`${EXPECTED_SHA}\`"
             echo "- Host: \`${DEPLOY_HOST}\`"
             echo "- Checkout: \`${DEPLOY_PATH}\`"
+            echo '- Source sync: server-side `gh` + exact main SHA verification'
+            echo '- Secrets/runtime overlay: server-authoritative; Actions does not overwrite it'
             echo '- API/webhooks: `https://api.happy-fox.online`'
             echo '- Mini App: `https://app.happy-fox.online/mini-app/`'
             echo '- Landing: `https://happy-fox.online/`'
