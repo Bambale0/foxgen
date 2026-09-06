@@ -1,0 +1,61 @@
+name: foxgen
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: foxgen-postgres-1
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      POSTGRES_DB: ${FOXGEN_POSTGRES_DB}
+      POSTGRES_USER: ${FOXGEN_POSTGRES_USER}
+      POSTGRES_PASSWORD: ${FOXGEN_POSTGRES_PASSWORD}
+    volumes:
+      - foxgen_postgres_data:/var/lib/postgresql/data
+    networks:
+      - foxgen_backend
+
+  redis:
+    image: redis:7-alpine
+    container_name: foxgen-redis-1
+    restart: unless-stopped
+    env_file:
+      - .env
+    command:
+      - sh
+      - -lc
+      - exec redis-server --appendonly yes --requirepass "$$FOXGEN_REDIS_PASSWORD"
+    volumes:
+      - foxgen_redis_data:/data
+    networks:
+      - foxgen_backend
+
+  minio:
+    image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
+    container_name: foxgen-minio-1
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      MINIO_ROOT_USER: ${FOXGEN_S3_ACCESS_KEY_ID}
+      MINIO_ROOT_PASSWORD: ${FOXGEN_S3_SECRET_ACCESS_KEY}
+    command: ["server", "/data", "--console-address", ":9001"]
+    volumes:
+      - foxgen_minio_data:/data
+    networks:
+      foxgen_backend:
+        aliases:
+          - minio
+
+networks:
+  foxgen_backend:
+    name: foxgen_backend
+
+volumes:
+  foxgen_postgres_data:
+    name: foxgen_postgres_data
+  foxgen_redis_data:
+    name: foxgen_redis_data
+  foxgen_minio_data:
+    name: foxgen_minio_data
