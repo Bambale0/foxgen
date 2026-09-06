@@ -7,7 +7,7 @@ from bot.database import get_admin_stats
 from bot.max_admin_store import claim_max_admin_invite, is_max_admin, list_max_admins
 from bot.max_api import callback_button, inline_keyboard
 from bot.max_channel import _format_cost, _message_text, _user_id, _user_names
-from bot.max_parity_channel import MaxTelegramParityChannelService
+from bot.max_creation_parity import MaxCreationParityChannelService
 from bot.max_store import clear_max_session, ensure_max_user, get_max_balance
 from bot.max_ui import main_menu
 
@@ -30,7 +30,7 @@ def _admin_panel_menu() -> list[dict[str, Any]]:
     ]
 
 
-class MaxAdminChannelService(MaxTelegramParityChannelService):
+class MaxAdminChannelService(MaxCreationParityChannelService):
     """MAX Telegram-parity product channel with database-backed administrators."""
 
     async def _home(
