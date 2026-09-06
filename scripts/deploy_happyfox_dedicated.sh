@@ -64,6 +64,9 @@ values["WEBHOOK_HOST"] = api
 values["STATIC_BASE_URL"] = api
 values["MINI_APP_URL"] = f"{app}/mini-app/"
 values["YOOKASSA_RETURN_URL"] = f"{app}/mini-app/"
+telegram_webhook_url = values.get("TELEGRAM_WEBHOOK_URL", "").strip()
+if telegram_webhook_url and not telegram_webhook_url.startswith("https://"):
+    raise SystemExit("TELEGRAM_WEBHOOK_URL must use HTTPS")
 
 database_url = values.get("DATABASE_URL", "").strip()
 if database_url:

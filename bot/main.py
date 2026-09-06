@@ -2371,10 +2371,15 @@ async def on_startup(bot: Bot, dispatcher: Dispatcher | None = None):
     except Exception:
         logger.exception("Redis warmup failed during startup")
 
-    # Устанавливаем вебхук для Telegram (если используем webhook mode)
-    if config.WEBHOOK_HOST:
+    # Устанавливаем вебхук для Telegram (если используем webhook mode).
+    # TELEGRAM_WEBHOOK_URL can point at a dedicated ingress relay while all
+    # other provider callbacks continue to use WEBHOOK_HOST.
+    if config.WEBHOOK_HOST or config.TELEGRAM_WEBHOOK_URL:
         try:
-            webhook_kwargs = {}
+            webhook_kwargs = {"drop_pending_updates": False}
+            secret_token = config.telegram_webhook_secret
+            if secret_token:
+                webhook_kwargs["secret_token"] = secret_token
             if dispatcher is not None:
                 webhook_kwargs["allowed_updates"] = dispatcher.resolve_used_update_types()
             await bot.set_webhook(config.webhook_url, **webhook_kwargs)
@@ -2503,6 +2508,12 @@ async def handle_telegram_webhook(
     request: web.Request, bot: Bot, dp: Dispatcher
 ) -> web.Response:
     """Обработчик вебхука от Telegram"""
+    expected_secret = config.telegram_webhook_secret
+    if expected_secret:
+        actual_secret = request.headers.get("X-Telegram-Bot-Api-Secret-Token", "")
+        if not hmac.compare_digest(actual_secret, expected_secret):
+            logger.warning("Rejected Telegram webhook with invalid secret token")
+            return web.Response(text="Unauthorized", status=401)
     try:
         raw_body = await request.read()
         if not raw_body:
