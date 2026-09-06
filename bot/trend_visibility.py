@@ -61,9 +61,12 @@ def sanitize_prompt_for_public(
     if not is_trend_prompt(payload):
         return payload
 
+    # Derive the safe parameter schema while the private prompt still exists in
+    # this server-side copy. Redact executable fields before returning anything.
+    public_settings = public_trend_settings(payload)
     payload["prompt_text"] = ""
     payload["model"] = None
-    payload["generation_settings"] = public_trend_settings(payload)
+    payload["generation_settings"] = public_settings
     payload["prompt_hidden"] = True
     payload["prompt_actions_allowed"] = False
     return payload
