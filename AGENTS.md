@@ -148,6 +148,24 @@ When a connected repository is available through GitHub tools, prefer repository
 
 ---
 
+## Mandatory release parity: MAX bot + Telegram bot + Mini App
+
+Every HappyFox update must keep all three product surfaces synchronized:
+
+1. MAX bot.
+2. Telegram bot.
+3. Mini App.
+
+Rules:
+
+- Any new or changed feature, menu item, model/provider option, pricing/payment behavior, text/copy, validation, error/fallback behavior, deep link, admin control, generation flow, or other user-facing behavior must be implemented or updated across all applicable surfaces in the same change/release.
+- Do **not** consider a product change complete if only one or two of the three surfaces were updated.
+- For backend/infrastructure-only changes that require no surface-specific code changes, still run regression/compatibility verification for MAX, Telegram, and Mini App before delivery.
+- If a platform limitation prevents identical behavior on one surface, preserve the same user outcome with an equivalent flow or explicit fallback, and document the limitation in the PR/final report.
+- Before merge/deploy, explicitly verify parity for MAX bot, Telegram bot, and Mini App. This is part of the Definition of Done.
+
+---
+
 ## Safety and destructive commands
 
 Never run destructive or high-risk commands unless the user explicitly requested and confirmed the exact action.
@@ -257,4 +275,5 @@ If tests were not run, explain why.
 - No known secrets or credentials were introduced.
 - Error handling and logging are appropriate.
 - Public behavior is documented when changed.
+- MAX bot, Telegram bot, and Mini App parity was verified for every update, or a platform-specific limitation/fallback was documented.
 - Final response follows the standard delivery format.
