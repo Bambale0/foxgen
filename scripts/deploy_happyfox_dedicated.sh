@@ -45,6 +45,11 @@ main_sha="$(gh api "repos/${GITHUB_REPO}/commits/main" --jq .sha)"
   exit 1
 }
 
+# MAX uses the Russian Trusted PKI. Keep the host trust store reproducible too,
+# not only the container image, so host-side diagnostics and future tooling use
+# the same verified chain without disabling TLS verification.
+bash scripts/install_russian_trusted_ca.sh
+
 # Recover protected channel values from the server-side channel overlay before
 # canonicalizing public URLs. GitHub Actions never replaces this runtime file:
 # the production host is authoritative for secrets and channel credentials.
@@ -217,9 +222,10 @@ kie_status="$(curl -sS -o /dev/null -w '%{http_code}' -X POST --max-time 20 \
 [[ "$kie_status" =~ ^(400|401|403)$ ]]
 
 # Telegram and MAX webhook configuration is part of the release, not a manual
-# afterthought. MAX refreshes its subscription during startup; Telegram is
-# explicitly reconciled here without dropping queued updates.
+# afterthought. MAX refreshes its subscription during startup; the explicit
+# authenticated smoke below also proves container TLS trust to the MAX API.
 docker exec foxgen-happyfox-bot python /app/scripts/ensure_telegram_webhook.py
+docker exec foxgen-happyfox-bot python -m scripts.check_max_connectivity
 docker logs foxgen-happyfox-bot 2>&1 | grep -F "$API_ORIGIN/max/webhook" >/dev/null
 
 # Keep the post-migration state backed up with the matching PG17 client.
