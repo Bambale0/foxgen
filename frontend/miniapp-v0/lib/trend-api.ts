@@ -1,7 +1,7 @@
 'use client'
 
 import { getApiBasePath, getInitData, getStartParamFallback } from './api'
-import type { Task, TaskDetail } from './types'
+import type { Task, TaskDetail, TrendGenerationSettings, PromptItem } from './types'
 
 interface RunTrendResponse {
   ok: true
@@ -48,6 +48,7 @@ async function parseResponse(response: Response): Promise<RunTrendResponse> {
 export async function runTrend(
   trendId: number,
   referenceUrls: string[],
+  userValues: Record<string, string> = {},
 ): Promise<RunTrendResult> {
   const initData = getInitData()
   if (!initData) {
@@ -59,6 +60,7 @@ export async function runTrend(
     trend_id: trendId,
     reference_urls: referenceUrls,
   }
+  if (Object.keys(userValues).length) payload.user_values = userValues
   const startParam = getStartParamFallback()
   if (startParam) payload.start_param_fallback = startParam
 
@@ -105,4 +107,45 @@ export async function runTrend(
         : null,
     credits: data.credits,
   }
+}
+
+export async function saveAdminTrend(
+  promptId: number | null,
+  payload: {
+    title: string
+    description: string
+    promptText: string
+    previewUrl: string
+    model: string
+    tags: string[]
+    generationSettings: TrendGenerationSettings
+  },
+): Promise<PromptItem> {
+  const initData = getInitData()
+  if (!initData) throw new Error('Откройте Mini App из Telegram и попробуйте снова.')
+  const body: Record<string, unknown> = {
+    init_data: initData,
+    title: payload.title,
+    description: payload.description,
+    prompt_text: payload.promptText,
+    preview_url: payload.previewUrl,
+    model: payload.model,
+    tags: payload.tags,
+    generation_settings: payload.generationSettings,
+  }
+  if (promptId) body.prompt_id = promptId
+  const startParam = getStartParamFallback()
+  if (startParam) body.start_param_fallback = startParam
+  const response = await fetch(`${getApiBasePath()}/trends/admin-save`, {
+    method: 'POST',
+    headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    cache: 'no-store',
+    credentials: 'same-origin',
+  })
+  const text = await response.text()
+  let data: { ok?: boolean; error?: string; prompt?: PromptItem } = {}
+  try { data = JSON.parse(text) as typeof data } catch { throw new Error('Сервер вернул некорректный ответ') }
+  if (!response.ok || !data.ok || !data.prompt) throw new Error(data.error || 'Не удалось сохранить тренд')
+  return data.prompt
 }

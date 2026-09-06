@@ -7,10 +7,14 @@ from typing import Any
 
 from aiohttp import web
 
+from bot import db as db_backend
 from bot.config import config
 from bot.database import (
+    DATABASE_PATH,
     add_credits,
+    approve_prompt,
     check_can_afford,
+    create_prompt,
     deduct_credits,
     get_or_create_user,
     get_prompt_by_id,
@@ -19,6 +23,12 @@ from bot.database import (
 )
 from bot.services.media_input_utils import missing_local_upload_sources
 from bot.services.preset_manager import preset_manager
+from bot.trend_user_fields import (
+    TrendUserFieldsError,
+    clean_submitted_user_values,
+    normalize_trend_user_fields,
+    render_trend_prompt,
+)
 from bot.video_reference_policy import apply_video_reference_cost
 
 logger = logging.getLogger(__name__)
@@ -34,6 +44,7 @@ class TrendRunValidationError(ValueError):
 class TrendRunRequest:
     trend_id: int
     reference_urls: tuple[str, ...]
+    user_values: dict[str, str]
 
 
 @dataclass(frozen=True)
@@ -126,11 +137,12 @@ def _clean_reference_urls(raw_urls: Any) -> tuple[str, ...]:
 
 
 def parse_trend_run_request(body: Any) -> TrendRunRequest:
-    """Accept only a trend ID and uploaded references from the client.
+    """Accept a trend ID, uploaded references and declared template values.
 
     Any client-supplied model, prompt, ratio, quality, duration or provider
-    options are deliberately ignored. Those values are loaded from the trend
-    record created by an administrator.
+    options are deliberately ignored. Template values are validated against
+    the administrator-owned ``generation_settings.user_fields`` schema before
+    they are interpolated into the hidden prompt on the server.
     """
 
     if not isinstance(body, Mapping):
@@ -140,15 +152,22 @@ def parse_trend_run_request(body: Any) -> TrendRunRequest:
     if not str(raw_trend_id or "").isdigit():
         raise TrendRunValidationError("Тренд не найден")
 
+    try:
+        user_values = clean_submitted_user_values(body.get("user_values"))
+    except TrendUserFieldsError as exc:
+        raise TrendRunValidationError(str(exc)) from exc
+
     return TrendRunRequest(
         trend_id=int(raw_trend_id),
         reference_urls=_clean_reference_urls(body.get("reference_urls")),
+        user_values=user_values,
     )
 
 
 def trusted_trend_run(
     trend: Mapping[str, Any] | None,
     reference_urls: tuple[str, ...],
+    user_values: Mapping[str, str] | None = None,
 ) -> TrustedTrendRun:
     if not trend:
         raise TrendRunValidationError("Тренд не найден")
@@ -180,6 +199,10 @@ def trusted_trend_run(
         raise TrendRunValidationError("Этот тренд не поддерживает фото-референсы")
 
     prompt = str(trend.get("prompt_text") or "").strip()
+    try:
+        prompt = render_trend_prompt(prompt, settings, user_values)
+    except TrendUserFieldsError as exc:
+        raise TrendRunValidationError(str(exc)) from exc
     model = str(settings.get("model") or trend.get("model") or "").strip()
     ratio = str(settings.get("ratio") or "").strip()
     if not prompt or not model or not ratio:
@@ -582,6 +605,96 @@ async def _run_video_trend(
         raise
 
 
+async def miniapp_save_admin_trend(request: web.Request) -> web.Response:
+    """Create or update a curated trend in-place. Admin-only; preserves old IDs/stats."""
+
+    try:
+        body = await request.json()
+        from bot import miniapp as miniapp_module
+
+        telegram_id, context = await miniapp_module._get_user_context(
+            request.app,
+            str(body.get("init_data") or ""),
+            body.get("start_param_fallback"),
+        )
+        if not config.is_admin(telegram_id):
+            return web.json_response({"ok": False, "error": "Нет доступа"}, status=403)
+
+        prompt_text = str(body.get("prompt_text") or "").strip()
+        title = str(body.get("title") or "").strip()
+        description = str(body.get("description") or "").strip()
+        preview_url = str(body.get("preview_url") or "").strip() or None
+        model = str(body.get("model") or "").strip() or None
+        tags = [str(item) for item in list(body.get("tags") or [])]
+        normalized_tags = {tag.strip().lower() for tag in tags}
+        if "trend" not in normalized_tags:
+            tags.append("trend")
+        raw_settings = body.get("generation_settings")
+        settings = dict(raw_settings) if isinstance(raw_settings, Mapping) else {}
+        if not prompt_text or not title or not preview_url or not model:
+            return web.json_response(
+                {"ok": False, "error": "Добавьте название, preview, модель и скрытый prompt"},
+                status=400,
+            )
+        try:
+            settings["user_fields"] = normalize_trend_user_fields(
+                settings.get("user_fields"),
+                prompt=prompt_text,
+            )
+        except TrendUserFieldsError as exc:
+            return web.json_response({"ok": False, "error": str(exc)}, status=400)
+
+        raw_prompt_id = body.get("prompt_id")
+        if raw_prompt_id not in (None, "", 0, "0"):
+            prompt_id = int(raw_prompt_id)
+            existing = await get_prompt_by_id(prompt_id)
+            if not existing or "trend" not in {
+                str(tag).strip().lower() for tag in list(existing.get("tags") or [])
+            }:
+                return web.json_response({"ok": False, "error": "Тренд не найден"}, status=404)
+            async with db_backend.connect(DATABASE_PATH) as db:
+                await db.execute(
+                    """
+                    UPDATE user_prompts
+                    SET title = ?, description = ?, prompt_text = ?, preview_url = ?,
+                        model = ?, tags = ?, generation_settings = ?, updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                    """,
+                    (
+                        title[:60],
+                        description[:200],
+                        prompt_text,
+                        preview_url,
+                        model,
+                        __import__("json").dumps(tags, ensure_ascii=False),
+                        __import__("json").dumps(settings, ensure_ascii=False),
+                        prompt_id,
+                    ),
+                )
+                await db.commit()
+            prompt = await get_prompt_by_id(prompt_id)
+        else:
+            prompt = await create_prompt(
+                author_id=context["user"].id,
+                prompt_text=prompt_text,
+                title=title,
+                description=description,
+                preview_url=preview_url,
+                model=model,
+                tags=tags,
+                generation_settings=settings,
+                is_public=True,
+            )
+            if prompt:
+                prompt = await approve_prompt(int(prompt["id"]))
+        return web.json_response({"ok": True, "prompt": prompt})
+    except (TypeError, ValueError):
+        return web.json_response({"ok": False, "error": "Некорректные данные тренда"}, status=400)
+    except Exception:
+        logger.exception("Mini App admin trend save failed")
+        return web.json_response({"ok": False, "error": "Не удалось сохранить тренд"}, status=500)
+
+
 async def miniapp_run_trend(request: web.Request) -> web.Response:
     """Run a curated trend using only settings stored by an administrator."""
 
@@ -600,7 +713,7 @@ async def miniapp_run_trend(request: web.Request) -> web.Response:
             parsed.trend_id,
             approved_public_only=True,
         )
-        trend = trusted_trend_run(prompt, parsed.reference_urls)
+        trend = trusted_trend_run(prompt, parsed.reference_urls, parsed.user_values)
 
         if trend.kind == "video":
             return await _run_video_trend(
@@ -627,4 +740,5 @@ async def miniapp_run_trend(request: web.Request) -> web.Response:
 def setup_trend_routes(app: web.Application, miniapp_root: str) -> None:
     """Register the exact route before Mini App's catch-all API handler."""
 
+    app.router.add_post(miniapp_root + "/api/trends/admin-save", miniapp_save_admin_trend)
     app.router.add_post(miniapp_root + "/api/trends/run", miniapp_run_trend)

@@ -71,6 +71,43 @@ describe('runTrend', () => {
     expect(result.task.prompt_actions_allowed).toBe(false)
   })
 
+  it('sends only declared user values alongside the trend id and references', async () => {
+    const fetchMock = jest.fn().mockResolvedValue({
+      ok: true,
+      text: async () =>
+        JSON.stringify({
+          ok: true,
+          status: 'queued',
+          task_id: 'trend-task-variable',
+          task_type: 'video',
+          saved_url: null,
+          credits: 4,
+          cost: 1,
+          model: 'seedance_2',
+          model_label: 'Seedance 2.0',
+          aspect_ratio: '9:16',
+          duration: 5,
+          prompt_hidden: true,
+          prompt_actions_allowed: false,
+          trend_id: 42,
+        }),
+    })
+    global.fetch = fetchMock as unknown as typeof fetch
+
+    await runTrend(42, ['https://example.test/reference.jpg'], { Возраст: '28' })
+
+    const [, options] = fetchMock.mock.calls[0] as [string, RequestInit]
+    const body = JSON.parse(String(options.body))
+    expect(body).toEqual({
+      init_data: 'signed-init-data',
+      trend_id: 42,
+      reference_urls: ['https://example.test/reference.jpg'],
+      user_values: { Возраст: '28' },
+    })
+    expect(body).not.toHaveProperty('prompt')
+    expect(body).not.toHaveProperty('generation_settings')
+  })
+
   it('keeps all generation controls out of the user trend runner', () => {
     const runnerPath = path.join(
       process.cwd(),
