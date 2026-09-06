@@ -30,6 +30,48 @@ interface TrendRunnerDialogProps {
 
 const IMAGE_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'webp', 'heic', 'heif', 'avif'])
 const MAX_REFERENCES = 12
+const TEMPLATE_PLACEHOLDER = /{{\s*([A-Za-zА-Яа-яЁё][A-Za-zА-Яа-яЁё0-9_]{0,31})\s*}}/g
+
+const TEMPLATE_FIELD_ALIASES: Record<
+  string,
+  Pick<TrendTemplateField, 'label' | 'type' | 'placeholder'>
+> = {
+  age: { label: 'Возраст', type: 'number', placeholder: 'Например, 28' },
+  'возраст': { label: 'Возраст', type: 'number', placeholder: 'Например, 28' },
+  name: { label: 'Имя', type: 'text', placeholder: 'Например, Анна' },
+  'имя': { label: 'Имя', type: 'text', placeholder: 'Например, Анна' },
+  date: { label: 'Дата', type: 'date', placeholder: 'Выберите дату' },
+  'дата': { label: 'Дата', type: 'date', placeholder: 'Выберите дату' },
+  year: { label: 'Год', type: 'number', placeholder: 'Например, 2026' },
+  'год': { label: 'Год', type: 'number', placeholder: 'Например, 2026' },
+  number: { label: 'Число', type: 'number', placeholder: 'Введите число' },
+  'число': { label: 'Число', type: 'number', placeholder: 'Введите число' },
+  city: { label: 'Город', type: 'text', placeholder: 'Например, Санкт-Петербург' },
+  'город': { label: 'Город', type: 'text', placeholder: 'Например, Санкт-Петербург' },
+}
+
+function fieldsFromAdminPrompt(prompt: string): TrendTemplateField[] {
+  const fields: TrendTemplateField[] = []
+  const seen = new Set<string>()
+  for (const match of prompt.matchAll(TEMPLATE_PLACEHOLDER)) {
+    const key = String(match[1] || '').trim()
+    const normalized = key.toLocaleLowerCase('ru-RU')
+    if (!key || seen.has(normalized)) continue
+    seen.add(normalized)
+    const known = TEMPLATE_FIELD_ALIASES[normalized]
+    const label = known?.label || key.replaceAll('_', ' ').replace(/^./, (value) => value.toUpperCase())
+    fields.push({
+      key,
+      label,
+      type: known?.type || 'text',
+      placeholder: known?.placeholder || `Введите ${label.toLowerCase()}`,
+      required: true,
+      max_length: 120,
+    })
+    if (fields.length >= 8) break
+  }
+  return fields
+}
 
 function trendTemplateFields(trend: PromptItem | null): TrendTemplateField[] {
   const settings = trend?.generation_settings as
@@ -38,7 +80,12 @@ function trendTemplateFields(trend: PromptItem | null): TrendTemplateField[] {
       })
     | null
     | undefined
-  return Array.isArray(settings?.template_fields) ? settings.template_fields : []
+  if (Array.isArray(settings?.template_fields) && settings.template_fields.length) {
+    return settings.template_fields
+  }
+  // Admin prompt detail may intentionally be unsanitized. This fallback lets an
+  // administrator test the same form without ever exposing prompt text to users.
+  return trend?.prompt_text ? fieldsFromAdminPrompt(trend.prompt_text) : []
 }
 
 export function TrendRunnerDialog({
