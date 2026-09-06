@@ -13,6 +13,9 @@ def test_dedicated_deploy_pins_three_public_origins_and_runtime_db() -> None:
     assert "ensure_telegram_webhook.py" in deploy
     assert "TELEGRAM_WEBHOOK_URL" in deploy
     assert "TELEGRAM_WEBHOOK_IP_ADDRESS" in deploy
+    assert "HAPPYFOX_TELEGRAM_RELAY_IP:-2.27.160.11" in deploy
+    assert 'values["TELEGRAM_WEBHOOK_URL"] = f"{api}/webhook"' in deploy
+    assert 'values["TELEGRAM_WEBHOOK_IP_ADDRESS"] = telegram_relay_ip' in deploy
     assert '"$API_ORIGIN/yookassa/webhook"' in deploy
     assert "backup_db.sh" in deploy
 
