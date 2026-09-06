@@ -7,7 +7,7 @@ from bot.database import get_admin_stats
 from bot.max_admin_store import claim_max_admin_invite, is_max_admin, list_max_admins
 from bot.max_api import callback_button, inline_keyboard
 from bot.max_channel import _format_cost, _message_text, _user_id, _user_names
-from bot.max_product_channel import MaxProductChannelService
+from bot.max_parity_channel import MaxTelegramParityChannelService
 from bot.max_store import clear_max_session, ensure_max_user, get_max_balance
 from bot.max_ui import main_menu
 
@@ -30,8 +30,8 @@ def _admin_panel_menu() -> list[dict[str, Any]]:
     ]
 
 
-class MaxAdminChannelService(MaxProductChannelService):
-    """MAX product channel with explicit database-backed administrator roles."""
+class MaxAdminChannelService(MaxTelegramParityChannelService):
+    """MAX Telegram-parity product channel with database-backed administrators."""
 
     async def _home(
         self,
@@ -49,19 +49,10 @@ class MaxAdminChannelService(MaxProductChannelService):
         balance = await get_max_balance(user_id)
         await self._respond(
             user_id,
-            "🦊 <b>HappyFox в MAX</b>\n\n"
-            "Создавайте контент прямо в чате — без команд и длинных настроек.\n\n"
-            "<b>Что здесь есть</b>\n"
-            "🖼 Фото — генерация и редактирование по референсам\n"
-            "🎬 Видео — текст → видео, фото → видео и видео → видео\n"
-            "🎯 Motion Control — перенос движения из ролика на персонажа\n"
-            "🎙 Озвучка — Gemini Omni Audio ID\n"
-            "🎵 Suno — музыка, lyrics, cover и аудио-инструменты\n"
-            "✨ Промпты — готовая библиотека прямо в MAX\n"
-            "🤖 AI-помощник — выбор модели, промпта и настроек\n\n"
-            f"🐾 <b>Баланс MAX:</b> {_format_cost(balance)}\n"
-            "🔧 <b>Роль:</b> администратор\n"
-            "<i>Выберите нужный экран ниже.</i>",
+            "🦊 <b>HappyFox</b>\n\n"
+            "Создавайте фото, видео и промпты — все основные сценарии доступны кнопками ниже.\n\n"
+            f"🍌 <b>Баланс:</b> {_format_cost(balance)}\n"
+            "🔧 <b>Роль:</b> администратор",
             attachments=_admin_main_menu(
                 balance,
                 mini_app_url=self.settings.mini_app_url,
@@ -81,7 +72,13 @@ class MaxAdminChannelService(MaxProductChannelService):
         stats = await get_admin_stats()
         admins = await list_max_admins()
         names = ", ".join(
-            html.escape(str(item.get("display_name") or item.get("first_name") or item["max_user_id"]))
+            html.escape(
+                str(
+                    item.get("display_name")
+                    or item.get("first_name")
+                    or item["max_user_id"]
+                )
+            )
             for item in admins
         ) or "—"
         await self._respond(
@@ -124,7 +121,10 @@ class MaxAdminChannelService(MaxProductChannelService):
                     first_name=first_name,
                     last_name=last_name,
                 )
-                claimed = await claim_max_admin_invite(user_id, payload.removeprefix("admin_"))
+                claimed = await claim_max_admin_invite(
+                    user_id,
+                    payload.removeprefix("admin_"),
+                )
                 await self._home(user_id)
                 if claimed:
                     await self.client.send_message(
@@ -135,7 +135,8 @@ class MaxAdminChannelService(MaxProductChannelService):
                 else:
                     await self.client.send_message(
                         user_id,
-                        "⛔ Ссылка администратора недействительна или уже использована другим MAX-аккаунтом.",
+                        "⛔ Ссылка администратора недействительна или уже использована "
+                        "другим MAX-аккаунтом.",
                     )
                 return
 
