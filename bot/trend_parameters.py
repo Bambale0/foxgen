@@ -100,7 +100,13 @@ def extract_trend_template_fields(prompt: str) -> tuple[TrendTemplateField, ...]
 
 
 def public_trend_template_fields(prompt: str) -> list[dict[str, Any]]:
-    return [field.public_payload() for field in extract_trend_template_fields(prompt)]
+    """Return safe UI schema without allowing one bad legacy trend to break the catalog."""
+
+    try:
+        fields = extract_trend_template_fields(prompt)
+    except TrendParameterValidationError:
+        return []
+    return [field.public_payload() for field in fields]
 
 
 def _clean_value(field: TrendTemplateField, raw_value: Any) -> str:
@@ -115,18 +121,26 @@ def _clean_value(field: TrendTemplateField, raw_value: Any) -> str:
             f"Поле «{field.label}» слишком длинное. Максимум {field.max_length} символов"
         )
     if any(ord(char) < 32 and char not in {"\t"} for char in value):
-        raise TrendParameterValidationError(f"Поле «{field.label}» содержит недопустимые символы")
+        raise TrendParameterValidationError(
+            f"Поле «{field.label}» содержит недопустимые символы"
+        )
     if "\n" in value or "\r" in value:
-        raise TrendParameterValidationError(f"Поле «{field.label}» должно быть в одну строку")
+        raise TrendParameterValidationError(
+            f"Поле «{field.label}» должно быть в одну строку"
+        )
 
     if field.field_type == "number":
         if not _NUMBER_RE.fullmatch(value):
-            raise TrendParameterValidationError(f"В поле «{field.label}» нужно указать число")
+            raise TrendParameterValidationError(
+                f"В поле «{field.label}» нужно указать число"
+            )
         if field.key.casefold() in {"age", "возраст"}:
             try:
                 age = int(value)
             except ValueError as exc:
-                raise TrendParameterValidationError("Возраст должен быть целым числом") from exc
+                raise TrendParameterValidationError(
+                    "Возраст должен быть целым числом"
+                ) from exc
             if not 1 <= age <= 120:
                 raise TrendParameterValidationError("Возраст должен быть от 1 до 120")
     elif field.field_type == "date" and not _DATE_RE.fullmatch(value):
@@ -145,7 +159,9 @@ def render_trend_prompt(prompt: str, raw_parameters: Any) -> str:
         if raw_parameters not in (None, {}, ""):
             if isinstance(raw_parameters, Mapping) and not raw_parameters:
                 return clean_prompt
-            raise TrendParameterValidationError("У этого тренда нет пользовательских полей")
+            raise TrendParameterValidationError(
+                "У этого тренда нет пользовательских полей"
+            )
         return clean_prompt
 
     if not isinstance(raw_parameters, Mapping):
@@ -157,7 +173,9 @@ def render_trend_prompt(prompt: str, raw_parameters: Any) -> str:
         key = str(raw_key or "").strip()
         normalized = key.casefold()
         if normalized not in expected_by_key:
-            raise TrendParameterValidationError("В запросе есть неизвестный параметр тренда")
+            raise TrendParameterValidationError(
+                "В запросе есть неизвестный параметр тренда"
+            )
         supplied[normalized] = raw_value
 
     cleaned_values: dict[str, str] = {}
