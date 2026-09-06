@@ -292,7 +292,8 @@ try {
   // User trend E2E: references only, no settings, immediate server-side run.
   await page.getByRole('button', { name: 'Повторить', exact: true }).click()
   const trendRunner = page.getByRole('dialog')
-  await trendRunner.getByText('Загрузите свои фото', { exact: true }).waitFor()
+  await trendRunner.getByText('Сделайте этот шаблон своим', { exact: true }).waitFor()
+  await trendRunner.getByText('Выбрать фото и запустить', { exact: true }).waitFor()
   assert.equal(await trendRunner.locator('select').count(), 0)
   assert.equal(await trendRunner.getByText('Модель', { exact: true }).count(), 0)
   assert.equal(await trendRunner.getByText('Формат', { exact: true }).count(), 0)
@@ -315,6 +316,7 @@ try {
     ['https://cdn.example/user-trend-photo.jpg'],
   )
   for (const forbiddenField of [
+    'parameters',
     'model',
     'prompt',
     'ratio',
