@@ -9,6 +9,7 @@ API_ORIGIN="${HAPPYFOX_API_ORIGIN:-https://api.happy-fox.online}"
 APP_ORIGIN="${HAPPYFOX_APP_ORIGIN:-https://app.happy-fox.online}"
 LANDING_ORIGIN="${HAPPYFOX_LANDING_ORIGIN:-https://happy-fox.online}"
 DATABASE_NAME="${HAPPYFOX_DATABASE_NAME:-happyfox_cutover}"
+TELEGRAM_RELAY_IP="${HAPPYFOX_TELEGRAM_RELAY_IP:-2.27.160.11}"
 RUNTIME_ENV="$PROJECT_DIR/.env.happyfox.runtime"
 
 [[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]] || {
@@ -39,7 +40,7 @@ python3 scripts/recover_happyfox_channel_runtime.py "$PROJECT_DIR"
 # traffic uses api.happy-fox.online, while the Telegram/MAX UI lives on the app
 # origin. The production DB name is also server-authoritative during the cutover
 # period so an older CI secret cannot point the app at a stale database.
-python3 - "$RUNTIME_ENV" "$API_ORIGIN" "$APP_ORIGIN" "$DATABASE_NAME" <<'PY'
+python3 - "$RUNTIME_ENV" "$API_ORIGIN" "$APP_ORIGIN" "$DATABASE_NAME" "$TELEGRAM_RELAY_IP" <<'PY'
 from pathlib import Path
 import ipaddress
 import os
@@ -50,6 +51,7 @@ path = Path(sys.argv[1])
 api = sys.argv[2].rstrip("/")
 app = sys.argv[3].rstrip("/")
 database_name = sys.argv[4]
+telegram_relay_ip = sys.argv[5].strip()
 values: dict[str, str] = {}
 for raw in path.read_text(encoding="utf-8").splitlines():
     line = raw.strip()
@@ -65,15 +67,14 @@ values["WEBHOOK_HOST"] = api
 values["STATIC_BASE_URL"] = api
 values["MINI_APP_URL"] = f"{app}/mini-app/"
 values["YOOKASSA_RETURN_URL"] = f"{app}/mini-app/"
-telegram_webhook_url = values.get("TELEGRAM_WEBHOOK_URL", "").strip()
-if telegram_webhook_url and not telegram_webhook_url.startswith("https://"):
-    raise SystemExit("TELEGRAM_WEBHOOK_URL must use HTTPS")
-telegram_webhook_ip = values.get("TELEGRAM_WEBHOOK_IP_ADDRESS", "").strip()
-if telegram_webhook_ip:
-    try:
-        ipaddress.ip_address(telegram_webhook_ip)
-    except ValueError as exc:
-        raise SystemExit("TELEGRAM_WEBHOOK_IP_ADDRESS must be a valid IP address") from exc
+values["TELEGRAM_WEBHOOK_URL"] = f"{api}/webhook"
+if not telegram_relay_ip:
+    raise SystemExit("HAPPYFOX_TELEGRAM_RELAY_IP must not be empty")
+try:
+    ipaddress.ip_address(telegram_relay_ip)
+except ValueError as exc:
+    raise SystemExit("HAPPYFOX_TELEGRAM_RELAY_IP must be a valid IP address") from exc
+values["TELEGRAM_WEBHOOK_IP_ADDRESS"] = telegram_relay_ip
 
 database_url = values.get("DATABASE_URL", "").strip()
 if database_url:
