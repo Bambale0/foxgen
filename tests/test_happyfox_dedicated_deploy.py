@@ -9,6 +9,8 @@ def test_dedicated_deploy_pins_three_public_origins_and_runtime_db() -> None:
     assert "https://happy-fox.online" in deploy
     assert "HAPPYFOX_DATABASE_NAME:-happyfox_cutover" in deploy
     assert "recover_happyfox_channel_runtime.py" in deploy
+    assert "install_russian_trusted_ca.sh" in deploy
+    assert "check_max_connectivity" in deploy
     assert "chown -R 10001:10001" in deploy
     assert "ensure_telegram_webhook.py" in deploy
     assert "TELEGRAM_WEBHOOK_URL" in deploy
@@ -58,3 +60,32 @@ def test_telegram_webhook_reconciliation_preserves_pending_updates() -> None:
     assert "TELEGRAM_WEBHOOK_IP_ADDRESS" in script
     assert "secret_token" in script
     assert "ip_address" in script
+
+
+def test_russian_trusted_ca_is_installed_without_tls_bypass() -> None:
+    installer = Path("scripts/install_russian_trusted_ca.sh").read_text(encoding="utf-8")
+    dockerfile = Path("Dockerfile").read_text(encoding="utf-8")
+
+    assert "Russian_Trusted_Root_CA.crt" in installer
+    assert "Russian_Trusted_Sub_CA.crt" in installer
+    assert "Russian Trusted Root CA" in installer
+    assert "Russian Trusted Sub CA" in installer
+    assert "update-ca-certificates" in installer
+    assert "openssl verify" in installer
+    assert "/usr/local/share/ca-certificates/" in installer
+    assert "--insecure" not in installer
+    assert " -k " not in installer
+
+    assert "COPY deploy/certs/ /usr/local/share/ca-certificates/rus/" in dockerfile
+    assert "RUN update-ca-certificates" in dockerfile
+
+
+def test_max_connectivity_smoke_uses_authenticated_client_and_system_tls() -> None:
+    script = Path("scripts/check_max_connectivity.py").read_text(encoding="utf-8")
+
+    assert "MaxSettings.from_env()" in script
+    assert "MaxClient(settings)" in script
+    assert "get_subscriptions()" in script
+    assert "max_api_ok=1" in script
+    assert "ssl=False" not in script
+    assert "CERT_NONE" not in script
