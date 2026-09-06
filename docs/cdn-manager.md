@@ -7,7 +7,7 @@ HappyFox Mini App is released from the same verified `foxgen/main` SHA as the ba
 Current public Mini App:
 
 ```text
-https://alena.chillcreative.ru/mini-app/
+https://app.happy-fox.online/mini-app/
 ```
 
 Use:

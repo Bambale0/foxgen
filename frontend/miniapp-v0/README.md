@@ -36,7 +36,7 @@ Normal runtime is Telegram WebView with signed `initData`. A direct browser/curl
 Current public Mini App:
 
 ```text
-https://alena.chillcreative.ru/mini-app/
+https://app.happy-fox.online/mini-app/
 ```
 
 Release flow:
