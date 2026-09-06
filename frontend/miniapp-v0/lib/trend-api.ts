@@ -59,8 +59,8 @@ export async function runTrend(
     init_data: initData,
     trend_id: trendId,
     reference_urls: referenceUrls,
-    parameters,
   }
+  if (Object.keys(parameters).length) payload.parameters = parameters
   const startParam = getStartParamFallback()
   if (startParam) payload.start_param_fallback = startParam
 
@@ -92,6 +92,12 @@ export async function runTrend(
     prompt_actions_allowed: false,
   }
 
+  const detailRequestData: Record<string, unknown> = {
+    reference_images: referenceUrls,
+    trend_id: data.trend_id,
+  }
+  if (Object.keys(parameters).length) detailRequestData.template_parameters = parameters
+
   return {
     task,
     detail:
@@ -99,11 +105,7 @@ export async function runTrend(
         ? {
             ...task,
             prompt: '',
-            request_data: {
-              reference_images: referenceUrls,
-              trend_id: data.trend_id,
-              template_parameters: parameters,
-            },
+            request_data: detailRequestData,
           }
         : null,
     credits: data.credits,
