@@ -48,6 +48,7 @@ async function parseResponse(response: Response): Promise<RunTrendResponse> {
 export async function runTrend(
   trendId: number,
   referenceUrls: string[],
+  parameters: Record<string, string> = {},
 ): Promise<RunTrendResult> {
   const initData = getInitData()
   if (!initData) {
@@ -58,6 +59,7 @@ export async function runTrend(
     init_data: initData,
     trend_id: trendId,
     reference_urls: referenceUrls,
+    parameters,
   }
   const startParam = getStartParamFallback()
   if (startParam) payload.start_param_fallback = startParam
@@ -100,6 +102,7 @@ export async function runTrend(
             request_data: {
               reference_images: referenceUrls,
               trend_id: data.trend_id,
+              template_parameters: parameters,
             },
           }
         : null,
