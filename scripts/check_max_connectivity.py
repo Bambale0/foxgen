@@ -18,10 +18,10 @@ async def check() -> None:
         await client.close()
 
     if not isinstance(payload, dict):
-        raise RuntimeError("MAX API connectivity check returned an invalid payload")
+        raise TypeError("MAX API connectivity check returned an invalid payload")
     subscriptions = payload.get("subscriptions")
     if subscriptions is not None and not isinstance(subscriptions, list):
-        raise RuntimeError("MAX subscriptions payload is not a list")
+        raise TypeError("MAX subscriptions payload is not a list")
 
     print(f"max_api_ok=1 subscriptions={len(subscriptions or [])}")
 
