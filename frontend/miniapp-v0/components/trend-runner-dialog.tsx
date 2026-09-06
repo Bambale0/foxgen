@@ -11,6 +11,16 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 
 type RunnerPhase = 'idle' | 'uploading' | 'generating' | 'error'
+type TrendTemplateFieldType = 'text' | 'number' | 'date'
+
+interface TrendTemplateField {
+  key: string
+  label: string
+  type: TrendTemplateFieldType
+  required?: boolean
+  placeholder?: string
+  max_length?: number
+}
 
 interface TrendRunnerDialogProps {
   trend: PromptItem | null
@@ -20,6 +30,16 @@ interface TrendRunnerDialogProps {
 
 const IMAGE_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'webp', 'heic', 'heif', 'avif'])
 const MAX_REFERENCES = 12
+
+function trendTemplateFields(trend: PromptItem | null): TrendTemplateField[] {
+  const settings = trend?.generation_settings as
+    | (NonNullable<PromptItem['generation_settings']> & {
+        template_fields?: TrendTemplateField[]
+      })
+    | null
+    | undefined
+  return Array.isArray(settings?.template_fields) ? settings.template_fields : []
+}
 
 export function TrendRunnerDialog({
   trend,
@@ -38,9 +58,11 @@ export function TrendRunnerDialog({
   const [phase, setPhase] = useState<RunnerPhase>('idle')
   const [error, setError] = useState<string | null>(null)
   const [previewUrls, setPreviewUrls] = useState<string[]>([])
+  const [parameterValues, setParameterValues] = useState<Record<string, string>>({})
 
   const busy = phase === 'uploading' || phase === 'generating'
   const isVideoTrend = trend?.generation_settings?.kind === 'video'
+  const templateFields = trendTemplateFields(trend)
 
   const clearPreviews = useCallback(() => {
     for (const previewUrl of previewRefs.current) {
@@ -54,6 +76,7 @@ export function TrendRunnerDialog({
     if (open) return
     setPhase('idle')
     setError(null)
+    setParameterValues({})
     clearPreviews()
     if (inputRef.current) inputRef.current.value = ''
   }, [clearPreviews, open])
@@ -62,6 +85,16 @@ export function TrendRunnerDialog({
 
   const handlePhotos = async (selectedFiles: File[]) => {
     if (!trend || busy || !selectedFiles.length) return
+
+    const missingField = templateFields.find(
+      (field) => field.required !== false && !String(parameterValues[field.key] || '').trim(),
+    )
+    if (missingField) {
+      setPhase('error')
+      setError(`Заполните поле «${missingField.label}»`)
+      return
+    }
+
     if (selectedFiles.length > MAX_REFERENCES) {
       setPhase('error')
       setError(`Можно загрузить максимум ${MAX_REFERENCES} фото`)
@@ -95,6 +128,7 @@ export function TrendRunnerDialog({
       const result = await runTrend(
         trend.id,
         uploadedReferences.map((uploaded) => uploaded.url),
+        parameterValues,
       )
       addTask(result.task)
       setCredits(result.credits)
@@ -144,13 +178,50 @@ export function TrendRunnerDialog({
         <div className="rounded-2xl border border-gold/25 bg-gold/10 p-4 text-center">
           <Sparkles className="mx-auto h-6 w-6 text-gold" />
           <p className="mt-2 text-sm font-semibold text-foreground">
-            Загрузите свои фото
+            Сделайте этот шаблон своим
           </p>
           <p className="mt-1 text-xs text-muted-foreground">
-            После загрузки генерация начнётся сразу. Модель, промпт, формат,
-            качество и остальные параметры уже настроены администратором.
+            {templateFields.length
+              ? 'Заполните данные ниже и загрузите свои фото. Скрытый сценарий, модель и настройки уже готовы.'
+              : 'Загрузите свои фото. Скрытый сценарий, модель, формат и качество уже настроены.'}
           </p>
         </div>
+
+        {templateFields.length ? (
+          <div className="space-y-3 rounded-2xl border border-border/60 bg-secondary/20 p-4">
+            <div>
+              <p className="text-sm font-semibold text-foreground">Ваши данные</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Эти значения меняются только в вашей генерации.
+              </p>
+            </div>
+            {templateFields.map((field) => (
+              <label key={field.key} className="block space-y-1.5">
+                <span className="text-xs font-medium text-foreground">{field.label}</span>
+                <input
+                  type={field.type === 'date' ? 'date' : 'text'}
+                  inputMode={field.type === 'number' ? 'decimal' : undefined}
+                  value={parameterValues[field.key] || ''}
+                  maxLength={field.max_length || 120}
+                  placeholder={field.type === 'date' ? undefined : field.placeholder}
+                  disabled={busy}
+                  onChange={(event) => {
+                    const value = event.currentTarget.value
+                    setParameterValues((current) => ({
+                      ...current,
+                      [field.key]: value,
+                    }))
+                    if (phase === 'error') {
+                      setPhase('idle')
+                      setError(null)
+                    }
+                  }}
+                  className="h-11 w-full rounded-xl border border-border/70 bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-gold/60 focus:ring-2 focus:ring-gold/15 disabled:opacity-60"
+                />
+              </label>
+            ))}
+          </div>
+        ) : null}
 
         {previewUrls.length ? (
           <div className="grid max-h-64 grid-cols-2 gap-2 overflow-y-auto rounded-2xl bg-secondary/20 p-2">
@@ -193,7 +264,7 @@ export function TrendRunnerDialog({
                 ? 'Запускаю тренд…'
                 : phase === 'error'
                   ? 'Выбрать фото заново'
-                  : 'Выбрать фото'}
+                  : 'Выбрать фото и запустить'}
           </span>
           {!busy ? (
             <span className="text-xs text-muted-foreground">
