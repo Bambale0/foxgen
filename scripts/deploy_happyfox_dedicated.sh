@@ -8,12 +8,18 @@ EXPECTED_SHA="${1:-$(git -C "$PROJECT_DIR" rev-parse HEAD)}"
 API_ORIGIN="${HAPPYFOX_API_ORIGIN:-https://api.happy-fox.online}"
 APP_ORIGIN="${HAPPYFOX_APP_ORIGIN:-https://app.happy-fox.online}"
 LANDING_ORIGIN="${HAPPYFOX_LANDING_ORIGIN:-https://happy-fox.online}"
+DATABASE_NAME="${HAPPYFOX_DATABASE_NAME:-happyfox_cutover}"
 RUNTIME_ENV="$PROJECT_DIR/.env.happyfox.runtime"
 
 [[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]] || {
   echo "Expected a full 40-character deployment SHA" >&2
   exit 1
 }
+[[ "$DATABASE_NAME" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || {
+  echo "HAPPYFOX_DATABASE_NAME must be a simple SQL identifier" >&2
+  exit 1
+}
+
 cd "$PROJECT_DIR"
 [[ "$(git rev-parse HEAD)" == "$EXPECTED_SHA" ]] || {
   echo "Checkout SHA does not match requested deployment SHA" >&2
@@ -24,25 +30,29 @@ cd "$PROJECT_DIR"
   exit 1
 }
 
+# Recover protected channel values from the server-side channel overlay before
+# canonicalizing public URLs. This prevents an older GitHub runtime secret from
+# silently deleting MAX credentials or display settings.
+python3 scripts/recover_happyfox_channel_runtime.py "$PROJECT_DIR"
+
 # Dedicated-host topology is intentionally split: all backend/webhook/media
 # traffic uses api.happy-fox.online, while the Telegram/MAX UI lives on the app
-# origin. Keep these non-secret public values server-authoritative so an older
-# CI secret cannot silently restore the legacy single-domain topology.
-python3 - "$RUNTIME_ENV" "$API_ORIGIN" "$APP_ORIGIN" <<'PY'
+# origin. The production DB name is also server-authoritative during the cutover
+# period so an older CI secret cannot point the app at a stale database.
+python3 - "$RUNTIME_ENV" "$API_ORIGIN" "$APP_ORIGIN" "$DATABASE_NAME" <<'PY'
 from pathlib import Path
 import os
 import sys
+from urllib.parse import urlsplit, urlunsplit
 
 path = Path(sys.argv[1])
 api = sys.argv[2].rstrip("/")
 app = sys.argv[3].rstrip("/")
+database_name = sys.argv[4]
 values: dict[str, str] = {}
-comments: list[str] = []
 for raw in path.read_text(encoding="utf-8").splitlines():
     line = raw.strip()
     if not line or line.startswith("#") or "=" not in line:
-        if raw:
-            comments.append(raw)
         continue
     key, value = line.split("=", 1)
     value = value.strip()
@@ -54,21 +64,32 @@ values["WEBHOOK_HOST"] = api
 values["STATIC_BASE_URL"] = api
 values["MINI_APP_URL"] = f"{app}/mini-app/"
 values["YOOKASSA_RETURN_URL"] = f"{app}/mini-app/"
+
+database_url = values.get("DATABASE_URL", "").strip()
+if database_url:
+    parsed = urlsplit(database_url)
+    if parsed.scheme not in {"postgres", "postgresql"}:
+        raise SystemExit("HappyFox dedicated runtime requires PostgreSQL DATABASE_URL")
+    values["DATABASE_URL"] = urlunsplit(
+        (parsed.scheme, parsed.netloc, f"/{database_name}", parsed.query, parsed.fragment)
+    )
+
 if values.get("MAX_ENABLED", "").lower() in {"1", "true", "yes", "on"}:
     max_path = values.get("MAX_WEBHOOK_PATH", "/max/webhook") or "/max/webhook"
+    if not max_path.startswith("/"):
+        raise SystemExit("MAX_WEBHOOK_PATH must start with /")
     values["MAX_WEBHOOK_URL"] = f"{api}{max_path}"
     values["MAX_MINI_APP_URL"] = f"{app}/mini-app/"
-    # MAX returns to its bot deep link when explicitly configured; otherwise
-    # use the app origin rather than a legacy hostname.
     if not values.get("MAX_PAYMENT_RETURN_URL", "").startswith("https://max.ru/"):
         values["MAX_PAYMENT_RETURN_URL"] = f"{app}/mini-app/"
+
 
 def quote(value: str) -> str:
     return "'" + value.replace("\\", "\\\\").replace("'", "\\'") + "'"
 
 out = [
     "# HappyFox dedicated-host runtime overlay",
-    "# Secret values are preserved; public origins are canonicalized on deploy.",
+    "# Secret values are preserved; public origins and DB target are canonicalized on deploy.",
 ]
 out.extend(f"{key}={quote(values[key])}" for key in sorted(values))
 tmp = path.with_suffix(path.suffix + ".tmp")
@@ -78,6 +99,12 @@ tmp.replace(path)
 PY
 
 python3 scripts/validate_happyfox_env.py .env .env.happyfox.runtime .env.postgres
+
+# Writable bind mounts belong to the non-root runtime UID from the Dockerfile.
+for path in data static/uploads logs backups outputs; do
+  install -d -m 0755 "$path"
+  chown -R 10001:10001 "$path"
+done
 
 docker compose -f compose.infra.yml up -d
 for i in $(seq 1 60); do
@@ -89,6 +116,15 @@ for i in $(seq 1 60); do
   [[ "$i" -lt 60 ]] || { echo "HappyFox data plane did not become ready" >&2; exit 1; }
 done
 
+# A verified rollback point is mandatory before replacing a healthy runtime.
+if docker inspect foxgen-happyfox-bot >/dev/null 2>&1; then
+  current_state="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' foxgen-happyfox-bot 2>/dev/null || true)"
+  if [[ "$current_state" == "healthy" ]]; then
+    docker exec -e SEND_BACKUP_TO_ADMINS=0 foxgen-happyfox-bot \
+      bash /app/scripts/backup_db.sh
+  fi
+fi
+
 docker build \
   --build-arg "VCS_REF=$EXPECTED_SHA" \
   --build-arg "BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
@@ -98,14 +134,22 @@ image_revision="$(docker inspect -f '{{index .Config.Labels "org.opencontainers.
 [[ "$image_revision" == "$EXPECTED_SHA" ]]
 
 COMPOSE_PROJECT_NAME=foxgen-happyfox \
+  HAPPYFOX_IMAGE=foxgen-happyfox-bot:local \
   docker compose -f compose.backend.yml up -d --no-build bot
 
 for i in $(seq 1 60); do
   health="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' foxgen-happyfox-bot 2>/dev/null || true)"
   [[ "$health" == "healthy" ]] && break
+  if [[ "$health" == "unhealthy" || "$health" == "exited" ]]; then
+    docker logs --tail 150 foxgen-happyfox-bot >&2 || true
+    exit 1
+  fi
   sleep 2
   [[ "$i" -lt 60 ]] || { docker logs --tail 150 foxgen-happyfox-bot >&2 || true; exit 1; }
 done
+
+runtime_revision="$(docker inspect -f '{{index .Config.Labels "org.opencontainers.image.revision"}}' foxgen-happyfox-bot)"
+[[ "$runtime_revision" == "$EXPECTED_SHA" ]]
 
 # Publish the exact static bundle embedded in the verified backend image.
 for webroot in /var/www/happyfox-app /var/www/happyfox-landing; do
@@ -130,4 +174,30 @@ live_revision="$(curl -fsS --retry 8 --retry-delay 2 --retry-all-errors --max-ti
 [[ "$live_revision" == "$EXPECTED_SHA" ]]
 curl -fsS --retry 5 --retry-delay 2 --retry-all-errors --max-time 20 "$LANDING_ORIGIN/" | grep -Fq 'https://t.me/'
 
-echo "[happyfox-dedicated] DEPLOY_OK revision=$EXPECTED_SHA api=$API_ORIGIN app=$APP_ORIGIN landing=$LANDING_ORIGIN"
+bootstrap_status="$(curl -sS -o /dev/null -w '%{http_code}' -X POST --max-time 20 \
+  -H 'Content-Type: application/json' -d '{}' "$APP_ORIGIN/mini-app/api/bootstrap" || true)"
+[[ "$bootstrap_status" =~ ^(400|401|403)$ ]]
+
+max_status="$(curl -sS -o /dev/null -w '%{http_code}' -X POST --max-time 20 \
+  -H 'Content-Type: application/json' -d '{}' "$API_ORIGIN/max/webhook" || true)"
+[[ "$max_status" == "401" ]]
+
+yookassa_status="$(curl -sS -o /dev/null -w '%{http_code}' -X POST --max-time 20 \
+  -H 'Content-Type: application/json' -d '{}' "$API_ORIGIN/yookassa/webhook" || true)"
+[[ "$yookassa_status" == "200" ]]
+
+kie_status="$(curl -sS -o /dev/null -w '%{http_code}' -X POST --max-time 20 \
+  -H 'Content-Type: application/json' -d '{}' "$API_ORIGIN/webhook/kie_ai" || true)"
+[[ "$kie_status" =~ ^(400|401|403)$ ]]
+
+# Telegram and MAX webhook configuration is part of the release, not a manual
+# afterthought. MAX refreshes its subscription during startup; Telegram is
+# explicitly reconciled here without dropping queued updates.
+docker exec foxgen-happyfox-bot python /app/scripts/ensure_telegram_webhook.py
+docker logs foxgen-happyfox-bot 2>&1 | grep -F "$API_ORIGIN/max/webhook" >/dev/null
+
+# Keep the post-migration state backed up with the matching PG17 client.
+docker exec -e SEND_BACKUP_TO_ADMINS=0 foxgen-happyfox-bot \
+  bash /app/scripts/backup_db.sh
+
+echo "[happyfox-dedicated] DEPLOY_OK revision=$EXPECTED_SHA api=$API_ORIGIN app=$APP_ORIGIN landing=$LANDING_ORIGIN db=$DATABASE_NAME"
