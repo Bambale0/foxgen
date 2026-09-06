@@ -32,7 +32,7 @@ PR to main
 Current public URL:
 
 ```text
-https://alena.chillcreative.ru/mini-app/
+https://app.happy-fox.online/mini-app/
 ```
 
 The deploy workflow/runtime owns host paths, Nginx and static-root details. Do not hardcode an old `cdn.chillcreative.ru` or Tanya source path into new HappyFox changes.

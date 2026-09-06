@@ -23,12 +23,6 @@ from aiohttp import web
 logger = logging.getLogger(__name__)
 
 _INTERNAL_PREFIX = "/internal/v1"
-_DISABLED_LEGACY_PAYMENT_PATHS = frozenset(
-    {
-        "/yookassa/webhook",
-        "/webhook/yookassa",
-    }
-)
 
 
 def _verify_hmac(request: web.Request, secret: str) -> bool:
@@ -64,16 +58,7 @@ def _verify_hmac(request: web.Request, secret: str) -> bool:
 
 @web.middleware
 async def internal_auth_middleware(request: web.Request, handler: Any) -> web.Response:
-    """Protect internal API and permanently retire old payment endpoints."""
-    if request.path in _DISABLED_LEGACY_PAYMENT_PATHS:
-        return web.json_response(
-            {
-                "error": "payment_provider_removed",
-                "provider": "lava",
-                "webhook": "/lava/webhook",
-            },
-            status=410,
-        )
+    """Protect only the private internal API; public provider routes pass through."""
     if not request.path.startswith(_INTERNAL_PREFIX):
         return await handler(request)
     secret = request.app.get("internal_api_secret", "")

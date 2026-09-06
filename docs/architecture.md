@@ -26,14 +26,16 @@ Provider/payment webhooks ──────┘          ├─ PostgreSQL 17
                                            ├─ provider adapters
                                            └─ billing ledgers
 
-Public HappyFox origin: https://alena.xn--e1aikcel5c5a.online
-Mini App:               https://alena.xn--e1aikcel5c5a.online/mini-app/
-MAX webhook:            https://alena.xn--e1aikcel5c5a.online/max/webhook
-Compose project:        foxgen-happyfox
-Container:              foxgen-happyfox-bot
-Database:               happyfox
-Redis prefix:           foxgen_happyfox
-Production branch:      main
+Landing:                 https://happy-fox.online/
+Mini App:                https://app.happy-fox.online/mini-app/
+API/webhooks/media:      https://api.happy-fox.online
+Telegram webhook URL:    https://api.happy-fox.online/webhook
+MAX webhook:             https://api.happy-fox.online/max/webhook
+Compose project:         foxgen-happyfox
+Container:               foxgen-happyfox-bot
+Database:                happyfox_cutover
+Redis prefix:            foxgen_happyfox
+Production branch:       main
 ```
 
 Exact server/IP details are runtime/deployment configuration, not product constants.
@@ -54,7 +56,9 @@ MAX identities are native MAX `user_id` values. MAX administrators are database-
 
 ## 4. Telegram surface
 
-Telegram is the full-featured surface:
+Telegram is the full-featured surface. Its native system menu is reserved for quick commands, while the Mini App is opened from explicit inline buttons. Deployment must reconcile the menu back to `type=commands` and must never replace it with `MenuButtonWebApp`.
+
+Current quick commands: `/start`, `/feed`, `/prompts`, `/help`, `/ref`, `/earn`.
 
 - `/start` and creator flows;
 - Mini App bootstrap/auth;
@@ -246,6 +250,18 @@ Instagram and MAX routes are authenticated with their channel-specific webhook c
 Production backend is bound through Docker to loopback and nginx is the trusted public reverse proxy.
 
 Nginx overwrites `X-Real-IP` with `$remote_addr`. Application rate limiting therefore trusts `X-Real-IP` before `X-Forwarded-For`; client-provided XFF must not create a new limiter bucket.
+
+### Telegram network relay
+
+The dedicated `happyfox` host is authoritative for the application and data plane. Its provider network currently cannot exchange Telegram Bot API traffic reliably. Telegram is therefore isolated behind a transport relay without moving application state back to the legacy host:
+
+- public webhook URL remains `https://api.happy-fox.online/webhook`;
+- Telegram `setWebhook(ip_address=...)` pins ingress to the `apix` relay IP;
+- the relay terminates valid `api.happy-fox.online` TLS and proxies to the dedicated API origin;
+- outbound requests to `api.telegram.org:443` use `happyfox-telegram-egress.service` over SSH to `apix`;
+- all other API/payment/provider traffic remains direct on the dedicated host.
+
+The relay is transport-only: it must not run a second HappyFox bot worker or own PostgreSQL/Redis state.
 
 ## 16. Deployment and dependency architecture
 

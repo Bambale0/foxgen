@@ -62,6 +62,23 @@ class TestConfig:
         cfg.WEBHOOK_PATH = "webhook"
         assert cfg.webhook_url == "https://test.com/webhook"
 
+    def test_telegram_webhook_url_override_is_independent_from_api_origin(self):
+        cfg = Config()
+        cfg.WEBHOOK_HOST = "https://api.happy-fox.online"
+        cfg.WEBHOOK_PATH = "/webhook"
+        cfg.TELEGRAM_WEBHOOK_URL = "https://relay.example/webhook"
+        assert cfg.webhook_url == "https://relay.example/webhook"
+
+    def test_telegram_webhook_secret_is_derived_when_explicit_secret_is_absent(self):
+        cfg = Config()
+        cfg.WEBHOOK_SECRET_TOKEN = ""
+        cfg.INTERNAL_API_SECRET = "internal-secret-for-test"
+        first = cfg.telegram_webhook_secret
+        second = cfg.telegram_webhook_secret
+        assert first
+        assert first == second
+        assert first != cfg.INTERNAL_API_SECRET
+
     def test_webhook_bind_host_default_is_localhost(self):
         cfg = Config()
         assert cfg.WEBHOOK_BIND_HOST == "127.0.0.1"

@@ -243,13 +243,12 @@ def test_happyfox_deploy_stops_only_legacy_app_tier_and_has_public_rollback() ->
     assert "CUTOVER_RESTART_ON_FAILURE" in generic
 
 
-def test_production_workflow_prepares_runtime_before_strict_validation() -> None:
+def test_production_workflow_prepares_dedicated_checkout_before_deploy() -> None:
     workflow = Path(".github/workflows/deploy-production.yml").read_text(encoding="utf-8")
 
-    prepare_index = workflow.index("prepare_happyfox_production.py")
-    runtime_validation_index = workflow.index(
-        ".env .env.happyfox.runtime .env.postgres"
-    )
-    assert prepare_index < runtime_validation_index
-    assert "docker network inspect" in workflow
-    assert 'HAPPYFOX_PUBLIC_ORIGIN="https://${MINIAPP_FRONTEND_DOMAIN}"' in workflow
+    prepare_index = workflow.index("Prepare exact main checkout on HappyFox host")
+    deploy_index = workflow.index("Deploy exact HappyFox commit to dedicated host")
+    assert prepare_index < deploy_index
+    assert "/opt/happyfox/repo" in workflow
+    assert "deploy_happyfox_dedicated.sh" in workflow
+    assert "HAPPYFOX_DATABASE_NAME=happyfox_cutover" in workflow

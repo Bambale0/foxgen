@@ -32,7 +32,19 @@ Telegram Mini App APIs validate Telegram authentication data. A manual request w
 
 Distinguish expected auth rejection from timeout/5xx/network failure.
 
-## 4. Instagram webhook route is missing/404
+## 4. Telegram bot is silent after deploy
+
+Check both directions separately. A healthy `/health` route does not prove Telegram connectivity.
+
+1. `getWebhookInfo` must show `https://api.happy-fox.online/webhook`, zero pending updates and no recent delivery error.
+2. When `TELEGRAM_WEBHOOK_IP_ADDRESS` is configured, Telegram must report that same fixed ingress IP.
+3. The relay must present a valid certificate for `api.happy-fox.online` and proxy to the dedicated backend.
+4. Outbound Bot API calls from the dedicated host/container must succeed; check `happyfox-telegram-egress.service`.
+5. Confirm the native system menu is `commands`, not `web_app`.
+
+If incoming webhook delivery works but responses time out, diagnose outbound Telegram connectivity. If Bot API calls work but `pending_update_count` grows, diagnose ingress/TLS/relay. Do not start a second bot worker on the relay host.
+
+## 5. Instagram webhook route is missing/404
 
 First check:
 
@@ -44,7 +56,7 @@ When `0`, Instagram route/worker registration is intentionally skipped. This is 
 
 If live is expected, verify production runtime actually has `INSTAGRAM_ENABLED=1` and the Meta variables set.
 
-## 5. Meta GET webhook verification fails
+## 6. Meta GET webhook verification fails
 
 Check:
 
@@ -56,7 +68,7 @@ Check:
 
 Never log/share the verify token value.
 
-## 6. Meta POST webhook signature fails
+## 7. Meta POST webhook signature fails
 
 The runtime verifies `X-Hub-Signature-256` using HMAC-SHA256 over the **raw request body** and `INSTAGRAM_APP_SECRET`.
 
@@ -69,7 +81,7 @@ Check:
 
 Do not weaken signature validation or parse/re-serialize JSON before HMAC comparison.
 
-## 7. Instagram event processed twice
+## 8. Instagram event processed twice
 
 Check Redis/idempotency state and stable event ID normalization.
 
@@ -77,7 +89,7 @@ Never solve duplicates by globally ignoring repeated user text; the same prompt 
 
 Financial/generation side effects must also be durable/idempotent independently.
 
-## 8. Instagram replies in wrong language
+## 9. Instagram replies in wrong language
 
 Language is persisted per Instagram identity.
 
@@ -97,7 +109,7 @@ If wrong behavior remains:
 
 Attachment-first flow should be bilingual until language is known.
 
-## 9. First photo is not free
+## 10. First photo is not free
 
 Expected rule: only first **successful Instagram photo** is free.
 
@@ -110,7 +122,7 @@ Check:
 
 If a provider failed terminally, the promotion should be released/preserved.
 
-## 10. Free photo was consumed after provider failure
+## 11. Free photo was consumed after provider failure
 
 Trace promotion reservation key and generation job.
 
@@ -124,7 +136,7 @@ Consumption belongs after successful media delivery/finalization path, not provi
 
 Do not manually recreate a second promotion row without understanding the unique identity constraint.
 
-## 11. Video accepts a reference before payment
+## 12. Video accepts a reference before payment
 
 This is a product regression.
 
@@ -136,7 +148,7 @@ Video -> video:awaiting_topup -> top-up/Continue -> sufficient balance -> ask re
 
 A media message in `video:awaiting_topup` must not bypass the paywall. Check `instagram_creator_generation` / video state handler and corresponding regression test.
 
-## 12. Continue/Продолжить does not resume video
+## 13. Continue/Продолжить does not resume video
 
 Check:
 
@@ -148,7 +160,7 @@ Check:
 
 If balance is insufficient, remaining in paywall is expected.
 
-## 13. Instagram payment chooser shows CryptoBot or Stars
+## 14. Instagram payment chooser shows CryptoBot or Stars
 
 Instagram-specific handoff should expose only:
 
@@ -161,13 +173,13 @@ Check `bot/handlers/instagram_account_link.py`.
 
 Do **not** fix this by removing CryptoBot/Stars from the global Telegram payment system. Telegram keeps its configured providers independently.
 
-## 14. Instagram YooKassa unavailable
+## 15. Instagram YooKassa unavailable
 
 Check YooKassa service enablement/credentials and available packages. Instagram reuses existing production YooKassa handlers rather than a second checkout implementation.
 
 Verify webhook/transaction behavior with the normal payment diagnostics.
 
-## 15. Lava Top package/method unavailable
+## 16. Lava Top package/method unavailable
 
 Check:
 
@@ -178,13 +190,13 @@ Check:
 
 Never fall back to imported Tanya offer IDs.
 
-## 16. Telegram CryptoBot disappeared after Instagram change
+## 17. Telegram CryptoBot disappeared after Instagram change
 
 That is a regression. Instagram restriction must not remove CryptoBot from Telegram.
 
 Check whether shared/global payment keyboard/provider configuration was modified instead of only Instagram account-link handoff.
 
-## 17. Paid generation charged twice
+## 18. Paid generation charged twice
 
 P0/P1 financial issue.
 
@@ -202,25 +214,25 @@ Expected: durable job prepared before charge, then one charge and one provider s
 
 Do not manually refund/credit until duplicate transaction state is understood.
 
-## 18. Provider generation runs twice after restart
+## 19. Provider generation runs twice after restart
 
 Check `provider_task_id` persistence. If it exists, worker should resume polling that provider task instead of calling createTask again.
 
 A job with `result_url` should retry delivery without regeneration.
 
-## 19. Result delivered twice
+## 20. Result delivered twice
 
 Check `result_url` and `delivered_at_epoch` checkpoint. Local finalization retries after a saved delivery checkpoint should not intentionally re-send.
 
 Note: there is an unavoidable distributed-systems ambiguity if Meta accepts a send and the process crashes before the local delivery checkpoint commits. Do not promise absolute exactly-once remote delivery.
 
-## 20. Paid provider failure did not refund
+## 21. Paid provider failure did not refund
 
 Trace job billing mode/cost/transaction and terminal provider status.
 
 Expected terminal paid failure -> refund once. Transient/pending provider state should normally remain queued/retry without premature refund if the same external task may still succeed.
 
-## 21. Instagram comments do not start generation
+## 22. Instagram comments do not start generation
 
 Expected behavior is acquisition, not direct generation:
 
@@ -230,7 +242,7 @@ comment keyword -> private invite -> Direct -> Photo/Video chooser
 
 Meta private reply has platform restrictions; it is not an unlimited cold-DM channel.
 
-## 22. Instagram live needs emergency disable
+## 23. Instagram live needs emergency disable
 
 If Telegram/Mini App are healthy:
 
@@ -242,7 +254,7 @@ Redeploy/restart the verified version. This is preferred over rolling back unrel
 
 Preserve identity/promotion/job data for investigation.
 
-## 23. Safe diagnostics
+## 24. Safe diagnostics
 
 Never paste full `.env`, access tokens, app secrets, payment secrets, Telegram bot token, signed request headers or unredacted user data.
 

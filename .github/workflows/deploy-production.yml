@@ -39,14 +39,13 @@ jobs:
       name: production
 
     env:
-      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+      DEPLOY_HOST: ${{ vars.HAPPYFOX_DEPLOY_HOST || '5.35.124.201' }}
       DEPLOY_SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
-      DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
       HAPPYFOX_RUNTIME_ENV: ${{ secrets.HAPPYFOX_RUNTIME_ENV }}
-      DEPLOY_USER: ${{ vars.DEPLOY_USER || 'root' }}
-      DEPLOY_PORT: ${{ vars.DEPLOY_PORT || '22' }}
-      DEPLOY_PATH: ${{ vars.DEPLOY_PATH || '/root/foxgen' }}
-      MINIAPP_FRONTEND_DOMAIN: ${{ vars.MINIAPP_FRONTEND_DOMAIN }}
+      DEPLOY_USER: ${{ vars.HAPPYFOX_DEPLOY_USER || 'root' }}
+      DEPLOY_PORT: ${{ vars.HAPPYFOX_DEPLOY_PORT || '22' }}
+      DEPLOY_PATH: ${{ vars.HAPPYFOX_DEPLOY_PATH || '/opt/happyfox/repo' }}
+      EXPECTED_HOST_FINGERPRINT: SHA256:NjLkwjwPwDroguKC0FMTFEjaSJD+vFEfL3EsjEN0pI4
       EXPECTED_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || inputs.commit_sha || github.sha }}
 
     steps:
@@ -64,12 +63,11 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          : "${DEPLOY_HOST:?Missing production secret DEPLOY_HOST}"
+          : "${DEPLOY_HOST:?Missing HappyFox deploy host}"
           : "${DEPLOY_SSH_PRIVATE_KEY:?Missing production secret DEPLOY_SSH_PRIVATE_KEY}"
-          : "${DEPLOY_KNOWN_HOSTS:?Missing production secret DEPLOY_KNOWN_HOSTS}"
-          : "${DEPLOY_USER:?Missing production variable DEPLOY_USER}"
-          : "${DEPLOY_PORT:?Missing production variable DEPLOY_PORT}"
-          : "${DEPLOY_PATH:?Missing production variable DEPLOY_PATH}"
+          : "${DEPLOY_USER:?Missing HappyFox deploy user}"
+          : "${DEPLOY_PORT:?Missing HappyFox deploy port}"
+          : "${DEPLOY_PATH:?Missing HappyFox deploy path}"
           [[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]] || {
             echo "EXPECTED_SHA must be a full 40-character SHA" >&2
             exit 1
@@ -81,169 +79,75 @@ jobs:
           ref: ${{ env.EXPECTED_SHA }}
           fetch-depth: 1
 
-      - name: Verify repository provenance
+      - name: Verify dedicated-host release files
         shell: bash
         run: |
           set -Eeuo pipefail
           grep -Fq 'Bambale0/banano_kling' MIGRATION_SOURCE.md
-          grep -Fq '36f92a0504f849c0c591652a880410e33a1c89aa' MIGRATION_SOURCE.md
           grep -Fq 'HappyFox' MIGRATION_SOURCE.md
           grep -Fq 'PRODUCT_ID: happyfox' compose.backend.yml
-          test -x scripts/deploy_happyfox.sh || chmod +x scripts/deploy_happyfox.sh
-          test -x scripts/deploy_happyfox_miniapp.sh || chmod +x scripts/deploy_happyfox_miniapp.sh
+          test -s compose.infra.yml
+          test -s scripts/deploy_happyfox_dedicated.sh
+          test -s scripts/ensure_telegram_webhook.py
+          chmod +x scripts/deploy_happyfox_dedicated.sh
 
-      - name: Configure pinned SSH
+      - name: Configure pinned SSH for dedicated host
         shell: bash
         run: |
           set -Eeuo pipefail
           install -d -m 0700 "$HOME/.ssh"
           printf '%s\n' "$DEPLOY_SSH_PRIVATE_KEY" | tr -d '\r' > "$HOME/.ssh/id_ed25519"
-          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" | tr -d '\r' > "$HOME/.ssh/known_hosts"
-          chmod 0600 "$HOME/.ssh/id_ed25519" "$HOME/.ssh/known_hosts"
+          chmod 0600 "$HOME/.ssh/id_ed25519"
           ssh-keygen -y -f "$HOME/.ssh/id_ed25519" >/dev/null
 
-      - name: Resolve HappyFox Mini App domain
+          scan="$(ssh-keyscan -p "$DEPLOY_PORT" -t ed25519 -T 10 "$DEPLOY_HOST" 2>/dev/null)"
+          : "${scan:?Could not scan HappyFox SSH host key}"
+          actual_fingerprint="$(printf '%s\n' "$scan" | ssh-keygen -lf - | awk '{print $2}')"
+          if [ "$actual_fingerprint" != "$EXPECTED_HOST_FINGERPRINT" ]; then
+            echo "HappyFox SSH host key mismatch" >&2
+            exit 1
+          fi
+          printf '%s\n' "$scan" > "$HOME/.ssh/known_hosts"
+          chmod 0600 "$HOME/.ssh/known_hosts"
+
+      - name: Prepare exact main checkout on HappyFox host
         shell: bash
         run: |
           set -Eeuo pipefail
+          printf -v quoted_path '%q' "$DEPLOY_PATH"
+          printf -v quoted_sha '%q' "$EXPECTED_SHA"
+          ssh \
+            -i "$HOME/.ssh/id_ed25519" \
+            -p "$DEPLOY_PORT" \
+            -o BatchMode=yes \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            -o ConnectTimeout=15 \
+            "$DEPLOY_USER@$DEPLOY_HOST" \
+            "bash -s -- $quoted_path $quoted_sha" <<'REMOTE'
+          set -Eeuo pipefail
+          project_dir="$1"
+          expected_sha="$2"
+          cd "$project_dir"
+          test -d .git
+          test -f .env
+          test -f .env.happyfox.channels
+          git fetch --prune origin main
+          [ "$(git rev-parse origin/main)" = "$expected_sha" ]
+          git switch main
+          git reset --hard "$expected_sha"
+          [ "$(git rev-parse HEAD)" = "$expected_sha" ]
+          REMOTE
 
-          normalize_domain() {
-            python3 - "$1" <<'PY'
-          import re
-          import sys
-          from urllib.parse import urlparse
-
-          value = sys.argv[1].strip()
-          if not value:
-              raise SystemExit("HappyFox Mini App domain is empty")
-
-          parsed = urlparse(value if "://" in value else f"//{value}")
-          host = (parsed.hostname or "").strip().rstrip(".")
-          if not host or not re.fullmatch(r"[A-Za-z0-9.-]+", host):
-              raise SystemExit("Could not parse a valid HappyFox Mini App hostname")
-          print(host)
-          PY
-          }
-
-          resolved_domain="${MINIAPP_FRONTEND_DOMAIN:-}"
-          resolver_source="github-environment:MINIAPP_FRONTEND_DOMAIN"
-          if [ -z "$resolved_domain" ]; then
-            printf -v quoted_path '%q' "$DEPLOY_PATH"
-            resolver_output="$(
-              ssh \
-                -i "$HOME/.ssh/id_ed25519" \
-                -p "$DEPLOY_PORT" \
-                -o BatchMode=yes \
-                -o IdentitiesOnly=yes \
-                -o StrictHostKeyChecking=yes \
-                -o ConnectTimeout=15 \
-                "$DEPLOY_USER@$DEPLOY_HOST" \
-                "python3 - $quoted_path" <<'PY'
-          import re
-          import sys
-          from pathlib import Path
-          from urllib.parse import urlparse
-
-          project_dir = Path(sys.argv[1])
-
-          def parse_env(path: Path) -> dict[str, str]:
-              values: dict[str, str] = {}
-              if not path.is_file():
-                  return values
-              for raw_line in path.read_text(encoding="utf-8").splitlines():
-                  line = raw_line.strip()
-                  if not line or line.startswith("#"):
-                      continue
-                  if line.startswith("export "):
-                      line = line[7:].lstrip()
-                  if "=" not in line:
-                      continue
-                  key, value = line.split("=", 1)
-                  value = value.strip()
-                  if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
-                      value = value[1:-1]
-                  values[key.strip()] = value
-              return values
-
-          def extract_hostname(value: str) -> str:
-              value = value.strip()
-              if not value:
-                  return ""
-              parsed = urlparse(value if "://" in value else f"//{value}")
-              host = (parsed.hostname or "").strip().rstrip(".")
-              if not host or not re.fullmatch(r"[A-Za-z0-9.-]+", host):
-                  return ""
-              return host
-
-          sources = (
-              project_dir / ".env.happyfox.runtime",
-              project_dir / ".env",
-              project_dir / "backups" / "pre-happyfox" / "legacy.env.initial",
-          )
-          keys = (
-              "MINIAPP_FRONTEND_DOMAIN",
-              "MINI_APP_URL",
-              "FOXGEN_MINIAPP_PUBLIC_URL",
-              "FOXGEN_KIE_CALLBACK_BASE_URL",
-              "WEBHOOK_HOST",
-              "STATIC_BASE_URL",
-          )
-
-          for path in sources:
-              values = parse_env(path)
-              for key in keys:
-                  host = extract_hostname(values.get(key, ""))
-                  if host:
-                      print(f"__HAPPYFOX_MINIAPP_DOMAIN__={host}")
-                      print(f"__HAPPYFOX_MINIAPP_SOURCE__={path.name}:{key}")
-                      raise SystemExit(0)
-
-          raise SystemExit(
-              "Could not resolve HappyFox Mini App domain from runtime or fallback env files"
-          )
-          PY
-            )"
-
-            resolved_domain="$(
-              printf '%s\n' "$resolver_output" \
-                | sed -n 's/^__HAPPYFOX_MINIAPP_DOMAIN__=//p' \
-                | tail -n 1
-            )"
-            resolver_source="$(
-              printf '%s\n' "$resolver_output" \
-                | sed -n 's/^__HAPPYFOX_MINIAPP_SOURCE__=//p' \
-                | tail -n 1
-            )"
-          fi
-
-          : "${resolved_domain:?Unable to resolve HappyFox Mini App domain}"
-          resolved_domain="$(normalize_domain "$resolved_domain")"
-
-          case "${resolved_domain,,}" in
-            *tanyapi.chillcreative.ru*|*cdn.chillcreative.ru*|*media.chillcreative.ru*|*tanyapp*|*neuromix*|*only_tany*)
-              echo "Refusing NEUROMIX/Tanya Mini App domain" >&2
-              exit 1
-              ;;
-          esac
-
-          echo "Resolved HappyFox Mini App domain: ${resolved_domain} (${resolver_source:-unknown source})"
-          echo "MINIAPP_FRONTEND_DOMAIN=${resolved_domain}" >> "$GITHUB_ENV"
-
-      - name: Sync HappyFox runtime overlay from GitHub secret
+      - name: Sync protected HappyFox runtime overlay
         if: env.HAPPYFOX_RUNTIME_ENV != ''
         shell: bash
         run: |
           set -Eeuo pipefail
-          if ! printf '%s\n' "$HAPPYFOX_RUNTIME_ENV" | grep -Eq "^MAX_ACCESS_TOKEN='[^']+'$"; then
-            echo "HAPPYFOX_RUNTIME_ENV secret is missing MAX_ACCESS_TOKEN" >&2
-            exit 1
-          fi
           tmp_env="$(mktemp)"
-          printf '%s\n' "$HAPPYFOX_RUNTIME_ENV" > "$tmp_env"
           trap 'rm -f "$tmp_env"' EXIT
-          chmod 600 "$tmp_env"
-          printf -v quoted_path '%q' "$DEPLOY_PATH"
-          printf -v quoted_port '%q' "$DEPLOY_PORT"
+          printf '%s\n' "$HAPPYFOX_RUNTIME_ENV" > "$tmp_env"
+          chmod 0600 "$tmp_env"
           scp \
             -i "$HOME/.ssh/id_ed25519" \
             -P "$DEPLOY_PORT" \
@@ -251,77 +155,22 @@ jobs:
             -o IdentitiesOnly=yes \
             -o StrictHostKeyChecking=yes \
             -o ConnectTimeout=15 \
-            "$tmp_env" "$DEPLOY_USER@$DEPLOY_HOST:$quoted_path/.env.happyfox.runtime"
+            "$tmp_env" "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/.env.happyfox.runtime"
           ssh \
             -i "$HOME/.ssh/id_ed25519" \
             -p "$DEPLOY_PORT" \
             -o BatchMode=yes \
             -o IdentitiesOnly=yes \
             -o StrictHostKeyChecking=yes \
-            -o ConnectTimeout=15 \
             "$DEPLOY_USER@$DEPLOY_HOST" \
-            "chmod 600 $quoted_path/.env.happyfox.runtime"
-          echo "Synced .env.happyfox.runtime from HAPPYFOX_RUNTIME_ENV secret (MAX protected values included)"
+            "chmod 600 '$DEPLOY_PATH/.env.happyfox.runtime'"
 
-      - name: Preflight isolated HappyFox runtime
+      - name: Deploy exact HappyFox commit to dedicated host
         shell: bash
         run: |
           set -Eeuo pipefail
           printf -v quoted_path '%q' "$DEPLOY_PATH"
           printf -v quoted_sha '%q' "$EXPECTED_SHA"
-          printf -v quoted_domain '%q' "$MINIAPP_FRONTEND_DOMAIN"
-
-          ssh \
-            -i "$HOME/.ssh/id_ed25519" \
-            -p "$DEPLOY_PORT" \
-            -o BatchMode=yes \
-            -o IdentitiesOnly=yes \
-            -o StrictHostKeyChecking=yes \
-            -o ConnectTimeout=15 \
-            "$DEPLOY_USER@$DEPLOY_HOST" \
-            "bash -s -- $quoted_path $quoted_sha $quoted_domain" <<'REMOTE'
-          set -Eeuo pipefail
-          PROJECT_DIR="$1"
-          EXPECTED_SHA="$2"
-          MINIAPP_FRONTEND_DOMAIN="$3"
-
-          cd "$PROJECT_DIR"
-          test -d .git
-          test -f .env
-          git update-index -q --refresh || true
-          git diff --quiet
-          git diff --cached --quiet
-          git fetch --prune origin main
-          [ "$(git rev-parse origin/main)" = "$EXPECTED_SHA" ]
-
-          git show "${EXPECTED_SHA}:MIGRATION_SOURCE.md" | grep -Fq '36f92a0504f849c0c591652a880410e33a1c89aa'
-
-          git switch main
-          git reset --hard "$EXPECTED_SHA"
-          export PRODUCT_ID=happyfox
-          export REDIS_PREFIX="${REDIS_PREFIX:-foxgen_happyfox}"
-          export HAPPYFOX_BACKEND_NETWORK="${HAPPYFOX_BACKEND_NETWORK:-foxgen_backend}"
-          export HAPPYFOX_PUBLIC_ORIGIN="https://${MINIAPP_FRONTEND_DOMAIN}"
-
-          docker network inspect "$HAPPYFOX_BACKEND_NETWORK" >/dev/null
-          python3 scripts/report_happyfox_production_topology.py .env
-          python3 scripts/prepare_happyfox_production.py "$PROJECT_DIR"
-          python3 scripts/validate_happyfox_env.py \
-            .env .env.happyfox.runtime .env.postgres
-
-          case "${MINIAPP_FRONTEND_DOMAIN,,}" in
-            *tanyapi.chillcreative.ru*|*cdn.chillcreative.ru*|*media.chillcreative.ru*|*tanyapp*|*neuromix*|*only_tany*) exit 1 ;;
-          esac
-          REMOTE
-
-      - name: Deploy exact HappyFox commit
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          printf -v quoted_path '%q' "$DEPLOY_PATH"
-          printf -v quoted_sha '%q' "$EXPECTED_SHA"
-          printf -v quoted_domain '%q' "$MINIAPP_FRONTEND_DOMAIN"
-
           ssh \
             -i "$HOME/.ssh/id_ed25519" \
             -p "$DEPLOY_PORT" \
@@ -332,83 +181,43 @@ jobs:
             -o ServerAliveInterval=20 \
             -o ServerAliveCountMax=6 \
             "$DEPLOY_USER@$DEPLOY_HOST" \
-            "bash -s -- $quoted_path $quoted_sha $quoted_domain" <<'REMOTE'
+            "bash -s -- $quoted_path $quoted_sha" <<'REMOTE'
           set -Eeuo pipefail
-          PROJECT_DIR="$1"
-          EXPECTED_SHA="$2"
-          MINIAPP_FRONTEND_DOMAIN="$3"
-          cd "$PROJECT_DIR"
-
-          run_root() {
-            if [ "$(id -u)" -eq 0 ]; then
-              "$@"
-            else
-              sudo -n "$@"
-            fi
-          }
-
-          chmod +x scripts/deploy_happyfox.sh scripts/deploy_happyfox_miniapp.sh
-          run_root env \
-            PROJECT_DIR="$PROJECT_DIR" \
-            PRODUCT_ID=happyfox \
-            REDIS_PREFIX=foxgen_happyfox \
-            HAPPYFOX_BACKEND_NETWORK=foxgen_backend \
-            HAPPYFOX_PUBLIC_ORIGIN="https://${MINIAPP_FRONTEND_DOMAIN}" \
-            bash scripts/deploy_happyfox.sh deploy
-
-          run_root env \
-            MINIAPP_FRONTEND_DOMAIN="$MINIAPP_FRONTEND_DOMAIN" \
-            PRODUCT_ID=happyfox \
-            NEXT_PUBLIC_PRODUCT_ID=happyfox \
-            bash scripts/deploy_happyfox_miniapp.sh "$EXPECTED_SHA"
-
-          health="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' foxgen-happyfox-bot)"
-          revision="$(docker inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' foxgen-happyfox-bot)"
-          [ "$health" = healthy ]
-          [ "$revision" = "$EXPECTED_SHA" ]
-
-          live_revision="$(curl -fsS --max-time 20 "https://${MINIAPP_FRONTEND_DOMAIN}/mini-app/revision.txt?revision=${EXPECTED_SHA}")"
-          [ "$live_revision" = "$EXPECTED_SHA" ]
+          project_dir="$1"
+          expected_sha="$2"
+          cd "$project_dir"
+          chmod +x scripts/deploy_happyfox_dedicated.sh
+          env \
+            HAPPYFOX_API_ORIGIN=https://api.happy-fox.online \
+            HAPPYFOX_APP_ORIGIN=https://app.happy-fox.online \
+            HAPPYFOX_LANDING_ORIGIN=https://happy-fox.online \
+            HAPPYFOX_DATABASE_NAME=happyfox_cutover \
+            bash scripts/deploy_happyfox_dedicated.sh "$expected_sha"
           REMOTE
+
+      - name: Verify public production revision
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          curl -fsS --retry 5 --retry-delay 2 --retry-all-errors --max-time 20 \
+            https://api.happy-fox.online/health >/dev/null
+          revision="$(curl -fsS --retry 5 --retry-delay 2 --retry-all-errors --max-time 20 \
+            "https://app.happy-fox.online/mini-app/revision.txt?revision=${EXPECTED_SHA}")"
+          [ "$revision" = "$EXPECTED_SHA" ]
+          curl -fsS --retry 5 --retry-delay 2 --retry-all-errors --max-time 20 \
+            https://happy-fox.online/ >/dev/null
 
       - name: Publish deployment summary
         shell: bash
         run: |
           {
-            echo '## HappyFox production deployment'
+            echo '## HappyFox dedicated production deployment'
             echo
             echo "- Commit: \`${EXPECTED_SHA}\`"
-            echo "- Backend checkout: \`${DEPLOY_PATH}\`"
-            echo "- Mini App: \`https://${MINIAPP_FRONTEND_DOMAIN}/mini-app/\`"
-            echo '- Database: isolated `happyfox` database on the established PostgreSQL service'
-            echo '- Redis: isolated logical DB plus `foxgen_happyfox` namespace'
-            echo '- Source core: `banano_kling/tanyapi@36f92a0504f849c0c591652a880410e33a1c89aa`'
+            echo "- Host: \`${DEPLOY_HOST}\`"
+            echo "- Checkout: \`${DEPLOY_PATH}\`"
+            echo '- API/webhooks: `https://api.happy-fox.online`'
+            echo '- Mini App: `https://app.happy-fox.online/mini-app/`'
+            echo '- Landing: `https://happy-fox.online/`'
+            echo '- Telegram webhook and MAX subscription are reconciled by the deploy gate.'
           } >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Publish deployment commit status
-        if: always()
-        continue-on-error: true
-        env:
-          GH_TOKEN: ${{ github.token }}
-          JOB_STATUS: ${{ job.status }}
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          state=failure
-          description='HappyFox production deployment failed'
-          if [ "$JOB_STATUS" = success ]; then
-            state=success
-            description='HappyFox production deployment succeeded'
-          fi
-          gh api \
-            --method POST \
-            "repos/${GITHUB_REPOSITORY}/statuses/${EXPECTED_SHA}" \
-            -f state="$state" \
-            -f context='foxgen/production-deploy' \
-            -f description="$description" \
-            -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-
-      - name: Remove SSH key
-        if: always()
-        shell: bash
-        run: rm -f "$HOME/.ssh/id_ed25519"

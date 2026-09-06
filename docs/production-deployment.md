@@ -7,14 +7,16 @@ This document describes the accepted production path. Historical NEUROMIX servic
 ## Production identity
 
 ```text
-Product:         happyfox
-Public origin:   https://alena.chillcreative.ru
-Mini App:        https://alena.chillcreative.ru/mini-app/
-Compose project: foxgen-happyfox
-Container:       foxgen-happyfox-bot
-Database:        happyfox
-Redis prefix:    foxgen_happyfox
-Branch:          main
+Product:          happyfox
+Dedicated host:   happyfox
+Landing:          https://happy-fox.online/
+Mini App:         https://app.happy-fox.online/mini-app/
+API/webhooks:     https://api.happy-fox.online
+Compose project:  foxgen-happyfox
+Container:        foxgen-happyfox-bot
+Database:         happyfox_cutover
+Redis prefix:     foxgen_happyfox
+Branch:           main
 ```
 
 Runtime secrets and host-specific paths are supplied through production environment/GitHub configuration and must not be committed.
@@ -48,10 +50,11 @@ main CI success
  -> checkout exact SHA
  -> verify repository provenance
  -> configure pinned SSH
- -> resolve HappyFox domain
+ -> pin dedicated HappyFox SSH host
  -> isolated runtime preflight
- -> deploy exact backend + Mini App
- -> public health/revision smoke
+ -> deploy exact backend + static Mini App/landing
+ -> reconcile Telegram webhook + commands menu and MAX subscription
+ -> public health/revision/payment-webhook smoke
  -> publish deployment status
 ```
 
@@ -63,12 +66,32 @@ Post-deploy checks should include:
 
 ```text
 container/service healthy
-public /health succeeds
+https://api.happy-fox.online/health succeeds
 Mini App static revision equals expected SHA
-PostgreSQL reachable
+landing returns 200
+PostgreSQL 17 reachable and pre/post backup verified
 Redis namespace isolated
-Telegram webhook/runtime starts
+Telegram webhook URL is https://api.happy-fox.online/webhook
+Telegram pending_update_count = 0 and last_error_message is empty
+Telegram native chat menu type = commands
+MAX has only the current api.happy-fox.online subscription
+YooKassa/provider webhook routes are live
 ```
+
+### Telegram relay contract
+
+The application/data plane stays on the dedicated `happyfox` host. Because its network path to Telegram is currently unreliable, Telegram uses a transport-only `apix` relay:
+
+```dotenv
+TELEGRAM_WEBHOOK_URL=https://api.happy-fox.online/webhook
+TELEGRAM_WEBHOOK_IP_ADDRESS=<relay IPv4>
+```
+
+`setWebhook` must use `drop_pending_updates=False`. The relay presents a valid certificate for `api.happy-fox.online`, forwards the request to the dedicated API origin and does not run a second bot worker. Outbound Bot API traffic is carried by `happyfox-telegram-egress.service`.
+
+The relay TLS certificate is copied from the valid `happy-fox.online` certificate on the dedicated host. After certificate renewal, refresh the relay copy and run `nginx -t` before reload; do not let the relay continue with an expired certificate.
+
+After each deploy, the system menu must be restored to native quick commands (`/start`, `/feed`, `/prompts`, `/help`, `/ref`, `/earn`); do not set `MenuButtonWebApp` here.
 
 CI already validates production Docker image/runtime imports before the deploy workflow is allowed to act.
 
