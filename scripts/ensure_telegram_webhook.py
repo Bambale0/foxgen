@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import hmac
 import os
+import time
 from urllib.parse import urljoin
 
 from aiogram import Bot
@@ -9,6 +12,12 @@ from aiogram.types import MenuButtonWebApp, WebAppInfo
 
 
 def _webhook_url() -> str:
+    override = str(os.getenv("TELEGRAM_WEBHOOK_URL", "")).strip()
+    if override:
+        if not override.startswith("https://"):
+            raise RuntimeError("TELEGRAM_WEBHOOK_URL must be an HTTPS URL")
+        return override
+
     host = str(os.getenv("WEBHOOK_HOST", "")).strip().rstrip("/")
     path = str(os.getenv("WEBHOOK_PATH", "/webhook")).strip() or "/webhook"
     if not path.startswith("/"):
@@ -18,6 +27,20 @@ def _webhook_url() -> str:
     return urljoin(host + "/", path.lstrip("/"))
 
 
+def _webhook_secret() -> str:
+    explicit = str(os.getenv("WEBHOOK_SECRET_TOKEN", "")).strip()
+    if explicit:
+        return explicit
+    internal = str(os.getenv("INTERNAL_API_SECRET", "")).strip()
+    if not internal:
+        return ""
+    return hmac.new(
+        internal.encode("utf-8"),
+        b"happyfox:telegram-webhook:v1",
+        hashlib.sha256,
+    ).hexdigest()
+
+
 async def ensure() -> None:
     token = str(os.getenv("BOT_TOKEN", "")).strip()
     if not token:
@@ -25,16 +48,26 @@ async def ensure() -> None:
 
     target = _webhook_url()
     mini_app_url = str(os.getenv("MINI_APP_URL", "")).strip()
+    secret = _webhook_secret()
+    started_at = int(time.time())
     bot = Bot(token=token)
     try:
-        await bot.set_webhook(url=target, drop_pending_updates=False)
+        kwargs: dict[str, object] = {
+            "url": target,
+            "drop_pending_updates": False,
+        }
+        if secret:
+            kwargs["secret_token"] = secret
+        await bot.set_webhook(**kwargs)
+
         info = await bot.get_webhook_info()
         if str(info.url or "").rstrip("/") != target.rstrip("/"):
             raise RuntimeError(
                 f"Telegram webhook mismatch: expected={target} actual={info.url or ''}"
             )
-        if info.last_error_message:
-            raise RuntimeError(f"Telegram webhook reports error: {info.last_error_message}")
+        error_date = int(info.last_error_date.timestamp()) if info.last_error_date else 0
+        if info.last_error_message and error_date >= started_at:
+            raise RuntimeError(f"Telegram webhook reports new error: {info.last_error_message}")
 
         if mini_app_url.startswith("https://"):
             await bot.set_chat_menu_button(
