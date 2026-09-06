@@ -12,6 +12,7 @@ def test_dedicated_deploy_pins_three_public_origins_and_runtime_db() -> None:
     assert "chown -R 10001:10001" in deploy
     assert "ensure_telegram_webhook.py" in deploy
     assert "TELEGRAM_WEBHOOK_URL" in deploy
+    assert "TELEGRAM_WEBHOOK_IP_ADDRESS" in deploy
     assert '"$API_ORIGIN/yookassa/webhook"' in deploy
     assert "backup_db.sh" in deploy
 
@@ -39,5 +40,7 @@ def test_telegram_webhook_reconciliation_preserves_pending_updates() -> None:
     assert "TELEGRAM_WEBHOOK_URL" in script
     assert "WEBHOOK_SECRET_TOKEN" in script
     assert "INTERNAL_API_SECRET" in script
+    assert "TELEGRAM_WEBHOOK_IP_ADDRESS" in script
     assert "secret_token" in script
+    assert "ip_address" in script
     assert "MINI_APP_URL" in script

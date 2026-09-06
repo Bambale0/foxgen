@@ -49,6 +49,7 @@ async def ensure() -> None:
     target = _webhook_url()
     mini_app_url = str(os.getenv("MINI_APP_URL", "")).strip()
     secret = _webhook_secret()
+    fixed_ip = str(os.getenv("TELEGRAM_WEBHOOK_IP_ADDRESS", "")).strip()
     started_at = int(time.time())
     bot = Bot(token=token)
     try:
@@ -58,12 +59,18 @@ async def ensure() -> None:
         }
         if secret:
             kwargs["secret_token"] = secret
+        if fixed_ip:
+            kwargs["ip_address"] = fixed_ip
         await bot.set_webhook(**kwargs)
 
         info = await bot.get_webhook_info()
         if str(info.url or "").rstrip("/") != target.rstrip("/"):
             raise RuntimeError(
                 f"Telegram webhook mismatch: expected={target} actual={info.url or ''}"
+            )
+        if fixed_ip and str(info.ip_address or "") != fixed_ip:
+            raise RuntimeError(
+                f"Telegram webhook IP mismatch: expected={fixed_ip} actual={info.ip_address or ''}"
             )
         error_date = int(info.last_error_date.timestamp()) if info.last_error_date else 0
         if info.last_error_message and error_date >= started_at:

@@ -41,6 +41,7 @@ python3 scripts/recover_happyfox_channel_runtime.py "$PROJECT_DIR"
 # period so an older CI secret cannot point the app at a stale database.
 python3 - "$RUNTIME_ENV" "$API_ORIGIN" "$APP_ORIGIN" "$DATABASE_NAME" <<'PY'
 from pathlib import Path
+import ipaddress
 import os
 import sys
 from urllib.parse import urlsplit, urlunsplit
@@ -67,6 +68,12 @@ values["YOOKASSA_RETURN_URL"] = f"{app}/mini-app/"
 telegram_webhook_url = values.get("TELEGRAM_WEBHOOK_URL", "").strip()
 if telegram_webhook_url and not telegram_webhook_url.startswith("https://"):
     raise SystemExit("TELEGRAM_WEBHOOK_URL must use HTTPS")
+telegram_webhook_ip = values.get("TELEGRAM_WEBHOOK_IP_ADDRESS", "").strip()
+if telegram_webhook_ip:
+    try:
+        ipaddress.ip_address(telegram_webhook_ip)
+    except ValueError as exc:
+        raise SystemExit("TELEGRAM_WEBHOOK_IP_ADDRESS must be a valid IP address") from exc
 
 database_url = values.get("DATABASE_URL", "").strip()
 if database_url:
