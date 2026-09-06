@@ -26,9 +26,10 @@ The workflow verifies:
 - exact commit checkout;
 - repository provenance;
 - pinned SSH configuration;
-- HappyFox public/Mini App domain resolution;
+- dedicated HappyFox SSH host-key pinning;
 - isolated PostgreSQL/Redis/runtime preflight;
-- exact backend/Mini App deployment;
+- exact backend + landing/Mini App static deployment;
+- Telegram webhook/quick-command reconciliation and MAX subscription reconciliation;
 - deployment summary/status publication.
 
 CI also builds/verifies the production Docker image before deployment.

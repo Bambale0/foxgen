@@ -8,7 +8,7 @@ import time
 from urllib.parse import urljoin
 
 from aiogram import Bot
-from aiogram.types import MenuButtonWebApp, WebAppInfo
+from aiogram.types import MenuButtonCommands
 
 
 def _webhook_url() -> str:
@@ -47,7 +47,6 @@ async def ensure() -> None:
         raise RuntimeError("BOT_TOKEN is required")
 
     target = _webhook_url()
-    mini_app_url = str(os.getenv("MINI_APP_URL", "")).strip()
     secret = _webhook_secret()
     fixed_ip = str(os.getenv("TELEGRAM_WEBHOOK_IP_ADDRESS", "")).strip()
     started_at = int(time.time())
@@ -76,13 +75,9 @@ async def ensure() -> None:
         if info.last_error_message and error_date >= started_at:
             raise RuntimeError(f"Telegram webhook reports new error: {info.last_error_message}")
 
-        if mini_app_url.startswith("https://"):
-            await bot.set_chat_menu_button(
-                menu_button=MenuButtonWebApp(
-                    text="Открыть HappyFox",
-                    web_app=WebAppInfo(url=mini_app_url),
-                )
-            )
+        # Telegram's native system button is reserved for quick commands.
+        # The Mini App remains available from the bot's inline main menu.
+        await bot.set_chat_menu_button(menu_button=MenuButtonCommands())
     finally:
         await bot.session.close()
 

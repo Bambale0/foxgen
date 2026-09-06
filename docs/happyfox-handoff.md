@@ -13,15 +13,18 @@ Legacy FoxGen remains reference-only history under `legacy/foxgen-pre-tanyapi-20
 ## Production identity
 
 ```text
-Product ID:       happyfox
-Public origin:    https://alena.chillcreative.ru
-Mini App:         https://alena.chillcreative.ru/mini-app/
-Compose project:  foxgen-happyfox
-Container:        foxgen-happyfox-bot
-Database:         happyfox
-Redis namespace:  foxgen_happyfox
+Product ID:        happyfox
+Landing:           https://happy-fox.online/
+Mini App:          https://app.happy-fox.online/mini-app/
+API/webhooks/media:https://api.happy-fox.online
+Compose project:   foxgen-happyfox
+Container:         foxgen-happyfox-bot
+Database:          happyfox_cutover
+Redis namespace:   foxgen_happyfox
 Production branch: main
 ```
+
+Telegram uses the native quick-command system menu. The Mini App must not replace that menu button. Current Telegram transport uses an `apix` ingress/egress relay while application state remains exclusively on the dedicated `happyfox` host.
 
 Configuration contract: `.env.happyfox.example`.
 
