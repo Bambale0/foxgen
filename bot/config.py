@@ -170,6 +170,7 @@ class Config:
     WEBHOOK_HOST: str = os.getenv("WEBHOOK_HOST", "")
     WEBHOOK_PATH: str = os.getenv("WEBHOOK_PATH", "/webhook")
     TELEGRAM_WEBHOOK_URL: str = os.getenv("TELEGRAM_WEBHOOK_URL", "")
+    TELEGRAM_WEBHOOK_IP_ADDRESS: str = os.getenv("TELEGRAM_WEBHOOK_IP_ADDRESS", "").strip()
     WEBHOOK_SECRET_TOKEN: str = os.getenv("WEBHOOK_SECRET_TOKEN", "")
     WEBHOOK_PORT: int = int(os.getenv("WEBHOOK_PORT", "8443"))
     WEBHOOK_BIND_HOST: str = os.getenv("WEBHOOK_BIND_HOST", "127.0.0.1")

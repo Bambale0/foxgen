@@ -2380,6 +2380,8 @@ async def on_startup(bot: Bot, dispatcher: Dispatcher | None = None):
             secret_token = config.telegram_webhook_secret
             if secret_token:
                 webhook_kwargs["secret_token"] = secret_token
+            if config.TELEGRAM_WEBHOOK_IP_ADDRESS:
+                webhook_kwargs["ip_address"] = config.TELEGRAM_WEBHOOK_IP_ADDRESS
             if dispatcher is not None:
                 webhook_kwargs["allowed_updates"] = dispatcher.resolve_used_update_types()
             await bot.set_webhook(config.webhook_url, **webhook_kwargs)
