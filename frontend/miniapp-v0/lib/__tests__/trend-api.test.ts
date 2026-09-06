@@ -22,7 +22,7 @@ describe('runTrend', () => {
     }
   })
 
-  it('sends only the trend id and uploaded references, never generation settings', async () => {
+  function mockQueuedResponse() {
     const fetchMock = jest.fn().mockResolvedValue({
       ok: true,
       text: async () =>
@@ -44,6 +44,11 @@ describe('runTrend', () => {
         }),
     })
     global.fetch = fetchMock as unknown as typeof fetch
+    return fetchMock
+  }
+
+  it('sends only the trend id and uploaded references for a plain trend', async () => {
+    const fetchMock = mockQueuedResponse()
 
     const result = await runTrend(42, ['https://example.test/reference.jpg'])
 
@@ -58,6 +63,7 @@ describe('runTrend', () => {
       trend_id: 42,
       reference_urls: ['https://example.test/reference.jpg'],
     })
+    expect(body).not.toHaveProperty('parameters')
     expect(body).not.toHaveProperty('model')
     expect(body).not.toHaveProperty('prompt')
     expect(body).not.toHaveProperty('ratio')
@@ -69,6 +75,28 @@ describe('runTrend', () => {
     expect(result.task.aspect_ratio).toBe('1:1')
     expect(result.task.prompt_hidden).toBe(true)
     expect(result.task.prompt_actions_allowed).toBe(false)
+  })
+
+  it('sends only user field values for a parameterized trend', async () => {
+    const fetchMock = mockQueuedResponse()
+
+    await runTrend(
+      42,
+      ['https://example.test/reference.jpg'],
+      { age: '28', name: 'Анна' },
+    )
+
+    const [, options] = fetchMock.mock.calls[0] as [string, RequestInit]
+    const body = JSON.parse(String(options.body))
+    expect(body).toEqual({
+      init_data: 'signed-init-data',
+      trend_id: 42,
+      reference_urls: ['https://example.test/reference.jpg'],
+      parameters: { age: '28', name: 'Анна' },
+    })
+    expect(body).not.toHaveProperty('model')
+    expect(body).not.toHaveProperty('prompt')
+    expect(body).not.toHaveProperty('generation_settings')
   })
 
   it('keeps all generation controls out of the user trend runner', () => {
