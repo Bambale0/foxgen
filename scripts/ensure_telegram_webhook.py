@@ -4,14 +4,24 @@ import asyncio
 import hashlib
 import hmac
 import os
+import sys
 import time
+from pathlib import Path
 from urllib.parse import urljoin
 
 from aiogram import Bot
 from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 from aiogram.types import MenuButtonCommands
 
-from bot import db as db_backend
+# The production deploy executes this file directly as
+# /app/scripts/ensure_telegram_webhook.py. In that mode Python puts /app/scripts
+# on sys.path, not the repository root, so make the project package importable
+# explicitly before importing bot.*.
+_REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
+from bot import db as db_backend  # noqa: E402
 
 
 def _webhook_url() -> str:
