@@ -20,4 +20,4 @@ Canonical sources:
 
 Do not use old `tanyapi`, `cdn.chillcreative.ru`, `cdn.sh`, Tanya frontend profiles or NEUROMIX checkout paths as HappyFox production instructions.
 
-The current public HappyFox Mini App is documented as `https://alena.chillcreative.ru/mini-app/`; host-specific deployment paths remain runtime/environment configuration.
+The current public HappyFox Mini App is documented as `https://app.happy-fox.online/mini-app/`; host-specific deployment paths remain runtime/environment configuration.

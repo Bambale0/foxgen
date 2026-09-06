@@ -1,6 +1,6 @@
 # HappyFox — agent brief
 
-Updated: 2026-08-31.
+Updated: 2026-09-06.
 
 Repository: `Bambale0/foxgen`
 Production source: `main`
@@ -25,14 +25,17 @@ Never reuse another product's:
 Production identity:
 
 ```text
-public origin: https://alena.chillcreative.ru
-mini app:      https://alena.chillcreative.ru/mini-app/
+landing:       https://happy-fox.online/
+mini app:      https://app.happy-fox.online/mini-app/
+api/webhooks:  https://api.happy-fox.online
 compose:       foxgen-happyfox
 container:     foxgen-happyfox-bot
-database:      happyfox
+database:      happyfox_cutover
 redis prefix:  foxgen_happyfox
 branch:        main
 ```
+
+Telegram native system menu = quick commands (`/start`, `/feed`, `/prompts`, `/help`, `/ref`, `/earn`), never the Mini App WebApp button.
 
 ## Architecture
 
