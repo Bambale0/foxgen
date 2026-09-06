@@ -243,12 +243,15 @@ def test_happyfox_deploy_stops_only_legacy_app_tier_and_has_public_rollback() ->
     assert "CUTOVER_RESTART_ON_FAILURE" in generic
 
 
-def test_production_workflow_prepares_dedicated_checkout_before_deploy() -> None:
+def test_production_workflow_syncs_with_server_gh_before_deploy() -> None:
     workflow = Path(".github/workflows/deploy-production.yml").read_text(encoding="utf-8")
 
-    prepare_index = workflow.index("Prepare exact main checkout on HappyFox host")
+    sync_index = workflow.index("Sync exact main on HappyFox host with gh")
     deploy_index = workflow.index("Deploy exact HappyFox commit to dedicated host")
-    assert prepare_index < deploy_index
+    assert sync_index < deploy_index
     assert "/opt/happyfox/repo" in workflow
+    assert "gh auth setup-git" in workflow
+    assert "gh api repos/Bambale0/foxgen/commits/main --jq .sha" in workflow
     assert "deploy_happyfox_dedicated.sh" in workflow
     assert "HAPPYFOX_DATABASE_NAME=happyfox_cutover" in workflow
+    assert "HAPPYFOX_RUNTIME_ENV" not in workflow
