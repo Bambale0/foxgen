@@ -73,15 +73,18 @@ bot/handlers/instagram_account_link.py Telegram top-up handoff
 ## Production identity
 
 ```text
-Product ID:       happyfox
-Public origin:    https://alena.chillcreative.ru
-Mini App:         https://alena.chillcreative.ru/mini-app/
-Compose project:  foxgen-happyfox
-Container:        foxgen-happyfox-bot
-Database:         happyfox
-Redis namespace:  foxgen_happyfox
+Product ID:        happyfox
+Landing:           https://happy-fox.online/
+Mini App:          https://app.happy-fox.online/mini-app/
+API/webhooks/media:https://api.happy-fox.online
+Compose project:   foxgen-happyfox
+Container:         foxgen-happyfox-bot
+Database:          happyfox_cutover
+Redis namespace:   foxgen_happyfox
 Production branch: main
 ```
+
+Telegram keeps the native system **Commands** menu for fast actions. Current user commands are `/start`, `/feed`, `/prompts`, `/help`, `/ref`, `/earn`. The Mini App is opened from the bot's inline menu; deployment must not replace the Telegram commands button with a WebApp button.
 
 `main` — единственный production source of truth. Production deployment always uses exact tested SHA through `.github/workflows/deploy-production.yml`.
 

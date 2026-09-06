@@ -36,6 +36,8 @@ def test_telegram_webhook_reconciliation_preserves_pending_updates() -> None:
     assert '"drop_pending_updates": False' in script
     assert "get_webhook_info" in script
     assert "set_chat_menu_button" in script
+    assert "MenuButtonCommands" in script
+    assert "MenuButtonWebApp" not in script
     assert "WEBHOOK_HOST" in script
     assert "TELEGRAM_WEBHOOK_URL" in script
     assert "WEBHOOK_SECRET_TOKEN" in script
@@ -43,4 +45,3 @@ def test_telegram_webhook_reconciliation_preserves_pending_updates() -> None:
     assert "TELEGRAM_WEBHOOK_IP_ADDRESS" in script
     assert "secret_token" in script
     assert "ip_address" in script
-    assert "MINI_APP_URL" in script

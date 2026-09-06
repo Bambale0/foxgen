@@ -16,7 +16,7 @@ def _callbacks(markup):
 
 
 def test_happyfox_main_menu_matches_product_layout(monkeypatch):
-    monkeypatch.setattr(config, "MINI_APP_URL", "https://alena.chillcreative.ru/mini-app/")
+    monkeypatch.setattr(config, "MINI_APP_URL", "https://app.happy-fox.online/mini-app/")
 
     markup = get_main_menu_keyboard(user_credits=42, mini_app_referral_code="FOX42")
 
@@ -42,7 +42,7 @@ def test_happyfox_main_menu_matches_product_layout(monkeypatch):
 
     mini_app_button = markup.inline_keyboard[0][0]
     assert mini_app_button.web_app is not None
-    assert "alena.chillcreative.ru/mini-app/" in mini_app_button.web_app.url
+    assert "app.happy-fox.online/mini-app/" in mini_app_button.web_app.url
     assert "ref=FOX42" in mini_app_button.web_app.url
 
 
