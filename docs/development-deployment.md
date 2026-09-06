@@ -154,10 +154,11 @@ It should:
 3. check out that exact commit;
 4. verify repository provenance;
 5. configure pinned SSH;
-6. resolve HappyFox Mini App/public origin;
+6. pin the dedicated HappyFox host key;
 7. run isolated runtime preflight;
-8. deploy exact commit;
-9. publish deployment status/summary.
+8. deploy the exact backend + static surfaces;
+9. reconcile Telegram webhook/commands and MAX subscription;
+10. publish deployment status/summary.
 
 See `production-deployment.md`.
 

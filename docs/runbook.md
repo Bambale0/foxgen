@@ -21,7 +21,7 @@ Runtime identity:
 ```text
 Compose project: foxgen-happyfox
 Container:       foxgen-happyfox-bot
-Database:        happyfox
+Database:        happyfox_cutover
 Redis prefix:    foxgen_happyfox
 ```
 
@@ -44,7 +44,7 @@ For an operational restart with no code change, preserve current verified SHA an
 Public smoke:
 
 ```bash
-curl -fsS https://alena.chillcreative.ru/health
+curl -fsS https://api.happy-fox.online/health
 ```
 
 If a protected/internal health route is used, follow deployment monitoring configuration rather than exposing secrets in shell history/screenshots.
@@ -72,12 +72,18 @@ redis
 
 ## Telegram incident triage
 
-1. Confirm production deploy SHA.
-2. Confirm Telegram webhook/runtime health.
-3. Distinguish expected Mini App auth failure without valid `initData` from backend outage.
-4. Check database/Redis connectivity.
-5. Check provider/payment-specific logs.
-6. Reproduce with a safe test user before changing production state.
+1. Confirm production deploy SHA and `foxgen-happyfox-bot` health on the dedicated host.
+2. Call `getWebhookInfo`: expected URL is `https://api.happy-fox.online/webhook`, `pending_update_count=0`, `last_error_message` empty.
+3. Confirm `happyfox-telegram-egress.service` is active and `api.telegram.org:443` is reachable from the runtime.
+4. Confirm the relay TLS endpoint accepts `api.happy-fox.online` on the configured fixed Telegram ingress IP.
+5. Confirm Telegram native menu type is `commands` and the quick-command list is registered.
+6. Distinguish expected Mini App auth failure without valid `initData` from backend outage.
+7. Check PostgreSQL/Redis and provider/payment-specific logs.
+8. Reproduce with a safe test user before changing production state.
+
+A blue WebApp button replacing Telegram's command menu is a regression: reset `setChatMenuButton` to `type=commands`; do not remove the inline Mini App button.
+
+Relay TLS is operational state: when the `happy-fox.online` certificate renews on the dedicated host, update the `api.happy-fox.online` certificate copy used by the relay and verify it with a forced-IP HTTPS health check before reloading nginx.
 
 ## Instagram status
 

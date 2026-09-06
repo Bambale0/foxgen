@@ -223,13 +223,14 @@ def test_production_deploy_runs_automatically_after_green_main_ci() -> None:
     assert "github.event.workflow_run.head_branch == 'main'" in workflow
 
 
-def test_production_deploy_reuses_existing_server_domain_config() -> None:
+def test_production_deploy_pins_dedicated_server_topology() -> None:
     workflow = Path(".github/workflows/deploy-production.yml").read_text(encoding="utf-8")
 
-    assert "Resolve HappyFox Mini App domain" in workflow
-    assert 'values.get("MINI_APP_URL"' not in workflow  # keys are iterated, not hard-coded lookups
-    assert '"MINI_APP_URL",' in workflow
-    assert '"FOXGEN_MINIAPP_PUBLIC_URL",' in workflow
-    assert '"FOXGEN_KIE_CALLBACK_BASE_URL",' in workflow
-    assert "Missing production variable MINIAPP_FRONTEND_DOMAIN" not in workflow
-    assert "target_url=\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"" in workflow
+    assert "5.35.124.201" in workflow
+    assert "/opt/happyfox/repo" in workflow
+    assert "https://api.happy-fox.online" in workflow
+    assert "https://app.happy-fox.online" in workflow
+    assert "https://happy-fox.online" in workflow
+    assert "Resolve HappyFox Mini App domain" not in workflow
+    assert "DEPLOY_KNOWN_HOSTS" not in workflow
+    assert "EXPECTED_HOST_FINGERPRINT" in workflow

@@ -20,12 +20,14 @@ BOT_TOKEN=
 ADMIN_IDS=
 SUPPORT_CONTACT=
 
-WEBHOOK_HOST=https://api.happyfox.example
+WEBHOOK_HOST=https://api.happy-fox.online
 WEBHOOK_PATH=/webhook
+TELEGRAM_WEBHOOK_URL=https://api.happy-fox.online/webhook
+TELEGRAM_WEBHOOK_IP_ADDRESS=
 WEBHOOK_BIND_HOST=127.0.0.1
 WEBHOOK_PORT=1888
-MINI_APP_URL=https://app.happyfox.example/mini-app/
-STATIC_BASE_URL=https://media.happyfox.example
+MINI_APP_URL=https://app.happy-fox.online/mini-app/
+STATIC_BASE_URL=https://api.happy-fox.online
 
 DATABASE_URL=postgresql://happyfox:change-me@127.0.0.1:5432/happyfox
 REDIS_URL=redis://127.0.0.1:6379/3
@@ -45,6 +47,10 @@ Use `.env.happyfox.example` as the actual template.
 `BOT_TOKEN` identifies the HappyFox Telegram bot and is also used for Telegram Web App authentication/signature logic.
 
 `ADMIN_IDS` is a comma-separated allow-list for admin functionality.
+
+`TELEGRAM_WEBHOOK_URL` optionally overrides only the Telegram callback URL without changing provider/payment `WEBHOOK_HOST`. `TELEGRAM_WEBHOOK_IP_ADDRESS` maps to Telegram Bot API `setWebhook(ip_address=...)` and is used only when Telegram must enter through a fixed relay IP. Keep it empty in ordinary deployments.
+
+The native Telegram system menu is `commands`; it is not a Mini App launcher.
 
 Do not reuse one bot token in competing active runtimes.
 

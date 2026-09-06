@@ -44,17 +44,20 @@ feature/fix/docs branch
 ```text
 Telegram Bot ───────────┐
 Telegram Mini App ──────┼──> HappyFox backend/core ──> providers / billing / DB
-Instagram Direct ───────┤
-Instagram comments ─────┘
+MAX / Instagram ────────┤
+Payment/provider hooks ─┘
 
-Public origin: https://alena.chillcreative.ru
-Mini App:      https://alena.chillcreative.ru/mini-app/
-Compose:       foxgen-happyfox
-Container:     foxgen-happyfox-bot
-Database:      happyfox
-Redis prefix:  foxgen_happyfox
-Branch:        main
+Landing:          https://happy-fox.online/
+Mini App:         https://app.happy-fox.online/mini-app/
+API/webhooks:     https://api.happy-fox.online
+Compose:          foxgen-happyfox
+Container:        foxgen-happyfox-bot
+Database:         happyfox_cutover
+Redis prefix:     foxgen_happyfox
+Branch:           main
 ```
+
+Telegram's native system button is a quick **commands menu**, not a WebApp launcher. The Mini App remains an explicit inline action inside the bot.
 
 ## Instagram summary
 
