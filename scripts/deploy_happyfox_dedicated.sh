@@ -10,6 +10,7 @@ APP_ORIGIN="${HAPPYFOX_APP_ORIGIN:-https://app.happy-fox.online}"
 LANDING_ORIGIN="${HAPPYFOX_LANDING_ORIGIN:-https://happy-fox.online}"
 DATABASE_NAME="${HAPPYFOX_DATABASE_NAME:-happyfox_cutover}"
 TELEGRAM_RELAY_IP="${HAPPYFOX_TELEGRAM_RELAY_IP:-2.27.160.11}"
+GITHUB_REPO="${HAPPYFOX_GITHUB_REPO:-Bambale0/foxgen}"
 RUNTIME_ENV="$PROJECT_DIR/.env.happyfox.runtime"
 
 [[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]] || {
@@ -22,24 +23,37 @@ RUNTIME_ENV="$PROJECT_DIR/.env.happyfox.runtime"
 }
 
 cd "$PROJECT_DIR"
-[[ "$(git rev-parse HEAD)" == "$EXPECTED_SHA" ]] || {
-  echo "Checkout SHA does not match requested deployment SHA" >&2
-  exit 1
-}
 [[ -s .env && -s "$RUNTIME_ENV" ]] || {
   echo "HappyFox production env files are missing" >&2
   exit 1
 }
+command -v gh >/dev/null 2>&1 || {
+  echo "GitHub CLI (gh) is required on the HappyFox production host" >&2
+  exit 1
+}
+gh auth status -h github.com >/dev/null 2>&1 || {
+  echo "GitHub CLI is not authenticated on the HappyFox production host" >&2
+  exit 1
+}
+main_sha="$(gh api "repos/${GITHUB_REPO}/commits/main" --jq .sha)"
+[[ "$main_sha" == "$EXPECTED_SHA" ]] || {
+  echo "Requested SHA is no longer the current ${GITHUB_REPO} main" >&2
+  exit 1
+}
+[[ "$(git rev-parse HEAD)" == "$EXPECTED_SHA" ]] || {
+  echo "Checkout SHA does not match requested deployment SHA" >&2
+  exit 1
+}
 
 # Recover protected channel values from the server-side channel overlay before
-# canonicalizing public URLs. This prevents an older GitHub runtime secret from
-# silently deleting MAX credentials or display settings.
+# canonicalizing public URLs. GitHub Actions never replaces this runtime file:
+# the production host is authoritative for secrets and channel credentials.
 python3 scripts/recover_happyfox_channel_runtime.py "$PROJECT_DIR"
 
 # Dedicated-host topology is intentionally split: all backend/webhook/media
 # traffic uses api.happy-fox.online, while the Telegram/MAX UI lives on the app
-# origin. The production DB name is also server-authoritative during the cutover
-# period so an older CI secret cannot point the app at a stale database.
+# origin. The production DB name and durable provider-result persistence are
+# server-authoritative so an old CI secret cannot regress production behavior.
 python3 - "$RUNTIME_ENV" "$API_ORIGIN" "$APP_ORIGIN" "$DATABASE_NAME" "$TELEGRAM_RELAY_IP" <<'PY'
 from pathlib import Path
 import ipaddress
@@ -67,6 +81,7 @@ values["WEBHOOK_HOST"] = api
 values["STATIC_BASE_URL"] = api
 values["MINI_APP_URL"] = f"{app}/mini-app/"
 values["YOOKASSA_RETURN_URL"] = f"{app}/mini-app/"
+values["PERSIST_PROVIDER_RESULTS"] = "1"
 values["TELEGRAM_WEBHOOK_URL"] = f"{api}/webhook"
 if not telegram_relay_ip:
     raise SystemExit("HAPPYFOX_TELEGRAM_RELAY_IP must not be empty")
