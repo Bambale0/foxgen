@@ -3,12 +3,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useApp } from '@/lib/app-context'
 import { copyTextToClipboard } from '@/lib/clipboard'
-import type { PromptItem } from '@/lib/types'
+import type { PromptItem, TrendUserField } from '@/lib/types'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
-import { deactivatePrompt, fetchPromptLink, fetchPrompts, submitPrompt, uploadFile } from '@/lib/api'
+import { deactivatePrompt, fetchPromptLink, fetchPrompts, uploadFile } from '@/lib/api'
 import { mediaAspectRatio, normalizeMiniAppMediaUrl, videoPreviewFrameUrl } from '@/lib/media-url'
 import { TrendRunnerDialog } from '@/components/trend-runner-dialog'
+import { saveAdminTrend } from '@/lib/trend-api'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import {
   Film,
@@ -56,6 +57,7 @@ export function TrendsTab() {
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [promptText, setPromptText] = useState('')
+  const [userFields, setUserFields] = useState<TrendUserField[]>([])
   const [model, setModel] = useState('banana_pro')
   const [videoDuration, setVideoDuration] = useState(5)
   const [trendRatio, setTrendRatio] = useState('1:1')
@@ -66,6 +68,7 @@ export function TrendsTab() {
   const [removingId, setRemovingId] = useState<number | null>(null)
   const [copiedId, setCopiedId] = useState<number | null>(null)
   const [previewTrend, setPreviewTrend] = useState<PromptItem | null>(null)
+  const [editingTrend, setEditingTrend] = useState<PromptItem | null>(null)
   const [videoAspectRatios, setVideoAspectRatios] = useState<Record<number, string>>({})
 
   const isLive = state.mode === 'live'
@@ -159,6 +162,7 @@ export function TrendsTab() {
     if (nextKind === trendKind) return
     setTrendKind(nextKind)
     setPreviewUrl('')
+    setEditingTrend(null)
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
@@ -167,6 +171,7 @@ export function TrendsTab() {
     setTitle('')
     setDescription('')
     setPromptText('')
+    setUserFields([])
     setModel(state.imageModels[0]?.id || 'banana_pro')
     setVideoDuration(5)
     setTrendRatio('1:1')
@@ -233,10 +238,102 @@ export function TrendsTab() {
     }
   }
 
+  const addUserField = () => {
+    setUserFields((current) => {
+      if (current.length >= 6) return current
+      const label = `Поле ${current.length + 1}`
+      return [
+        ...current,
+        {
+          key: label,
+          label,
+          type: 'text',
+          required: true,
+          placeholder: '',
+          max_length: 80,
+        },
+      ]
+    })
+  }
+
+  const updateUserField = (index: number, patch: Partial<TrendUserField>) => {
+    setUserFields((current) =>
+      current.map((field, fieldIndex) =>
+        fieldIndex === index ? { ...field, ...patch } : field,
+      ),
+    )
+  }
+
+  const removeUserField = (index: number) => {
+    setUserFields((current) => current.filter((_, fieldIndex) => fieldIndex !== index))
+  }
+
+  const beginEditTrend = (trend: PromptItem) => {
+    const settings = trend.generation_settings || null
+    const kind: TrendKind = settings?.kind === 'video' || trend.category === 'video' ? 'video' : 'image'
+    setEditingTrend(trend)
+    setIsCreateOpen(true)
+    setTrendKind(kind)
+    setTitle(trend.title || '')
+    setDescription(trend.description || '')
+    setPromptText(trend.prompt_text || '')
+    setModel(String(settings?.model || trend.model || (kind === 'video' ? 'v3_pro' : 'banana_pro')))
+    setTrendRatio(String(settings?.ratio || (kind === 'video' ? '16:9' : '1:1')))
+    setImageQuality(String(settings?.quality || '2K'))
+    setVideoDuration(Number(settings?.duration || 5))
+    setPreviewUrl(String(trend.preview_url || ''))
+    setUserFields(Array.isArray(settings?.user_fields) ? settings.user_fields.slice(0, 6) : [])
+    setError(null)
+    window.requestAnimationFrame(() => document.querySelector('[data-trend-editor]')?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
+  }
+
   const handleCreate = async () => {
     if (!isAdmin || submitting) return
     if (!title.trim() || !promptText.trim() || !previewUrl || !model) {
       setError('Заполните название, preview, нейросеть и скрытый prompt')
+      return
+    }
+    const normalizedUserFields = userFields.map((field) => {
+      const label = field.label.trim()
+      return {
+        ...field,
+        key: label,
+        label,
+        required: true,
+        placeholder: String(field.placeholder || '').trim(),
+        max_length: field.type === 'text' ? Math.max(1, Math.min(160, field.max_length || 80)) : undefined,
+        min: field.type === 'number' ? field.min : undefined,
+        max: field.type === 'number' ? field.max : undefined,
+      }
+    })
+    if (normalizedUserFields.some((field) => !field.key)) {
+      setError('Укажите название каждого пользовательского поля')
+      return
+    }
+    if (normalizedUserFields.some((field) => field.key.includes('{{') || field.key.includes('}}'))) {
+      setError('Название пользовательского поля не должно содержать фигурные скобки')
+      return
+    }
+    if (new Set(normalizedUserFields.map((field) => field.key)).size !== normalizedUserFields.length) {
+      setError('Названия пользовательских полей не должны повторяться')
+      return
+    }
+    const missingTemplateField = normalizedUserFields.find(
+      (field) => !promptText.includes(`{{${field.key}}}`),
+    )
+    if (missingTemplateField) {
+      setError(`Добавьте {{${missingTemplateField.key}}} в скрытый prompt`)
+      return
+    }
+    const invalidNumberRange = normalizedUserFields.find(
+      (field) =>
+        field.type === 'number' &&
+        typeof field.min === 'number' &&
+        typeof field.max === 'number' &&
+        field.min > field.max,
+    )
+    if (invalidNumberRange) {
+      setError(`Минимум поля «${invalidNumberRange.label}» больше максимума`)
       return
     }
     setSubmitting(true)
@@ -264,6 +361,7 @@ export function TrendsTab() {
             model,
             scenario: 'imgtxt' as const,
             ratio: trendRatio,
+            user_fields: normalizedUserFields.length ? normalizedUserFields : undefined,
             duration: videoDuration,
             grok_mode: selectedTrendVideoModel?.grok_modes?.[0] || 'normal',
             grok_resolution: selectedTrendVideoModel?.grok_resolutions?.[0] || '480p',
@@ -295,21 +393,25 @@ export function TrendsTab() {
             user_input: 'photo' as const,
             model,
             ratio: trendRatio,
+            user_fields: normalizedUserFields.length ? normalizedUserFields : undefined,
             quality: imageQuality,
             count: 1,
             nsfw_checker: false,
             nsfw_enabled: false,
           }
 
-      const created = await submitPrompt({
+      const payload = {
         title: title.trim(),
         description: description.trim(),
         promptText: promptText.trim(),
         previewUrl: finalPreviewUrl,
         model,
-        tags: trendKind === 'video'
-          ? [TREND_TAG, VIDEO_TREND_TAG]
-          : [TREND_TAG],
+        tags: trendKind === 'video' ? [TREND_TAG, VIDEO_TREND_TAG] : [TREND_TAG],
+        generationSettings,
+      }
+      const created = await saveAdminTrend(editingTrend?.id || null, {
+        ...payload,
+        previewUrl: finalPreviewUrl,
         generationSettings,
       })
       setItems((prev) => [created, ...prev.filter((item) => item.id !== created.id)])
@@ -398,7 +500,7 @@ export function TrendsTab() {
                   <Button type="button" size="sm" className="w-full bg-gold text-primary-foreground hover:bg-gold/90" onClick={() => applyTrend(trend)}><Repeat2 className="h-3.5 w-3.5" />Повторить</Button>
                   <div className={isAdmin ? 'grid grid-cols-[1fr_auto] gap-2' : 'grid'}>
                     <Button type="button" size="sm" variant="secondary" onClick={() => void handleCopyLink(trend)}>{copiedId === trend.id ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}{copiedId === trend.id ? 'Скопировано' : 'Ссылка'}</Button>
-                    {isAdmin ? <Button type="button" variant="secondary" size="icon" onClick={() => void handleRemove(trend)} disabled={removingId === trend.id} aria-label="Убрать тренд">{removingId === trend.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}</Button> : null}
+                    {isAdmin ? <div className="flex gap-1"><Button type="button" variant="secondary" size="sm" onClick={() => beginEditTrend(trend)}>Редактировать</Button><Button type="button" variant="secondary" size="icon" onClick={() => void handleRemove(trend)} disabled={removingId === trend.id} aria-label="Убрать тренд">{removingId === trend.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}</Button></div> : null}
                   </div>
                 </div>
               </article>
@@ -435,9 +537,9 @@ export function TrendsTab() {
       </div>
 
       {isAdmin && isCreateOpen ? (
-        <section className="glass space-y-4 rounded-2xl border border-gold/25 p-4">
+        <section data-trend-editor className="glass space-y-4 rounded-2xl border border-gold/25 p-4">
           <div>
-            <p className="text-sm font-semibold text-foreground">Новый тренд</p>
+            <p className="text-sm font-semibold text-foreground">{editingTrend ? `Редактировать: ${editingTrend.title}` : 'Новый тренд'}</p>
             <p className="mt-1 text-xs text-muted-foreground">
               Пользователи увидят пример и описание, но не увидят скрытый prompt.
             </p>
@@ -446,6 +548,7 @@ export function TrendsTab() {
           <div className="grid grid-cols-2 gap-2">
             <button
               type="button"
+              disabled={Boolean(editingTrend)}
               onClick={() => changeTrendKind('image')}
               className={`rounded-xl border px-3 py-3 text-sm font-medium transition ${
                 trendKind === 'image'
@@ -457,6 +560,7 @@ export function TrendsTab() {
             </button>
             <button
               type="button"
+              disabled={Boolean(editingTrend)}
               onClick={() => changeTrendKind('video')}
               className={`rounded-xl border px-3 py-3 text-sm font-medium transition ${
                 trendKind === 'video'
@@ -618,6 +722,110 @@ export function TrendsTab() {
             ) : null}
           </div>
 
+          <div className="space-y-3 rounded-2xl border border-border/50 bg-secondary/25 p-3">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold text-foreground">Поля пользователя</p>
+                <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+                  Необязательно. Пользователь заполнит их перед генерацией, а скрытый prompt останется закрытым.
+                </p>
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                disabled={userFields.length >= 6}
+                onClick={addUserField}
+              >
+                <Plus className="h-3.5 w-3.5" />
+                Поле
+              </Button>
+            </div>
+
+            {userFields.length ? (
+              <div className="space-y-3">
+                {userFields.map((field, index) => (
+                  <div key={index} className="space-y-2 rounded-xl border border-border/50 bg-background/45 p-3">
+                    <div className="grid grid-cols-[minmax(0,1fr)_110px_auto] gap-2">
+                      <input
+                        value={field.label}
+                        onChange={(event) => {
+                          const label = event.target.value.slice(0, 48)
+                          updateUserField(index, { label, key: label })
+                        }}
+                        placeholder="Например: Возраст"
+                        className="h-10 min-w-0 rounded-lg border border-border/60 bg-secondary/50 px-3 text-sm text-foreground outline-none focus:border-gold/50"
+                      />
+                      <select
+                        value={field.type}
+                        onChange={(event) => {
+                          const type = event.target.value as 'text' | 'number'
+                          updateUserField(index,
+                            type === 'number'
+                              ? { type, min: 1, max: 120, placeholder: field.placeholder || '28', max_length: undefined }
+                              : { type, min: undefined, max: undefined, max_length: 80 },
+                          )
+                        }}
+                        className="h-10 rounded-lg border border-border/60 bg-secondary/50 px-2 text-xs text-foreground"
+                      >
+                        <option value="text">Текст</option>
+                        <option value="number">Число</option>
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => removeUserField(index)}
+                        className="flex h-10 w-10 items-center justify-center rounded-lg border border-border/60 bg-secondary/40 text-muted-foreground hover:text-destructive"
+                        aria-label={`Удалить поле ${field.label || index + 1}`}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+
+                    {field.type === 'number' ? (
+                      <div className="grid grid-cols-3 gap-2">
+                        <input
+                          type="number"
+                          value={field.min ?? ''}
+                          onChange={(event) => updateUserField(index, { min: event.target.value === '' ? undefined : Number(event.target.value) })}
+                          placeholder="Мин."
+                          className="h-9 rounded-lg border border-border/60 bg-secondary/40 px-2 text-xs"
+                        />
+                        <input
+                          type="number"
+                          value={field.max ?? ''}
+                          onChange={(event) => updateUserField(index, { max: event.target.value === '' ? undefined : Number(event.target.value) })}
+                          placeholder="Макс."
+                          className="h-9 rounded-lg border border-border/60 bg-secondary/40 px-2 text-xs"
+                        />
+                        <input
+                          value={field.placeholder || ''}
+                          onChange={(event) => updateUserField(index, { placeholder: event.target.value.slice(0, 80) })}
+                          placeholder="Пример: 28"
+                          className="h-9 rounded-lg border border-border/60 bg-secondary/40 px-2 text-xs"
+                        />
+                      </div>
+                    ) : (
+                      <input
+                        value={field.placeholder || ''}
+                        onChange={(event) => updateUserField(index, { placeholder: event.target.value.slice(0, 80) })}
+                        placeholder="Подсказка в поле, например: Анна"
+                        className="h-9 w-full rounded-lg border border-border/60 bg-secondary/40 px-2 text-xs"
+                      />
+                    )}
+
+                    <p className="text-[10px] text-muted-foreground">
+                      В скрытом prompt используйте <code className="text-gold">{`{{${field.label.trim() || 'Название'}}}`}</code>
+                    </p>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-[11px] text-muted-foreground">
+                Для обычного тренда ничего добавлять не нужно. Для birthday-шаблона добавьте поле «Возраст».
+              </p>
+            )}
+          </div>
+
           <Textarea
             value={promptText}
             onChange={(event) => setPromptText(event.target.value)}
@@ -632,7 +840,7 @@ export function TrendsTab() {
             onClick={() => void handleCreate()}
           >
             {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-            Опубликовать тренд
+            {editingTrend ? 'Сохранить изменения' : 'Опубликовать тренд'}
           </Button>
         </section>
       ) : null}
