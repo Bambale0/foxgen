@@ -1,5 +1,5 @@
 import React from 'react'
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import '@testing-library/jest-dom'
 
 jest.mock('next/image', () => ({
@@ -12,6 +12,11 @@ import robots from '@/app/robots'
 import sitemap from '@/app/sitemap'
 
 describe('HappyFox landing', () => {
+  beforeEach(() => {
+    window.history.replaceState({}, '', '/landing/')
+    window.localStorage.clear()
+  })
+
   it('renders a concrete conversion-focused value proposition and working Telegram CTAs', () => {
     const { container } = render(<LandingPage />)
 
@@ -32,8 +37,14 @@ describe('HappyFox landing', () => {
     }
 
     expect(
-      screen.getByRole('link', { name: 'Открыть HappyFox в Telegram из демо' }),
-    ).toHaveAttribute('href', 'https://t.me/AlePolbot?start=ref_M9SHFF25')
+      screen.getByRole('link', { name: 'Попробовать HappyFox на сайте из демо' }),
+    ).toHaveAttribute('href', '/mini-app/?startapp=ref_M9SHFF25')
+
+    expect(
+      screen.getAllByRole('link', { name: 'Попробовать' }).some((link) =>
+        link.getAttribute('href') === '/mini-app/?startapp=ref_M9SHFF25',
+      ),
+    ).toBe(true)
 
     expect(
       screen.getAllByRole('link').some((link) =>
@@ -61,13 +72,31 @@ describe('HappyFox landing', () => {
     ).toBeInTheDocument()
     expect(
       container.querySelector('img[src="/mini-app/happyfox-icon.webp"]'),
-    ).toBeInTheDocument()
+    ).not.toBeInTheDocument()
 
     expect(screen.getByRole('heading', { name: 'Фото' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Видео' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Музыка' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'AI-инструменты' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Изменить волосы, одежду или фон' })).toBeInTheDocument()
+  })
+
+  it('propagates an incoming referral to both the browser Try tab and Telegram CTAs', async () => {
+    window.history.replaceState({}, '', '/landing/?ref=partner42')
+    const { container } = render(<LandingPage />)
+
+    await waitFor(() => {
+      const botLinks = Array.from(container.querySelectorAll('[data-referral-link="bot"]'))
+      const webLinks = Array.from(container.querySelectorAll('[data-referral-link="web"]'))
+
+      expect(botLinks.length).toBeGreaterThanOrEqual(3)
+      expect(webLinks.length).toBeGreaterThanOrEqual(2)
+      expect(botLinks.every((link) => link.getAttribute('href') === 'https://t.me/AlePolbot?start=ref_PARTNER42')).toBe(true)
+      expect(webLinks.every((link) => link.getAttribute('href') === '/mini-app/?startapp=ref_PARTNER42')).toBe(true)
+    })
+
+    expect(window.localStorage.getItem('happyfox_ref_start_param')).toBe('ref_PARTNER42')
+    expect(screen.queryByText('https://t.me/AlePolbot?start=ref_PARTNER42')).not.toBeInTheDocument()
   })
 
   it('keeps the public surface on the HappyFox brand', () => {
