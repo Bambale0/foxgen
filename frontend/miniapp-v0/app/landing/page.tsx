@@ -5,9 +5,7 @@ import {
   AudioLines,
   Check,
   Image as ImageGlyph,
-  Instagram,
   Layers3,
-  Send,
   Sparkles,
   Video,
   WandSparkles,
@@ -148,6 +146,40 @@ const telegramLinkProps = {
   ...externalLinkProps,
 } as const
 
+function TelegramBrandIcon({ className = 'size-5' }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      className={className}
+      data-brand-icon="telegram"
+      fill="currentColor"
+    >
+      <path d="M9.78 18.65l.28-4.23 7.68-6.92c.34-.3-.07-.45-.52-.17l-9.5 5.98-4.1-1.32c-.88-.25-.9-.86.2-1.3L19.8 4.54c.73-.33 1.43.18 1.15 1.3l-2.72 12.8c-.19.91-.74 1.13-1.5.7l-4.14-3.05-2 1.93c-.23.23-.42.42-.81.42Z" />
+    </svg>
+  )
+}
+
+function InstagramBrandIcon({ className = 'size-5' }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      className={className}
+      data-brand-icon="instagram"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <rect x="3" y="3" width="18" height="18" rx="5" />
+      <circle cx="12" cy="12" r="4" />
+      <circle cx="17.4" cy="6.6" r="1" fill="currentColor" stroke="none" />
+    </svg>
+  )
+}
+
 const structuredData = {
   '@context': 'https://schema.org',
   '@graph': [
@@ -221,8 +253,8 @@ export default function LandingPage() {
           {...telegramLinkProps}
           className="inline-flex min-h-10 items-center justify-center rounded-xl border border-primary/35 bg-primary px-4 text-sm font-semibold text-primary-foreground shadow-[0_10px_30px_rgba(255,106,0,0.18)] transition-transform hover:-translate-y-0.5"
         >
+          <TelegramBrandIcon className="mr-2 size-4" />
           Попробовать
-          <ArrowRight className="ml-2 size-4" aria-hidden="true" />
         </a>
       </header>
 
@@ -247,16 +279,17 @@ export default function LandingPage() {
               {...telegramLinkProps}
               className="inline-flex min-h-12 items-center justify-center rounded-2xl bg-primary px-6 font-semibold text-primary-foreground shadow-[0_16px_50px_rgba(255,106,0,0.22)] transition-transform hover:-translate-y-0.5"
             >
+              <TelegramBrandIcon className="mr-2 size-5" />
               Создать в Telegram
               <ArrowRight className="ml-2 size-4" aria-hidden="true" />
             </a>
             <a
-              href={TELEGRAM_CHANNEL_URL}
+              href={INSTAGRAM_URL}
               {...externalLinkProps}
               className="inline-flex min-h-12 items-center justify-center rounded-2xl border border-border bg-card/70 px-6 font-medium text-foreground backdrop-blur transition-colors hover:border-primary/35"
             >
               Смотреть работы
-              <Send className="ml-2 size-4" aria-hidden="true" />
+              <InstagramBrandIcon className="ml-2 size-5" />
             </a>
           </div>
 
@@ -398,7 +431,7 @@ export default function LandingPage() {
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">Работы и идеи</p>
               <h2 className="mt-3 font-serif text-4xl font-semibold tracking-[-0.035em] sm:text-5xl">Посмотрите, что можно сделать с HappyFox</h2>
               <p className="mt-4 max-w-xl text-base leading-7 text-muted-foreground">
-                В Telegram-паблике и Instagram публикуем примеры, идеи и визуальные сценарии. Можно сначала посмотреть работы, а потом открыть бота и повторить подход на своём фото.
+                В Instagram публикуем примеры готовых работ и визуальные сценарии. В Telegram собрана база промптов, которые можно брать за основу и адаптировать под свои задачи.
               </p>
             </div>
 
@@ -406,24 +439,34 @@ export default function LandingPage() {
               <a
                 href={TELEGRAM_CHANNEL_URL}
                 {...externalLinkProps}
-                className="group flex min-h-16 items-center justify-between rounded-2xl border border-border/70 bg-background/70 px-5 py-4 transition-colors hover:border-primary/40"
+                className="group flex min-h-20 items-center justify-between rounded-2xl border border-border/70 bg-background/70 px-5 py-4 transition-colors hover:border-primary/40"
               >
-                <span>
-                  <span className="block text-xs text-muted-foreground">Telegram-паблик</span>
-                  <span className="mt-1 block font-semibold">@PolyakovaAll</span>
+                <span className="flex items-center gap-4">
+                  <span className="grid size-12 shrink-0 place-items-center rounded-2xl bg-[#229ED9] text-white shadow-sm">
+                    <TelegramBrandIcon className="size-7" />
+                  </span>
+                  <span>
+                    <span className="block text-xs text-muted-foreground">Telegram</span>
+                    <span className="mt-1 block font-semibold text-foreground">База промптов</span>
+                  </span>
                 </span>
-                <Send className="size-5 text-primary transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
+                <ArrowRight className="size-5 text-primary transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
               </a>
               <a
                 href={INSTAGRAM_URL}
                 {...externalLinkProps}
-                className="group flex min-h-16 items-center justify-between rounded-2xl border border-border/70 bg-background/70 px-5 py-4 transition-colors hover:border-primary/40"
+                className="group flex min-h-20 items-center justify-between rounded-2xl border border-border/70 bg-background/70 px-5 py-4 transition-colors hover:border-primary/40"
               >
-                <span>
-                  <span className="block text-xs text-muted-foreground">Instagram</span>
-                  <span className="mt-1 block font-semibold">@polyakovaall</span>
+                <span className="flex items-center gap-4">
+                  <span className="grid size-12 shrink-0 place-items-center rounded-2xl bg-[radial-gradient(circle_at_30%_107%,#fdf497_0%,#fdf497_5%,#fd5949_45%,#d6249f_60%,#285AEB_90%)] text-white shadow-sm">
+                    <InstagramBrandIcon className="size-7" />
+                  </span>
+                  <span>
+                    <span className="block text-xs text-muted-foreground">Instagram</span>
+                    <span className="mt-1 block font-semibold text-foreground">Примеры работ</span>
+                  </span>
                 </span>
-                <Instagram className="size-5 text-primary transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
+                <ArrowRight className="size-5 text-primary transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
               </a>
             </div>
           </div>
@@ -439,6 +482,7 @@ export default function LandingPage() {
             {...telegramLinkProps}
             className="mt-7 inline-flex min-h-12 items-center justify-center rounded-2xl bg-primary px-7 font-semibold text-primary-foreground shadow-[0_16px_50px_rgba(255,106,0,0.22)] transition-transform hover:-translate-y-0.5"
           >
+            <TelegramBrandIcon className="mr-2 size-5" />
             Открыть HappyFox в Telegram
             <ArrowRight className="ml-2 size-4" aria-hidden="true" />
           </a>
@@ -451,10 +495,19 @@ export default function LandingPage() {
             <span className="font-serif text-base font-semibold text-foreground">{BRAND_NAME}</span>
             <span className="ml-3 hidden sm:inline">AI-студия для фото, видео и музыки в Telegram</span>
           </div>
-          <nav className="flex flex-wrap gap-x-5 gap-y-2" aria-label="Социальные ссылки">
-            <a href={TELEGRAM_APP_URL} {...externalLinkProps} className="transition-colors hover:text-foreground">Telegram-бот</a>
-            <a href={TELEGRAM_CHANNEL_URL} {...externalLinkProps} className="transition-colors hover:text-foreground">Паблик</a>
-            <a href={INSTAGRAM_URL} {...externalLinkProps} className="transition-colors hover:text-foreground">Instagram</a>
+          <nav className="flex flex-wrap gap-x-5 gap-y-3" aria-label="Социальные ссылки">
+            <a href={TELEGRAM_APP_URL} {...externalLinkProps} className="inline-flex items-center gap-2 transition-colors hover:text-foreground">
+              <span className="grid size-7 place-items-center rounded-lg bg-[#229ED9] text-white"><TelegramBrandIcon className="size-4" /></span>
+              Telegram-бот
+            </a>
+            <a href={TELEGRAM_CHANNEL_URL} {...externalLinkProps} className="inline-flex items-center gap-2 transition-colors hover:text-foreground">
+              <span className="grid size-7 place-items-center rounded-lg bg-[#229ED9] text-white"><TelegramBrandIcon className="size-4" /></span>
+              База промптов
+            </a>
+            <a href={INSTAGRAM_URL} {...externalLinkProps} className="inline-flex items-center gap-2 transition-colors hover:text-foreground">
+              <span className="grid size-7 place-items-center rounded-lg bg-[radial-gradient(circle_at_30%_107%,#fdf497_0%,#fd5949_45%,#d6249f_60%,#285AEB_90%)] text-white"><InstagramBrandIcon className="size-4" /></span>
+              Instagram
+            </a>
           </nav>
         </div>
       </footer>
