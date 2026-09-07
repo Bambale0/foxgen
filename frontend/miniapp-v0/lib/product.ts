@@ -12,11 +12,11 @@ type ProductConfig = {
   instagramUrl: string
 }
 
-const MINIAPP_BASE_PATH = String(process.env.NEXT_PUBLIC_MINIAPP_BASE_PATH || '/mini-app')
+export const MINIAPP_BASE_PATH = String(process.env.NEXT_PUBLIC_MINIAPP_BASE_PATH || '/mini-app')
   .trim()
   .replace(/\/$/, '')
 
-const TELEGRAM_BOT_USERNAME = String(
+export const TELEGRAM_BOT_USERNAME = String(
   process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME || 'AlePolbot',
 )
   .trim()
@@ -34,7 +34,7 @@ const INSTAGRAM_USERNAME = String(
   .trim()
   .replace(/^@/, '')
 
-const TELEGRAM_START_PARAM = String(
+export const TELEGRAM_START_PARAM = String(
   process.env.NEXT_PUBLIC_TELEGRAM_START_PARAM || 'ref_M9SHFF25',
 ).trim()
 
@@ -74,7 +74,7 @@ const HAPPYFOX_PRODUCT: ProductConfig = {
   brandName: 'HappyFox',
   brandDescription:
     'HappyFox — AI-студия в Telegram для генерации и редактирования фото, видео, музыки и другого контента с помощью нейросетей.',
-  brandLogo: `${MINIAPP_BASE_PATH}/happyfox-icon.webp`,
+  brandLogo: `${MINIAPP_BASE_PATH}/happyfox-brand.webp`,
   siteLogo: `${MINIAPP_BASE_PATH}/happyfox-brand.webp`,
   publicSiteUrl: PUBLIC_SITE_URL,
   telegramAppUrl: `https://t.me/${TELEGRAM_BOT_USERNAME}?start=${encodeURIComponent(TELEGRAM_START_PARAM)}`,

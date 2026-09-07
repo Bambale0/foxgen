@@ -15,14 +15,14 @@ export function HeroHeader() {
       <div className="mx-auto w-full max-w-[1180px]">
         <div className="glass-strong flex items-center justify-between gap-3 rounded-2xl border border-white/[0.07] px-3 py-2.5 shadow-[0_12px_42px_rgba(0,0,0,0.3)]">
           <div className="flex min-w-0 items-center gap-2.5">
-            <div className="relative h-9 w-9 shrink-0 overflow-hidden rounded-xl border border-gold/35 bg-gold/10 shadow-[0_0_24px_rgba(255,106,0,0.12)]">
+            <div className="relative h-10 w-10 shrink-0">
               <Image
                 src={BRAND_LOGO}
                 alt={`${BRAND_NAME} logo`}
                 fill
                 priority
-                sizes="36px"
-                className="object-cover"
+                sizes="40px"
+                className="object-contain"
               />
             </div>
             <div className="min-w-0">

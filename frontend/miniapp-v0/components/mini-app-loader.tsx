@@ -25,14 +25,14 @@ export function MiniAppLoader() {
             <div className="absolute inset-0 rounded-full border border-gold/15 shadow-[0_0_44px_rgba(255,106,0,0.12)]" />
             <div className="absolute inset-2 rounded-full border border-dashed border-gold/25" />
             <div className="absolute inset-0 animate-spin rounded-full border-2 border-transparent border-r-gold/40 border-t-gold" />
-            <div className="relative h-16 w-16 overflow-hidden rounded-full border border-gold/30 bg-gold/10 shadow-[0_0_28px_rgba(255,106,0,0.14)]">
+            <div className="relative h-16 w-16">
               <Image
                 src={BRAND_LOGO}
                 alt={`${BRAND_NAME} logo`}
                 fill
                 priority
                 sizes="64px"
-                className="object-cover"
+                className="object-contain"
               />
             </div>
           </div>
