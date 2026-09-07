@@ -8,6 +8,7 @@ import {
   buildTelegramBotUrl,
   isReferralStartParam,
   REFERRAL_STORAGE_KEY,
+  resolveExplicitLandingStartParam,
   resolveLandingStartParam,
 } from '@/lib/referral-links'
 
@@ -40,14 +41,17 @@ export function ReferralAwareLink({
       storedReferral = window.localStorage.getItem(REFERRAL_STORAGE_KEY) || ''
     } catch {}
 
-    const startParam = resolveLandingStartParam(
-      new URLSearchParams(window.location.search),
-      storedReferral,
-    )
+    const params = new URLSearchParams(window.location.search)
+    const explicitStartParam = resolveExplicitLandingStartParam(params)
+    const startParam = resolveLandingStartParam(params, storedReferral)
 
-    if (isReferralStartParam(startParam)) {
+    if (isReferralStartParam(explicitStartParam)) {
       try {
-        window.localStorage.setItem(REFERRAL_STORAGE_KEY, startParam)
+        window.localStorage.setItem(REFERRAL_STORAGE_KEY, explicitStartParam)
+      } catch {}
+    } else if (storedReferral && startParam !== storedReferral) {
+      try {
+        window.localStorage.removeItem(REFERRAL_STORAGE_KEY)
       } catch {}
     }
 
