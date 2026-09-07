@@ -34,6 +34,10 @@ const INSTAGRAM_USERNAME = String(
   .trim()
   .replace(/^@/, '')
 
+const TELEGRAM_START_PARAM = String(
+  process.env.NEXT_PUBLIC_TELEGRAM_START_PARAM || 'ref_M9SHFF25',
+).trim()
+
 const PUBLIC_SITE_URL = String(
   process.env.NEXT_PUBLIC_PUBLIC_SITE_URL || 'https://happy-fox.online',
 )
@@ -50,6 +54,10 @@ if (!/^[A-Za-z0-9_]+$/.test(TELEGRAM_CHANNEL_USERNAME)) {
 
 if (!/^[A-Za-z0-9._]+$/.test(INSTAGRAM_USERNAME)) {
   throw new Error('NEXT_PUBLIC_INSTAGRAM_USERNAME must be a valid Instagram username')
+}
+
+if (!/^[A-Za-z0-9_-]{1,64}$/.test(TELEGRAM_START_PARAM)) {
+  throw new Error('NEXT_PUBLIC_TELEGRAM_START_PARAM must be a valid Telegram start parameter')
 }
 
 try {
@@ -69,7 +77,7 @@ const HAPPYFOX_PRODUCT: ProductConfig = {
   brandLogo: `${MINIAPP_BASE_PATH}/happyfox-icon.webp`,
   siteLogo: `${MINIAPP_BASE_PATH}/happyfox-brand.webp`,
   publicSiteUrl: PUBLIC_SITE_URL,
-  telegramAppUrl: `https://t.me/${TELEGRAM_BOT_USERNAME}`,
+  telegramAppUrl: `https://t.me/${TELEGRAM_BOT_USERNAME}?start=${encodeURIComponent(TELEGRAM_START_PARAM)}`,
   telegramChannelUrl: `https://t.me/${TELEGRAM_CHANNEL_USERNAME}`,
   instagramUrl: `https://www.instagram.com/${INSTAGRAM_USERNAME}/`,
 }

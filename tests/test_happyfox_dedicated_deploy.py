@@ -23,6 +23,12 @@ def test_dedicated_deploy_pins_three_public_origins_and_runtime_db() -> None:
     assert 'gh api "repos/${GITHUB_REPO}/commits/main" --jq .sha' in deploy
     assert "gh auth status -h github.com" in deploy
     assert '"$API_ORIGIN/yookassa/webhook"' in deploy
+    assert '/var/www/happyfox-landing/mini-app/${seo_file}' in deploy
+    assert '/var/www/happyfox-landing/${seo_file}' in deploy
+    assert '$LANDING_ORIGIN/robots.txt' in deploy
+    assert '$LANDING_ORIGIN/sitemap.xml' in deploy
+    assert 'Sitemap: ${LANDING_ORIGIN}/sitemap.xml' in deploy
+    assert '<loc>${LANDING_ORIGIN}/</loc>' in deploy
     assert "backup_db.sh" in deploy
 
 
