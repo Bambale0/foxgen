@@ -6,6 +6,7 @@ import {
 } from './product'
 
 const START_PARAM_RE = /^[A-Za-z0-9_-]{1,64}$/
+const LEGACY_DEFAULT_REFERRALS = new Set(['ref_M9SHFF25'])
 export const REFERRAL_STORAGE_KEY = 'happyfox_ref_start_param'
 
 export function normalizeStartParam(raw: string | null | undefined): string {
@@ -24,20 +25,24 @@ function normalizeRefCode(raw: string | null | undefined): string {
   return `ref_${value.toUpperCase()}`
 }
 
-export function resolveLandingStartParam(
-  params: URLSearchParams,
-  storedReferral = '',
-): string {
+export function resolveExplicitLandingStartParam(params: URLSearchParams): string {
   for (const key of ['startapp', 'start']) {
     const direct = normalizeStartParam(params.get(key))
     if (direct) return direct
   }
 
-  const referral = normalizeRefCode(params.get('ref'))
-  if (referral) return referral
+  return normalizeRefCode(params.get('ref'))
+}
+
+export function resolveLandingStartParam(
+  params: URLSearchParams,
+  storedReferral = '',
+): string {
+  const explicit = resolveExplicitLandingStartParam(params)
+  if (explicit) return explicit
 
   const stored = normalizeStartParam(storedReferral)
-  if (stored.startsWith('ref_')) return stored
+  if (stored.startsWith('ref_') && !LEGACY_DEFAULT_REFERRALS.has(stored)) return stored
 
   return TELEGRAM_START_PARAM
 }
