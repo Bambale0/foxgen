@@ -9,7 +9,9 @@ describe('landing referral links', () => {
   it('uses the configured referral when the landing has no attribution query', () => {
     expect(resolveLandingStartParam(new URLSearchParams())).toBe('ref_M9SHFF25')
     expect(buildTelegramBotUrl()).toBe('https://t.me/AlePolbot?start=ref_M9SHFF25')
-    expect(buildBrowserMiniAppUrl()).toBe('/mini-app/?startapp=ref_M9SHFF25')
+    expect(buildBrowserMiniAppUrl()).toBe(
+      'https://app.happy-fox.online/mini-app/?startapp=ref_M9SHFF25',
+    )
   })
 
   it('preserves direct start and startapp contracts before plain ref', () => {
@@ -26,5 +28,11 @@ describe('landing referral links', () => {
   it('falls back to a persisted referral only when no explicit query is present', () => {
     expect(resolveLandingStartParam(new URLSearchParams(), 'ref_saved7')).toBe('ref_SAVED7')
     expect(resolveLandingStartParam(new URLSearchParams('ref=fresh8'), 'ref_saved7')).toBe('ref_FRESH8')
+  })
+
+  it('keeps the referral when the website button crosses to the app domain', () => {
+    expect(buildBrowserMiniAppUrl('ref_partner42')).toBe(
+      'https://app.happy-fox.online/mini-app/?startapp=ref_PARTNER42',
+    )
   })
 })
