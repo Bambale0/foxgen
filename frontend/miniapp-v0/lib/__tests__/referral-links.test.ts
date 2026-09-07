@@ -2,6 +2,7 @@ import {
   buildBrowserMiniAppUrl,
   buildTelegramBotUrl,
   normalizeStartParam,
+  resolveExplicitLandingStartParam,
   resolveLandingStartParam,
 } from '@/lib/referral-links'
 
@@ -21,13 +22,18 @@ describe('landing referral links', () => {
 
   it('normalizes ref query codes and rejects malformed start parameters', () => {
     expect(resolveLandingStartParam(new URLSearchParams('ref=partner7'))).toBe('ref_PARTNER7')
+    expect(resolveExplicitLandingStartParam(new URLSearchParams('ref=partner7'))).toBe('ref_PARTNER7')
     expect(normalizeStartParam('ref_partner7')).toBe('ref_PARTNER7')
     expect(normalizeStartParam('bad value with spaces')).toBe('')
   })
 
-  it('falls back to a persisted referral only when no explicit query is present', () => {
+  it('falls back to a persisted real referral only when no explicit query is present', () => {
     expect(resolveLandingStartParam(new URLSearchParams(), 'ref_saved7')).toBe('ref_SAVED7')
     expect(resolveLandingStartParam(new URLSearchParams('ref=fresh8'), 'ref_saved7')).toBe('ref_FRESH8')
+  })
+
+  it('ignores the previous site default cached as if it were a partner referral', () => {
+    expect(resolveLandingStartParam(new URLSearchParams(), 'ref_M9SHFF25')).toBe('ref_AZLRXW6L')
   })
 
   it('keeps the referral when the website button crosses to the app domain', () => {
