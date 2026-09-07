@@ -104,6 +104,21 @@ describe('HappyFox landing', () => {
     expect(screen.queryByText('https://t.me/AlePolbot?start=ref_PARTNER42')).not.toBeInTheDocument()
   })
 
+  it('migrates the previous default referral cached in the browser', async () => {
+    window.localStorage.setItem('happyfox_ref_start_param', 'ref_M9SHFF25')
+    const { container } = render(<LandingPage />)
+
+    await waitFor(() => {
+      const botLinks = Array.from(container.querySelectorAll('[data-referral-link="bot"]'))
+      const webLinks = Array.from(container.querySelectorAll('[data-referral-link="web"]'))
+
+      expect(botLinks.every((link) => link.getAttribute('href') === 'https://t.me/AlePolbot?start=ref_AZLRXW6L')).toBe(true)
+      expect(webLinks.every((link) => link.getAttribute('href') === 'https://app.happy-fox.online/mini-app/?startapp=ref_AZLRXW6L')).toBe(true)
+    })
+
+    expect(window.localStorage.getItem('happyfox_ref_start_param')).toBeNull()
+  })
+
   it('keeps the public surface on the HappyFox brand', () => {
     render(<LandingPage />)
 
