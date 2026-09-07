@@ -22,7 +22,7 @@ describe('HappyFox landing', () => {
     ).toBeInTheDocument()
 
     const telegramLinks = screen.getAllByRole('link').filter((link) =>
-      link.getAttribute('href') === 'https://t.me/AlePolbot',
+      link.getAttribute('href') === 'https://t.me/AlePolbot?start=ref_M9SHFF25',
     )
     expect(telegramLinks.length).toBeGreaterThanOrEqual(4)
     for (const link of telegramLinks) {
@@ -33,7 +33,7 @@ describe('HappyFox landing', () => {
 
     expect(
       screen.getByRole('link', { name: 'Открыть HappyFox в Telegram из демо' }),
-    ).toHaveAttribute('href', 'https://t.me/AlePolbot')
+    ).toHaveAttribute('href', 'https://t.me/AlePolbot?start=ref_M9SHFF25')
 
     expect(
       screen.getAllByRole('link').some((link) =>
@@ -45,6 +45,16 @@ describe('HappyFox landing', () => {
         link.getAttribute('href') === 'https://www.instagram.com/polyakovaall/',
       ),
     ).toBe(true)
+
+    expect(screen.queryByText('https://t.me/AlePolbot?start=ref_M9SHFF25')).not.toBeInTheDocument()
+    expect(container.querySelectorAll('[data-brand-icon="telegram"]').length).toBeGreaterThanOrEqual(4)
+    expect(container.querySelectorAll('[data-brand-icon="instagram"]').length).toBeGreaterThanOrEqual(2)
+
+    expect(screen.getByRole('link', { name: /Смотреть работы/i })).toHaveAttribute(
+      'href',
+      'https://www.instagram.com/polyakovaall/',
+    )
+    expect(screen.getAllByText('База промптов').length).toBeGreaterThanOrEqual(1)
 
     expect(
       container.querySelector('img[src="/mini-app/happyfox-brand.webp"]'),
