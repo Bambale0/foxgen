@@ -196,6 +196,15 @@ trap - EXIT
 find /var/www/happyfox-app /var/www/happyfox-landing -type d -exec chmod 0755 {} +
 find /var/www/happyfox-app /var/www/happyfox-landing -type f -exec chmod 0644 {} +
 
+# The public landing is served from the domain root, while Next exports metadata
+# routes under /mini-app. Publish canonical crawl artifacts at the actual public
+# URLs so nginx serves text/XML instead of falling back to landing HTML.
+for seo_file in robots.txt sitemap.xml; do
+  source_file="/var/www/happyfox-landing/mini-app/${seo_file}"
+  [[ -s "$source_file" ]] || { echo "Missing HappyFox SEO artifact: $source_file" >&2; exit 1; }
+  install -m 0644 "$source_file" "/var/www/happyfox-landing/${seo_file}"
+done
+
 [[ "$(tr -d '\r\n' </var/www/happyfox-app/mini-app/revision.txt)" == "$EXPECTED_SHA" ]]
 nginx -t
 systemctl reload nginx
@@ -204,6 +213,16 @@ curl -fsS --retry 8 --retry-delay 2 --retry-all-errors --max-time 20 "$API_ORIGI
 live_revision="$(curl -fsS --retry 8 --retry-delay 2 --retry-all-errors --max-time 20 "$APP_ORIGIN/mini-app/revision.txt?revision=$EXPECTED_SHA")"
 [[ "$live_revision" == "$EXPECTED_SHA" ]]
 curl -fsS --retry 5 --retry-delay 2 --retry-all-errors --max-time 20 "$LANDING_ORIGIN/" | grep -Fq 'https://t.me/'
+robots_body="$(curl -fsS --retry 5 --retry-delay 2 --retry-all-errors --max-time 20 "$LANDING_ORIGIN/robots.txt")"
+grep -Fq "Sitemap: ${LANDING_ORIGIN}/sitemap.xml" <<<"$robots_body" || {
+  echo "HappyFox public robots.txt is missing canonical sitemap directive" >&2
+  exit 1
+}
+sitemap_body="$(curl -fsS --retry 5 --retry-delay 2 --retry-all-errors --max-time 20 "$LANDING_ORIGIN/sitemap.xml")"
+grep -Fq "<loc>${LANDING_ORIGIN}/</loc>" <<<"$sitemap_body" || {
+  echo "HappyFox public sitemap.xml is not the canonical XML sitemap" >&2
+  exit 1
+}
 
 bootstrap_status="$(curl -sS -o /dev/null -w '%{http_code}' -X POST --max-time 20 \
   -H 'Content-Type: application/json' -d '{}' "$APP_ORIGIN/mini-app/api/bootstrap" || true)"
