@@ -7,10 +7,10 @@ import {
 
 describe('landing referral links', () => {
   it('uses the configured referral when the landing has no attribution query', () => {
-    expect(resolveLandingStartParam(new URLSearchParams())).toBe('ref_M9SHFF25')
-    expect(buildTelegramBotUrl()).toBe('https://t.me/AlePolbot?start=ref_M9SHFF25')
+    expect(resolveLandingStartParam(new URLSearchParams())).toBe('ref_AZLRXW6L')
+    expect(buildTelegramBotUrl()).toBe('https://t.me/AlePolbot?start=ref_AZLRXW6L')
     expect(buildBrowserMiniAppUrl()).toBe(
-      'https://app.happy-fox.online/mini-app/?startapp=ref_M9SHFF25',
+      'https://app.happy-fox.online/mini-app/?startapp=ref_AZLRXW6L',
     )
   })
 
