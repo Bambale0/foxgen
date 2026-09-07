@@ -1,7 +1,9 @@
 import {
   buildBrowserMiniAppUrl,
   buildTelegramBotUrl,
+  isLegacyDefaultReferral,
   normalizeStartParam,
+  resolveExplicitLandingStartParam,
   resolveLandingStartParam,
 } from '@/lib/referral-links'
 
@@ -15,8 +17,14 @@ describe('landing referral links', () => {
   })
 
   it('preserves direct start and startapp contracts before plain ref', () => {
-    expect(resolveLandingStartParam(new URLSearchParams('startapp=feed_42_ref_partner7&ref=ignored'))).toBe('feed_42_ref_partner7')
-    expect(resolveLandingStartParam(new URLSearchParams('start=ref_partner7&ref=ignored'))).toBe('ref_PARTNER7')
+    expect(
+      resolveLandingStartParam(
+        new URLSearchParams('startapp=feed_42_ref_partner7&ref=ignored'),
+      ),
+    ).toBe('feed_42_ref_partner7')
+    expect(
+      resolveLandingStartParam(new URLSearchParams('start=ref_partner7&ref=ignored')),
+    ).toBe('ref_PARTNER7')
   })
 
   it('normalizes ref query codes and rejects malformed start parameters', () => {
@@ -27,7 +35,23 @@ describe('landing referral links', () => {
 
   it('falls back to a persisted referral only when no explicit query is present', () => {
     expect(resolveLandingStartParam(new URLSearchParams(), 'ref_saved7')).toBe('ref_SAVED7')
-    expect(resolveLandingStartParam(new URLSearchParams('ref=fresh8'), 'ref_saved7')).toBe('ref_FRESH8')
+    expect(resolveLandingStartParam(new URLSearchParams('ref=fresh8'), 'ref_saved7')).toBe(
+      'ref_FRESH8',
+    )
+  })
+
+  it('ignores the former site default when it is still persisted in the browser', () => {
+    expect(isLegacyDefaultReferral('ref_M9SHFF25')).toBe(true)
+    expect(resolveLandingStartParam(new URLSearchParams(), 'ref_M9SHFF25')).toBe(
+      'ref_AZLRXW6L',
+    )
+  })
+
+  it('separates explicit attribution from the configured default', () => {
+    expect(resolveExplicitLandingStartParam(new URLSearchParams())).toBe('')
+    expect(resolveExplicitLandingStartParam(new URLSearchParams('ref=partner42'))).toBe(
+      'ref_PARTNER42',
+    )
   })
 
   it('keeps the referral when the website button crosses to the app domain', () => {
