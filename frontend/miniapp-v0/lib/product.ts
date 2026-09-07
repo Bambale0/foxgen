@@ -41,7 +41,7 @@ const INSTAGRAM_USERNAME = String(
   .replace(/^@/, '')
 
 export const TELEGRAM_START_PARAM = String(
-  process.env.NEXT_PUBLIC_TELEGRAM_START_PARAM || 'ref_M9SHFF25',
+  process.env.NEXT_PUBLIC_TELEGRAM_START_PARAM || 'ref_AZLRXW6L',
 ).trim()
 
 const PUBLIC_SITE_URL = String(
