@@ -1,5 +1,6 @@
 import {
   MINIAPP_BASE_PATH,
+  MINIAPP_PUBLIC_ORIGIN,
   TELEGRAM_BOT_USERNAME,
   TELEGRAM_START_PARAM,
 } from './product'
@@ -48,7 +49,7 @@ export function buildTelegramBotUrl(startParam = TELEGRAM_START_PARAM): string {
 
 export function buildBrowserMiniAppUrl(startParam = TELEGRAM_START_PARAM): string {
   const normalized = normalizeStartParam(startParam) || TELEGRAM_START_PARAM
-  return `${MINIAPP_BASE_PATH}/?startapp=${encodeURIComponent(normalized)}`
+  return `${MINIAPP_PUBLIC_ORIGIN}${MINIAPP_BASE_PATH}/?startapp=${encodeURIComponent(normalized)}`
 }
 
 export function isReferralStartParam(startParam: string): boolean {
