@@ -21,6 +21,7 @@ import {
   TELEGRAM_APP_URL,
   TELEGRAM_CHANNEL_URL,
 } from '@/lib/brand'
+import { ReferralAwareLink } from '@/components/landing-referral-link'
 
 const SEO_TITLE = 'HappyFox — нейросеть для фото, видео и музыки в Telegram'
 const SEO_DESCRIPTION =
@@ -141,11 +142,6 @@ const externalLinkProps = {
   rel: 'noopener noreferrer',
 } as const
 
-const telegramLinkProps = {
-  href: TELEGRAM_APP_URL,
-  ...externalLinkProps,
-} as const
-
 function TelegramBrandIcon({ className = 'size-5' }: { className?: string }) {
   return (
     <svg
@@ -225,8 +221,8 @@ export default function LandingPage() {
       />
 
       <header className="relative z-10 mx-auto flex w-full max-w-6xl items-center justify-between px-4 py-5 sm:px-6 lg:px-8">
-        <a
-          {...telegramLinkProps}
+        <ReferralAwareLink
+          kind="bot"
           className="flex items-center gap-3"
           aria-label={`${BRAND_NAME} — открыть бота в Telegram`}
         >
@@ -240,22 +236,23 @@ export default function LandingPage() {
               className="object-contain"
             />
           </span>
-        </a>
+        </ReferralAwareLink>
 
         <nav className="hidden items-center gap-7 text-sm text-muted-foreground md:flex" aria-label="Основная навигация">
           <a href="#scenarios" className="transition-colors hover:text-foreground">Сценарии</a>
           <a href="#features" className="transition-colors hover:text-foreground">Возможности</a>
           <a href="#how" className="transition-colors hover:text-foreground">Как работает</a>
           <a href="#examples" className="transition-colors hover:text-foreground">Примеры</a>
+          <ReferralAwareLink kind="web" className="font-semibold text-primary transition-colors hover:text-primary/80">Попробовать</ReferralAwareLink>
         </nav>
 
-        <a
-          {...telegramLinkProps}
+        <ReferralAwareLink
+          kind="web"
           className="inline-flex min-h-10 items-center justify-center rounded-xl border border-primary/35 bg-primary px-4 text-sm font-semibold text-primary-foreground shadow-[0_10px_30px_rgba(255,106,0,0.18)] transition-transform hover:-translate-y-0.5"
         >
-          <TelegramBrandIcon className="mr-2 size-4" />
+          <Sparkles className="mr-2 size-4" aria-hidden="true" />
           Попробовать
-        </a>
+        </ReferralAwareLink>
       </header>
 
       <section className="relative z-10 mx-auto grid w-full max-w-6xl gap-12 px-4 pb-20 pt-12 sm:px-6 sm:pt-20 lg:grid-cols-[1.05fr_0.95fr] lg:items-center lg:px-8 lg:pb-28 lg:pt-24">
@@ -275,14 +272,14 @@ export default function LandingPage() {
           </p>
 
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-            <a
-              {...telegramLinkProps}
+            <ReferralAwareLink
+              kind="bot"
               className="inline-flex min-h-12 items-center justify-center rounded-2xl bg-primary px-6 font-semibold text-primary-foreground shadow-[0_16px_50px_rgba(255,106,0,0.22)] transition-transform hover:-translate-y-0.5"
             >
               <TelegramBrandIcon className="mr-2 size-5" />
               Создать в Telegram
               <ArrowRight className="ml-2 size-4" aria-hidden="true" />
-            </a>
+            </ReferralAwareLink>
             <a
               href={INSTAGRAM_URL}
               {...externalLinkProps}
@@ -307,9 +304,9 @@ export default function LandingPage() {
 
         <div className="relative mx-auto w-full max-w-[31rem] lg:justify-self-end">
           <div aria-hidden="true" className="absolute -inset-8 rounded-[3rem] bg-primary/10 blur-3xl" />
-          <a
-            {...telegramLinkProps}
-            aria-label="Открыть HappyFox в Telegram из демо"
+          <ReferralAwareLink
+            kind="web"
+            aria-label="Попробовать HappyFox на сайте из демо"
             className="relative block rounded-[2rem] border border-border/70 bg-card/80 p-3 shadow-[0_28px_90px_rgba(0,0,0,0.45)] backdrop-blur-xl transition-transform hover:-translate-y-1"
           >
             <div className="rounded-[1.55rem] border border-border/60 bg-background/90 p-4">
@@ -356,7 +353,7 @@ export default function LandingPage() {
                 </div>
               </div>
             </div>
-          </a>
+          </ReferralAwareLink>
         </div>
       </section>
 
@@ -478,14 +475,14 @@ export default function LandingPage() {
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">Начать</p>
           <h2 className="mx-auto mt-3 max-w-3xl font-serif text-4xl font-semibold tracking-[-0.035em] sm:text-5xl">Есть идея или фото? Отправьте его HappyFox</h2>
           <p className="mx-auto mt-4 max-w-xl text-base leading-7 text-muted-foreground">Откройте бота, выберите нужный сценарий и переходите сразу к созданию.</p>
-          <a
-            {...telegramLinkProps}
+          <ReferralAwareLink
+            kind="bot"
             className="mt-7 inline-flex min-h-12 items-center justify-center rounded-2xl bg-primary px-7 font-semibold text-primary-foreground shadow-[0_16px_50px_rgba(255,106,0,0.22)] transition-transform hover:-translate-y-0.5"
           >
             <TelegramBrandIcon className="mr-2 size-5" />
             Открыть HappyFox в Telegram
             <ArrowRight className="ml-2 size-4" aria-hidden="true" />
-          </a>
+          </ReferralAwareLink>
         </div>
       </section>
 
@@ -496,10 +493,10 @@ export default function LandingPage() {
             <span className="ml-3 hidden sm:inline">AI-студия для фото, видео и музыки в Telegram</span>
           </div>
           <nav className="flex flex-wrap gap-x-5 gap-y-3" aria-label="Социальные ссылки">
-            <a href={TELEGRAM_APP_URL} {...externalLinkProps} className="inline-flex items-center gap-2 transition-colors hover:text-foreground">
+            <ReferralAwareLink kind="bot" className="inline-flex items-center gap-2 transition-colors hover:text-foreground">
               <span className="grid size-7 place-items-center rounded-lg bg-[#229ED9] text-white"><TelegramBrandIcon className="size-4" /></span>
               Telegram-бот
-            </a>
+            </ReferralAwareLink>
             <a href={TELEGRAM_CHANNEL_URL} {...externalLinkProps} className="inline-flex items-center gap-2 transition-colors hover:text-foreground">
               <span className="grid size-7 place-items-center rounded-lg bg-[#229ED9] text-white"><TelegramBrandIcon className="size-4" /></span>
               База промптов
