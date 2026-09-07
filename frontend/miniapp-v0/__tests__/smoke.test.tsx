@@ -13,7 +13,7 @@ describe('HappyFox Mini App smoke contracts', () => {
   it('is pinned to the HappyFox product identity', () => {
     expect(PRODUCT.id).toBe('happyfox')
     expect(PRODUCT.brandName).toBe('HappyFox')
-    expect(PRODUCT.telegramAppUrl).toMatch(/^https:\/\/t\.me\/[A-Za-z0-9_]+$/)
+    expect(PRODUCT.telegramAppUrl).toBe('https://t.me/AlePolbot?start=ref_M9SHFF25')
   })
 
   it('keeps Tailwind class merging deterministic', () => {
