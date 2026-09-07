@@ -5,78 +5,203 @@ import {
   AudioLines,
   Check,
   Image as ImageGlyph,
+  Instagram,
   Layers3,
+  Send,
   Sparkles,
   Video,
   WandSparkles,
 } from 'lucide-react'
 
-import { BRAND_DESCRIPTION, BRAND_LOGO, BRAND_NAME, BRAND_SITE_LOGO, TELEGRAM_APP_URL } from '@/lib/brand'
+import {
+  BRAND_DESCRIPTION,
+  BRAND_LOGO,
+  BRAND_NAME,
+  BRAND_PUBLIC_SITE_URL,
+  BRAND_SITE_LOGO,
+  INSTAGRAM_URL,
+  TELEGRAM_APP_URL,
+  TELEGRAM_CHANNEL_URL,
+} from '@/lib/brand'
+
+const SEO_TITLE = 'HappyFox — нейросеть для фото, видео и музыки в Telegram'
+const SEO_DESCRIPTION =
+  'Создавайте и редактируйте фото, оживляйте изображения, генерируйте видео и музыку с AI прямо в Telegram. HappyFox объединяет нейросети в одном понятном боте.'
 
 export const metadata: Metadata = {
-  title: `${BRAND_NAME} — AI-контент в Telegram`,
-  description: BRAND_DESCRIPTION,
+  metadataBase: new URL(BRAND_PUBLIC_SITE_URL),
+  title: SEO_TITLE,
+  description: SEO_DESCRIPTION,
+  applicationName: BRAND_NAME,
+  category: 'technology',
+  alternates: {
+    canonical: '/',
+  },
+  keywords: [
+    'нейросеть для фото',
+    'генерация видео из фото',
+    'AI фотосессия',
+    'редактирование фото нейросетью',
+    'создать видео нейросетью',
+    'нейросеть Telegram',
+    'AI бот Telegram',
+    'генерация музыки AI',
+  ],
+  openGraph: {
+    type: 'website',
+    locale: 'ru_RU',
+    url: '/',
+    siteName: BRAND_NAME,
+    title: SEO_TITLE,
+    description: SEO_DESCRIPTION,
+    images: [
+      {
+        url: BRAND_SITE_LOGO,
+        alt: `${BRAND_NAME} — AI-студия в Telegram`,
+      },
+    ],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: SEO_TITLE,
+    description: SEO_DESCRIPTION,
+    images: [BRAND_SITE_LOGO],
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      'max-image-preview': 'large',
+      'max-snippet': -1,
+      'max-video-preview': -1,
+    },
+  },
 }
 
 const capabilities = [
   {
     title: 'Фото',
-    description: 'Создание и редактирование изображений по идее или референсу.',
+    description: 'Нейрофотосессии, замена фона, образа и деталей, генерация и редактирование по референсу.',
     icon: ImageGlyph,
   },
   {
     title: 'Видео',
-    description: 'Генерация роликов из текста и фото в одном понятном сценарии.',
+    description: 'Видео по тексту или фото: от короткой анимации до полноценного AI-ролика.',
     icon: Video,
   },
   {
     title: 'Музыка',
-    description: 'Треки и аудио без переходов между разными сервисами.',
+    description: 'Создание треков и аудио без переходов между разными сервисами.',
     icon: AudioLines,
   },
   {
-    title: 'AI-сервисы',
-    description: 'Промпты, аватары, оживление фото и другие инструменты рядом.',
+    title: 'AI-инструменты',
+    description: 'Промпты, оживление фото, аватары и другие готовые сценарии в одном интерфейсе.',
     icon: WandSparkles,
   },
 ]
 
+const scenarios = [
+  {
+    eyebrow: 'AI-фотосессия',
+    title: 'Новый образ из обычного фото',
+    description: 'Загрузите снимок и получите серию изображений в нужном стиле без студии и сложного промптинга.',
+  },
+  {
+    eyebrow: 'Редактирование фото',
+    title: 'Изменить волосы, одежду или фон',
+    description: 'Напишите, что поменять: например, сделать волосы светлыми, заменить образ или перенести сцену в другое место.',
+  },
+  {
+    eyebrow: 'Фото → видео',
+    title: 'Оживить изображение',
+    description: 'Добавьте движение, атмосферу и камеру. HappyFox проведёт фото через подходящий видео-сценарий.',
+  },
+  {
+    eyebrow: 'Текст → видео',
+    title: 'Создать ролик с нуля',
+    description: 'Опишите сцену обычными словами и получите AI-видео без монтажа в нескольких приложениях.',
+  },
+]
+
 const steps = [
-  ['1', 'Выбери задачу', 'Фото, видео, музыка или готовый AI-инструмент.'],
-  ['2', 'Опиши идею', 'Добавь промпт и, если нужно, загрузи референс.'],
-  ['3', 'Получи результат', 'HappyFox ведёт генерацию до готового контента в Telegram.'],
+  ['1', 'Выберите задачу', 'Фото, видео, музыка или готовый AI-инструмент.'],
+  ['2', 'Опишите результат', 'Напишите идею и при необходимости добавьте своё фото или референс.'],
+  ['3', 'Получите готовый файл', 'HappyFox ведёт генерацию до результата и возвращает его прямо в Telegram.'],
 ]
 
 const highlights = [
-  'Фото и видео в одном интерфейсе',
-  'Работа с референсами',
-  'Готовые сценарии без лишних настроек',
+  'Всё работает прямо в Telegram',
+  'Можно загружать свои фото и референсы',
+  'Понятные сценарии вместо десятка настроек',
 ]
+
+const externalLinkProps = {
+  target: '_blank',
+  rel: 'noopener noreferrer',
+} as const
 
 const telegramLinkProps = {
   href: TELEGRAM_APP_URL,
-  target: '_blank',
-  rel: 'noreferrer',
+  ...externalLinkProps,
 } as const
+
+const structuredData = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'WebSite',
+      '@id': `${BRAND_PUBLIC_SITE_URL}/#website`,
+      url: `${BRAND_PUBLIC_SITE_URL}/`,
+      name: BRAND_NAME,
+      description: SEO_DESCRIPTION,
+      inLanguage: 'ru-RU',
+    },
+    {
+      '@type': 'SoftwareApplication',
+      '@id': `${BRAND_PUBLIC_SITE_URL}/#app`,
+      name: BRAND_NAME,
+      description: BRAND_DESCRIPTION,
+      url: `${BRAND_PUBLIC_SITE_URL}/`,
+      applicationCategory: 'MultimediaApplication',
+      operatingSystem: 'Telegram',
+      image: `${BRAND_PUBLIC_SITE_URL}${BRAND_SITE_LOGO}`,
+      sameAs: [TELEGRAM_CHANNEL_URL, INSTAGRAM_URL],
+      potentialAction: {
+        '@type': 'UseAction',
+        target: TELEGRAM_APP_URL,
+      },
+    },
+  ],
+}
 
 export default function LandingPage() {
   return (
     <main className="relative min-h-screen overflow-hidden bg-background text-foreground">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(structuredData).replace(/</g, '\\u003c'),
+        }}
+      />
+
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-x-0 top-0 h-[38rem] bg-[radial-gradient(circle_at_50%_0%,rgba(255,106,0,0.18),transparent_58%)]"
+        className="pointer-events-none absolute inset-x-0 top-0 h-[42rem] bg-[radial-gradient(circle_at_50%_0%,rgba(255,106,0,0.2),transparent_58%)]"
       />
 
       <header className="relative z-10 mx-auto flex w-full max-w-6xl items-center justify-between px-4 py-5 sm:px-6 lg:px-8">
         <a
           {...telegramLinkProps}
           className="flex items-center gap-3"
-          aria-label={`${BRAND_NAME} — открыть приложение в Telegram`}
+          aria-label={`${BRAND_NAME} — открыть бота в Telegram`}
         >
           <span className="relative h-20 w-20 shrink-0 sm:h-24 sm:w-24">
             <Image
               src={BRAND_SITE_LOGO}
-              alt={`${BRAND_NAME} — AI Regeneration`}
+              alt={`${BRAND_NAME} — AI-студия в Telegram`}
               fill
               priority
               sizes="(min-width: 640px) 96px, 80px"
@@ -86,15 +211,17 @@ export default function LandingPage() {
         </a>
 
         <nav className="hidden items-center gap-7 text-sm text-muted-foreground md:flex" aria-label="Основная навигация">
+          <a href="#scenarios" className="transition-colors hover:text-foreground">Сценарии</a>
           <a href="#features" className="transition-colors hover:text-foreground">Возможности</a>
           <a href="#how" className="transition-colors hover:text-foreground">Как работает</a>
+          <a href="#examples" className="transition-colors hover:text-foreground">Примеры</a>
         </nav>
 
         <a
           {...telegramLinkProps}
           className="inline-flex min-h-10 items-center justify-center rounded-xl border border-primary/35 bg-primary px-4 text-sm font-semibold text-primary-foreground shadow-[0_10px_30px_rgba(255,106,0,0.18)] transition-transform hover:-translate-y-0.5"
         >
-          Открыть
+          Попробовать
           <ArrowRight className="ml-2 size-4" aria-hidden="true" />
         </a>
       </header>
@@ -103,16 +230,16 @@ export default function LandingPage() {
         <div className="max-w-2xl">
           <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-primary/25 bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary">
             <Sparkles className="size-3.5" aria-hidden="true" />
-            Всё для AI-контента в одном месте
+            AI-студия прямо в Telegram
           </div>
 
           <h1 className="max-w-3xl font-serif text-5xl font-semibold leading-[0.98] tracking-[-0.045em] sm:text-6xl lg:text-7xl">
-            Фото, видео и музыка —
-            <span className="text-primary"> в одном HappyFox</span>
+            Создавайте фото и видео
+            <span className="text-primary"> нейросетями без десятка сервисов</span>
           </h1>
 
           <p className="mt-6 max-w-xl text-base leading-7 text-muted-foreground sm:text-lg">
-            Опиши идею, добавь референс и выбери сценарий. HappyFox соберёт генерацию без лишних интерфейсов и вернёт готовый результат прямо в Telegram.
+            Нейрофотосессии, редактирование фото, оживление изображений, AI-видео и музыка — в одном понятном боте. Опишите идею обычными словами и получите результат в Telegram.
           </p>
 
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
@@ -120,14 +247,16 @@ export default function LandingPage() {
               {...telegramLinkProps}
               className="inline-flex min-h-12 items-center justify-center rounded-2xl bg-primary px-6 font-semibold text-primary-foreground shadow-[0_16px_50px_rgba(255,106,0,0.22)] transition-transform hover:-translate-y-0.5"
             >
-              Открыть HappyFox
+              Создать в Telegram
               <ArrowRight className="ml-2 size-4" aria-hidden="true" />
             </a>
             <a
-              href="#features"
+              href={TELEGRAM_CHANNEL_URL}
+              {...externalLinkProps}
               className="inline-flex min-h-12 items-center justify-center rounded-2xl border border-border bg-card/70 px-6 font-medium text-foreground backdrop-blur transition-colors hover:border-primary/35"
             >
-              Посмотреть возможности
+              Смотреть работы
+              <Send className="ml-2 size-4" aria-hidden="true" />
             </a>
           </div>
 
@@ -158,7 +287,7 @@ export default function LandingPage() {
                   </span>
                   <div>
                     <p className="font-serif font-semibold">{BRAND_NAME}</p>
-                    <p className="text-[10px] uppercase tracking-[0.16em] text-muted-foreground">Студия</p>
+                    <p className="text-[10px] uppercase tracking-[0.16em] text-muted-foreground">AI-студия</p>
                   </div>
                 </div>
                 <span className="rounded-full border border-primary/25 bg-primary/10 px-2.5 py-1 text-[10px] font-semibold text-primary">AI</span>
@@ -173,19 +302,19 @@ export default function LandingPage() {
               <div className="mt-3 rounded-2xl border border-border/70 bg-card/70 p-4">
                 <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
                   <Layers3 className="size-3.5 text-primary" aria-hidden="true" />
-                  Новая генерация
+                  Редактирование по фото
                 </div>
                 <div className="mt-3 min-h-24 rounded-xl border border-border/70 bg-background/70 p-3 text-sm leading-6 text-foreground/90">
-                  Кинематографичный портрет в мягком вечернем свете, детальная фактура, естественные цвета…
+                  Сделай волосы светлыми, сохрани лицо, естественный свет и реалистичную текстуру фотографии.
                 </div>
                 <div className="mt-3 grid grid-cols-2 gap-2">
                   <div className="rounded-xl border border-border/60 bg-background/55 p-3">
-                    <p className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">Формат</p>
-                    <p className="mt-1 text-sm font-medium">4:5</p>
+                    <p className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">Референс</p>
+                    <p className="mt-1 text-sm font-medium">1 фото</p>
                   </div>
                   <div className="rounded-xl border border-border/60 bg-background/55 p-3">
-                    <p className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">Качество</p>
-                    <p className="mt-1 text-sm font-medium">Высокое</p>
+                    <p className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">Результат</p>
+                    <p className="mt-1 text-sm font-medium">Высокое качество</p>
                   </div>
                 </div>
                 <div className="mt-3 flex min-h-11 items-center justify-center rounded-xl bg-primary font-semibold text-primary-foreground shadow-[0_10px_30px_rgba(255,106,0,0.16)]">
@@ -198,39 +327,59 @@ export default function LandingPage() {
         </div>
       </section>
 
-      <section id="features" className="relative z-10 border-y border-border/60 bg-card/25">
+      <section id="scenarios" className="relative z-10 border-y border-border/60 bg-card/25">
         <div className="mx-auto w-full max-w-6xl px-4 py-20 sm:px-6 lg:px-8 lg:py-24">
           <div className="max-w-2xl">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">Возможности</p>
-            <h2 className="mt-3 font-serif text-4xl font-semibold tracking-[-0.035em] sm:text-5xl">От идеи до готового контента</h2>
-            <p className="mt-4 text-base leading-7 text-muted-foreground">Один знакомый интерфейс вместо набора отдельных AI-сервисов.</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">Что можно сделать</p>
+            <h2 className="mt-3 font-serif text-4xl font-semibold tracking-[-0.035em] sm:text-5xl">Начните с результата, а не с выбора модели</h2>
+            <p className="mt-4 text-base leading-7 text-muted-foreground">
+              Выберите понятный сценарий. HappyFox сам оставляет техническую сложность нейросетей внутри.
+            </p>
           </div>
 
-          <div className="mt-10 grid gap-3 md:grid-cols-2 lg:grid-cols-4">
-            {capabilities.map(({ title, description, icon: Icon }) => (
-              <article key={title} className="group rounded-[1.5rem] border border-border/65 bg-background/65 p-5 shadow-sm backdrop-blur transition-colors hover:border-primary/35">
-                <span className="grid size-11 place-items-center rounded-2xl border border-primary/20 bg-primary/10 text-primary">
-                  <Icon className="size-5" aria-hidden="true" />
-                </span>
-                <h3 className="mt-6 font-serif text-2xl font-semibold">{title}</h3>
-                <p className="mt-2 text-sm leading-6 text-muted-foreground">{description}</p>
+          <div className="mt-10 grid gap-3 md:grid-cols-2">
+            {scenarios.map(({ eyebrow, title, description }) => (
+              <article key={title} className="rounded-[1.5rem] border border-border/65 bg-background/65 p-6 shadow-sm backdrop-blur transition-colors hover:border-primary/35">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">{eyebrow}</p>
+                <h3 className="mt-3 font-serif text-2xl font-semibold sm:text-3xl">{title}</h3>
+                <p className="mt-3 max-w-xl text-sm leading-6 text-muted-foreground">{description}</p>
               </article>
             ))}
           </div>
         </div>
       </section>
 
-      <section id="how" className="relative z-10 mx-auto w-full max-w-6xl px-4 py-20 sm:px-6 lg:px-8 lg:py-28">
-        <div className="grid gap-12 lg:grid-cols-[0.8fr_1.2fr] lg:items-start">
+      <section id="features" className="relative z-10 mx-auto w-full max-w-6xl px-4 py-20 sm:px-6 lg:px-8 lg:py-28">
+        <div className="max-w-2xl">
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">Возможности</p>
+          <h2 className="mt-3 font-serif text-4xl font-semibold tracking-[-0.035em] sm:text-5xl">Одна AI-студия для разного контента</h2>
+          <p className="mt-4 text-base leading-7 text-muted-foreground">Не нужно регистрироваться в нескольких нейросервисах и заново разбираться в каждом интерфейсе.</p>
+        </div>
+
+        <div className="mt-10 grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+          {capabilities.map(({ title, description, icon: Icon }) => (
+            <article key={title} className="group rounded-[1.5rem] border border-border/65 bg-card/55 p-5 shadow-sm backdrop-blur transition-colors hover:border-primary/35">
+              <span className="grid size-11 place-items-center rounded-2xl border border-primary/20 bg-primary/10 text-primary">
+                <Icon className="size-5" aria-hidden="true" />
+              </span>
+              <h3 className="mt-6 font-serif text-2xl font-semibold">{title}</h3>
+              <p className="mt-2 text-sm leading-6 text-muted-foreground">{description}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section id="how" className="relative z-10 border-y border-border/60 bg-card/25">
+        <div className="mx-auto grid w-full max-w-6xl gap-12 px-4 py-20 sm:px-6 lg:grid-cols-[0.8fr_1.2fr] lg:items-start lg:px-8 lg:py-24">
           <div className="max-w-xl">
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">Как это работает</p>
-            <h2 className="mt-3 font-serif text-4xl font-semibold tracking-[-0.035em] sm:text-5xl">Три шага — и можно создавать</h2>
-            <p className="mt-4 text-base leading-7 text-muted-foreground">HappyFox оставляет сложность моделей внутри и показывает только то, что нужно для результата.</p>
+            <h2 className="mt-3 font-serif text-4xl font-semibold tracking-[-0.035em] sm:text-5xl">Три шага до готового результата</h2>
+            <p className="mt-4 text-base leading-7 text-muted-foreground">Обычный Telegram, понятные действия и минимум технических терминов.</p>
           </div>
 
           <ol className="grid gap-3">
             {steps.map(([number, title, description]) => (
-              <li key={number} className="grid grid-cols-[auto_1fr] gap-4 rounded-[1.5rem] border border-border/65 bg-card/55 p-5">
+              <li key={number} className="grid grid-cols-[auto_1fr] gap-4 rounded-[1.5rem] border border-border/65 bg-background/65 p-5">
                 <span className="grid size-10 place-items-center rounded-2xl bg-primary text-sm font-bold text-primary-foreground">{number}</span>
                 <div>
                   <h3 className="font-serif text-xl font-semibold">{title}</h3>
@@ -242,29 +391,71 @@ export default function LandingPage() {
         </div>
       </section>
 
-      <section className="relative z-10 mx-auto w-full max-w-6xl px-4 pb-20 sm:px-6 lg:px-8 lg:pb-28">
+      <section id="examples" className="relative z-10 mx-auto w-full max-w-6xl px-4 py-20 sm:px-6 lg:px-8 lg:py-28">
         <div className="overflow-hidden rounded-[2rem] border border-primary/25 bg-[linear-gradient(135deg,rgba(255,106,0,0.15),rgba(20,20,20,0.88)_52%,rgba(255,106,0,0.06))] p-6 sm:p-10 lg:p-12">
-          <div className="grid gap-8 lg:grid-cols-[1fr_auto] lg:items-end">
+          <div className="grid gap-8 lg:grid-cols-[1fr_0.8fr] lg:items-end">
             <div className="max-w-2xl">
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">HappyFox</p>
-              <h2 className="mt-3 font-serif text-4xl font-semibold tracking-[-0.035em] sm:text-5xl">Твоя AI-студия уже внутри Telegram</h2>
-              <p className="mt-4 max-w-xl text-base leading-7 text-muted-foreground">Открой HappyFox, выбери нужный сценарий и переходи сразу к созданию.</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">Работы и идеи</p>
+              <h2 className="mt-3 font-serif text-4xl font-semibold tracking-[-0.035em] sm:text-5xl">Посмотрите, что можно сделать с HappyFox</h2>
+              <p className="mt-4 max-w-xl text-base leading-7 text-muted-foreground">
+                В Telegram-паблике и Instagram публикуем примеры, идеи и визуальные сценарии. Можно сначала посмотреть работы, а потом открыть бота и повторить подход на своём фото.
+              </p>
             </div>
-            <a
-              {...telegramLinkProps}
-              className="inline-flex min-h-12 items-center justify-center rounded-2xl bg-primary px-6 font-semibold text-primary-foreground shadow-[0_16px_50px_rgba(255,106,0,0.22)] transition-transform hover:-translate-y-0.5"
-            >
-              Открыть HappyFox
-              <ArrowRight className="ml-2 size-4" aria-hidden="true" />
-            </a>
+
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
+              <a
+                href={TELEGRAM_CHANNEL_URL}
+                {...externalLinkProps}
+                className="group flex min-h-16 items-center justify-between rounded-2xl border border-border/70 bg-background/70 px-5 py-4 transition-colors hover:border-primary/40"
+              >
+                <span>
+                  <span className="block text-xs text-muted-foreground">Telegram-паблик</span>
+                  <span className="mt-1 block font-semibold">@PolyakovaAll</span>
+                </span>
+                <Send className="size-5 text-primary transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
+              </a>
+              <a
+                href={INSTAGRAM_URL}
+                {...externalLinkProps}
+                className="group flex min-h-16 items-center justify-between rounded-2xl border border-border/70 bg-background/70 px-5 py-4 transition-colors hover:border-primary/40"
+              >
+                <span>
+                  <span className="block text-xs text-muted-foreground">Instagram</span>
+                  <span className="mt-1 block font-semibold">@polyakovaall</span>
+                </span>
+                <Instagram className="size-5 text-primary transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
+              </a>
+            </div>
           </div>
         </div>
       </section>
 
+      <section className="relative z-10 mx-auto w-full max-w-6xl px-4 pb-20 sm:px-6 lg:px-8 lg:pb-28">
+        <div className="rounded-[2rem] border border-border/70 bg-card/55 p-6 text-center sm:p-10 lg:p-12">
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">Начать</p>
+          <h2 className="mx-auto mt-3 max-w-3xl font-serif text-4xl font-semibold tracking-[-0.035em] sm:text-5xl">Есть идея или фото? Отправьте его HappyFox</h2>
+          <p className="mx-auto mt-4 max-w-xl text-base leading-7 text-muted-foreground">Откройте бота, выберите нужный сценарий и переходите сразу к созданию.</p>
+          <a
+            {...telegramLinkProps}
+            className="mt-7 inline-flex min-h-12 items-center justify-center rounded-2xl bg-primary px-7 font-semibold text-primary-foreground shadow-[0_16px_50px_rgba(255,106,0,0.22)] transition-transform hover:-translate-y-0.5"
+          >
+            Открыть HappyFox в Telegram
+            <ArrowRight className="ml-2 size-4" aria-hidden="true" />
+          </a>
+        </div>
+      </section>
+
       <footer className="relative z-10 border-t border-border/60">
-        <div className="mx-auto flex w-full max-w-6xl flex-col gap-3 px-4 py-7 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8">
-          <span className="font-serif text-base font-semibold text-foreground">{BRAND_NAME}</span>
-          <span>Создание фото, видео и AI-контента в Telegram</span>
+        <div className="mx-auto flex w-full max-w-6xl flex-col gap-5 px-4 py-7 text-sm text-muted-foreground sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-8">
+          <div>
+            <span className="font-serif text-base font-semibold text-foreground">{BRAND_NAME}</span>
+            <span className="ml-3 hidden sm:inline">AI-студия для фото, видео и музыки в Telegram</span>
+          </div>
+          <nav className="flex flex-wrap gap-x-5 gap-y-2" aria-label="Социальные ссылки">
+            <a href={TELEGRAM_APP_URL} {...externalLinkProps} className="transition-colors hover:text-foreground">Telegram-бот</a>
+            <a href={TELEGRAM_CHANNEL_URL} {...externalLinkProps} className="transition-colors hover:text-foreground">Паблик</a>
+            <a href={INSTAGRAM_URL} {...externalLinkProps} className="transition-colors hover:text-foreground">Instagram</a>
+          </nav>
         </div>
       </footer>
     </main>
