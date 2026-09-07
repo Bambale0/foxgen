@@ -210,7 +210,10 @@ Typical public variables include:
 ```dotenv
 NEXT_PUBLIC_PRODUCT_ID=happyfox
 NEXT_PUBLIC_MINIAPP_BASE_PATH=/mini-app
+NEXT_PUBLIC_MINIAPP_ORIGIN=https://app.happy-fox.online
 ```
+
+`NEXT_PUBLIC_MINIAPP_ORIGIN` is the browser origin used by landing-page web CTAs. Keep the route itself in `NEXT_PUBLIC_MINIAPP_BASE_PATH`; production resolves to `https://app.happy-fox.online/mini-app/` and referral/start parameters are appended to that URL.
 
 Anything beginning `NEXT_PUBLIC_` can be read by users.
 
