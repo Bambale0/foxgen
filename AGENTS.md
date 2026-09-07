@@ -148,6 +148,21 @@ When a connected repository is available through GitHub tools, prefer repository
 
 ---
 
+## HappyFox brand and marketing identity
+
+`HappyFox` is the only public-facing product and brand name.
+
+Rules:
+
+- Use `HappyFox` consistently in advertising, marketing, landing pages, SEO metadata, Open Graph/Twitter metadata, public UI copy, product descriptions, campaigns, documentation, and other user-facing materials.
+- Treat `AlePolbot`, `@AlePolbot`, and URLs such as `t.me/AlePolbot...` only as technical Telegram usernames, deep links, or transport URLs. They are not the product name, brand name, campaign name, or marketing identity.
+- Do not expose `AlePolbot` as visible marketing copy when a human-readable label can be used. Prefer labels and calls to action such as `HappyFox`, `Открыть HappyFox`, `Попробовать`, or `Запустить в Telegram`, while keeping the underlying technical link unchanged.
+- If a platform itself must display the Telegram username, treat that as a technical platform constraint and do not repeat the username in surrounding marketing copy.
+- Keep public naming consistent across Yandex Direct, landing pages, Telegram, MAX, Mini App, SEO, social profiles, and advertising creatives.
+- When an external advertising or analytics platform asks for the business/product name, use `HappyFox`.
+
+---
+
 ## Mandatory release parity: MAX bot + Telegram bot + Mini App
 
 Every HappyFox update must keep all three product surfaces synchronized:
