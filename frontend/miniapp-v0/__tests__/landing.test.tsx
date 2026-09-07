@@ -27,7 +27,7 @@ describe('HappyFox landing', () => {
     ).toBeInTheDocument()
 
     const telegramLinks = screen.getAllByRole('link').filter((link) =>
-      link.getAttribute('href') === 'https://t.me/AlePolbot?start=ref_M9SHFF25',
+      link.getAttribute('href') === 'https://t.me/AlePolbot?start=ref_AZLRXW6L',
     )
     expect(telegramLinks.length).toBeGreaterThanOrEqual(4)
     for (const link of telegramLinks) {
@@ -38,17 +38,17 @@ describe('HappyFox landing', () => {
 
     expect(screen.getByRole('link', { name: 'Попробовать ТГ' })).toHaveAttribute(
       'href',
-      'https://t.me/AlePolbot?start=ref_M9SHFF25',
+      'https://t.me/AlePolbot?start=ref_AZLRXW6L',
     )
     expect(screen.getByRole('link', { name: 'Попробовать на сайте' })).toHaveAttribute(
       'href',
-      'https://app.happy-fox.online/mini-app/?startapp=ref_M9SHFF25',
+      'https://app.happy-fox.online/mini-app/?startapp=ref_AZLRXW6L',
     )
     expect(
       screen.getByRole('link', { name: 'Попробовать HappyFox на сайте из демо' }),
     ).toHaveAttribute(
       'href',
-      'https://app.happy-fox.online/mini-app/?startapp=ref_M9SHFF25',
+      'https://app.happy-fox.online/mini-app/?startapp=ref_AZLRXW6L',
     )
 
     expect(
@@ -62,7 +62,7 @@ describe('HappyFox landing', () => {
       ),
     ).toBe(true)
 
-    expect(screen.queryByText('https://t.me/AlePolbot?start=ref_M9SHFF25')).not.toBeInTheDocument()
+    expect(screen.queryByText('https://t.me/AlePolbot?start=ref_AZLRXW6L')).not.toBeInTheDocument()
     expect(container.querySelectorAll('[data-brand-icon="telegram"]').length).toBeGreaterThanOrEqual(4)
     expect(container.querySelectorAll('[data-brand-icon="instagram"]').length).toBeGreaterThanOrEqual(2)
 
