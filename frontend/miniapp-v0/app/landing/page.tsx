@@ -220,7 +220,7 @@ export default function LandingPage() {
         className="pointer-events-none absolute inset-x-0 top-0 h-[42rem] bg-[radial-gradient(circle_at_50%_0%,rgba(255,106,0,0.2),transparent_58%)]"
       />
 
-      <header className="relative z-10 mx-auto flex w-full max-w-6xl items-center justify-between px-4 py-5 sm:px-6 lg:px-8">
+      <header className="relative z-10 mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-5 sm:px-6 lg:flex-nowrap lg:px-8">
         <ReferralAwareLink
           kind="bot"
           className="flex items-center gap-3"
@@ -238,21 +238,29 @@ export default function LandingPage() {
           </span>
         </ReferralAwareLink>
 
-        <nav className="hidden items-center gap-7 text-sm text-muted-foreground md:flex" aria-label="Основная навигация">
+        <nav className="hidden items-center gap-7 text-sm text-muted-foreground lg:flex" aria-label="Основная навигация">
           <a href="#scenarios" className="transition-colors hover:text-foreground">Сценарии</a>
           <a href="#features" className="transition-colors hover:text-foreground">Возможности</a>
           <a href="#how" className="transition-colors hover:text-foreground">Как работает</a>
           <a href="#examples" className="transition-colors hover:text-foreground">Примеры</a>
-          <ReferralAwareLink kind="web" className="font-semibold text-primary transition-colors hover:text-primary/80">Попробовать</ReferralAwareLink>
         </nav>
 
-        <ReferralAwareLink
-          kind="web"
-          className="inline-flex min-h-10 items-center justify-center rounded-xl border border-primary/35 bg-primary px-4 text-sm font-semibold text-primary-foreground shadow-[0_10px_30px_rgba(255,106,0,0.18)] transition-transform hover:-translate-y-0.5"
-        >
-          <Sparkles className="mr-2 size-4" aria-hidden="true" />
-          Попробовать
-        </ReferralAwareLink>
+        <div className="order-3 flex w-full items-center gap-2 sm:order-none sm:w-auto">
+          <ReferralAwareLink
+            kind="bot"
+            className="inline-flex min-h-10 flex-1 items-center justify-center rounded-xl border border-[#229ED9]/45 bg-card/70 px-3 text-xs font-semibold text-foreground transition-colors hover:border-[#229ED9]/70 hover:bg-[#229ED9]/10 sm:flex-none sm:px-4 sm:text-sm"
+          >
+            <TelegramBrandIcon className="mr-2 size-4 text-[#229ED9]" />
+            Попробовать ТГ
+          </ReferralAwareLink>
+          <ReferralAwareLink
+            kind="web"
+            className="inline-flex min-h-10 flex-1 items-center justify-center rounded-xl border border-primary/35 bg-primary px-3 text-xs font-semibold text-primary-foreground shadow-[0_10px_30px_rgba(255,106,0,0.18)] transition-transform hover:-translate-y-0.5 sm:flex-none sm:px-4 sm:text-sm"
+          >
+            <Sparkles className="mr-2 size-4" aria-hidden="true" />
+            Попробовать на сайте
+          </ReferralAwareLink>
+        </div>
       </header>
 
       <section className="relative z-10 mx-auto grid w-full max-w-6xl gap-12 px-4 pb-20 pt-12 sm:px-6 sm:pt-20 lg:grid-cols-[1.05fr_0.95fr] lg:items-center lg:px-8 lg:pb-28 lg:pt-24">
