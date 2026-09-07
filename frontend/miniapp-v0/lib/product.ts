@@ -16,6 +16,12 @@ export const MINIAPP_BASE_PATH = String(process.env.NEXT_PUBLIC_MINIAPP_BASE_PAT
   .trim()
   .replace(/\/$/, '')
 
+export const MINIAPP_PUBLIC_ORIGIN = String(
+  process.env.NEXT_PUBLIC_MINIAPP_ORIGIN || 'https://app.happy-fox.online',
+)
+  .trim()
+  .replace(/\/+$/, '')
+
 export const TELEGRAM_BOT_USERNAME = String(
   process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME || 'AlePolbot',
 )
@@ -60,13 +66,18 @@ if (!/^[A-Za-z0-9_-]{1,64}$/.test(TELEGRAM_START_PARAM)) {
   throw new Error('NEXT_PUBLIC_TELEGRAM_START_PARAM must be a valid Telegram start parameter')
 }
 
-try {
-  const url = new URL(PUBLIC_SITE_URL)
-  if (url.protocol !== 'https:') {
-    throw new Error('PUBLIC_SITE_URL must use https')
+for (const [name, value] of [
+  ['NEXT_PUBLIC_PUBLIC_SITE_URL', PUBLIC_SITE_URL],
+  ['NEXT_PUBLIC_MINIAPP_ORIGIN', MINIAPP_PUBLIC_ORIGIN],
+] as const) {
+  try {
+    const url = new URL(value)
+    if (url.protocol !== 'https:') {
+      throw new Error(`${name} must use https`)
+    }
+  } catch (error) {
+    throw new Error(`${name} must be a valid https URL`, { cause: error })
   }
-} catch (error) {
-  throw new Error('NEXT_PUBLIC_PUBLIC_SITE_URL must be a valid https URL', { cause: error })
 }
 
 const HAPPYFOX_PRODUCT: ProductConfig = {
