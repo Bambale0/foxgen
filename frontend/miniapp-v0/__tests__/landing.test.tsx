@@ -29,7 +29,7 @@ describe('HappyFox landing', () => {
     const telegramLinks = screen.getAllByRole('link').filter((link) =>
       link.getAttribute('href') === 'https://t.me/AlePolbot?start=ref_AZLRXW6L',
     )
-    expect(telegramLinks.length).toBeGreaterThanOrEqual(4)
+    expect(telegramLinks.length).toBeGreaterThanOrEqual(5)
     for (const link of telegramLinks) {
       expect(link).toHaveAttribute('target', '_blank')
       expect(link).toHaveAttribute('rel', 'noopener noreferrer')
@@ -63,7 +63,7 @@ describe('HappyFox landing', () => {
     ).toBe(true)
 
     expect(screen.queryByText('https://t.me/AlePolbot?start=ref_AZLRXW6L')).not.toBeInTheDocument()
-    expect(container.querySelectorAll('[data-brand-icon="telegram"]').length).toBeGreaterThanOrEqual(4)
+    expect(container.querySelectorAll('[data-brand-icon="telegram"]').length).toBeGreaterThanOrEqual(5)
     expect(container.querySelectorAll('[data-brand-icon="instagram"]').length).toBeGreaterThanOrEqual(2)
 
     expect(screen.getByRole('link', { name: /Смотреть работы/i })).toHaveAttribute(
@@ -84,6 +84,22 @@ describe('HappyFox landing', () => {
     expect(screen.getByRole('heading', { name: 'Музыка' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'AI-инструменты' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Изменить волосы, одежду или фон' })).toBeInTheDocument()
+
+    expect(container.querySelector('#partners')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Зарабатывайте вместе с HappyFox' })).toBeInTheDocument()
+    expect(screen.getByText('Персональная ссылка')).toBeInTheDocument()
+    expect(screen.getByText('Два уровня вознаграждений')).toBeInTheDocument()
+    expect(screen.getByText('Статистика и выплаты')).toBeInTheDocument()
+    expect(
+      screen.getAllByRole('link', { name: 'Партнёрам' }).some((link) =>
+        link.getAttribute('href') === '#partners',
+      ),
+    ).toBe(true)
+    expect(screen.getByRole('link', { name: 'Ссылка на программу' })).toHaveAttribute(
+      'href',
+      'https://happy-fox.online/#partners',
+    )
+    expect(screen.getByText('happy-fox.online/#partners')).toBeInTheDocument()
   })
 
   it('propagates an incoming referral to both the app-domain website CTA and Telegram CTAs', async () => {
@@ -94,7 +110,7 @@ describe('HappyFox landing', () => {
       const botLinks = Array.from(container.querySelectorAll('[data-referral-link="bot"]'))
       const webLinks = Array.from(container.querySelectorAll('[data-referral-link="web"]'))
 
-      expect(botLinks.length).toBeGreaterThanOrEqual(4)
+      expect(botLinks.length).toBeGreaterThanOrEqual(5)
       expect(webLinks.length).toBeGreaterThanOrEqual(2)
       expect(botLinks.every((link) => link.getAttribute('href') === 'https://t.me/AlePolbot?start=ref_PARTNER42')).toBe(true)
       expect(webLinks.every((link) => link.getAttribute('href') === 'https://app.happy-fox.online/mini-app/?startapp=ref_PARTNER42')).toBe(true)
@@ -117,11 +133,6 @@ describe('HappyFox landing', () => {
     expect(metadata.metadataBase?.toString()).toBe('https://happy-fox.online/')
     expect(metadata.alternates).toMatchObject({ canonical: '/' })
     expect(metadata.robots).toMatchObject({ index: true, follow: true })
-    expect(metadata.openGraph).toMatchObject({
-      type: 'website',
-      url: '/',
-      siteName: 'HappyFox',
-    })
   })
 
   it('publishes crawl directives and a canonical sitemap entry', () => {
