@@ -133,6 +133,11 @@ describe('HappyFox landing', () => {
     expect(metadata.metadataBase?.toString()).toBe('https://happy-fox.online/')
     expect(metadata.alternates).toMatchObject({ canonical: '/' })
     expect(metadata.robots).toMatchObject({ index: true, follow: true })
+    expect(metadata.openGraph).toMatchObject({
+      type: 'website',
+      url: '/',
+      siteName: 'HappyFox',
+    })
   })
 
   it('publishes crawl directives and a canonical sitemap entry', () => {
