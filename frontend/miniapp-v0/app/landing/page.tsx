@@ -45,6 +45,7 @@ export const metadata: Metadata = {
     'нейросеть Telegram',
     'AI бот Telegram',
     'генерация музыки AI',
+    'партнёрская программа нейросети',
   ],
   openGraph: {
     type: 'website',
@@ -136,6 +137,26 @@ const highlights = [
   'Можно загружать свои фото и референсы',
   'Понятные сценарии вместо десятка настроек',
 ]
+
+const partnerBenefits = [
+  {
+    number: '01',
+    title: 'Персональная ссылка',
+    description: 'Делитесь HappyFox в канале, соцсетях, сообществе или напрямую со своей аудиторией.',
+  },
+  {
+    number: '02',
+    title: 'Два уровня вознаграждений',
+    description: 'Начисления учитывают покупки ваших приглашённых пользователей и рефералов второго уровня.',
+  },
+  {
+    number: '03',
+    title: 'Статистика и выплаты',
+    description: 'В партнёрском кабинете видны приглашения, начисления, доступный баланс и статус выплат.',
+  },
+]
+
+const PARTNER_PROGRAM_URL = `${BRAND_PUBLIC_SITE_URL}/#partners`
 
 const externalLinkProps = {
   target: '_blank',
@@ -243,6 +264,7 @@ export default function LandingPage() {
           <a href="#features" className="transition-colors hover:text-foreground">Возможности</a>
           <a href="#how" className="transition-colors hover:text-foreground">Как работает</a>
           <a href="#examples" className="transition-colors hover:text-foreground">Примеры</a>
+          <a href="#partners" className="font-semibold text-primary transition-colors hover:text-primary/80">Партнёрам</a>
         </nav>
 
         <div className="order-3 flex w-full items-center gap-2 sm:order-none sm:w-auto">
@@ -429,6 +451,62 @@ export default function LandingPage() {
         </div>
       </section>
 
+      <section id="partners" className="relative z-10 mx-auto w-full max-w-6xl scroll-mt-6 px-4 py-20 sm:px-6 lg:px-8 lg:py-28">
+        <div className="overflow-hidden rounded-[2rem] border border-primary/30 bg-[linear-gradient(135deg,rgba(255,106,0,0.18),rgba(20,20,20,0.92)_48%,rgba(255,106,0,0.08))] p-6 shadow-[0_28px_90px_rgba(0,0,0,0.28)] sm:p-10 lg:p-12">
+          <div className="grid gap-10 lg:grid-cols-[0.95fr_1.05fr] lg:items-start">
+            <div className="max-w-xl">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">Партнёрская программа</p>
+              <h2 className="mt-3 font-serif text-4xl font-semibold tracking-[-0.035em] sm:text-5xl">Зарабатывайте вместе с HappyFox</h2>
+              <p className="mt-4 text-base leading-7 text-muted-foreground">
+                Для авторов, каналов, сообществ и тех, кто рекомендует полезные AI-инструменты. Делитесь своей персональной ссылкой и получайте вознаграждение с покупок приглашённых пользователей.
+              </p>
+              <p className="mt-4 text-sm leading-6 text-foreground/85">
+                После заявки и ручного одобрения откроются активная реферальная ссылка, статистика и выплаты.
+              </p>
+
+              <div className="mt-7 flex flex-col gap-3 sm:flex-row sm:items-center">
+                <ReferralAwareLink
+                  kind="bot"
+                  className="inline-flex min-h-12 items-center justify-center rounded-2xl bg-primary px-6 font-semibold text-primary-foreground shadow-[0_16px_50px_rgba(255,106,0,0.22)] transition-transform hover:-translate-y-0.5"
+                >
+                  <TelegramBrandIcon className="mr-2 size-5" />
+                  Открыть HappyFox
+                  <ArrowRight className="ml-2 size-4" aria-hidden="true" />
+                </ReferralAwareLink>
+                <a
+                  href={PARTNER_PROGRAM_URL}
+                  data-partner-program-link="share"
+                  className="inline-flex min-h-12 items-center justify-center rounded-2xl border border-border/70 bg-background/55 px-5 text-sm font-medium text-foreground transition-colors hover:border-primary/40"
+                >
+                  Ссылка на программу
+                </a>
+              </div>
+
+              <p className="mt-4 text-xs leading-5 text-muted-foreground">
+                В Mini App откройте раздел «Партнёры» и отправьте заявку на активацию.
+              </p>
+              <p className="mt-3 break-all text-xs text-primary/90">happy-fox.online/#partners</p>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-1">
+              {partnerBenefits.map(({ number, title, description }) => (
+                <article key={number} className="rounded-[1.5rem] border border-border/65 bg-background/65 p-5 backdrop-blur">
+                  <div className="flex items-start gap-4">
+                    <span className="grid size-10 shrink-0 place-items-center rounded-2xl border border-primary/25 bg-primary/10 text-xs font-bold text-primary">
+                      {number}
+                    </span>
+                    <div>
+                      <h3 className="font-serif text-xl font-semibold">{title}</h3>
+                      <p className="mt-2 text-sm leading-6 text-muted-foreground">{description}</p>
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
       <section id="examples" className="relative z-10 mx-auto w-full max-w-6xl px-4 py-20 sm:px-6 lg:px-8 lg:py-28">
         <div className="overflow-hidden rounded-[2rem] border border-primary/25 bg-[linear-gradient(135deg,rgba(255,106,0,0.15),rgba(20,20,20,0.88)_52%,rgba(255,106,0,0.06))] p-6 sm:p-10 lg:p-12">
           <div className="grid gap-8 lg:grid-cols-[1fr_0.8fr] lg:items-end">
@@ -501,6 +579,9 @@ export default function LandingPage() {
             <span className="ml-3 hidden sm:inline">AI-студия для фото, видео и музыки в Telegram</span>
           </div>
           <nav className="flex flex-wrap gap-x-5 gap-y-3" aria-label="Социальные ссылки">
+            <a href="#partners" className="inline-flex items-center gap-2 font-medium text-primary transition-colors hover:text-primary/80">
+              Партнёрам
+            </a>
             <ReferralAwareLink kind="bot" className="inline-flex items-center gap-2 transition-colors hover:text-foreground">
               <span className="grid size-7 place-items-center rounded-lg bg-[#229ED9] text-white"><TelegramBrandIcon className="size-4" /></span>
               Telegram-бот
