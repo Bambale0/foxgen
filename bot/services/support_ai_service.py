@@ -198,31 +198,39 @@ class SupportAIService:
         last_error: Exception | None = None
         for attempt in range(SUPPORT_AI_MAX_ATTEMPTS):
             try:
-                async with aiohttp.ClientSession(timeout=timeout) as session:
-                    async with session.post(
+                async with (
+                    aiohttp.ClientSession(timeout=timeout) as session,
+                    session.post(
                         f"{self.base_url}/codex/v1/responses",
                         json=payload,
                         headers=headers,
-                    ) as response:
-                        raw = await response.text()
-                        if response.status == 429 or response.status >= 500:
-                            raise RuntimeError(f"Kie GPT-5.5 temporary HTTP {response.status}")
-                        if response.status >= 400:
-                            raise RuntimeError(f"Kie GPT-5.5 HTTP {response.status}")
-                        parsed = json.loads(raw)
-                        if not isinstance(parsed, dict):
-                            raise RuntimeError("Kie GPT-5.5 returned non-object response")
-                        body_code = parsed.get("code")
-                        if body_code not in (None, 0, 200, "0", "200"):
-                            try:
-                                numeric_code = int(body_code)
-                            except (TypeError, ValueError):
-                                numeric_code = 0
-                            if numeric_code >= 400:
-                                raise RuntimeError(f"Kie GPT-5.5 body error {numeric_code}")
-                        data = parsed
-                        break
-            except (aiohttp.ClientError, asyncio.TimeoutError, json.JSONDecodeError, RuntimeError) as exc:
+                    ) as response,
+                ):
+                    raw = await response.text()
+                    if response.status == 429 or response.status >= 500:
+                        raise RuntimeError(f"Kie GPT-5.5 temporary HTTP {response.status}")
+                    if response.status >= 400:
+                        raise RuntimeError(f"Kie GPT-5.5 HTTP {response.status}")
+                    parsed = json.loads(raw)
+                    if not isinstance(parsed, dict):
+                        raise TypeError("Kie GPT-5.5 returned non-object response")
+                    body_code = parsed.get("code")
+                    if body_code not in (None, 0, 200, "0", "200"):
+                        try:
+                            numeric_code = int(body_code)
+                        except (TypeError, ValueError):
+                            numeric_code = 0
+                        if numeric_code >= 400:
+                            raise RuntimeError(f"Kie GPT-5.5 body error {numeric_code}")
+                    data = parsed
+                    break
+            except (
+                aiohttp.ClientError,
+                asyncio.TimeoutError,
+                json.JSONDecodeError,
+                RuntimeError,
+                TypeError,
+            ) as exc:
                 last_error = exc
                 if attempt >= SUPPORT_AI_MAX_ATTEMPTS - 1:
                     break
