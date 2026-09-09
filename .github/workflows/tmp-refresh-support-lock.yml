@@ -1,0 +1,40 @@
+name: Temporary refresh frontend lock
+
+on:
+  push:
+    branches:
+      - feat/support-bot-gpt55-kie-20260909
+
+permissions:
+  contents: write
+
+jobs:
+  refresh-lock:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: feat/support-bot-gpt55-kie-20260909
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/miniapp-v0/package-lock.json
+      - name: Refresh patched dependencies
+        working-directory: frontend/miniapp-v0
+        run: npm install --save-exact next@16.3.4 sharp@0.35.4
+      - name: Verify audit
+        working-directory: frontend/miniapp-v0
+        run: npm audit --omit=dev --audit-level=high
+      - name: Commit lock refresh
+        run: |
+          if git diff --quiet -- frontend/miniapp-v0/package.json frontend/miniapp-v0/package-lock.json; then
+            echo 'Lock already current'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add frontend/miniapp-v0/package.json frontend/miniapp-v0/package-lock.json
+          git commit -m 'chore(frontend): refresh patched Next and sharp lock'
+          git push origin HEAD:feat/support-bot-gpt55-kie-20260909
