@@ -23,7 +23,11 @@ jobs:
           cache-dependency-path: frontend/miniapp-v0/package-lock.json
       - name: Refresh patched dependencies
         working-directory: frontend/miniapp-v0
-        run: npm install --save-exact next@16.3.4 sharp@0.35.4
+        run: |
+          npm pkg set dependencies.next=16.3.4
+          npm pkg set devDependencies.sharp=0.35.4
+          npm pkg set overrides.sharp=0.35.4
+          npm install
       - name: Verify audit
         working-directory: frontend/miniapp-v0
         run: npm audit --omit=dev --audit-level=high
