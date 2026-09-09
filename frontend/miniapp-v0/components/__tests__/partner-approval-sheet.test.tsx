@@ -51,7 +51,7 @@ describe('PartnerApprovalSheet', () => {
     mockedUseApp.mockReturnValue({
       activeWorkspace: 'partners',
       closeWorkspace: jest.fn(),
-    } as ReturnType<typeof useApp>)
+    } as unknown as ReturnType<typeof useApp>)
   })
 
   it('submits an application and moves from available to pending without exposing a referral link', async () => {
