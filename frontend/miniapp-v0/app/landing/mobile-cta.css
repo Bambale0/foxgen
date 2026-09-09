@@ -1,0 +1,33 @@
+@media (max-width: 639px) {
+  header > div {
+    width: 100%;
+  }
+
+  header > div [data-referral-link='bot'] {
+    display: none;
+  }
+
+  header > div [data-referral-link='web'] {
+    min-height: 76px;
+    width: 100%;
+    flex: 1 1 100%;
+    border-radius: 24px;
+    padding-inline: 24px;
+    font-size: 0;
+    font-weight: 800;
+    box-shadow: 0 20px 52px rgba(255, 106, 0, 0.34);
+  }
+
+  header > div [data-referral-link='web']::after {
+    content: 'Попробовать';
+    font-size: 22px;
+    line-height: 1.2;
+    letter-spacing: -0.015em;
+  }
+
+  header > div [data-referral-link='web'] svg {
+    width: 26px;
+    height: 26px;
+    margin-right: 12px;
+  }
+}
