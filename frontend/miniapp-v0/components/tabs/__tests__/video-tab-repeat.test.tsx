@@ -64,7 +64,7 @@ function mockApp(videoPromptPreset: Record<string, unknown>) {
     videoPromptPreset,
     setVideoPromptPreset: jest.fn(),
     refreshTasks: jest.fn(),
-  } as ReturnType<typeof useApp>)
+  } as unknown as ReturnType<typeof useApp>)
 }
 
 describe('VideoTab repeat mode selection', () => {
