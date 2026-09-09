@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 from aiohttp import web
@@ -19,6 +19,7 @@ from bot.database import (
 )
 from bot.services.media_input_utils import missing_local_upload_sources
 from bot.services.preset_manager import preset_manager
+from bot.trend_parameters import TrendParameterValidationError, render_trend_prompt
 from bot.video_reference_policy import apply_video_reference_cost
 
 logger = logging.getLogger(__name__)
@@ -601,6 +602,10 @@ async def miniapp_run_trend(request: web.Request) -> web.Response:
             approved_public_only=True,
         )
         trend = trusted_trend_run(prompt, parsed.reference_urls)
+        trend = replace(
+            trend,
+            prompt=render_trend_prompt(trend.prompt, body.get("parameters")),
+        )
 
         if trend.kind == "video":
             return await _run_video_trend(
@@ -614,7 +619,7 @@ async def miniapp_run_trend(request: web.Request) -> web.Response:
             user=context["user"],
             trend=trend,
         )
-    except TrendRunValidationError as error:
+    except (TrendRunValidationError, TrendParameterValidationError) as error:
         return web.json_response({"ok": False, "error": str(error)}, status=400)
     except Exception:
         logger.exception("Mini App trend generation failed")
