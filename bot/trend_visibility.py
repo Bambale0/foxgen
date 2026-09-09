@@ -7,6 +7,8 @@ from collections.abc import Mapping
 from typing import Any
 from urllib.parse import parse_qsl
 
+from bot.trend_parameters import public_trend_template_fields
+
 
 def is_trend_prompt(prompt: Mapping[str, Any] | None) -> bool:
     if not prompt:
@@ -17,7 +19,7 @@ def is_trend_prompt(prompt: Mapping[str, Any] | None) -> bool:
     )
 
 
-def public_trend_settings(prompt: Mapping[str, Any]) -> dict[str, str]:
+def public_trend_settings(prompt: Mapping[str, Any]) -> dict[str, Any]:
     raw_settings = prompt.get("generation_settings")
     settings = raw_settings if isinstance(raw_settings, Mapping) else {}
     tags = {
@@ -39,7 +41,12 @@ def public_trend_settings(prompt: Mapping[str, Any]) -> dict[str, str]:
     if not ratio:
         ratio = "16:9" if kind == "video" else "1:1"
 
-    return {"kind": kind, "ratio": ratio}
+    prompt_text = str(prompt.get("prompt_text") or "")
+    return {
+        "kind": kind,
+        "ratio": ratio,
+        "template_fields": public_trend_template_fields(prompt_text),
+    }
 
 
 def sanitize_prompt_for_public(
@@ -54,9 +61,12 @@ def sanitize_prompt_for_public(
     if not is_trend_prompt(payload):
         return payload
 
+    # Derive the safe parameter schema while the private prompt still exists in
+    # this server-side copy. Redact executable fields before returning anything.
+    public_settings = public_trend_settings(payload)
     payload["prompt_text"] = ""
     payload["model"] = None
-    payload["generation_settings"] = public_trend_settings(payload)
+    payload["generation_settings"] = public_settings
     payload["prompt_hidden"] = True
     payload["prompt_actions_allowed"] = False
     return payload

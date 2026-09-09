@@ -67,29 +67,35 @@ const bootstrapPayload = {
   saved_references: [],
 }
 
+// This mirrors the real public trend payload: executable prompt/model/settings
+// are redacted, while the safe parameter schema remains available to the UI.
 const curatedTrend = {
   id: 11,
   title: 'Curated Video',
   description: 'Official trend',
-  prompt_text: 'Create a cinematic motion scene',
+  prompt_text: '',
   category: 'video',
   tags: ['trend', 'trend-video'],
   uses_count: 2,
   likes: 3,
   preview_url: 'https://cdn.example/curated.mp4',
-  model: 'v3_pro',
+  model: null,
   generation_settings: {
     kind: 'video',
-    user_input: 'photo',
-    model: 'v3_pro',
-    scenario: 'imgtxt',
     ratio: '16:9',
-    duration: 5,
-    grok_mode: 'normal',
-    grok_resolution: '480p',
-    kling_negative_prompt: '',
-    kling_cfg_scale: 0.5,
+    template_fields: [
+      {
+        key: 'age',
+        label: 'Возраст',
+        type: 'number',
+        required: true,
+        placeholder: 'Например, 28',
+        max_length: 120,
+      },
+    ],
   },
+  prompt_hidden: true,
+  prompt_actions_allowed: false,
   author_id: 1,
   status: 'approved',
 }
@@ -289,14 +295,19 @@ try {
   assert.equal(promptsPayload?.tag, 'trend')
   assert.equal(await page.getByText('Ordinary Prompt', { exact: true }).count(), 0)
 
-  // User trend E2E: references only, no settings, immediate server-side run.
+  // Parameterized trend E2E: safe fields + references only, no executable settings.
   await page.getByRole('button', { name: 'Повторить', exact: true }).click()
   const trendRunner = page.getByRole('dialog')
-  await trendRunner.getByText('Загрузите свои фото', { exact: true }).waitFor()
+  await trendRunner.getByText('Сделайте этот шаблон своим', { exact: true }).waitFor()
+  await trendRunner.getByText('Ваши данные', { exact: true }).waitFor()
+  await trendRunner.getByText('Выбрать фото и запустить', { exact: true }).waitFor()
   assert.equal(await trendRunner.locator('select').count(), 0)
   assert.equal(await trendRunner.getByText('Модель', { exact: true }).count(), 0)
   assert.equal(await trendRunner.getByText('Формат', { exact: true }).count(), 0)
   assert.equal(await trendRunner.getByText('Длительность', { exact: true }).count(), 0)
+  assert.equal(await trendRunner.getByText('Create a cinematic motion scene').count(), 0)
+
+  await trendRunner.getByLabel('Возраст').fill('28')
 
   trendPhotoUploadExpected = true
   const generatedResponse = page.waitForResponse((response) =>
@@ -314,6 +325,7 @@ try {
     trendGenerationPayload?.reference_urls,
     ['https://cdn.example/user-trend-photo.jpg'],
   )
+  assert.deepEqual(trendGenerationPayload?.parameters, { age: '28' })
   for (const forbiddenField of [
     'model',
     'prompt',
