@@ -10,6 +10,7 @@ jest.mock('next/image', () => ({
 import LandingPage, { metadata } from '@/app/landing/page'
 import robots from '@/app/robots'
 import sitemap from '@/app/sitemap'
+import { REFERRAL_STORAGE_KEY } from '@/lib/referral-links'
 
 describe('HappyFox landing', () => {
   beforeEach(() => {
@@ -116,8 +117,40 @@ describe('HappyFox landing', () => {
       expect(webLinks.every((link) => link.getAttribute('href') === 'https://app.happy-fox.online/mini-app/?startapp=ref_PARTNER42')).toBe(true)
     })
 
-    expect(window.localStorage.getItem('happyfox_ref_start_param')).toBe('ref_PARTNER42')
+    expect(window.localStorage.getItem(REFERRAL_STORAGE_KEY)).toBe('ref_PARTNER42')
     expect(screen.queryByText('https://t.me/AlePolbot?start=ref_PARTNER42')).not.toBeInTheDocument()
+  })
+
+  it('does not pin the configured default referral in browser storage', async () => {
+    render(<LandingPage />)
+
+    await waitFor(() => {
+      expect(window.localStorage.getItem(REFERRAL_STORAGE_KEY)).toBeNull()
+    })
+  })
+
+  it('drops the former persisted site default and uses the current default', async () => {
+    window.localStorage.setItem(REFERRAL_STORAGE_KEY, 'ref_M9SHFF25')
+    const { container } = render(<LandingPage />)
+
+    await waitFor(() => {
+      const botLinks = Array.from(container.querySelectorAll('[data-referral-link="bot"]'))
+      const webLinks = Array.from(container.querySelectorAll('[data-referral-link="web"]'))
+
+      expect(
+        botLinks.every(
+          (link) => link.getAttribute('href') === 'https://t.me/AlePolbot?start=ref_AZLRXW6L',
+        ),
+      ).toBe(true)
+      expect(
+        webLinks.every(
+          (link) =>
+            link.getAttribute('href') ===
+            'https://app.happy-fox.online/mini-app/?startapp=ref_AZLRXW6L',
+        ),
+      ).toBe(true)
+      expect(window.localStorage.getItem(REFERRAL_STORAGE_KEY)).toBeNull()
+    })
   })
 
   it('keeps the public surface on the HappyFox brand', () => {

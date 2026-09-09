@@ -6,8 +6,10 @@ import { useEffect, useState } from 'react'
 import {
   buildBrowserMiniAppUrl,
   buildTelegramBotUrl,
+  isLegacyDefaultReferral,
   isReferralStartParam,
   REFERRAL_STORAGE_KEY,
+  resolveExplicitLandingStartParam,
   resolveLandingStartParam,
 } from '@/lib/referral-links'
 
@@ -40,16 +42,18 @@ export function ReferralAwareLink({
       storedReferral = window.localStorage.getItem(REFERRAL_STORAGE_KEY) || ''
     } catch {}
 
-    const startParam = resolveLandingStartParam(
-      new URLSearchParams(window.location.search),
-      storedReferral,
-    )
+    const params = new URLSearchParams(window.location.search)
+    const explicitStartParam = resolveExplicitLandingStartParam(params)
+    const startParam = resolveLandingStartParam(params, storedReferral)
 
-    if (isReferralStartParam(startParam)) {
-      try {
-        window.localStorage.setItem(REFERRAL_STORAGE_KEY, startParam)
-      } catch {}
-    }
+    try {
+      if (isLegacyDefaultReferral(storedReferral)) {
+        window.localStorage.removeItem(REFERRAL_STORAGE_KEY)
+      }
+      if (isReferralStartParam(explicitStartParam)) {
+        window.localStorage.setItem(REFERRAL_STORAGE_KEY, explicitStartParam)
+      }
+    } catch {}
 
     setHref(hrefFor(kind, startParam))
   }, [kind])
