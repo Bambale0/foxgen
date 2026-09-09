@@ -60,6 +60,56 @@ services:
         soft: 65536
         hard: 65536
 
+  support_bot:
+    profiles:
+      - support
+    image: ${HAPPYFOX_IMAGE:-foxgen-happyfox-bot:local}
+    container_name: ${SUPPORT_CONTAINER_NAME:-foxgen-happyfox-support}
+    restart: unless-stopped
+    stop_grace_period: 30s
+    command:
+      - python
+      - -m
+      - bot.support_bot_runtime
+
+    env_file:
+      - path: .env
+        required: true
+      - path: .env.happyfox.runtime
+        required: true
+      - path: .env.postgres
+        required: false
+      - path: .env.happyfox.support
+        required: false
+
+    environment:
+      PRODUCT_ID: happyfox
+      BANANO_SKIP_PROJECT_ENV: "1"
+      BANANO_LOG_TO_STDOUT: "1"
+      DATABASE_PATH: ${DATABASE_PATH:-/app/data/bot.db}
+
+    networks:
+      - legacy_backend
+
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./backups:/app/backups
+
+    cap_drop:
+      - ALL
+
+    logging:
+      driver: json-file
+      options:
+        max-size: 20m
+        max-file: "5"
+
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+
 networks:
   legacy_backend:
     external: true
