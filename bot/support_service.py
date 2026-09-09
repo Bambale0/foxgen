@@ -4,7 +4,7 @@ import asyncio
 import html
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from aiogram import Bot
@@ -288,7 +288,7 @@ async def _mark_outbox_failed(
 ) -> None:
     terminal = attempts + 1 >= OUTBOX_MAX_ATTEMPTS
     delay_seconds = min(300, 2 ** max(attempts, 0) * 5)
-    next_attempt = datetime.utcnow() + timedelta(seconds=delay_seconds)
+    next_attempt = datetime.now(timezone.utc) + timedelta(seconds=delay_seconds)
     async with db_backend.connect() as connection:
         await connection.execute(
             """
