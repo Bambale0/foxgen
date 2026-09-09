@@ -42,7 +42,7 @@ describe('BalanceSheet', () => {
       isBalanceOpen: true,
       closeBalance: jest.fn(),
       refreshTasks: jest.fn(),
-    } as ReturnType<typeof useApp>)
+    } as unknown as ReturnType<typeof useApp>)
   })
 
   it('renders EUR and YooKassa actions for packages with an EUR offer', () => {
