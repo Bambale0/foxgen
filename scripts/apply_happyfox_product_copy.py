@@ -8,8 +8,8 @@ fails closed if an expected upstream anchor changes.
 from pathlib import Path
 
 from apply_happyfox_main_menu import apply_happyfox_main_menu
-from apply_happyfox_video_ui import apply_happyfox_video_ui
 from apply_happyfox_telegram_screen_copy import apply_happyfox_telegram_screen_copy
+from apply_happyfox_video_ui import apply_happyfox_video_ui
 
 COMMON_PATH = Path("bot/handlers/common.py")
 KEYBOARDS_PATH = Path("bot/keyboards.py")
@@ -92,7 +92,7 @@ def _patch_common() -> None:
         f"        {SUPPORT_CONTACT_EXPRESSION}\n",
     )
 
-    if '🏠 <b>NEUROMIX</b>' in text:
+    if "🏠 <b>NEUROMIX</b>" in text:
         raise RuntimeError("Stale NEUROMIX main-menu brand remains")
     if "@only_tany" in text:
         raise RuntimeError("Stale Tanya support contact remains in Telegram runtime")
@@ -240,14 +240,10 @@ def _patch_payments() -> None:
         raise RuntimeError("HappyFox Lava offer anchor was not found")
 
     replacements = {
-        "return f\"\\n🎁 Реферальный бонус: <code>{referral_bonus['value']}</code> бананов\"":
-            "return f\"\\n🎁 Реферальный бонус: <code>{product.format_credits(referral_bonus['value'])}</code>\"",
-        "f\"Покупка: <code>{credits}</code>🍌 на <code>{amount_rub}</code> ₽\\n\"":
-            "f\"Покупка: <code>{product.format_credits(credits)}</code> на <code>{amount_rub}</code> ₽\\n\"",
-        "f\"• {credits}🍌 → +<code>{bonus}</code>🍌\"":
-            "f\"• {product.format_credits(credits)} → +<code>{product.format_credits(bonus)}</code>\"",
-        "f\"\\n🎟 Промокод{code_part}: +<code>{promo_bonus['bonus_credits']}</code> бананов\"":
-            "f\"\\n🎟 Промокод{code_part}: +<code>{product.format_credits(promo_bonus['bonus_credits'])}</code>\"",
+        "return f\"\\n🎁 Реферальный бонус: <code>{referral_bonus['value']}</code> бананов\"": "return f\"\\n🎁 Реферальный бонус: <code>{product.format_credits(referral_bonus['value'])}</code>\"",
+        'f"Покупка: <code>{credits}</code>🍌 на <code>{amount_rub}</code> ₽\\n"': 'f"Покупка: <code>{product.format_credits(credits)}</code> на <code>{amount_rub}</code> ₽\\n"',
+        'f"• {credits}🍌 → +<code>{bonus}</code>🍌"': 'f"• {product.format_credits(credits)} → +<code>{product.format_credits(bonus)}</code>"',
+        "f\"\\n🎟 Промокод{code_part}: +<code>{promo_bonus['bonus_credits']}</code> бананов\"": "f\"\\n🎟 Промокод{code_part}: +<code>{product.format_credits(promo_bonus['bonus_credits'])}</code>\"",
     }
     for old, new in replacements.items():
         if old in text:
