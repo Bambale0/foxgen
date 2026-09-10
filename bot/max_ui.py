@@ -155,7 +155,7 @@ def video_model_selection_menu(
         "veo3_fast": 6,
         "veo3_lite": 6,
     }
-    for model in catalog.video_models().keys():
+    for model in catalog.video_models():
         duration = default_durations.get(model, 5)
         pricing_quality = (
             "720p"
