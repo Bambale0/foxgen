@@ -69,7 +69,7 @@ def main_menu(
     """MAX mirror of the HappyFox Telegram main menu."""
     rows: list[list[dict[str, Any]]] = []
     if mini_app_url:
-        rows.append([open_app_button("🚀 Открыть Mini App", mini_app_url)])
+        rows.append([open_app_button("🚀 Открыть Mini App")])
 
     video_prompt_price = _service_price(catalog, "video_prompt", default=3)
     rows.extend(
