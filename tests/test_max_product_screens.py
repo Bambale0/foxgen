@@ -126,6 +126,16 @@ def _sample_prompt() -> dict:
 
 
 def test_max_main_menu_visually_mirrors_telegram_contract() -> None:
+    menu = main_menu(
+        42,
+        mini_app_url="https://example.invalid/mini-app/",
+    )[0]["payload"]["buttons"]
+    assert menu[0][0] == {
+        "type": "open_app",
+        "text": "🚀 Открыть Mini App",
+        "web_app": "https://example.invalid/mini-app/",
+    }
+
     assert _visible_button_rows() == [
         ["🚀 Открыть Mini App"],
         ["🖼 Создать фото", "🎬 Создать видео"],
