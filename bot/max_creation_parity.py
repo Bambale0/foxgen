@@ -22,7 +22,6 @@ from bot.max_ui import (
     generation_confirm_menu,
     image_model_menu,
     topup_menu,
-    video_model_selection_menu,
     video_type_menu,
 )
 
