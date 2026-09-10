@@ -89,11 +89,11 @@ export function TaskCard({ task, index }: TaskCardProps) {
 
       <div className="min-w-0 p-2.5">
         <div className="mb-1 flex items-center gap-1.5">
-          <span className="truncate text-[10px] font-medium text-muted-foreground">
+          <span className="truncate text-[11px] font-medium text-muted-foreground">
             {task.model_label}
           </span>
           <span className="h-1 w-1 rounded-full bg-border" />
-          <span className="text-[10px] text-muted-foreground">
+          <span className="text-[11px] text-muted-foreground">
             {task.aspect_ratio}
           </span>
         </div>
@@ -105,7 +105,7 @@ export function TaskCard({ task, index }: TaskCardProps) {
         <div className="flex items-center justify-between gap-1">
           <span className={cn(
             "inline-flex min-w-0 items-center gap-1 rounded-full border px-1.5 py-0.5",
-            "text-[9px] font-medium",
+            "text-[11px] font-medium",
             status.className,
             task.status === 'pending' && "animate-pulse"
           )}>
@@ -113,7 +113,7 @@ export function TaskCard({ task, index }: TaskCardProps) {
             {status.label}
           </span>
 
-          <span className="truncate text-[9px] text-muted-foreground">
+          <span className="truncate text-[11px] text-muted-foreground">
             {formatTime(task.created_at)}
           </span>
         </div>

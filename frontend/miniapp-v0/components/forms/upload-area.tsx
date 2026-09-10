@@ -316,8 +316,9 @@ export function UploadArea({
                   event.stopPropagation()
                   handleRemove(file.id)
                 }}
+                aria-label={`Удалить ${file.name}`}
                 className={cn(
-                  'w-6 h-6 rounded flex items-center justify-center',
+                  'h-11 w-11 rounded flex items-center justify-center',
                   'text-muted-foreground hover:text-foreground hover:bg-secondary',
                   'transition-colors'
                 )}

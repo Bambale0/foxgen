@@ -199,7 +199,7 @@ export function MotionTab() {
     }
   }
 
-  const estimatedCost = `${motionCost}🍌 • ${formatPerSecondCost(perSecondCost)}🍌/с`
+  const estimatedCost = `${motionCost}🐾 • ${formatPerSecondCost(perSecondCost)}🐾/с`
 
   return (
     <div className="px-4 space-y-5 pb-28">
@@ -218,7 +218,7 @@ export function MotionTab() {
           </h2>
 
           <p className="mt-2 text-sm leading-6 text-muted-foreground">
-            Загрузите фото персонажа и видео с движением. Модель перенесёт динамику на ваш образ.
+            Загрузите фото персонажа и ролик с нужным движением — HappyFox перенесёт его на ваш образ.
           </p>
         </div>
       </div>
@@ -227,7 +227,7 @@ export function MotionTab() {
         <div className="space-y-4">
           <MotionUploadCard
             title="Фото персонажа"
-            description="Кого нужно оживить."
+            description="Фото человека или персонажа, которого хотите оживить."
             icon={ImageIcon}
             accept="image/*"
             file={characterImage}
@@ -237,7 +237,7 @@ export function MotionTab() {
 
           <MotionUploadCard
             title="Видео движения"
-            description="Откуда берём движение."
+            description="Ролик с движением, которое нужно повторить."
             icon={Video}
             accept="video/*"
             file={motionVideo}
@@ -277,7 +277,7 @@ export function MotionTab() {
                     >
                       <span className="block">{item.label}</span>
                       <span className="mt-1 block text-xs opacity-80">
-                        {itemCost}🍌 · {formatPerSecondCost(itemPerSecondCost)}🍌/с
+                        {itemCost}🐾 · {formatPerSecondCost(itemPerSecondCost)}🐾/с
                       </span>
                     </button>
                     )
@@ -308,7 +308,7 @@ export function MotionTab() {
                     >
                       <span className="block">{item}</span>
                       <span className="mt-1 block text-xs opacity-80">
-                        {qCost}🍌 · {formatPerSecondCost(qPerSec)}🍌/с
+                        {qCost}🐾 · {formatPerSecondCost(qPerSec)}🐾/с
                       </span>
                     </button>
                     )
@@ -419,7 +419,7 @@ export function MotionTab() {
                 Готово к запуску
               </h3>
               <p className="text-sm leading-6 text-muted-foreground">
-                После запуска здесь появится задача. Готовый ролик придёт в чат и историю.
+                Запустите перенос движения — готовый ролик появится здесь, в чате и в истории.
               </p>
             </div>
           )}

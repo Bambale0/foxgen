@@ -14,7 +14,7 @@ import { DurationSelect } from './duration-select'
 import { getStorageItem, removeStorageItem } from '@/hooks/browser-storage'
 import {
   AlertCircle,
-  Banana,
+  PawPrint,
   Clapperboard,
   Headphones,
   Loader2,
@@ -466,7 +466,7 @@ export function VideoGeneratorForm({
               <p className="text-sm font-medium text-foreground">{model?.label}</p>
               <p className="text-xs text-muted-foreground mt-1">{model?.description}</p>
               <p className="text-xs text-muted-foreground mt-1">
-                {isOmniAudio || isOmniCharacter ? `${cost}🍌 за ID` : `${formatPerSecondCost(perSecondCost)}🍌 за 1 секунду`}
+                {isOmniAudio || isOmniCharacter ? `${cost}🐾 за ID` : `${formatPerSecondCost(perSecondCost)}🐾 за 1 секунду`}
               </p>
             </div>
             <div className="w-fit max-w-full rounded-full border border-gold/20 bg-gold/10 px-3 py-1 text-xs text-gold">
@@ -698,7 +698,7 @@ export function VideoGeneratorForm({
                         )}
                       >
                         <span className="block">{resolution}</span>
-                        <span className="block text-[10px] text-gold">{resolutionCost}🍌</span>
+                        <span className="block text-[11px] text-gold">{resolutionCost}🐾</span>
                       </button>
                     )
                   })}
@@ -774,7 +774,7 @@ export function VideoGeneratorForm({
                         )}
                       >
                         <span className="block">{resolution}</span>
-                        <span className="block text-[10px] text-gold">{resolutionCost}🍌</span>
+                        <span className="block text-[11px] text-gold">{resolutionCost}🐾</span>
                       </button>
                     )
                   })}
@@ -1095,14 +1095,14 @@ export function VideoGeneratorForm({
             <span className="text-sm text-muted-foreground">Стоимость</span>
             <p className="text-xs text-muted-foreground/70">
               {isOmniAudio || isOmniCharacter
-                ? `${model?.label} • ${cost}🍌`
+                ? `${model?.label} • ${cost}🐾`
                 : omniHasVideoReference
-                  ? `видео-реф • ${selectedRatio} • ${formatPerSecondCost(perSecondCost)}🍌/с`
-                  : `${selectedDuration} сек. • ${selectedRatio} • ${formatPerSecondCost(perSecondCost)}🍌/с`}
+                  ? `видео-реф • ${selectedRatio} • ${formatPerSecondCost(perSecondCost)}🐾/с`
+                  : `${selectedDuration} сек. • ${selectedRatio} • ${formatPerSecondCost(perSecondCost)}🐾/с`}
             </p>
           </div>
           <div className="flex items-center gap-1.5">
-            <Banana className="w-4 h-4 text-gold" />
+            <PawPrint className="w-4 h-4 text-gold" />
             <span className="text-lg font-semibold text-gold">{cost}</span>
           </div>
         </div>
@@ -1111,7 +1111,7 @@ export function VideoGeneratorForm({
           <div className="flex items-center gap-2 p-3 rounded-xl bg-destructive/10 border border-destructive/30">
             <AlertCircle className="w-4 h-4 text-destructive flex-shrink-0" />
             <p className="text-xs text-destructive">
-              Недостаточно бананов. Пополните баланс.
+              Недостаточно лапок. Пополните баланс.
             </p>
           </div>
         )}

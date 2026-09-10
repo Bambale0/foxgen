@@ -42,11 +42,11 @@ class ProductConfig:
 HAPPYFOX_PRODUCT = ProductConfig(
     product_id="happyfox",
     brand_name="HappyFox",
-    brand_description="HappyFox — создание фото, видео и AI-контента в Telegram",
+    brand_description="HappyFox — фото, видео и анимация по описанию и референсам",
     welcome_text=(
         "Привет 👋\n\n"
-        "Я <b>HappyFox</b> — удобный AI-сервис для создания изображений, видео и другого контента.\n\n"
-        "👇 Выбирай генерацию в боте или открывай приложение, чтобы начать."
+        "Я <b>HappyFox</b>. Создавайте фото, видео и анимацию по описанию или референсам.\n\n"
+        "👇 Выберите задачу в боте или откройте приложение."
     ),
     credit_name="лапка",
     credit_name_few="лапки",

@@ -669,13 +669,14 @@ export function ProfileTab() {
                 value={channelInput}
                 onChange={(event) => setChannelInput(event.target.value)}
                 maxLength={160}
-                className="h-10 min-w-0 rounded-lg border border-border/60 bg-background px-3 text-sm text-foreground outline-none focus:border-cyan"
+                aria-label="Ссылка на канал"
+                className="h-11 min-w-0 rounded-lg border border-border/60 bg-background px-3 text-sm text-foreground outline-none focus:border-cyan"
                 placeholder="@channel"
               />
               <Button
                 type="button"
                 size="icon"
-                className="h-10 w-10 rounded-lg"
+                className="h-11 w-11 rounded-lg"
                 disabled={channelSaving || !isLive}
                 onClick={handleSaveChannel}
                 aria-label="Сохранить канал"
@@ -700,7 +701,7 @@ export function ProfileTab() {
             ) : null}
           </div>
         ) : displayChannelUrl ? (
-          <Button asChild type="button" variant="secondary" className="h-10 rounded-lg">
+          <Button asChild type="button" variant="secondary" className="min-h-11 rounded-lg">
             <a href={displayChannelUrl} target="_blank" rel="noreferrer">
               <Radio className="h-4 w-4" />
               <span className="truncate">Канал автора</span>
@@ -713,7 +714,7 @@ export function ProfileTab() {
             <Button
               type="button"
               variant="secondary"
-              className="h-10 min-w-0 rounded-lg px-3"
+              className="min-h-11 min-w-0 rounded-lg px-3"
               disabled={!profileShareLink}
               onClick={handleCopyProfileLink}
             >
@@ -721,13 +722,13 @@ export function ProfileTab() {
               <span className="truncate">{copied === 'profile' ? 'Скопировано' : 'Ссылка на профиль'}</span>
             </Button>
             {profileShareLink ? (
-              <Button asChild type="button" variant="secondary" size="icon" className="h-10 w-10 rounded-lg">
+              <Button asChild type="button" variant="secondary" size="icon" className="h-11 w-11 rounded-lg">
                 <a href={profileShareLink} target="_blank" rel="noreferrer" aria-label="Открыть профиль">
                   <ExternalLink className="h-4 w-4" />
                 </a>
               </Button>
             ) : (
-              <Button type="button" variant="secondary" size="icon" className="h-10 w-10 rounded-lg" disabled>
+              <Button type="button" variant="secondary" size="icon" className="h-11 w-11 rounded-lg" disabled>
                 <ExternalLink className="h-4 w-4" />
               </Button>
             )}
@@ -808,28 +809,28 @@ export function ProfileTab() {
                     className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center gap-1 bg-background/25 text-center text-foreground backdrop-blur-[2px]"
                   >
                     <Eye className="h-5 w-5" />
-                    <span className="rounded-full bg-background/80 px-2 py-1 text-[10px] font-semibold">
+                    <span className="rounded-full bg-background/80 px-2 py-1 text-[11px] font-semibold">
                       Открыть
                     </span>
                   </span>
                 ) : null}
-                <span className="pointer-events-none absolute left-1 top-1 flex items-center gap-0.5 rounded bg-background/80 px-1 py-0.5 text-[9px] font-semibold text-foreground backdrop-blur">
+                <span className="pointer-events-none absolute left-1 top-1 flex items-center gap-0.5 rounded bg-background/80 px-1 py-0.5 text-[11px] font-semibold text-foreground backdrop-blur">
                   <Heart className="h-3 w-3" />
                   {formatCompactNumber(item.likes_count)}
                 </span>
-                <span className="pointer-events-none absolute right-1 top-1 flex items-center gap-0.5 rounded bg-background/80 px-1 py-0.5 text-[9px] font-semibold text-foreground backdrop-blur">
+                <span className="pointer-events-none absolute right-1 top-1 flex items-center gap-0.5 rounded bg-background/80 px-1 py-0.5 text-[11px] font-semibold text-foreground backdrop-blur">
                   <Share2 className="h-3 w-3" />
                   {formatCompactNumber(item.shares_count)}
                 </span>
                 <span
-                  className="pointer-events-none absolute right-1 bottom-8 flex items-center gap-0.5 rounded bg-background/80 px-1 py-0.5 text-[9px] font-semibold text-foreground backdrop-blur"
+                  className="pointer-events-none absolute right-1 bottom-8 flex items-center gap-0.5 rounded bg-background/80 px-1 py-0.5 text-[11px] font-semibold text-foreground backdrop-blur"
                   aria-label={`Повторов: ${item.remixes || 0}`}
                 >
                   <Repeat2 className="h-3 w-3" />
                   {formatCompactNumber(item.remixes)}
                 </span>
                 {item.publication_scope === 'profile' ? (
-                  <span className="pointer-events-none absolute bottom-1 left-1/2 -translate-x-1/2 rounded bg-background/85 px-1.5 py-0.5 text-[9px] font-semibold text-cyan backdrop-blur">
+                  <span className="pointer-events-none absolute bottom-1 left-1/2 -translate-x-1/2 rounded bg-background/85 px-1.5 py-0.5 text-[11px] font-semibold text-cyan backdrop-blur">
                     Только профиль
                   </span>
                 ) : null}
@@ -855,7 +856,7 @@ export function ProfileTab() {
               </button>
               <button
                 type="button"
-                className="absolute bottom-1 right-1 flex h-6 min-w-6 items-center justify-center gap-0.5 rounded-full bg-background/80 px-1.5 text-[10px] font-medium text-foreground backdrop-blur transition-colors hover:bg-background disabled:opacity-60"
+                className="absolute bottom-1 right-1 flex h-6 min-w-6 items-center justify-center gap-0.5 rounded-full bg-background/80 px-1.5 text-[11px] font-medium text-foreground backdrop-blur transition-colors hover:bg-background disabled:opacity-60"
                 disabled={!isLive || !profileInteractionsEnabled(item)}
                 onClick={() => setCommentsItem(item)}
                 aria-label="Комментарии"
@@ -1051,7 +1052,7 @@ export function ProfileTab() {
               <button
                 type="button"
                 onClick={() => setCommentsItem(null)}
-                className="flex h-8 w-8 items-center justify-center rounded-full bg-secondary text-muted-foreground"
+                className="flex h-11 w-11 items-center justify-center rounded-full bg-secondary text-muted-foreground"
                 aria-label="Закрыть"
               >
                 <X className="h-4 w-4" />

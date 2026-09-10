@@ -66,39 +66,43 @@ except Exception:
 
 
 def get_main_menu_keyboard(user_credits: int = 0, telegram_id: int | None = None, mini_app_referral_code: str | None = None):
-    """Аккуратное главное меню: сценарии сверху, детали моделей внутри разделов."""
+    """Главное меню HappyFox: короткий путь к ключевым сценариям."""
     builder = InlineKeyboardBuilder()
 
     if config.mini_app_url:
         builder.row(
             InlineKeyboardButton(
-                text="🚀 Открыть Mini App",
+                text="🚀 Mini App",
                 web_app=WebAppInfo(url=_mini_app_url_with_referral(mini_app_referral_code) or config.mini_app_url),
             )
         )
+
     builder.row(
         InlineKeyboardButton(text="🖼 Создать фото", callback_data="create_image_text_new"),
+        InlineKeyboardButton(text="🎙 Создать озвучку", callback_data="omni_mode_audio"),
+    )
+    builder.row(
         InlineKeyboardButton(text="🎬 Создать видео", callback_data="create_video_new"),
+        InlineKeyboardButton(text="🎵 Создать музыку · Suno", callback_data="happyfox_music"),
     )
     builder.row(
         InlineKeyboardButton(text="🎯 Motion Control", callback_data="motion_control"),
-        InlineKeyboardButton(text="✍️ Промпт по описанию", callback_data="photo_to_prompt"),
+        InlineKeyboardButton(text="✨ Промпты", callback_data="menu_prompts"),
     )
     builder.row(
-        InlineKeyboardButton(text=f"🎞 Промпт по видео • {_video_prompt_price_label()}🍌", callback_data="video_to_prompt"),
+        InlineKeyboardButton(text="🔷 Gemini Omni", callback_data="v_model_gemini_omni"),
         InlineKeyboardButton(text="🤖 AI-помощник", callback_data="menu_ai_assistant"),
     )
     builder.row(
-        InlineKeyboardButton(text="📚 Библиотека промптов", callback_data="menu_prompts"),
-        InlineKeyboardButton(text="🖼 Лента", callback_data="menu_feed"),
-    )
-    builder.row(
-        InlineKeyboardButton(text=f"🍌 Баланс: {user_credits}", callback_data="menu_balance"),
+        InlineKeyboardButton(text="🔗 Ссылки на работы", callback_data="menu_feed"),
         InlineKeyboardButton(text="💬 Поддержка", callback_data="menu_support"),
     )
     builder.row(
-        InlineKeyboardButton(text="🤝 Партнёрам", callback_data="menu_partner"),
-        InlineKeyboardButton(text="⋯ Ещё", callback_data="ux_more"),
+        InlineKeyboardButton(text=f"🍌 Баланс: {user_credits}", callback_data="menu_balance"),
+        InlineKeyboardButton(text="🤝 Партнёры", callback_data="menu_partner"),
+    )
+    builder.row(
+        InlineKeyboardButton(text="💳 Тарифы", callback_data="menu_topup")
     )
 
     return builder.as_markup()
@@ -164,10 +168,11 @@ def get_motion_control_model_keyboard(current_model: str = "motion_control_v26")
 
 
 def get_more_menu_keyboard():
+    """Дополнительные AI-сценарии из главного меню HappyFox."""
     builder = InlineKeyboardBuilder()
-    builder.button(text="❓ Как пользоваться", callback_data="menu_help")
-    builder.button(text="💬 Поддержка", callback_data="menu_support")
-    builder.button(text="💰 Пополнить", callback_data="menu_topup")
+    builder.button(text="🎬 Видео", callback_data="create_video_new")
+    builder.button(text="🖼 Фото", callback_data="create_image_text_new")
+    builder.button(text="✨ Улучшение", callback_data="create_image_refs_new")
     builder.button(text="🏠 Главное меню", callback_data="back_main")
     builder.adjust(2, 1, 1)
     return builder.as_markup()

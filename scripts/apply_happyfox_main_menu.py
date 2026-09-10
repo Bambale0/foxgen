@@ -214,19 +214,29 @@ def _patch_common() -> None:
             1,
         )
 
-    old_title = "⋯ <b>Ещё</b>"
-    new_title = "✨ <b>Прочий AI</b>"
-    if old_title in text:
-        text = text.replace(old_title, new_title, 1)
-    elif new_title not in text:
-        raise RuntimeError("HappyFox other-AI title anchor was not found")
+    new_title = "✨ <b>Другие AI-инструменты</b>"
+    legacy_titles = ("⋯ <b>Ещё</b>", "✨ <b>Прочий AI</b>")
+    if new_title not in text:
+        for legacy_title in legacy_titles:
+            if legacy_title in text:
+                text = text.replace(legacy_title, new_title, 1)
+                break
+        else:
+            raise RuntimeError("HappyFox other-AI title anchor was not found")
 
-    old_body = "Здесь находятся баланс, история, помощь и поддержка."
-    new_body = "Выберите дополнительный сценарий: видео, фото или улучшение."
-    if old_body in text:
-        text = text.replace(old_body, new_body, 1)
-    elif new_body not in text:
-        raise RuntimeError("HappyFox other-AI body anchor was not found")
+    new_body = "Выберите, что хотите сделать: создать видео, создать фото или улучшить готовое изображение."
+    legacy_bodies = (
+        "Здесь находятся баланс, история, помощь и поддержка.",
+        "Выберите дополнительный сценарий: видео, фото или улучшение.",
+        "Баланс, история генераций, поддержка и другие полезные разделы.",
+    )
+    if new_body not in text:
+        for legacy_body in legacy_bodies:
+            if legacy_body in text:
+                text = text.replace(legacy_body, new_body, 1)
+                break
+        else:
+            raise RuntimeError("HappyFox other-AI body anchor was not found")
 
     COMMON_PATH.write_text(text, encoding="utf-8")
 
