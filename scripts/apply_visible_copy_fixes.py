@@ -6,9 +6,12 @@ source layout changes.
 """
 
 
-BUTTON_TEXT = (
+LEGACY_DIRECT_PROMPT_BUTTON = (
     'InlineKeyboardButton(text="✍️ Промпт по описанию", '
     'callback_data="photo_to_prompt"),'
+)
+CURRENT_PROMPTS_HUB_BUTTON = (
+    'InlineKeyboardButton(text="✨ Промпты", callback_data="menu_prompts"),'
 )
 PRICE_IN_BUTTON_FRAGMENT = "Промпт по описанию •"
 
@@ -252,12 +255,17 @@ def normalize_miniapp_trend_video_previews() -> None:
 
 
 def main() -> None:
-    keyboard_path = "bot/keyboards.py"
-    keyboard_text = read_text(keyboard_path)
-    if BUTTON_TEXT not in keyboard_text:
-        raise RuntimeError("Main-menu photo prompt button was not found")
-    if PRICE_IN_BUTTON_FRAGMENT in keyboard_text:
-        raise RuntimeError("Photo prompt price must not be shown in the menu button")
+    keyboard_text = read_text("bot/keyboards.py")
+    main_menu_block = keyboard_text.split("def get_main_menu_keyboard", 1)[1].split(
+        "def get_create_hub_keyboard", 1
+    )[0]
+    if not any(
+        button in main_menu_block
+        for button in (CURRENT_PROMPTS_HUB_BUTTON, LEGACY_DIRECT_PROMPT_BUTTON)
+    ):
+        raise RuntimeError("Main-menu prompts entry was not found")
+    if PRICE_IN_BUTTON_FRAGMENT in main_menu_block:
+        raise RuntimeError("Photo prompt price must not be shown in the main menu")
 
     normalize_photo_prompt_screen()
     validate_active_prompt_analyzer_screen()
