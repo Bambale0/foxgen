@@ -214,6 +214,30 @@ class MaxClient:
     async def get_subscriptions(self) -> dict[str, Any]:
         return await self._request_json("GET", "/subscriptions")
 
+    async def get_bot_info(self) -> dict[str, Any]:
+        return await self._request_json("GET", "/me")
+
+    async def set_bot_commands(
+        self,
+        commands: list[dict[str, str]],
+    ) -> dict[str, Any]:
+        if len(commands) > 32:
+            raise ValueError("MAX supports at most 32 bot commands")
+
+        normalized: list[dict[str, str]] = []
+        for command in commands:
+            name = str(command.get("name") or "").strip().lstrip("/")
+            description = str(command.get("description") or "").strip()
+            if not name or not description:
+                raise ValueError("MAX bot commands require name and description")
+            normalized.append({"name": name, "description": description})
+
+        return await self._request_json(
+            "PATCH",
+            "/me/commands",
+            json_body={"commands": normalized},
+        )
+
     async def get_upload_slot(self, media_type: str) -> dict[str, Any]:
         if media_type not in MAX_MEDIA_TYPES:
             raise ValueError("Unsupported MAX media type")
@@ -333,8 +357,20 @@ def link_button(text: str, url: str) -> dict[str, str]:
     return {"type": "link", "text": text, "url": url}
 
 
-def open_app_button(text: str, url: str) -> dict[str, str]:
-    return {"type": "open_app", "text": text, "web_app": url}
+def open_app_button(
+    text: str,
+    web_app: str = "",
+    *,
+    payload: str = "",
+) -> dict[str, str]:
+    button = {"type": "open_app", "text": text}
+    target = str(web_app or "").strip()
+    if target:
+        button["web_app"] = target
+    launch_payload = str(payload or "").strip()
+    if launch_payload:
+        button["payload"] = launch_payload
+    return button
 
 
 def inline_keyboard(rows: list[list[dict[str, Any]]]) -> dict[str, Any]:

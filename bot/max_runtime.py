@@ -10,6 +10,7 @@ from aiohttp import web
 
 from bot.max_admin_channel import MaxAdminChannelService
 from bot.max_api import MAX_UPDATE_TYPES, MaxClient, MaxSettings, setup_max_routes
+from bot.max_commands import MAX_QUICK_COMMANDS, max_quick_commands_payload
 from bot.max_generation import install_max_generation_worker
 from bot.max_payments import MaxYooKassaService, ensure_max_payment_schema
 from bot.max_seedance25 import MaxSeedance25GenerationService
@@ -101,6 +102,36 @@ async def _ensure_max_subscription(
     )
 
 
+async def _ensure_max_quick_commands(client: MaxClient) -> None:
+    """Reconcile MAX native quick commands and verify the visible bot contract."""
+
+    await client.set_bot_commands(max_quick_commands_payload())
+    info = await client.get_bot_info()
+    declared = info.get("commands")
+    if not isinstance(declared, list):
+        raise TypeError("MAX bot info did not return a commands list")
+
+    actual = [
+        (
+            str(command.get("name") or "").strip().lstrip("/"),
+            str(command.get("description") or "").strip(),
+        )
+        for command in declared
+        if isinstance(command, dict)
+    ]
+    expected = list(MAX_QUICK_COMMANDS)
+    if actual != expected:
+        raise RuntimeError(
+            "MAX quick commands did not reconcile: "
+            f"expected={expected!r} actual={actual!r}"
+        )
+
+    logger.info(
+        "MAX quick commands reconciled: %s",
+        ", ".join(f"/{name}" for name, _ in MAX_QUICK_COMMANDS),
+    )
+
+
 async def _max_payment_reconcile_loop(
     *,
     payments: MaxYooKassaService,
@@ -171,6 +202,7 @@ def setup_max_runtime(app: web.Application) -> None:
     async def runtime_ctx(_app: web.Application):
         await ensure_max_payment_schema()
         await _ensure_max_subscription(client, webhook_url=runtime.webhook_url)
+        await _ensure_max_quick_commands(client)
         stop_event = asyncio.Event()
         reconcile_task = asyncio.create_task(
             _max_payment_reconcile_loop(

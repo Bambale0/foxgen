@@ -53,7 +53,7 @@ main CI success
  -> pin dedicated HappyFox SSH host
  -> isolated runtime preflight
  -> deploy exact backend + static Mini App/landing
- -> reconcile Telegram webhook + commands menu and MAX subscription
+ -> reconcile Telegram webhook + commands menu and MAX subscription + quick commands
  -> public health/revision/payment-webhook smoke
  -> publish deployment status
 ```
@@ -75,6 +75,7 @@ Telegram webhook URL is https://api.happy-fox.online/webhook
 Telegram pending_update_count = 0 and last_error_message is empty
 Telegram native chat menu type = commands
 MAX has only the current api.happy-fox.online subscription
+MAX native quick commands are /start, /feed, /prompts, /help, /ref, /earn
 YooKassa/provider webhook routes are live
 ```
 
