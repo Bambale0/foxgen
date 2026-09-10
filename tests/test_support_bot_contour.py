@@ -31,6 +31,18 @@ def test_support_source_is_explicit_and_bounded() -> None:
     assert _normalize_source("telegram_support_bot") == "telegram_support_bot"
 
 
+def test_support_ticket_reads_and_outbox_are_source_isolated() -> None:
+    service = Path("bot/support_service.py").read_text(encoding="utf-8")
+    assert "source: str = SUPPORT_SOURCE_MAIN" in service
+    assert service.count("AND st.source = ?") >= 3
+    assert "support_outbox_worker(bot, source=normalized_source)" in service
+
+
+def test_gpt_answer_is_sent_as_plain_text() -> None:
+    runtime = Path("bot/support_bot_runtime.py").read_text(encoding="utf-8")
+    assert "message.answer(chunk, parse_mode=None)" in runtime
+
+
 def test_support_compose_service_is_opt_in_and_separate() -> None:
     compose = Path("compose.backend.yml").read_text(encoding="utf-8")
     assert "support_bot:" in compose
