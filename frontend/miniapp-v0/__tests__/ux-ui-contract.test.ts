@@ -2,7 +2,9 @@ import fs from 'node:fs'
 import path from 'node:path'
 
 const root = path.resolve(__dirname, '..')
+const repoRoot = path.resolve(root, '../..')
 const read = (relative: string) => fs.readFileSync(path.join(root, relative), 'utf8')
+const readRepo = (relative: string) => fs.readFileSync(path.join(repoRoot, relative), 'utf8')
 
 function componentSources() {
   const dir = path.join(root, 'components')
@@ -47,10 +49,13 @@ describe('HappyFox UX/UI guardrails', () => {
     expect(detail).not.toContain('>Blur<')
   })
 
-  test('honors reduced motion and visible keyboard focus', () => {
+  test('honors reduced motion, keyboard focus and coarse-pointer targets', () => {
     const css = read('app/globals.css')
     expect(css).toContain('@media (prefers-reduced-motion: reduce)')
     expect(css).toContain(':focus-visible')
+    expect(css).toContain('@media (pointer: coarse)')
+    expect(css).toContain('min-width: 44px')
+    expect(css).toContain('min-height: 44px')
   })
 
   test('critical icon-only actions have accessible names and 44px targets', () => {
@@ -66,5 +71,17 @@ describe('HappyFox UX/UI guardrails', () => {
     expect(detail).toContain('aria-label="Скопировать номер задачи"')
     expect(result).toContain('aria-label="Закрыть результат"')
     expect(result).toContain('aria-label="Закрыть полный просмотр"')
+  })
+
+  test('other-AI screen describes the actions its keyboard actually offers', () => {
+    const common = readRepo('bot/handlers/common.py')
+    const normalizer = readRepo('scripts/apply_happyfox_main_menu.py')
+
+    expect(common).toContain('✨ <b>Другие AI-инструменты</b>')
+    expect(common).toContain('создать видео, создать фото или улучшить готовое изображение')
+    expect(normalizer).toContain('🎬 Видео')
+    expect(normalizer).toContain('🖼 Фото')
+    expect(normalizer).toContain('✨ Улучшение')
+    expect(normalizer).toContain('Другие AI-инструменты')
   })
 })
