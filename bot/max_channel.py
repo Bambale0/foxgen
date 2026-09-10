@@ -14,6 +14,7 @@ from bot.max_api import (
     link_button,
 )
 from bot.max_catalog import MAX_VIDEO_TYPES, MaxPresetManager, max_preset_manager
+from bot.max_commands import MAX_QUICK_COMMAND_TARGETS, max_quick_command_name
 from bot.max_generation import MaxGenerationJob, enqueue_max_generation
 from bot.max_payments import (
     MaxYooKassaService,
@@ -799,7 +800,13 @@ class MaxChannelService:
             return
 
         text = _message_text(update).strip().lower()
-        if text in {"/start", "start", "старт", "меню", "/menu"}:
+        command_name = max_quick_command_name(text)
+        command_payload = MAX_QUICK_COMMAND_TARGETS.get(command_name)
+        if command_payload:
+            await self._handle_callback(user_id, "", command_payload)
+            return
+
+        if text in {"start", "старт", "меню", "/menu"}:
             await self._home(user_id)
         elif text in {"фото", "создать фото"}:
             await self._respond(
