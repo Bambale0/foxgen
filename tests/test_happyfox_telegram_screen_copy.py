@@ -9,11 +9,17 @@ def _read(path: str) -> str:
 
 def test_telegram_primary_screens_use_current_happyfox_copy() -> None:
     common = _read("bot/handlers/common.py")
-    assert "Скажите, что хотите получить: изображение, ролик, озвучку или музыку." in common
+    assert (
+        "Скажите, что хотите получить: изображение, ролик, озвучку или музыку."
+        in common
+    )
     assert "<b>Быстрый старт</b>" in common
     assert "Что создаём? Выберите результат" in common
     assert "🐾 <b>Баланс HappyFox</b>" in common
-    assert "Опишите проблему одним сообщением. AI-поддержка попробует решить её сразу." in common
+    assert (
+        "Опишите проблему одним сообщением. AI-поддержка попробует решить её сразу."
+        in common
+    )
     assert "🤖 <b>HappyFox:</b>" in common
 
 
@@ -36,7 +42,9 @@ def test_telegram_partner_and_payment_screens_are_current() -> None:
     assert "🤝 <b>Партнёрская программа</b>" in partner
     assert "<b>Ваше вознаграждение</b>" in partner
     assert "Это практическое руководство по участию" not in partner
-    assert "Выберите пакет лапок. Итоговую сумму увидите до перехода к оплате." in payments
+    assert (
+        "Выберите пакет лапок. Итоговую сумму увидите до перехода к оплате." in payments
+    )
     assert "Выберите пакет бананов ниже." not in payments
 
 
@@ -51,6 +59,11 @@ def test_telegram_auxiliary_copy_has_no_old_public_brand() -> None:
 
 def test_product_normalizer_runs_telegram_screen_copy_before_currency_guard() -> None:
     normalizer = _read("scripts/apply_happyfox_product_copy.py")
-    assert "from apply_happyfox_telegram_screen_copy import apply_happyfox_telegram_screen_copy" in normalizer
+    assert (
+        "from apply_happyfox_telegram_screen_copy import apply_happyfox_telegram_screen_copy"
+        in normalizer
+    )
     assert "apply_happyfox_telegram_screen_copy()" in normalizer
-    assert normalizer.index("apply_happyfox_telegram_screen_copy()") < normalizer.index("_patch_currency_copy()", normalizer.index("def main()"))
+    assert normalizer.index("apply_happyfox_telegram_screen_copy()") < normalizer.index(
+        "_patch_currency_copy()", normalizer.index("def main()")
+    )
