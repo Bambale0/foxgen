@@ -151,6 +151,38 @@ def test_max_photo_follows_model_refs_settings_prompt_confirm(
     assert "max:cancel" in _callbacks(client.sent[-1])
 
 
+def test_max_image_model_change_preserves_uploaded_references(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    _prepare_database(tmp_path / "max-photo-model-change.db", monkeypatch)
+    service, client = _service()
+
+    asyncio.run(service.handle_update(_callback(805, "photo", "max:create_image")))
+    asyncio.run(service.handle_update(_callback(805, "model", "max:image:banana_2")))
+    asyncio.run(
+        service.handle_update(
+            _message(805, image_url="https://example.invalid/reference.jpg")
+        )
+    )
+    asyncio.run(
+        service.handle_update(_callback(805, "continue", "max:image:refs:continue"))
+    )
+    assert asyncio.run(get_max_session(805)).state == "parity:image:settings_prompt"
+
+    asyncio.run(service.handle_update(_callback(805, "change-model", "max:create_image")))
+    selecting = asyncio.run(get_max_session(805))
+    assert selecting.state == "parity:image:select_model"
+    assert selecting.data["image_urls"] == ["https://example.invalid/reference.jpg"]
+    assert "Референсы сохранены" in client.answers[-1]["message"]["text"]
+
+    asyncio.run(service.handle_update(_callback(805, "new-model", "max:image:banana_pro")))
+    session = asyncio.run(get_max_session(805))
+    assert session.state == "parity:image:settings_prompt"
+    assert session.data["image_urls"] == ["https://example.invalid/reference.jpg"]
+    assert "Настройки фото" in client.answers[-1]["message"]["text"]
+
+
 def test_max_required_image_reference_cannot_be_skipped(tmp_path, monkeypatch) -> None:
     _prepare_database(tmp_path / "max-photo-required-ref.db", monkeypatch)
     service, client = _service()
