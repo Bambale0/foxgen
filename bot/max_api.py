@@ -357,8 +357,20 @@ def link_button(text: str, url: str) -> dict[str, str]:
     return {"type": "link", "text": text, "url": url}
 
 
-def open_app_button(text: str, url: str) -> dict[str, str]:
-    return {"type": "open_app", "text": text, "web_app": url}
+def open_app_button(
+    text: str,
+    web_app: str = "",
+    *,
+    payload: str = "",
+) -> dict[str, str]:
+    button = {"type": "open_app", "text": text}
+    target = str(web_app or "").strip()
+    if target:
+        button["web_app"] = target
+    launch_payload = str(payload or "").strip()
+    if launch_payload:
+        button["payload"] = launch_payload
+    return button
 
 
 def inline_keyboard(rows: list[list[dict[str, Any]]]) -> dict[str, Any]:
