@@ -57,7 +57,7 @@ async def _send_chunks(message: types.Message, text: str) -> None:
             split_at = max(chunk.rfind("\n"), chunk.rfind(". "))
             if split_at > 1200:
                 chunk = chunk[: split_at + 1]
-        await message.answer(chunk)
+        await message.answer(chunk, parse_mode=None)
         clean = clean[len(chunk) :].lstrip()
 
 
