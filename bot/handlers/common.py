@@ -1264,19 +1264,18 @@ def _get_user_menu(user_id: int) -> str:
 def _build_main_menu_text(user_credits: int, referral_bonus_text: str = "") -> str:
     bonus_block = f"\n{referral_bonus_text.strip()}\n" if referral_bonus_text else "\n"
     return (
-        "🏠 <b>NEUROMIX</b>\n"
-        "Привет! Я — твой AI-помощник для создания контента.\n"
-        "Могу сгенерировать фото, видео и анимацию по тексту или референсам.\n"
-        "Просто выбери, что хочешь сделать 👇\n\n"
-        "<b>Что умею</b>\n"
-        "🖼 Создать фото — опиши, что хочешь увидеть\n"
-        "🎬 Создать видео — текст, фото или видео в ролик\n"
-        "🎭 Оживить фото — перенести движение на персонажа\n"
-        "🔁 Изменить фото — заменить фон, одежду, детали\n"
-        "📸 Промпт по фото — нейросеть опишет твой снимок\n"
-        "📱 Лента — смотри работы других пользователей\n"
-        "📚 Библиотека промптов — готовые запросы на все случаи\n"
-        "🤖 Помощник — подберёт модель и поможет с запросом\n\n"
+        "🏠 <b>HappyFox</b>\n"
+        "Создавайте фото, видео и анимацию по описанию или референсам.\n"
+        "Выберите задачу — дальше покажу только нужные шаги. 👇\n\n"
+        "<b>Что можно сделать</b>\n"
+        "🖼 Создать фото — по описанию или референсу\n"
+        "🎬 Создать видео — по тексту, фото или готовому ролику\n"
+        "🎭 Оживить фото — добавить или перенести движение\n"
+        "🔁 Изменить фото — поменять фон, стиль, одежду или детали\n"
+        "📸 Промпт по фото — разобрать кадр и получить готовый промпт\n"
+        "📱 Лента — посмотреть работы других пользователей\n"
+        "📚 Библиотека промптов — выбрать готовую идею для генерации\n"
+        "🤖 Помощник — подобрать модель, настройки и улучшить промпт\n\n"
         f"🍌 <b>Баланс:</b> <code>{user_credits}</code> бананов"
         f"{bonus_block}"
         "🎁 <b>Новым пользователям — 15 бананов в подарок!</b>\n"
@@ -1299,7 +1298,7 @@ def _build_balance_text(stats: dict) -> str:
 def _build_settings_text() -> str:
     return (
         "⚙️ <b>Настройки</b>\n"
-        "Здесь можно выбрать модели по умолчанию и уведомления.\n\n"
+        "Выберите модели по умолчанию и настройте уведомления — эти параметры будут использоваться в новых генерациях.\n\n"
         "<b>Что можно настроить</b>\n"
         "• фото\n"
         "• видео из текста\n"
@@ -1313,7 +1312,7 @@ def _build_settings_text() -> str:
 def _build_motion_control_menu_text(user_credits: int) -> str:
     return (
         "🎬 <b>Motion Control</b>\n"
-        "Этот режим переносит движение из видео на фото.\n\n"
+        "Загрузите фото персонажа и ролик с движением — HappyFox перенесёт движение на ваш образ.\n\n"
         "<b>Как это работает</b>\n"
         "1. Загрузите фото\n"
         "2. Добавьте видео с движением\n"
@@ -3265,7 +3264,7 @@ async def _send_full_prompt(message: types.Message, prompt: dict) -> None:
     raw_prompt = str(prompt.get("prompt_text") or "").strip()
     if not raw_prompt:
         await message.answer(
-            "У этого элемента нет текста prompt.",
+            "У этого элемента нет текста промпта.",
             reply_markup=_build_prompt_use_keyboard(),
         )
         return
@@ -3293,8 +3292,7 @@ async def show_create_hub(callback: types.CallbackQuery, state: FSMContext):
     text = (
         "✨ <b>Создать</b>\n"
         f"🍌 Баланс: <code>{user.credits}</code> бананов\n\n"
-        "Выберите, что хотите получить. Можно использовать готовый сценарий "
-        "или открыть пошаговый режим."
+        "Выберите, что хотите получить — дальше покажу только подходящие настройки."
     )
     await callback.message.edit_text(
         text, reply_markup=get_create_hub_keyboard(), parse_mode="HTML"
@@ -3310,8 +3308,7 @@ async def show_edit_hub(callback: types.CallbackQuery, state: FSMContext):
     text = (
         "✏️ <b>Изменить фото</b>\n"
         f"🍌 Баланс: <code>{user.credits}</code> бананов\n\n"
-        "Здесь можно поменять стиль, фон, одежду, детали или настроение кадра.\n"
-        "Сначала выберите сценарий ниже."
+        "Загрузите исходное фото и выберите, что изменить: фон, стиль, одежду, детали или настроение."
     )
     await callback.message.edit_text(
         text, reply_markup=get_edit_hub_keyboard(), parse_mode="HTML"
@@ -3327,7 +3324,7 @@ async def show_animate_hub(callback: types.CallbackQuery, state: FSMContext):
     text = (
         "🎬 <b>Оживить</b>\n"
         f"🍌 Баланс: <code>{user.credits}</code> бананов\n\n"
-        "Выберите, как хотите сделать видео:\n"
+        "Выберите способ оживить изображение:\n"
         "• оживить фото\n"
         "• перенести движение\n"
         "• использовать видео-референсы"
@@ -3346,7 +3343,7 @@ async def show_more_menu(callback: types.CallbackQuery, state: FSMContext):
     text = (
         "⋯ <b>Ещё</b>\n"
         f"🍌 Баланс: <code>{user.credits}</code> бананов\n\n"
-        "Здесь находятся баланс, история, помощь и поддержка."
+        "Баланс, история генераций, поддержка и другие полезные разделы."
     )
     await callback.message.edit_text(
         text, reply_markup=get_more_menu_keyboard(), parse_mode="HTML"
@@ -3699,7 +3696,7 @@ async def send_prompt_to_use(callback: types.CallbackQuery):
         return
 
     await _send_full_prompt(callback.message, prompt)
-    await _safe_callback_answer(callback, "Prompt отправлен")
+    await _safe_callback_answer(callback, "Промпт отправлен")
 
 
 @router.callback_query(F.data == SUBSCRIPTION_CHECK_CALLBACK)
@@ -4086,11 +4083,11 @@ async def show_prompt_channel(callback: types.CallbackQuery):
     """Показывает информацию о канале с промптами."""
     text = (
         "📚 <b>Канал промптов</b>\n\n"
-        "Здесь позже будет ссылка на канал с готовыми промптами и примерами.\n\n"
-        "Пока можно использовать:\n"
+        "Раздел с готовыми примерами ещё готовится.\n\n"
+        "Уже сейчас можно использовать:\n"
         "• кнопку <b>Промпт по фото</b> для разбора референса\n"
         "• AI-помощника для сборки промпта под вашу задачу\n\n"
-        "Когда добавите ссылку на канал, её можно будет поставить сюда отдельной кнопкой."
+        "Так можно собрать сильный промпт, не дожидаясь готового примера."
     )
     try:
         await callback.message.edit_text(

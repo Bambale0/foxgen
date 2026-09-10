@@ -418,7 +418,7 @@ export function TrendsTab() {
             <h2 className="font-serif text-xl font-semibold text-foreground">Тренды</h2>
           </div>
           <p className="mt-1 max-w-xl text-sm text-muted-foreground">
-            Готовые фото- и видео-шаблоны от команды NEUROMIX.
+            Готовые идеи для фото и видео — выберите тренд, добавьте свои данные и запустите генерацию.
           </p>
         </div>
         {isAdmin ? (

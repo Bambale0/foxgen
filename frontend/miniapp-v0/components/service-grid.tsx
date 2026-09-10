@@ -18,7 +18,7 @@ const primaryServices = [
     id: 'prompt-by-photo',
     icon: Wand2,
     title: 'Промпт по фото',
-    description: 'Загрузите референс — AI соберёт точный prompt для похожей генерации.',
+    description: 'Загрузите фото — получите готовый промпт, который передаст стиль и детали.',
     badge: '1 ₽ · 0,1 🍌',
     tone: 'gold',
   },
@@ -26,7 +26,7 @@ const primaryServices = [
     id: 'avatar',
     icon: Mic2,
     title: 'Avatar',
-    description: 'Говорящий аватар: загрузите фото персонажа и аудио.',
+    description: 'Загрузите фото и аудио — персонаж заговорит и оживёт в кадре.',
     badge: 'Фото + аудио',
     tone: 'cyan',
   },
@@ -34,7 +34,7 @@ const primaryServices = [
     id: 'edit-photo',
     icon: Pencil,
     title: 'Изменить фото',
-    description: 'Правки по исходнику: фон, стиль, детали, одежда, настроение.',
+    description: 'Загрузите исходник и напишите, что изменить: фон, стиль, одежду или детали.',
     badge: 'Правки',
     tone: 'cyan',
   },
@@ -42,7 +42,7 @@ const primaryServices = [
     id: 'animate',
     icon: Play,
     title: 'Оживить фото',
-    description: 'Переход к видео-сценариям: стартовый кадр, движение, камера.',
+    description: 'Превратите изображение в короткое видео с нужным движением и камерой.',
     badge: 'Анимация',
     tone: 'success',
   },
@@ -53,19 +53,19 @@ const secondaryServices = [
     id: 'support',
     icon: HeadphonesIcon,
     title: 'Поддержка',
-    description: 'Помощь по задачам, оплате и результатам.',
+    description: 'Поможем с генерацией, оплатой или результатом.',
   },
   {
     id: 'partners',
     icon: Users,
     title: 'Партнёрам',
-    description: 'Рефералка, материалы и условия.',
+    description: 'Приглашайте пользователей и получайте вознаграждение.',
   },
   {
     id: 'more',
     icon: MoreHorizontal,
     title: 'Ещё',
-    description: 'Дополнительные разделы и переходы.',
+    description: 'История, настройки и дополнительные возможности.',
   },
 ]
 
@@ -96,7 +96,7 @@ export function ServiceGrid({ activeServiceId, onServiceClick }: ServiceGridProp
             Сервисы
           </h2>
           <p className="mt-2 text-sm leading-6 text-muted-foreground">
-            Быстрые инструменты для подготовки промптов, редактирования, анимации и поддержки.
+            Выберите задачу — подготовим промпт, изменим фото, оживим кадр или поможем разобраться.
           </p>
         </div>
       </div>

@@ -511,7 +511,7 @@ export function FeedTab() {
     <div className="px-4 space-y-5">
       <div>
         <h2 className="font-serif text-xl font-semibold text-foreground">Лента работ</h2>
-        <p className="mt-1 text-sm text-muted-foreground">Публичные фото и видео, которые можно лайкнуть, открыть или повторить.</p>
+        <p className="mt-1 text-sm text-muted-foreground">Смотрите работы других пользователей, сохраняйте идеи и повторяйте понравившиеся генерации.</p>
       </div>
 
       <div className="space-y-2">
