@@ -159,7 +159,7 @@ export function VideoTab() {
           </div>
           <h2 className="text-2xl font-black tracking-[-0.035em] text-foreground">Создайте видео</h2>
           <p className="mt-1 max-w-xl text-xs leading-relaxed text-muted-foreground">
-            Выберите подходящую модель, сценарий и длительность. Для image-to-video добавьте стартовый кадр.
+            Опишите сцену и выберите подходящую модель. Если делаете видео из фото, добавьте стартовый кадр.
           </p>
         </div>
         <div className="shrink-0 pt-1 text-right">
@@ -248,18 +248,18 @@ export function VideoTab() {
               <h3 className="text-lg font-bold text-foreground">Seedance 2.5</h3>
               {seedanceQueued ? (
                 <div className="mt-2 space-y-2 text-sm">
-                  <p>Задача отправлена в Kie.ai.</p>
+                  <p>Видео поставлено в очередь.</p>
                   <p className="break-all font-mono text-[10px] text-muted-foreground">{seedanceQueued.task_id}</p>
                   <p className="text-xs leading-relaxed text-muted-foreground">
                     {seedanceQueued.admin_free
                       ? 'Для администратора списание отключено.'
                       : `Списано ${seedanceQueued.cost} кредитов.`}{' '}
-                    Результат придёт в Telegram. Если callback задержится, включён polling fallback.
+                    Готовый ролик придёт в Telegram автоматически. Статус также появится в истории.
                   </p>
                 </div>
               ) : (
                 <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-                  Здесь появится ID последней задачи. Итоговое видео бот пришлёт автоматически.
+                  После запуска здесь появится статус последнего видео. Готовый ролик бот пришлёт автоматически.
                 </p>
               )}
             </div>
@@ -276,7 +276,7 @@ export function VideoTab() {
               <p className="mb-2 text-[9px] font-black uppercase tracking-[0.16em] text-gold">Результат</p>
               <h3 className="text-lg font-bold text-foreground">Видео-панель</h3>
               <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-                После запуска здесь появятся очередь, task id и превью ролика. Все параметры сохраняются в истории.
+                Запустите генерацию — здесь появятся статус и готовое видео. Результат сохранится в истории.
               </p>
             </div>
           )}

@@ -141,15 +141,15 @@ class MaxProductChannelService(MaxSeedance25ChannelService):
         await self._respond(
             user_id,
             "🦊 <b>HappyFox в MAX</b>\n\n"
-            "Создавайте контент прямо в чате — без команд и длинных настроек.\n\n"
+            "Выберите задачу — HappyFox проведёт по нужным шагам прямо в чате.\n\n"
             "<b>Что здесь есть</b>\n"
-            "🖼 Фото — генерация и редактирование по референсам\n"
-            "🎬 Видео — текст → видео, фото → видео и видео → видео\n"
-            "🎯 Motion Control — перенос движения из ролика на персонажа\n"
-            "🎙 Озвучка — Gemini Omni Audio ID\n"
-            "🎵 Suno — музыка, lyrics, cover и аудио-инструменты\n"
-            "✨ Промпты — готовая библиотека прямо в MAX\n"
-            "🤖 AI-помощник — выбор модели, промпта и настроек\n\n"
+            "🖼 Фото — создайте новое изображение или измените готовое\n"
+            "🎬 Видео — создайте ролик по тексту, фото или видео\n"
+            "🎯 Motion Control — перенесите движение из ролика на персонажа\n"
+            "🎙 Озвучка — создайте голосовой профиль для доступных сценариев\n"
+            "🎵 Suno — создайте музыку и работайте с готовым аудио\n"
+            "✨ Промпты — выберите готовую идею для генерации\n"
+            "🤖 AI-помощник — поможет с идеей, промптом и выбором модели\n\n"
             f"🐾 <b>Баланс MAX:</b> {_format_cost(balance)}\n"
             "<i>Выберите нужный экран ниже.</i>",
             attachments=main_menu(balance, mini_app_url=self.settings.mini_app_url),
@@ -162,9 +162,8 @@ class MaxProductChannelService(MaxSeedance25ChannelService):
             user_id,
             "🐾 <b>Баланс MAX</b>\n\n"
             f"Доступно: <b>{_format_cost(balance)} 🐾</b>\n"
-            "1 🐾 используется только внутри MAX и не смешивается с балансом Telegram.\n\n"
-            "Стоимость конкретной генерации всегда показывается до запуска. "
-            "Ниже можно сразу выбрать пакет пополнения.",
+            "Баланс MAX хранится отдельно от Telegram. Стоимость каждой генерации покажем до запуска.\n\n"
+            "Ниже можно выбрать пакет пополнения.",
             attachments=topup_menu(self.catalog),
             callback_id=callback_id,
         )
@@ -179,8 +178,7 @@ class MaxProductChannelService(MaxSeedance25ChannelService):
             await self._respond(
                 user_id,
                 "💳 <b>Тарифы MAX</b>\n\n"
-                "Пакеты уже настроены, но платёжный шлюз MAX сейчас недоступен. "
-                "Баланс и генерации продолжат работать с текущим остатком.",
+                "Пополнение сейчас недоступно. Текущий баланс и генерации продолжают работать.",
                 attachments=back_home_menu(),
                 callback_id=callback_id,
             )
@@ -188,9 +186,8 @@ class MaxProductChannelService(MaxSeedance25ChannelService):
         await self._respond(
             user_id,
             "💳 <b>Тарифы MAX</b>\n\n"
-            "Выберите пакет 🐾. Счёт создаётся только после выбора пакета, "
-            "а начисление идёт в отдельный MAX-баланс после подтверждения оплаты.\n\n"
-            "<i>Перед оплатой вы увидите сумму и количество 🐾.</i>",
+            "Выберите пакет. Перед оплатой покажем сумму и количество 🐾. "
+            "После успешного платежа баланс MAX пополнится автоматически.",
             attachments=topup_menu(self.catalog),
             callback_id=callback_id,
         )
@@ -202,12 +199,12 @@ class MaxProductChannelService(MaxSeedance25ChannelService):
         await self._respond(
             user_id,
             "🤖 <b>AI-помощник HappyFox</b>\n\n"
-            "Пишите обычным сообщением — я помогу выбрать модель, улучшить prompt "
-            "и подобрать настройки под задачу.\n\n"
+            "Опишите задачу обычным сообщением — помогу выбрать модель, улучшить промпт "
+            "и подобрать настройки.\n\n"
             "<b>Можно спросить, например:</b>\n"
-            "• что лучше для реалистичного product-фото\n"
+            "• что лучше для реалистичного рекламного фото товара\n"
             "• какую модель взять для видео из одной фотографии\n"
-            "• перепиши мой prompt под fashion-рекламу\n"
+            "• улучши мой промпт для модной рекламы\n"
             "• какой формат выбрать для Reels / Shorts\n"
             "• сколько 🐾 стоит нужная модель в MAX\n\n"
             f"🐾 Сейчас на балансе: <b>{_format_cost(balance)}</b>\n"
@@ -290,10 +287,9 @@ class MaxProductChannelService(MaxSeedance25ChannelService):
         await self._respond(
             user_id,
             "💬 <b>Поддержка HappyFox</b>\n\n"
-            "Если не получается генерация, оплата или выбор модели, сначала напишите AI-помощнику — "
-            "он видит актуальные модели, отдельный MAX-баланс и MAX-прайс.\n\n"
-            "Для обращения человеку удобно сразу прислать: что нажали, модель, примерное время ошибки "
-            "и Task ID, если он появился."
+            "Если что-то не работает, напишите AI-помощнику или оператору.\n\n"
+            "Для быстрого ответа укажите, что делали, какую модель выбрали и когда возникла ошибка. "
+            "Если есть номер задачи — приложите его."
             f"{operator_line}",
             attachments=_support_menu(contact, self.settings.mini_app_url),
             callback_id=callback_id,
@@ -383,7 +379,7 @@ class MaxProductChannelService(MaxSeedance25ChannelService):
         raw_prompt = str(prompt.get("prompt_text") or "").strip()
         title = html.escape(str(prompt.get("title") or "Промпт"))
         if not raw_prompt:
-            rendered = "У этой карточки пока нет текста prompt."
+            rendered = "У этой карточки пока нет текста промпта."
         else:
             visible = raw_prompt[:3000]
             suffix = (
@@ -464,8 +460,8 @@ class MaxProductChannelService(MaxSeedance25ChannelService):
             await self._respond(
                 user_id,
                 "🖼 <b>Создать фото</b>\n\n"
-                "Выберите модель. Цена указана прямо на кнопке. После выбора пришлите prompt; "
-                "референс можно приложить в том же сообщении, а для edit-моделей он обязателен.",
+                "Выберите модель — стоимость указана на кнопке. Затем отправьте описание и, если нужно, "
+                "фото-референс. Для редактирования исходное фото обязательно.",
                 attachments=image_model_menu(self.catalog),
                 callback_id=callback_id,
             )
@@ -475,8 +471,8 @@ class MaxProductChannelService(MaxSeedance25ChannelService):
             await self._respond(
                 user_id,
                 "🎬 <b>Создать видео</b>\n\n"
-                "Сначала выберите исходник: только текст, фото или готовое видео. "
-                "Дальше покажу только совместимые модели и их стоимость.",
+                "Выберите, из чего сделать ролик: из текста, фото или готового видео. "
+                "Дальше покажу только подходящие модели и стоимость.",
                 attachments=video_type_menu(),
                 callback_id=callback_id,
             )
@@ -486,9 +482,9 @@ class MaxProductChannelService(MaxSeedance25ChannelService):
             await self._respond(
                 user_id,
                 "🔷 <b>Gemini Omni</b>\n\n"
-                "Мультимодальный раздел HappyFox: видео, озвучка и работа с голосовыми профилями.\n\n"
-                "• для видео выберите обычный экран «Создать видео» и Gemini Omni\n"
-                "• для Audio ID откройте «Создать озвучку»",
+                "Создавайте видео и голосовые профили в одном разделе.\n\n"
+                "• для ролика откройте «Создать видео» и выберите Gemini Omni\n"
+                "• для голоса откройте «Создать озвучку»",
                 attachments=[
                     inline_keyboard(
                         [

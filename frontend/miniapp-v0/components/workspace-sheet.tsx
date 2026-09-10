@@ -23,27 +23,27 @@ const workspaceConfig: Record<
 > = {
   assistant: {
     title: 'Помощник',
-    description: 'Подскажет модель, настройки и поможет с запросом.',
+    description: 'Поможет с идеей, промптом, моделью и настройками.',
     icon: Bot,
   },
   'photo-prompt': {
     title: 'Промпт по фото',
-    description: 'Анализ фото и prompt для похожей генерации.',
+    description: 'Разберёт фото и соберёт промпт для похожей генерации.',
     icon: Wand2,
   },
   partners: {
     title: 'Партнёрская программа',
-    description: 'Ваша ссылка, рефералы и партнёрский баланс.',
+    description: 'Ссылка, приглашённые пользователи, статистика и выплаты.',
     icon: BriefcaseBusiness,
   },
   support: {
     title: 'Поддержка',
-    description: 'Помощь по задачам, оплате и результатам.',
+    description: 'Помощь с генерацией, оплатой и результатами.',
     icon: Headphones,
   },
   more: {
     title: 'Ещё',
-    description: 'Быстрые переходы к полезным разделам студии.',
+    description: 'История, настройки и другие возможности HappyFox.',
     icon: PanelTopOpen,
   },
 }
@@ -486,9 +486,9 @@ function PhotoPromptPanel({ onOpenPhoto }: { onOpenPhoto: () => void }) {
     <div className="space-y-5 pb-10">
       <div className="rounded-[1.75rem] border border-gold/20 bg-gradient-to-br from-gold/[0.12] via-card/70 to-cyan/[0.08] p-5">
         <p className="text-[11px] uppercase tracking-[0.18em] text-gold">Разбор фото</p>
-        <h3 className="mt-2 font-serif text-2xl text-foreground">Фото → точный prompt</h3>
+        <h3 className="mt-2 font-serif text-2xl text-foreground">Фото → точный промпт</h3>
         <p className="mt-2 text-sm leading-6 text-muted-foreground">
-          Загрузите референс. AI разберёт кадр и соберёт промпт для генерации похожего изображения:
+          Загрузите фото — HappyFox разберёт кадр и соберёт промпт для похожей генерации:
           композиция, объект, свет, стиль, цвета и важные детали.
         </p>
         <p className="mt-3 inline-flex rounded-full border border-gold/25 bg-gold/10 px-3 py-1.5 text-xs font-medium text-gold">
@@ -767,9 +767,9 @@ function PartnersPanel() {
 
 function SupportPanel() {
   const tips = [
-    'Проверьте, хватает ли баланса для выбранной модели и длительности.',
-    'Если задача долго выполняется, откройте её детали и обновите статус.',
-    'Для редактирования и анимации обязательно добавьте исходный файл.',
+    'Проверьте баланс и стоимость выбранной модели.',
+    'Если результат задерживается, откройте задачу — статус обновится автоматически.',
+    'Для редактирования и анимации добавьте исходное фото или видео.',
   ]
 
   return (
@@ -787,7 +787,7 @@ function SupportPanel() {
       <div className="rounded-2xl border border-cyan/20 bg-cyan/10 p-4">
         <p className="text-xs text-muted-foreground">Сообщение в поддержку</p>
         <p className="mt-2 text-sm leading-6 text-foreground">
-          Здравствуйте. Нужна помощь по задаче. Укажу номер задачи, выбранную модель и коротко опишу, что ожидал получить.
+          Опишите, что делали, какую модель выбрали и что пошло не так. Если есть номер задачи — приложите его.
         </p>
         <Button
           onClick={() => toast.success('Текст скопирован')}
@@ -814,11 +814,11 @@ function MorePanel({
   onSupport: () => void
 }) {
   const actions = [
-    { label: 'Фото', description: 'Перейти к генерации изображений', action: onPhoto },
-    { label: 'Видео', description: 'Перейти к генерации роликов', action: onVideo },
-    { label: 'Помощник', description: 'Подскажет модель и улучшит запрос', action: onAssistant },
-    { label: 'Партнёрам', description: 'Посмотреть выгоду и материалы', action: onPartners },
-    { label: 'Поддержка', description: 'Собрать обращение и не забыть детали', action: onSupport },
+    { label: 'Фото', description: 'Создать изображение по описанию или референсу', action: onPhoto },
+    { label: 'Видео', description: 'Создать ролик по тексту, фото или видео', action: onVideo },
+    { label: 'Помощник', description: 'Подобрать модель и улучшить промпт', action: onAssistant },
+    { label: 'Партнёрам', description: 'Открыть ссылку, статистику и выплаты', action: onPartners },
+    { label: 'Поддержка', description: 'Получить помощь с генерацией или оплатой', action: onSupport },
   ]
 
   return (

@@ -35,7 +35,7 @@ export function StudioTab() {
             Ваш творческий <span className="text-gold">AI-помощник</span>
           </h1>
           <p className="mt-3 max-w-[430px] text-xs leading-relaxed text-muted-foreground sm:text-sm">
-            Создавайте изображения и видео через проверенные модели без сложных меню — от идеи до результата за несколько шагов.
+            Опишите идею или добавьте референс — HappyFox поможет превратить её в фото, видео или анимацию.
           </p>
 
           <div className="mt-5 grid max-w-[430px] grid-cols-3 gap-2">
@@ -68,7 +68,7 @@ export function StudioTab() {
         <div className="mb-3 flex items-end justify-between gap-3 px-0.5">
           <div>
             <h2 className="text-lg font-bold tracking-[-0.02em] text-foreground">С чего начнём?</h2>
-            <p className="mt-0.5 text-[11px] text-muted-foreground">Выберите действие — настройки появятся дальше</p>
+            <p className="mt-0.5 text-[11px] text-muted-foreground">Выберите, что хотите получить — дальше покажем только нужные настройки</p>
           </div>
           <span className="text-[9px] font-black uppercase tracking-[0.14em] text-gold">{BRAND_NAME}</span>
         </div>
@@ -85,7 +85,7 @@ export function StudioTab() {
         <div className="mb-3 flex items-center justify-between px-0.5">
           <div>
             <h2 className="text-base font-bold text-foreground">Ваши работы</h2>
-            <p className="mt-0.5 text-[10px] text-muted-foreground">Последние генерации и их статус</p>
+            <p className="mt-0.5 text-[10px] text-muted-foreground">Последние генерации, результаты и статус</p>
           </div>
         </div>
         <TaskHistoryList />

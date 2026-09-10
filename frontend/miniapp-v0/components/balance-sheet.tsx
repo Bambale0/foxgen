@@ -102,7 +102,7 @@ export function BalanceSheet() {
           toast.error('Оплата Stars не прошла')
         } else {
           toast.message('Счёт Stars открыт', {
-            description: 'После оплаты баланс обновится в Mini App.',
+            description: 'После оплаты баланс обновится автоматически.',
           })
         }
         return
@@ -201,7 +201,7 @@ export function BalanceSheet() {
                   <div>
                     <p className="text-sm font-bold text-foreground">ЮKassa • карта / СБП</p>
                     <p className="mt-0.5 text-[10px] leading-relaxed text-muted-foreground">
-                      Оплата проходит на защищённой странице ЮKassa. Лапки начисляются только после подтверждения платежа сервером.
+                      Оплата проходит на защищённой странице ЮKassa. После успешного платежа лапки начислятся автоматически.
                     </p>
                   </div>
                 </div>
