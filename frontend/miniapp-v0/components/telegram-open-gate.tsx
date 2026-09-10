@@ -164,7 +164,7 @@ export function TelegramOpenGate() {
             </div>
           </div>
 
-          <div className="inline-flex items-center gap-1.5 rounded-full border border-gold/20 bg-gold/[0.07] px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.14em] text-gold">
+          <div className="inline-flex items-center gap-1.5 rounded-full border border-gold/20 bg-gold/[0.07] px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.14em] text-gold">
             <Sparkles className="h-3 w-3" />
             Telegram Mini App
           </div>
@@ -182,7 +182,7 @@ export function TelegramOpenGate() {
           ) : (
             <>
               <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-                Войдите через Telegram, чтобы генерации, баланс и история работали в вашем аккаунте.
+                Войдите через Telegram, чтобы сохранить баланс, историю и результаты в одном аккаунте.
               </p>
 
               <div className="mt-6 flex min-h-12 w-full items-center justify-center">
@@ -202,7 +202,7 @@ export function TelegramOpenGate() {
 
               {loginStatus === 'error' ? (
                 <div className="mt-5 w-full space-y-3">
-                  <p className="text-xs text-muted-foreground">Не получилось войти. Попробуйте открыть приложение напрямую.</p>
+                  <p className="text-xs text-muted-foreground">Не удалось войти через браузер. Откройте HappyFox прямо в Telegram.</p>
                   {telegramUrl ? (
                     <Button asChild variant="secondary" className="h-11 w-full rounded-xl">
                       <a href={telegramUrl} target="_blank" rel="noreferrer">

@@ -29,7 +29,7 @@ export function HeroHeader() {
               <div className="truncate text-[13px] font-black uppercase tracking-[0.18em] text-foreground">
                 {BRAND_NAME}
               </div>
-              <div className="mt-0.5 inline-flex items-center gap-1.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+              <div className="mt-0.5 inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                 <Wifi className="h-2.5 w-2.5 text-gold" />
                 <span>{mode === 'live' ? 'Онлайн' : 'Telegram'}</span>
               </div>
@@ -43,7 +43,7 @@ export function HeroHeader() {
               disabled={isLoading}
               aria-label="Обновить"
               className={cn(
-                'inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/[0.07] bg-white/[0.035] text-muted-foreground',
+                'inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/[0.07] bg-white/[0.035] text-muted-foreground',
                 'transition-all hover:border-gold/30 hover:bg-gold/10 hover:text-gold active:scale-95',
                 'disabled:opacity-50',
               )}
@@ -54,7 +54,8 @@ export function HeroHeader() {
             <button
               type="button"
               onClick={openBalance}
-              className="inline-flex items-center gap-2 rounded-full border border-gold/35 bg-gold/[0.09] px-3 py-2 transition-all hover:bg-gold/[0.14] active:scale-[0.98]"
+              aria-label={`Баланс: ${user.credits} лапок. Пополнить баланс`}
+              className="inline-flex min-h-11 items-center gap-2 rounded-full border border-gold/35 bg-gold/[0.09] px-3 py-2 transition-all hover:bg-gold/[0.14] active:scale-[0.98]"
             >
               <Coins className="h-4 w-4 text-gold" />
               <span className="text-sm font-black tabular-nums text-foreground">{user.credits}</span>

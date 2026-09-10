@@ -27,25 +27,25 @@ export function QuickActionGrid({
   const items = [
     {
       label: 'Создать фото',
-      description: 'Картинки, арты, редактирование',
+      description: 'Опишите идею или добавьте референс — получите готовое изображение',
       icon: Image,
       onClick: onPhotoClick,
     },
     {
       label: 'Создать видео',
-      description: 'Динамичные сцены и анимация',
+      description: 'Создайте ролик по тексту, фото или видео-референсу',
       icon: Video,
       onClick: onVideoClick,
     },
     {
       label: 'Оживить фото',
-      description: 'Motion и движение по референсу',
+      description: 'Добавьте движение, мимику и камеру к готовому изображению',
       icon: Sparkles,
       onClick: onMotionClick || onVideoClick,
     },
     {
       label: 'AI-помощник',
-      description: 'Идея, промпт и быстрый старт',
+      description: 'Поможет с идеей, промптом и выбором подходящей модели',
       icon: Bot,
       onClick: onAssistantClick,
     },
@@ -78,7 +78,7 @@ export function QuickActionGrid({
 
               <div className="min-w-0">
                 <div className="text-sm font-bold text-foreground sm:text-[15px]">{item.label}</div>
-                <div className="mt-1 line-clamp-2 text-[10px] leading-relaxed text-muted-foreground sm:text-[11px]">
+                <div className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-muted-foreground sm:text-[11px]">
                   {item.description}
                 </div>
               </div>

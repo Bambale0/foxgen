@@ -90,22 +90,14 @@ export function PhotoTab() {
     <div className="space-y-4 px-3 pb-3 sm:px-4 lg:px-6">
       <div className="flex items-start justify-between gap-4 px-0.5 pt-1">
         <div>
-          <div className="mb-2 inline-flex items-center gap-1.5 rounded-full border border-gold/20 bg-gold/[0.07] px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.14em] text-gold">
+          <div className="mb-2 inline-flex items-center gap-1.5 rounded-full border border-gold/20 bg-gold/[0.07] px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.14em] text-gold">
             <ImageIcon className="h-3 w-3" />
             Фото
           </div>
           <h2 className="text-2xl font-black tracking-[-0.035em] text-foreground">Создайте изображение</h2>
           <p className="mt-1 max-w-xl text-xs leading-relaxed text-muted-foreground">
-            Выберите модель, задайте формат и опишите идею. Референсы можно добавить при необходимости.
+            Опишите, что хотите получить. При желании добавьте фото — оно поможет сохранить стиль, персонажа или детали.
           </p>
-        </div>
-        <div className="shrink-0 pt-1 text-right">
-          <div className="text-[9px] font-bold uppercase tracking-[0.13em] text-muted-foreground">Шаг 1 из 3</div>
-          <div className="mt-2 flex justify-end gap-1">
-            <span className="h-1 w-5 rounded-full bg-gold" />
-            <span className="h-1 w-3 rounded-full bg-white/10" />
-            <span className="h-1 w-3 rounded-full bg-white/10" />
-          </div>
         </div>
       </div>
 
@@ -138,10 +130,10 @@ export function PhotoTab() {
               <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl border border-gold/20 bg-gold/[0.08]">
                 <Sparkles className="h-5 w-5 text-gold" />
               </div>
-              <p className="mb-2 text-[9px] font-black uppercase tracking-[0.16em] text-gold">Результат</p>
+              <p className="mb-2 text-[11px] font-black uppercase tracking-[0.16em] text-gold">Результат</p>
               <h3 className="text-lg font-bold text-foreground">Готово к запуску</h3>
               <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-                После запуска здесь появится статус задачи и готовое изображение. Все параметры сохраняются в истории.
+                Запустите генерацию — здесь появятся статус и готовое изображение. Результат сохранится в истории.
               </p>
             </div>
           )}

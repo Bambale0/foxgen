@@ -6,7 +6,7 @@ import { notifyFeedChanged } from '@/lib/feed-events'
 import { cn } from '@/lib/utils'
 import { 
   X, Image, Video, Clock, CheckCircle2, XCircle, 
-  Banana, ExternalLink, Copy, RefreshCw, Headphones, UserRound, Images, BookOpen, Eye, EyeOff, ShieldAlert
+  PawPrint, ExternalLink, Copy, RefreshCw, Headphones, UserRound, Images, BookOpen, Eye, EyeOff, ShieldAlert
 } from 'lucide-react' 
 import { motion, AnimatePresence } from 'framer-motion'
 import { Button } from '@/components/ui/button'
@@ -167,7 +167,7 @@ export function TaskDetailPanel() {
         toast.success('Промпт сохранён')
       }
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Не удалось сохранить prompt')
+      toast.error(e instanceof Error ? e.message : 'Не удалось сохранить промпт')
     } finally {
       setLibraryBusy(false)
     }
@@ -229,8 +229,10 @@ export function TaskDetailPanel() {
                 Детали задачи
               </h2>
               <button
+                type="button"
                 onClick={closeTaskDetail}
-                className="w-8 h-8 rounded-full bg-secondary/80 flex items-center justify-center hover:bg-secondary transition-colors"
+                aria-label="Закрыть детали задачи"
+                className="w-11 h-11 rounded-full bg-secondary/80 flex items-center justify-center hover:bg-secondary transition-colors"
               >
                 <X className="w-4 h-4 text-muted-foreground" />
               </button>
@@ -327,7 +329,7 @@ export function TaskDetailPanel() {
                 <InfoItem 
                   label="Стоимость" 
                   value={`${taskDetail.cost}`}
-                  icon={Banana}
+                  icon={PawPrint}
                   statusColor="text-gold"
                 />
                 <InfoItem
@@ -355,8 +357,10 @@ export function TaskDetailPanel() {
                   {taskDetail.task_id}
                 </code>
                 <button
+                  type="button"
                   onClick={handleCopyTaskId}
-                  className="text-muted-foreground hover:text-foreground transition-colors"
+                  aria-label="Скопировать номер задачи"
+                  className="flex h-11 w-11 items-center justify-center rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
                 >
                   <Copy className="w-4 h-4" />
                 </button>
@@ -370,7 +374,7 @@ export function TaskDetailPanel() {
                     type="button"
                     variant="secondary"
                     size="sm"
-                    className="h-8 px-3"
+                    className="min-h-11 px-3"
                     onClick={handleCopyPrompt}
                     disabled={!taskDetail.prompt || taskDetail.prompt_hidden}
                   >
@@ -414,7 +418,7 @@ export function TaskDetailPanel() {
                       disabled={adultContent}
                       onClick={() => setPublicationScope('feed')}
                       className={cn(
-                        'rounded-lg border px-3 py-2 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-45',
+                        'min-h-11 rounded-lg border px-3 py-2 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-45',
                         publicationScope === 'feed'
                           ? 'border-cyan/40 bg-cyan/10 text-cyan'
                           : 'border-border/50 bg-background/40 text-muted-foreground'
@@ -426,7 +430,7 @@ export function TaskDetailPanel() {
                       type="button"
                       onClick={() => setPublicationScope('profile')}
                       className={cn(
-                        'rounded-lg border px-3 py-2 text-xs font-medium transition-colors',
+                        'min-h-11 rounded-lg border px-3 py-2 text-xs font-medium transition-colors',
                         publicationScope === 'profile'
                           ? 'border-cyan/40 bg-cyan/10 text-cyan'
                           : 'border-border/50 bg-background/40 text-muted-foreground'
@@ -468,41 +472,41 @@ export function TaskDetailPanel() {
                           type="button"
                           onClick={() => setFeedPromptVisible((prev) => !prev)}
                           className={cn(
-                            'flex h-10 items-center justify-center gap-2 rounded-lg border px-3 text-xs font-medium transition-colors',
+                            'flex h-11 items-center justify-center gap-2 rounded-lg border px-3 text-xs font-medium transition-colors',
                             feedPromptVisible
                               ? 'border-cyan/40 bg-cyan/10 text-cyan'
                               : 'border-border/50 bg-background/40 text-muted-foreground'
                           )}
                         >
                           {feedPromptVisible ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
-                          Prompt
+                          Промпт
                         </button>
                         <button
                           type="button"
                           disabled={referenceCount === 0}
                           onClick={() => setFeedReferencesVisible((prev) => !prev)}
                           className={cn(
-                            'flex h-10 items-center justify-center gap-2 rounded-lg border px-3 text-xs font-medium transition-colors disabled:opacity-50',
+                            'flex h-11 items-center justify-center gap-2 rounded-lg border px-3 text-xs font-medium transition-colors disabled:opacity-50',
                             feedReferencesVisible
                               ? 'border-cyan/40 bg-cyan/10 text-cyan'
                               : 'border-border/50 bg-background/40 text-muted-foreground'
                           )}
                         >
                           {feedReferencesVisible ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
-                          Рефы {referenceCount ? `(${referenceCount})` : ''}
+                          Исходники {referenceCount ? `(${referenceCount})` : ''}
                         </button>
                         <button
                           type="button"
                           onClick={() => setFeedBlurred((prev) => !prev)}
                           className={cn(
-                            'flex h-10 items-center justify-center gap-2 rounded-lg border px-3 text-xs font-medium transition-colors',
+                            'flex h-11 items-center justify-center gap-2 rounded-lg border px-3 text-xs font-medium transition-colors',
                             feedBlurred
                               ? 'border-cyan/40 bg-cyan/10 text-cyan'
                               : 'border-border/50 bg-background/40 text-muted-foreground'
                           )}
                         >
                           {feedBlurred ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                          Blur
+                          Размытие
                         </button>
                       </div>
                   <div className="mt-3 grid gap-2">

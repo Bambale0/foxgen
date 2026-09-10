@@ -102,7 +102,7 @@ export function BalanceSheet() {
           toast.error('Оплата Stars не прошла')
         } else {
           toast.message('Счёт Stars открыт', {
-            description: 'После оплаты баланс обновится в Mini App.',
+            description: 'После оплаты баланс обновится автоматически.',
           })
         }
         return
@@ -154,7 +154,7 @@ export function BalanceSheet() {
               <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-white/15" />
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <p className="text-[9px] font-black uppercase tracking-[0.18em] text-gold">Баланс</p>
+                  <p className="text-[11px] font-black uppercase tracking-[0.18em] text-gold">Баланс</p>
                   <h2 className="mt-0.5 text-xl font-bold tracking-[-0.025em] text-foreground">Пополнение лапок</h2>
                 </div>
                 <button
@@ -177,10 +177,10 @@ export function BalanceSheet() {
                       <span className="text-xl" aria-hidden="true">🐾</span>
                       <span className="text-3xl font-black tabular-nums tracking-[-0.04em] text-foreground">{user.credits}</span>
                     </div>
-                    <p className="mt-2 text-[10px] text-muted-foreground">1 лапка = 10 ₽</p>
+                    <p className="mt-2 text-[11px] text-muted-foreground">1 лапка = 10 ₽</p>
                   </div>
                   <div className="rounded-2xl border border-gold/20 bg-black/25 px-4 py-3 text-right">
-                    <p className="text-[9px] uppercase tracking-[0.12em] text-muted-foreground">Статус</p>
+                    <p className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground">Статус</p>
                     <p className="mt-1 text-sm font-bold text-foreground">{mode === 'live' ? 'Онлайн' : 'Telegram'}</p>
                   </div>
                 </div>
@@ -200,8 +200,8 @@ export function BalanceSheet() {
                   </div>
                   <div>
                     <p className="text-sm font-bold text-foreground">ЮKassa • карта / СБП</p>
-                    <p className="mt-0.5 text-[10px] leading-relaxed text-muted-foreground">
-                      Оплата проходит на защищённой странице ЮKassa. Лапки начисляются только после подтверждения платежа сервером.
+                    <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">
+                      Оплата проходит на защищённой странице ЮKassa. После успешного платежа лапки начислятся автоматически.
                     </p>
                   </div>
                 </div>
@@ -210,10 +210,10 @@ export function BalanceSheet() {
               <div>
                 <div className="mb-3 flex items-end justify-between gap-3">
                   <div>
-                    <p className="text-[9px] font-black uppercase tracking-[0.16em] text-gold">Пополнить баланс</p>
+                    <p className="text-[11px] font-black uppercase tracking-[0.16em] text-gold">Пополнить баланс</p>
                     <h3 className="mt-0.5 text-lg font-bold text-foreground">Пакеты лапок</h3>
                   </div>
-                  <span className="text-[10px] text-muted-foreground">Выберите пакет</span>
+                  <span className="text-[11px] text-muted-foreground">Выберите пакет</span>
                 </div>
 
                 <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
@@ -243,7 +243,7 @@ export function BalanceSheet() {
 
                         <div className="pr-8">
                           <h4 className="text-sm font-bold text-foreground">{pkg.name}</h4>
-                          <p className="mt-1 line-clamp-2 min-h-[30px] text-[9px] leading-relaxed text-muted-foreground">{pkg.description}</p>
+                          <p className="mt-1 line-clamp-2 min-h-[30px] text-[11px] leading-relaxed text-muted-foreground">{pkg.description}</p>
                         </div>
 
                         <div className="mt-4 flex items-end justify-between gap-2">
@@ -347,7 +347,7 @@ function StatCard({
       <div className="mb-2 flex h-8 w-8 items-center justify-center rounded-xl border border-gold/15 bg-gold/[0.07]">
         <Icon className="h-3.5 w-3.5 text-gold" />
       </div>
-      <p className="text-[9px] text-muted-foreground">{label}</p>
+      <p className="text-[11px] text-muted-foreground">{label}</p>
       <p className="mt-1 text-sm font-bold tabular-nums text-foreground">{value}</p>
     </div>
   )

@@ -9,7 +9,7 @@ import { ModelSelect } from './model-select'
 import { RatioSelect } from './ratio-select'
 import { QualitySelect } from './quality-select'
 import { UploadArea } from './upload-area'
-import { Banana, Sparkles, Loader2, AlertCircle, Palette, Shirt, Mountain, Sparkle, ScanFace } from 'lucide-react'
+import { PawPrint, Sparkles, Loader2, AlertCircle, Palette, Shirt, Mountain, Sparkle, ScanFace } from 'lucide-react'
 
 interface ImageGeneratorFormProps {
   models: ImageModel[]
@@ -263,8 +263,9 @@ export function ImageGeneratorForm({
                   key={count}
                   type="button"
                   onClick={() => setSelectedCount(count)}
+                  aria-pressed={selectedCount === count}
                   className={cn(
-                    "rounded-lg border px-3 py-2 text-xs font-medium transition-all duration-200",
+                    "min-h-11 rounded-lg border px-3 py-2 text-xs font-medium transition-all duration-200",
                     selectedCount === count
                       ? "border-gold/50 bg-gold/15 text-gold"
                       : "border-border/50 bg-secondary/50 text-muted-foreground hover:bg-secondary hover:text-foreground"
@@ -328,7 +329,7 @@ export function ImageGeneratorForm({
 
           <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
             <div className="rounded-xl bg-background/40 px-3 py-2 text-muted-foreground">
-              Режим: <span className="text-foreground">{model?.requires_reference ? 'Edit / reference' : 'Text / image mix'}</span>
+              Режим: <span className="text-foreground">{model?.requires_reference ? 'Редактирование по фото' : 'По описанию или фото'}</span>
             </div>
             <div className="rounded-xl bg-background/40 px-3 py-2 text-muted-foreground">
               Формат: <span className="text-foreground">{selectedRatio} • {selectedCount}x</span>
@@ -384,8 +385,9 @@ export function ImageGeneratorForm({
                       key={chip.id}
                       type="button"
                       onClick={() => toggleChange(chip.id, chip.insert)}
+                      aria-pressed={isActive}
                       className={cn(
-                        'inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-all duration-200',
+                        'inline-flex min-h-11 items-center gap-1.5 rounded-full border px-3 py-2 text-xs font-medium transition-all duration-200',
                         isActive
                           ? 'border-gold/50 bg-gold/20 text-gold shadow-sm'
                           : 'border-border/50 bg-background/50 text-muted-foreground hover:border-gold/30 hover:text-foreground'
@@ -428,7 +430,7 @@ export function ImageGeneratorForm({
                   ? 'Используется промпт из библиотеки'
                   : prompt.trim().length > 0
                     ? 'Промпт готов к запуску'
-                    : 'Пустой prompt не отправится'}
+                    : 'Добавьте описание для запуска'}
             </span>
             <span>{prompt.length} симв.</span>
           </div>
@@ -459,7 +461,7 @@ export function ImageGeneratorForm({
         <div className="flex items-center justify-between">
           <span className="text-sm text-muted-foreground">Стоимость</span>
           <div className="flex items-center gap-1.5">
-            <Banana className="w-4 h-4 text-gold" />
+            <PawPrint className="w-4 h-4 text-gold" />
             <span className="text-lg font-semibold text-gold">{cost}</span>
           </div>
         </div>
@@ -468,7 +470,7 @@ export function ImageGeneratorForm({
           <div className="flex items-center gap-2 p-3 rounded-xl bg-destructive/10 border border-destructive/30">
             <AlertCircle className="w-4 h-4 text-destructive flex-shrink-0" />
             <p className="text-xs text-destructive">
-              Недостаточно бананов. Пополните баланс.
+              Недостаточно лапок — пополните баланс и повторите запуск.
             </p>
           </div>
         )}

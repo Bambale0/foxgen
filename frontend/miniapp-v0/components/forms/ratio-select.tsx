@@ -21,17 +21,19 @@ const ratioIcons: Record<string, { width: number; height: number }> = {
 
 export function RatioSelect({ ratios, value, onChange }: RatioSelectProps) {
   return (
-    <div className="grid min-w-0 grid-cols-3 gap-2 sm:grid-cols-4">
+    <div role="group" aria-label="Формат" className="grid min-w-0 grid-cols-3 gap-2 sm:grid-cols-4">
       {ratios.map((ratio) => {
         const icon = ratioIcons[ratio] || { width: 16, height: 16 }
         const isSelected = ratio === value
         
         return (
           <button
+            type="button"
             key={ratio}
+            aria-pressed={isSelected}
             onClick={() => onChange(ratio)}
             className={cn(
-              "min-w-0 justify-center flex items-center gap-2 px-2 py-2 rounded-lg",
+              "min-w-0 justify-center flex items-center gap-2 min-h-11 px-2 py-2 rounded-lg",
               "border transition-all duration-200",
               isSelected 
                 ? "bg-gold/15 border-gold/50 text-gold" 
