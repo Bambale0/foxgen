@@ -90,6 +90,28 @@ def _image_default_quality(model: str) -> str:
     return "2K"
 
 
+def _image_refs_from_session(state: str, data: dict[str, Any]) -> list[str]:
+    if not str(state or "").startswith("parity:image:"):
+        return []
+
+    raw_refs: Any
+    if state == "parity:image:confirm":
+        input_data = data.get("input_data") or {}
+        raw_refs = input_data.get("image_urls") if isinstance(input_data, dict) else []
+    else:
+        raw_refs = data.get("image_urls")
+
+    refs: list[str] = []
+    if isinstance(raw_refs, list):
+        for value in raw_refs:
+            url = str(value or "").strip()
+            if url.startswith("https://") and url not in refs:
+                refs.append(url)
+            if len(refs) >= 9:
+                break
+    return refs
+
+
 def _image_reference_menu(count: int, *, max_count: int = 9) -> list[dict[str, Any]]:
     return [
         inline_keyboard(
@@ -270,10 +292,25 @@ class MaxCreationParityChannelService(MaxTelegramParityChannelService):
     """Mirror Telegram creator wizard order while preserving MAX transport/ledger."""
 
     async def _open_image_models(self, user_id: int, *, callback_id: str = "") -> None:
-        await clear_max_session(user_id)
+        session = await get_max_session(user_id)
+        refs = _image_refs_from_session(session.state, dict(session.data))
+        if refs:
+            await save_max_session(
+                user_id,
+                "parity:image:select_model",
+                {"image_urls": refs},
+            )
+            text = (
+                "🖼 <b>Создать фото</b>\n\n"
+                f"Референсы сохранены: <b>{len(refs)}</b>. Выберите модель."
+            )
+        else:
+            await clear_max_session(user_id)
+            text = "🖼 <b>Создать фото</b>\n\nВыберите модель."
+
         await self._respond(
             user_id,
-            "🖼 <b>Создать фото</b>\n\nВыберите модель.",
+            text,
             attachments=image_model_menu(self.catalog),
             callback_id=callback_id,
         )
@@ -293,16 +330,30 @@ class MaxCreationParityChannelService(MaxTelegramParityChannelService):
                 callback_id=callback_id,
             )
             return
+        session = await get_max_session(user_id)
+        refs = _image_refs_from_session(session.state, dict(session.data))
         data = {
             "kind": "image",
             "model": model,
-            "image_urls": [],
+            "image_urls": refs,
             "aspect_ratio": "1:1",
             "quality": _image_default_quality(model),
             "count": 1,
         }
+        if refs:
+            await self._show_image_settings(
+                user_id,
+                data,
+                callback_id=callback_id,
+            )
+            return
+
         await save_max_session(user_id, "parity:image:refs", data)
-        required = " Референс обязателен для этой модели." if model in _IMAGE_REFERENCE_REQUIRED else ""
+        required = (
+            " Референс обязателен для этой модели."
+            if model in _IMAGE_REFERENCE_REQUIRED
+            else ""
+        )
         await self._respond(
             user_id,
             f"🖼 <b>{html.escape(IMAGE_LABELS.get(model, model))}</b>\n\n"
