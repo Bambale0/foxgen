@@ -9,6 +9,7 @@ from pathlib import Path
 
 from apply_happyfox_main_menu import apply_happyfox_main_menu
 from apply_happyfox_video_ui import apply_happyfox_video_ui
+from apply_happyfox_telegram_screen_copy import apply_happyfox_telegram_screen_copy
 
 COMMON_PATH = Path("bot/handlers/common.py")
 KEYBOARDS_PATH = Path("bot/keyboards.py")
@@ -286,6 +287,7 @@ def main() -> None:
     _patch_payments()
     apply_happyfox_main_menu()
     apply_happyfox_video_ui()
+    apply_happyfox_telegram_screen_copy()
     _patch_currency_copy()
 
 
