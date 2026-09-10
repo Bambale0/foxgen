@@ -12,6 +12,7 @@ from bot.max_api import (
     callback_button,
     inline_keyboard,
     link_button,
+    open_app_button,
 )
 from bot.max_catalog import MAX_VIDEO_TYPES, MaxPresetManager, max_preset_manager
 from bot.max_commands import MAX_QUICK_COMMAND_TARGETS, max_quick_command_name
@@ -724,7 +725,7 @@ class MaxChannelService:
                     inline_keyboard(
                         [
                             [
-                                link_button(
+                                open_app_button(
                                     "🚀 Открыть Mini App",
                                     self.settings.mini_app_url,
                                 )
