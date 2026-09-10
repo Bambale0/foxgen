@@ -3336,15 +3336,24 @@ async def show_animate_hub(callback: types.CallbackQuery, state: FSMContext):
     await callback.answer()
 
 
+@router.callback_query(F.data == "happyfox_music")
+async def show_happyfox_music(callback: types.CallbackQuery):
+    """Keep the planned Suno entry visible without leaving a dead callback."""
+    await callback.answer(
+        "🎵 Создание музыки через Suno скоро появится в HappyFox.",
+        show_alert=True,
+    )
+
+
 @router.callback_query(F.data == "ux_more")
 async def show_more_menu(callback: types.CallbackQuery, state: FSMContext):
     """Показывает вторичные разделы."""
     await state.clear()
     user = await get_or_create_user(callback.from_user.id)
     text = (
-        "⋯ <b>Ещё</b>\n"
-        f"🍌 Баланс: <code>{user.credits}</code> бананов\n\n"
-        "Баланс, история генераций, поддержка и другие полезные разделы."
+        "✨ <b>Другие AI-инструменты</b>\n"
+        f"🐾 Баланс: <code>{user.credits}</code> лапок\n\n"
+        "Выберите, что хотите сделать: создать видео, создать фото или улучшить готовое изображение."
     )
     await callback.message.edit_text(
         text, reply_markup=get_more_menu_keyboard(), parse_mode="HTML"

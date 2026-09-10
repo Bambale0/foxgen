@@ -304,3 +304,12 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+
+/* Coarse pointers need a reliable hit area even when a visual control is compact. */
+@media (pointer: coarse) {
+  button:not([aria-hidden="true"]) {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
