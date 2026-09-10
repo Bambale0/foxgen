@@ -144,7 +144,7 @@ def _feed_menu(index: int, total: int, *, mini_app_url: str = "") -> list[dict[s
             ]
         )
     if mini_app_url:
-        rows.append([open_app_button("🚀 Открыть в Mini App", mini_app_url)])
+        rows.append([open_app_button("🚀 Открыть в Mini App")])
     rows.append([callback_button("🏠 Главное меню", "max:home")])
     return [inline_keyboard(rows)]
 
