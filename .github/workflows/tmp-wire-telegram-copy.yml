@@ -1,0 +1,58 @@
+name: Temporary wire Telegram copy refresh
+
+on:
+  push:
+    branches:
+      - fix/telegram-screen-copy-20260910
+
+permissions:
+  contents: write
+
+jobs:
+  wire:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: fix/telegram-screen-copy-20260910
+          fetch-depth: 0
+      - name: Wire copy normalizer and tests
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('scripts/apply_happyfox_product_copy.py')
+          text = path.read_text(encoding='utf-8')
+          import_anchor = 'from apply_happyfox_video_ui import apply_happyfox_video_ui\n'
+          import_line = 'from apply_happyfox_telegram_screen_copy import apply_happyfox_telegram_screen_copy\n'
+          if import_line not in text:
+              if import_anchor not in text:
+                  raise SystemExit('product copy import anchor not found')
+              text = text.replace(import_anchor, import_anchor + import_line, 1)
+          call_anchor = '    apply_happyfox_video_ui()\n    _patch_currency_copy()\n'
+          call_new = '    apply_happyfox_video_ui()\n    apply_happyfox_telegram_screen_copy()\n    _patch_currency_copy()\n'
+          if call_new not in text:
+              if call_anchor not in text:
+                  raise SystemExit('product copy call anchor not found')
+              text = text.replace(call_anchor, call_new, 1)
+          path.write_text(text, encoding='utf-8')
+
+          test = Path('tests/test_happyfox_telegram_screen_copy.py')
+          test.write_text('''from pathlib import Path\n\nROOT = Path(__file__).resolve().parents[1]\n\n\ndef _read(path: str) -> str:\n    return (ROOT / path).read_text(encoding="utf-8")\n\n\ndef test_telegram_primary_screens_use_current_happyfox_copy() -> None:\n    common = _read("bot/handlers/common.py")\n    assert "Скажите, что хотите получить: изображение, ролик, озвучку или музыку." in common\n    assert "<b>Быстрый старт</b>" in common\n    assert "Что создаём? Выберите результат" in common\n    assert "🐾 <b>Баланс HappyFox</b>" in common\n    assert "Опишите проблему одним сообщением. AI-поддержка попробует решить её сразу." in common\n    assert "🤖 <b>HappyFox:</b>" in common\n\n\ndef test_telegram_primary_screens_drop_stale_copy() -> None:\n    common = _read("bot/handlers/common.py")\n    stale = (\n        "Создавайте фото, видео и анимацию по описанию или референсам.",\n        "Выберите задачу — дальше покажу только нужные шаги.",\n        "💎 <b>Баланс и статистика</b>",\n        "Можно написать прямо сюда — AI-ассистент поможет с:",\n        "🤖 <b>BotAI:</b>",\n    )\n    for fragment in stale:\n        assert fragment not in common\n\n\ndef test_telegram_partner_and_payment_screens_are_current() -> None:\n    partner = _read("bot/partner_copy.py")\n    payments = _read("bot/handlers/payments.py")\n    assert "🤝 <b>Партнёрская программа</b>" in partner\n    assert "<b>Ваше вознаграждение</b>" in partner\n    assert "Это практическое руководство по участию" not in partner\n    assert "Выберите пакет лапок. Итоговую сумму увидите до перехода к оплате." in payments\n    assert "Выберите пакет бананов ниже." not in payments\n\n\ndef test_telegram_auxiliary_copy_has_no_old_public_brand() -> None:\n    trends = _read("bot/handlers/trends_compat.py")\n    help_text = _read("bot/utils/help_texts.py")\n    assert "готовые шаблоны HappyFox" in trends\n    assert "готовые шаблоны от команды NEUROMIX" not in trends\n    assert "🦊 <b>HappyFox</b>" in help_text\n    assert "⚠️ <b>注意:</b>" not in help_text\n\n\ndef test_product_normalizer_runs_telegram_screen_copy_last() -> None:\n    normalizer = _read("scripts/apply_happyfox_product_copy.py")\n    assert "from apply_happyfox_telegram_screen_copy import apply_happyfox_telegram_screen_copy" in normalizer\n    assert "apply_happyfox_telegram_screen_copy()" in normalizer\n''', encoding='utf-8')
+          PY
+          python3 -m py_compile scripts/apply_happyfox_telegram_screen_copy.py scripts/apply_happyfox_product_copy.py tests/test_happyfox_telegram_screen_copy.py
+          git rm .github/workflows/tmp-wire-telegram-copy.yml
+      - name: Commit clean branch
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git config user.name "HappyFox CI"
+          git config user.email "actions@users.noreply.github.com"
+          git add scripts/apply_happyfox_product_copy.py scripts/apply_happyfox_telegram_screen_copy.py tests/test_happyfox_telegram_screen_copy.py .github/workflows/tmp-wire-telegram-copy.yml
+          if git diff --cached --quiet; then
+            exit 0
+          fi
+          git commit -m "feat(copy): refresh Telegram text screens"
+          git push origin HEAD:fix/telegram-screen-copy-20260910
