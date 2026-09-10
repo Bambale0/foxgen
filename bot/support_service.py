@@ -4,7 +4,7 @@ import asyncio
 import html
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from aiogram import Bot
@@ -16,7 +16,8 @@ logger = logging.getLogger(__name__)
 
 OUTBOX_POLL_SECONDS = 2.0
 OUTBOX_MAX_ATTEMPTS = 5
-_WORKER_TASK: asyncio.Task[None] | None = None
+_WORKER_TASKS: dict[str, asyncio.Task[None]] = {}
+SUPPORT_SOURCE_MAIN = "telegram"
 
 
 @dataclass(slots=True)
@@ -26,6 +27,13 @@ class SupportAttachment:
     file_name: str | None = None
     mime_type: str | None = None
     size_bytes: int | None = None
+
+
+def _normalize_source(source: str) -> str:
+    value = str(source or "").strip().lower()
+    if not value or len(value) > 64:
+        raise ValueError("invalid support source")
+    return value
 
 
 async def _ensure_user(
@@ -67,8 +75,10 @@ async def create_support_ticket(
     body: str,
     telegram_message_id: int | None,
     attachments: list[SupportAttachment] | None = None,
+    source: str = SUPPORT_SOURCE_MAIN,
 ) -> int:
     await ensure_internal_admin_support_schema()
+    normalized_source = _normalize_source(source)
     user_id = await _ensure_user(
         telegram_id=telegram_id,
         username=username,
@@ -84,10 +94,10 @@ async def create_support_ticket(
             """
             INSERT INTO support_tickets (
                 user_id, subject, status, priority, source, last_user_message_at
-            ) VALUES (?, ?, 'new', 'normal', 'telegram', CURRENT_TIMESTAMP)
+            ) VALUES (?, ?, 'new', 'normal', ?, CURRENT_TIMESTAMP)
             RETURNING id
             """,
-            (user_id, normalized_subject),
+            (user_id, normalized_subject, normalized_source),
         )
         ticket_row = await ticket_cursor.fetchone()
         if not ticket_row:
@@ -206,7 +216,8 @@ async def latest_open_ticket_id(telegram_id: int) -> int | None:
     return int(row["id"]) if row else None
 
 
-async def _claim_outbox_item() -> dict[str, Any] | None:
+async def _claim_outbox_item(source: str) -> dict[str, Any] | None:
+    normalized_source = _normalize_source(source)
     async with db_backend.connect() as connection:
         connection.row_factory = db_backend.Row
         cursor = await connection.execute(
@@ -216,14 +227,16 @@ async def _claim_outbox_item() -> dict[str, Any] | None:
                 o.attempts, m.body
             FROM support_outbox o
             JOIN support_messages m ON m.id = o.message_id
+            JOIN support_tickets st ON st.id = o.ticket_id
             WHERE o.status IN ('queued', 'failed')
               AND o.next_attempt_at <= CURRENT_TIMESTAMP
               AND o.attempts < ?
+              AND st.source = ?
             ORDER BY o.id
             FOR UPDATE OF o SKIP LOCKED
             LIMIT 1
             """,
-            (OUTBOX_MAX_ATTEMPTS,),
+            (OUTBOX_MAX_ATTEMPTS, normalized_source),
         )
         row = await cursor.fetchone()
         if not row:
@@ -275,7 +288,7 @@ async def _mark_outbox_failed(
 ) -> None:
     terminal = attempts + 1 >= OUTBOX_MAX_ATTEMPTS
     delay_seconds = min(300, 2 ** max(attempts, 0) * 5)
-    next_attempt = datetime.utcnow() + timedelta(seconds=delay_seconds)
+    next_attempt = datetime.now(timezone.utc) + timedelta(seconds=delay_seconds)
     async with db_backend.connect() as connection:
         await connection.execute(
             """
@@ -297,13 +310,18 @@ async def _mark_outbox_failed(
         await connection.commit()
 
 
-async def support_outbox_worker(bot: Bot) -> None:
+async def support_outbox_worker(
+    bot: Bot,
+    *,
+    source: str = SUPPORT_SOURCE_MAIN,
+) -> None:
+    normalized_source = _normalize_source(source)
     await ensure_internal_admin_support_schema()
-    logger.info("Support outbox worker started")
+    logger.info("Support outbox worker started for source=%s", normalized_source)
     while True:
         item = None
         try:
-            item = await _claim_outbox_item()
+            item = await _claim_outbox_item(normalized_source)
             if item is None:
                 await asyncio.sleep(OUTBOX_POLL_SECONDS)
                 continue
@@ -322,7 +340,9 @@ async def support_outbox_worker(bot: Bot) -> None:
         except asyncio.CancelledError:
             raise
         except Exception as exc:
-            logger.exception("Support outbox delivery failed")
+            logger.exception(
+                "Support outbox delivery failed for source=%s", normalized_source
+            )
             if item is not None:
                 await _mark_outbox_failed(
                     int(item["id"]),
@@ -333,11 +353,17 @@ async def support_outbox_worker(bot: Bot) -> None:
             await asyncio.sleep(OUTBOX_POLL_SECONDS)
 
 
-def ensure_support_outbox_worker(bot: Bot) -> asyncio.Task[None]:
-    global _WORKER_TASK
-    if _WORKER_TASK is None or _WORKER_TASK.done():
-        _WORKER_TASK = asyncio.create_task(
-            support_outbox_worker(bot),
-            name="support-outbox-worker",
+def ensure_support_outbox_worker(
+    bot: Bot,
+    *,
+    source: str = SUPPORT_SOURCE_MAIN,
+) -> asyncio.Task[None]:
+    normalized_source = _normalize_source(source)
+    task = _WORKER_TASKS.get(normalized_source)
+    if task is None or task.done():
+        task = asyncio.create_task(
+            support_outbox_worker(bot, source=normalized_source),
+            name=f"support-outbox-worker:{normalized_source}",
         )
-    return _WORKER_TASK
+        _WORKER_TASKS[normalized_source] = task
+    return task
