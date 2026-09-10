@@ -4,8 +4,10 @@ import pytest
 from aiohttp import web
 
 from bot.max_api import MAX_UPDATE_TYPES, MaxSettings
+from bot.max_commands import MAX_QUICK_COMMANDS, max_quick_commands_payload
 from bot.max_runtime import (
     MaxRuntimeSettings,
+    _ensure_max_quick_commands,
     _ensure_max_subscription,
     setup_max_runtime,
 )
@@ -22,6 +24,20 @@ class FakeSubscriptionClient:
     async def create_subscription(self, webhook_url):
         self.created.append(webhook_url)
         return {"success": True}
+
+
+class FakeCommandsClient:
+    def __init__(self) -> None:
+        self.commands = []
+        self.set_calls = []
+
+    async def set_bot_commands(self, commands):
+        self.set_calls.append(commands)
+        self.commands = [dict(command) for command in commands]
+        return {"commands": self.commands}
+
+    async def get_bot_info(self):
+        return {"commands": self.commands}
 
 
 def test_max_runtime_is_dark_by_default(monkeypatch) -> None:
@@ -106,3 +122,25 @@ def test_max_subscription_is_created_or_refreshed_with_event_parity() -> None:
         )
     )
     assert incomplete.created == ["https://api.example.invalid/max/webhook"]
+
+
+def test_max_quick_commands_are_registered_and_verified() -> None:
+    client = FakeCommandsClient()
+    asyncio.run(_ensure_max_quick_commands(client))
+
+    expected = max_quick_commands_payload()
+    assert client.set_calls == [expected]
+    assert [
+        (item["name"], item["description"]) for item in client.commands
+    ] == list(MAX_QUICK_COMMANDS)
+
+
+def test_max_quick_commands_match_telegram_product_contract() -> None:
+    assert list(MAX_QUICK_COMMANDS) == [
+        ("start", "Текстовый бот и главное меню"),
+        ("feed", "Лента работ"),
+        ("prompts", "Библиотека промптов"),
+        ("help", "Помощь и возможности"),
+        ("ref", "Партнёрская программа"),
+        ("earn", "Заработок на рефералах"),
+    ]
