@@ -725,10 +725,7 @@ class MaxChannelService:
                     inline_keyboard(
                         [
                             [
-                                open_app_button(
-                                    "🚀 Открыть Mini App",
-                                    self.settings.mini_app_url,
-                                )
+                                open_app_button("🚀 Открыть Mini App")
                             ],
                             [callback_button("🏠 Главное меню", "max:home")],
                         ]
