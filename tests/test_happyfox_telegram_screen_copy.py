@@ -14,6 +14,14 @@ def test_telegram_primary_screens_use_current_happyfox_copy() -> None:
         in common
     )
     assert "<b>Быстрый старт</b>" in common
+    assert "🖼 Фото — создать с нуля или изменить по референсу" in common
+    assert "🎬 Видео — сделать по тексту, фото или ролику" in common
+    assert "🎙 Озвучка — создать голос или говорящего персонажа" in common
+    assert "🎵 Музыка — создать готовый трек через Suno" in common
+    assert "🎯 Motion Control — перенести движение на персонажа" in common
+    assert "✨ Промпты — разобрать референс или подготовить запрос" in common
+    assert "🔗 Работы — открыть сохранённые ссылки и результаты" in common
+    assert "🤖 AI-помощник — подобрать модель и собрать промпт" in common
     assert "Что создаём? Выберите результат" in common
     assert "🐾 <b>Баланс HappyFox</b>" in common
     assert (
