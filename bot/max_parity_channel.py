@@ -19,7 +19,6 @@ from bot.max_store import (
 )
 from bot.max_ui import (
     back_home_menu,
-    image_model_menu,
     main_menu,
     more_menu,
     topup_menu,
