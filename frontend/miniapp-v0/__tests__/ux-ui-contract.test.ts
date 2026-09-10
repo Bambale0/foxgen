@@ -22,6 +22,7 @@ describe('HappyFox UX/UI guardrails', () => {
   test('keeps primary navigation to five destinations with active semantics', () => {
     const nav = read('components/tab-nav.tsx')
     expect(nav).toContain("label: 'Главная'")
+    expect(nav).toContain('activeIds: [0, 1, 2, 3]')
     expect(nav).toContain("aria-current={isActive ? 'page' : undefined}")
     expect((nav.match(/label:/g) || []).length).toBe(5)
   })
@@ -31,7 +32,19 @@ describe('HappyFox UX/UI guardrails', () => {
     expect(source).not.toContain('text-[9px]')
     expect(source).not.toContain('text-[10px]')
     expect(source).not.toContain('🍌')
+    expect(source).not.toContain('<Banana className=')
     expect(source).not.toContain('Недостаточно бананов')
+  })
+
+  test('does not show fake progress or provider-facing language in core generation screens', () => {
+    const photo = read('components/tabs/photo-tab.tsx')
+    const video = read('components/tabs/video-tab.tsx')
+    const detail = read('components/task-detail-panel.tsx')
+
+    expect(photo).not.toContain('Шаг 1 из 3')
+    expect(video).not.toContain('Шаг 1 из 3')
+    expect(detail).not.toContain('>Prompt<')
+    expect(detail).not.toContain('>Blur<')
   })
 
   test('honors reduced motion and visible keyboard focus', () => {
