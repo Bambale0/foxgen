@@ -78,7 +78,7 @@ export function QuickActionGrid({
 
               <div className="min-w-0">
                 <div className="text-sm font-bold text-foreground sm:text-[15px]">{item.label}</div>
-                <div className="mt-1 line-clamp-2 text-[10px] leading-relaxed text-muted-foreground sm:text-[11px]">
+                <div className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-muted-foreground sm:text-[11px]">
                   {item.description}
                 </div>
               </div>

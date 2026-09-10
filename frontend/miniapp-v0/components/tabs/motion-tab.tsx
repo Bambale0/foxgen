@@ -199,7 +199,7 @@ export function MotionTab() {
     }
   }
 
-  const estimatedCost = `${motionCost}🍌 • ${formatPerSecondCost(perSecondCost)}🍌/с`
+  const estimatedCost = `${motionCost}🐾 • ${formatPerSecondCost(perSecondCost)}🐾/с`
 
   return (
     <div className="px-4 space-y-5 pb-28">
@@ -277,7 +277,7 @@ export function MotionTab() {
                     >
                       <span className="block">{item.label}</span>
                       <span className="mt-1 block text-xs opacity-80">
-                        {itemCost}🍌 · {formatPerSecondCost(itemPerSecondCost)}🍌/с
+                        {itemCost}🐾 · {formatPerSecondCost(itemPerSecondCost)}🐾/с
                       </span>
                     </button>
                     )
@@ -308,7 +308,7 @@ export function MotionTab() {
                     >
                       <span className="block">{item}</span>
                       <span className="mt-1 block text-xs opacity-80">
-                        {qCost}🍌 · {formatPerSecondCost(qPerSec)}🍌/с
+                        {qCost}🐾 · {formatPerSecondCost(qPerSec)}🐾/с
                       </span>
                     </button>
                     )

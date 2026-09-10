@@ -1,7 +1,7 @@
 'use client'
 
 import Image from 'next/image'
-import { ArrowRight, Gauge, Sparkles, WandSparkles } from 'lucide-react'
+import { ArrowRight, Sparkles } from 'lucide-react'
 import { BRAND_LOGO, BRAND_NAME } from '@/lib/brand'
 import { useApp } from '@/lib/app-context'
 import { QuickActionGrid } from '../quick-action-grid'
@@ -26,7 +26,7 @@ export function StudioTab() {
         </div>
 
         <div className="relative max-w-[540px]">
-          <div className="inline-flex items-center gap-1.5 rounded-full border border-gold/25 bg-gold/[0.08] px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.14em] text-gold">
+          <div className="inline-flex items-center gap-1.5 rounded-full border border-gold/25 bg-gold/[0.08] px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.14em] text-gold">
             <Sparkles className="h-3 w-3" />
             AI генерация фото и видео
           </div>
@@ -38,27 +38,12 @@ export function StudioTab() {
             Опишите идею или добавьте референс — HappyFox поможет превратить её в фото, видео или анимацию.
           </p>
 
-          <div className="mt-5 grid max-w-[430px] grid-cols-3 gap-2">
-            <div className="rounded-xl border border-white/[0.06] bg-black/20 px-2 py-2.5">
-              <WandSparkles className="h-4 w-4 text-gold" />
-              <div className="mt-2 text-[9px] font-semibold leading-tight text-foreground">Топовые модели</div>
-            </div>
-            <div className="rounded-xl border border-white/[0.06] bg-black/20 px-2 py-2.5">
-              <Gauge className="h-4 w-4 text-gold" />
-              <div className="mt-2 text-[9px] font-semibold leading-tight text-foreground">Быстрый старт</div>
-            </div>
-            <div className="rounded-xl border border-white/[0.06] bg-black/20 px-2 py-2.5">
-              <Sparkles className="h-4 w-4 text-gold" />
-              <div className="mt-2 text-[9px] font-semibold leading-tight text-foreground">Понятный путь</div>
-            </div>
-          </div>
-
           <button
             type="button"
             onClick={() => setActiveTab(1)}
             className="fox-cta mt-5 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl px-5 text-sm font-bold transition-all active:scale-[0.99] sm:w-auto sm:min-w-56"
           >
-            Начать творить
+            Создать фото
             <ArrowRight className="h-4 w-4" />
           </button>
         </div>
@@ -70,7 +55,7 @@ export function StudioTab() {
             <h2 className="text-lg font-bold tracking-[-0.02em] text-foreground">С чего начнём?</h2>
             <p className="mt-0.5 text-[11px] text-muted-foreground">Выберите, что хотите получить — дальше покажем только нужные настройки</p>
           </div>
-          <span className="text-[9px] font-black uppercase tracking-[0.14em] text-gold">{BRAND_NAME}</span>
+          <span className="text-[11px] font-black uppercase tracking-[0.14em] text-gold">{BRAND_NAME}</span>
         </div>
         <QuickActionGrid
           onPhotoClick={() => setActiveTab(1)}
@@ -85,7 +70,7 @@ export function StudioTab() {
         <div className="mb-3 flex items-center justify-between px-0.5">
           <div>
             <h2 className="text-base font-bold text-foreground">Ваши работы</h2>
-            <p className="mt-0.5 text-[10px] text-muted-foreground">Последние генерации, результаты и статус</p>
+            <p className="mt-0.5 text-[11px] text-muted-foreground">Последние генерации, результаты и статус</p>
           </div>
         </div>
         <TaskHistoryList />

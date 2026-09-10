@@ -41,7 +41,7 @@ const scenarioConfig: Record<ScenarioType, {
     description: 'ID персонажа',
   },
   'avatar': {
-    label: 'Avatar',
+    label: 'Аватар',
     icon: UserRound,
     description: 'Аватар',
   },
@@ -51,7 +51,7 @@ export function ScenarioSelect({ scenarios, value, onChange }: ScenarioSelectPro
   const allScenarios: ScenarioType[] = ['text', 'imgtxt', 'video', 'audio', 'character', 'avatar']
 
   return (
-    <div className="grid min-w-0 grid-cols-3 gap-2 sm:grid-cols-6">
+    <div role="group" aria-label="Сценарий" className="grid min-w-0 grid-cols-3 gap-2 sm:grid-cols-6">
       {allScenarios.map((scenario) => {
         const config = scenarioConfig[scenario]
         const Icon = config.icon
@@ -60,7 +60,9 @@ export function ScenarioSelect({ scenarios, value, onChange }: ScenarioSelectPro
         
         return (
           <button
+            type="button"
             key={scenario}
+            aria-pressed={isSelected}
             onClick={() => isAvailable && onChange(scenario)}
             disabled={!isAvailable}
             className={cn(
@@ -74,7 +76,7 @@ export function ScenarioSelect({ scenarios, value, onChange }: ScenarioSelectPro
             )}
           >
             <Icon className="h-4 w-4 shrink-0" />
-            <span className="max-w-full text-center text-[10px] font-medium leading-tight">
+            <span className="max-w-full text-center text-[11px] font-medium leading-tight">
               {config.label}
             </span>
           </button>

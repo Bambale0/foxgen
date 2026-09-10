@@ -126,7 +126,7 @@ function AssistantChat({ starters }: { starters: string[] }) {
     {
       id: 'assistant-1',
       role: 'assistant',
-      text: `Я помогу быстро выбрать модель и собрать сильный запрос. Сейчас у вас ${state.user.credits}🍌. Что хотите сделать: фото, видео или доработать идею?`,
+      text: `Я помогу быстро выбрать модель и собрать сильный запрос. Сейчас у вас ${state.user.credits}🐾. Что хотите сделать: фото, видео или доработать идею?`,
     },
   ])
 
@@ -397,7 +397,7 @@ function buildFallbackReply(input: string, credits: number) {
   }
 
   if (text.includes('баланс') || text.includes('сколько')) {
-    return `Сейчас у вас ${credits}🍌. Если задача тестовая, начните с одного варианта и короткого запроса. Когда понравится направление, можно усиливать качество, длительность или количество результатов.`
+    return `Сейчас у вас ${credits}🐾. Если задача тестовая, начните с одного варианта и короткого запроса. Когда понравится направление, можно усиливать качество, длительность или количество результатов.`
   }
 
   return `Понял задачу. Я бы сейчас уточнил три вещи: что должно быть в центре внимания, какой нужен формат и какое настроение вы хотите получить. После этого выбор модели и настройка запуска становятся намного точнее.`
@@ -468,7 +468,7 @@ function PhotoPromptPanel({ onOpenPhoto }: { onOpenPhoto: () => void }) {
       })
       setРезультат(data)
       setCredits(data.credits)
-      toast.success('Промпт собран', { description: 'Списано 1 ₽ (0,1 🍌).' })
+      toast.success('Промпт собран', { description: 'Списано 1 ₽ (0,1 🐾).' })
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Не удалось собрать промпт'
       toast.error('Ошибка анализа', { description: message })
@@ -492,7 +492,7 @@ function PhotoPromptPanel({ onOpenPhoto }: { onOpenPhoto: () => void }) {
           композиция, объект, свет, стиль, цвета и важные детали.
         </p>
         <p className="mt-3 inline-flex rounded-full border border-gold/25 bg-gold/10 px-3 py-1.5 text-xs font-medium text-gold">
-          Стоимость: 1 ₽ · 0,1 🍌
+          Стоимость: 1 ₽ · 0,1 🐾
         </p>
       </div>
 

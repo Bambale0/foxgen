@@ -33,6 +33,9 @@ export function ModelSelect({ models, value, onChange }: ModelSelectProps) {
     <div className="relative min-w-0">
       <button
         type="button"
+        aria-label="Выбрать модель"
+        aria-haspopup="listbox"
+        aria-expanded={isOpen}
         onClick={() => setIsOpen(!isOpen)}
         className={cn(
           'fox-surface flex w-full min-w-0 items-center justify-between gap-3 rounded-xl p-3 text-left sm:p-4',
@@ -44,7 +47,7 @@ export function ModelSelect({ models, value, onChange }: ModelSelectProps) {
           <div className="flex items-center gap-2">
             <p className="truncate text-sm font-semibold text-foreground">{selected?.label}</p>
             {selectedIsNew && (
-              <span className="shrink-0 rounded-full border border-gold/45 bg-gold/[0.12] px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.12em] text-gold shadow-[0_0_14px_rgba(255,106,0,0.12)]">
+              <span className="shrink-0 rounded-full border border-gold/45 bg-gold/[0.12] px-2 py-0.5 text-[11px] font-black uppercase tracking-[0.12em] text-gold shadow-[0_0_14px_rgba(255,106,0,0.12)]">
                 NEW
               </span>
             )}
@@ -78,6 +81,8 @@ export function ModelSelect({ models, value, onChange }: ModelSelectProps) {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -8, scale: 0.97 }}
               transition={{ duration: 0.15 }}
+              role="listbox"
+              aria-label="Доступные модели"
               className={cn(
                 'glass-strong absolute z-50 mt-2 max-h-[60vh] w-full overflow-y-auto rounded-2xl border border-white/[0.08] py-2 shadow-[0_24px_64px_rgba(0,0,0,0.55)]',
               )}
@@ -88,6 +93,8 @@ export function ModelSelect({ models, value, onChange }: ModelSelectProps) {
                   <button
                     key={model.id}
                     type="button"
+                    role="option"
+                    aria-selected={model.id === value}
                     onClick={() => {
                       onChange(model.id)
                       setIsOpen(false)
@@ -101,7 +108,7 @@ export function ModelSelect({ models, value, onChange }: ModelSelectProps) {
                       <div className="flex items-center gap-2">
                         <p className="truncate text-sm font-semibold text-foreground">{model.label}</p>
                         {isNew && (
-                          <span className="shrink-0 rounded-full border border-gold/45 bg-gold/[0.12] px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.12em] text-gold">
+                          <span className="shrink-0 rounded-full border border-gold/45 bg-gold/[0.12] px-2 py-0.5 text-[11px] font-black uppercase tracking-[0.12em] text-gold">
                             NEW
                           </span>
                         )}

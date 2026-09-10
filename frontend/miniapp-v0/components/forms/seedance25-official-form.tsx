@@ -313,7 +313,7 @@ export function Seedance25OfficialForm({ model, credits, isAdmin, onQueued, onSa
       if (scenario === 'multimodal' && !refImages.length && !refVideos.length && !refAudios.length) {
         throw new Error('Добавьте хотя бы один фото, видео или аудио-референс')
       }
-      if (!canAfford) throw new Error(`Недостаточно бананов. Нужно ${price}🍌`)
+      if (!canAfford) throw new Error(`Недостаточно лапок. Нужно ${price}🐾`)
 
       setSubmitting(true)
       const result = await generateSeedance25({
@@ -343,7 +343,7 @@ export function Seedance25OfficialForm({ model, credits, isAdmin, onQueued, onSa
     <div className="glass min-w-0 space-y-5 overflow-hidden rounded-2xl border border-cyan/25 p-3 sm:p-4">
       <div className="rounded-2xl border border-cyan/25 bg-gradient-to-br from-cyan/10 via-cyan/5 to-transparent p-4">
         <div className="flex items-center gap-2">
-          <span className="rounded-full border border-gold/40 bg-gold/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-gold">NEW</span>
+          <span className="rounded-full border border-gold/40 bg-gold/15 px-2 py-0.5 text-[11px] font-bold uppercase tracking-[0.14em] text-gold">NEW</span>
           <h3 className="font-serif text-xl font-semibold text-foreground">Seedance 2.5</h3>
         </div>
         <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
@@ -353,7 +353,7 @@ export function Seedance25OfficialForm({ model, credits, isAdmin, onQueued, onSa
 
       <section className="space-y-3">
         <div>
-          <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-cyan/80">Шаг 1</div>
+          <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-cyan/80">Шаг 1</div>
           <h4 className="mt-1 text-sm font-semibold text-foreground">Выберите сценарий</h4>
         </div>
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -403,13 +403,13 @@ export function Seedance25OfficialForm({ model, credits, isAdmin, onQueued, onSa
             <div className="space-y-2 rounded-xl border border-gold/25 bg-gold/5 p-3">
               <div className="flex justify-between text-sm"><span>🎬 Видео</span><span className="text-xs text-muted-foreground">{videos.length}/10</span></div>
               <UploadButton label="＋ Добавить видео" multiple accept=".mp4,.mov,video/mp4,video/quicktime" disabled={uploading || videos.length >= 10} onFiles={(files) => void runUpload(async () => { for (const file of files.slice(0, 10 - videos.length)) await uploadVideo(file) })} />
-              <div className="text-[10px] leading-relaxed text-muted-foreground">MP4/MOV · 2–30с каждое · суммарно до 30с{knownVideoSeconds ? ` · выбрано ${knownVideoSeconds.toFixed(1)}с` : ''}</div>
+              <div className="text-[11px] leading-relaxed text-muted-foreground">MP4/MOV · 2–30с каждое · суммарно до 30с{knownVideoSeconds ? ` · выбрано ${knownVideoSeconds.toFixed(1)}с` : ''}</div>
               {videos.map((item, index) => <FileRow key={`${item.file.id}-${index}`} item={item} onRemove={() => setVideos((current) => current.filter((_, i) => i !== index))} />)}
             </div>
             <div className="space-y-2 rounded-xl border border-border/35 bg-background/30 p-3">
               <div className="flex justify-between text-sm"><span>🎵 Аудио</span><span className="text-xs text-muted-foreground">{audios.length}/10</span></div>
               <UploadButton label="＋ Добавить аудио" multiple accept=".wav,.mp3,audio/wav,audio/mpeg" disabled={uploading || audios.length >= 10} onFiles={(files) => void runUpload(async () => { for (const file of files.slice(0, 10 - audios.length)) await uploadAudio(file) })} />
-              <div className="text-[10px] text-muted-foreground">WAV/MP3 · 2–30с</div>
+              <div className="text-[11px] text-muted-foreground">WAV/MP3 · 2–30с</div>
               {audios.map((item, index) => <FileRow key={`${item.file.id}-${index}`} item={item} onRemove={() => setAudios((current) => current.filter((_, i) => i !== index))} />)}
             </div>
           </div>
@@ -441,7 +441,7 @@ export function Seedance25OfficialForm({ model, credits, isAdmin, onQueued, onSa
             <div className="grid grid-cols-2 gap-2">
               {(['480p', '720p'] as Seedance25Resolution[]).map((value) => {
                 const rate = Number(model?.quality_costs?.[value] || 0)
-                return <Choice key={value} active={resolution === value} onClick={() => setResolution(value)}>{value}{rate ? ` · ${rate}🍌/с` : ''}</Choice>
+                return <Choice key={value} active={resolution === value} onClick={() => setResolution(value)}>{value}{rate ? ` · ${rate}🐾/с` : ''}</Choice>
               })}
             </div>
           </div>
@@ -470,8 +470,8 @@ export function Seedance25OfficialForm({ model, credits, isAdmin, onQueued, onSa
 
       <div className={`rounded-2xl border p-4 ${hasVideoReference ? 'border-gold/35 bg-gold/7' : 'border-cyan/25 bg-cyan/5'}`}>
         <div className="flex items-end justify-between gap-4">
-          <div><div className="text-xs text-muted-foreground">Стоимость</div><div className="mt-1 text-2xl font-bold">{price || 0}🍌</div></div>
-          <div className="text-right text-xs text-muted-foreground">{isAdmin ? <>Для админа<br /><span className="font-semibold text-cyan">без списания</span></> : <>Баланс<br /><span className="font-semibold text-foreground">{credits}🍌</span></>}</div>
+          <div><div className="text-xs text-muted-foreground">Стоимость</div><div className="mt-1 text-2xl font-bold">{price || 0}🐾</div></div>
+          <div className="text-right text-xs text-muted-foreground">{isAdmin ? <>Для админа<br /><span className="font-semibold text-cyan">без списания</span></> : <>Баланс<br /><span className="font-semibold text-foreground">{credits}🐾</span></>}</div>
         </div>
         {hasVideoReference ? <div className="mt-3 text-xs text-gold">🎬 Видео-референс: цена ×2</div> : null}
       </div>
@@ -480,7 +480,7 @@ export function Seedance25OfficialForm({ model, credits, isAdmin, onQueued, onSa
       {queued ? <div className="rounded-xl border border-cyan/30 bg-cyan/5 p-3 text-sm"><strong>✅ Видео поставлено в очередь</strong><div className="mt-1 break-all font-mono text-xs text-muted-foreground">{queued.task_id}</div></div> : null}
 
       <button type="button" onClick={() => void submit()} disabled={submitting || uploading || !canAfford} className="w-full rounded-2xl bg-cyan px-4 py-3.5 text-sm font-semibold text-background transition disabled:cursor-not-allowed disabled:opacity-50">
-        {submitting ? 'Запускаю Seedance 2.5…' : uploading ? 'Загружаю референсы…' : !canAfford ? `Нужно ${price}🍌` : `Создать видео · ${price || 0}🍌`}
+        {submitting ? 'Запускаю Seedance 2.5…' : uploading ? 'Загружаю референсы…' : !canAfford ? `Нужно ${price}🐾` : `Создать видео · ${price || 0}🐾`}
       </button>
     </div>
   )

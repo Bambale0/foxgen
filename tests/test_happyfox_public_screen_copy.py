@@ -11,7 +11,7 @@ def test_public_screen_copy_uses_happyfox_brand() -> None:
     telegram = _read("bot/handlers/common.py")
     trends = _read("frontend/miniapp-v0/components/tabs/trends-tab.tsx")
 
-    assert '🏠 <b>HappyFox</b>' in telegram
+    assert 'html.escape(product.brand_name)' in telegram
     assert '🏠 <b>NEUROMIX</b>' not in telegram
     assert 'Готовые фото- и видео-шаблоны от команды NEUROMIX.' not in trends
     assert 'Готовые идеи для фото и видео' in trends
