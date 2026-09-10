@@ -640,7 +640,7 @@ export function FeedTab() {
                         <span className="pointer-events-none absolute inset-0 bg-background/10 backdrop-blur-[1px]" />
                       ) : null}
                     </button>
-                    <div className="absolute left-2 top-2 rounded-full bg-background/80 px-2 py-1 text-[10px] font-medium text-foreground backdrop-blur">
+                    <div className="absolute left-2 top-2 rounded-full bg-background/80 px-2 py-1 text-[11px] font-medium text-foreground backdrop-blur">
                       {item.gen_type === 'video' ? (
                         <span className="inline-flex items-center gap-1">
                           <Video className="h-3 w-3" />
@@ -668,7 +668,7 @@ export function FeedTab() {
                           <span className="truncate">{item.author}</span>
                         </button>
                       </div>
-                      <div className="shrink-0 rounded-full bg-secondary/70 px-2 py-1 text-[10px] text-muted-foreground">
+                      <div className="shrink-0 rounded-full bg-secondary/70 px-2 py-1 text-[11px] text-muted-foreground">
                         {item.remixes}
                       </div>
                     </div>
@@ -916,7 +916,7 @@ export function FeedTab() {
               <button
                 type="button"
                 onClick={() => setCommentsItem(null)}
-                className="flex h-8 w-8 items-center justify-center rounded-full bg-secondary text-muted-foreground"
+                className="flex h-11 w-11 items-center justify-center rounded-full bg-secondary text-muted-foreground"
                 aria-label="Закрыть"
               >
                 <X className="h-4 w-4" />

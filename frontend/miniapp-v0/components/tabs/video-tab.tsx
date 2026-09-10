@@ -153,7 +153,7 @@ export function VideoTab() {
     <div className="min-w-0 space-y-4 overflow-x-hidden px-3 pb-3 sm:px-4 lg:px-6">
       <div className="flex items-start justify-between gap-4 px-0.5 pt-1">
         <div>
-          <div className="mb-2 inline-flex items-center gap-1.5 rounded-full border border-gold/20 bg-gold/[0.07] px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.14em] text-gold">
+          <div className="mb-2 inline-flex items-center gap-1.5 rounded-full border border-gold/20 bg-gold/[0.07] px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.14em] text-gold">
             <VideoIcon className="h-3 w-3" />
             Видео
           </div>
@@ -162,19 +162,11 @@ export function VideoTab() {
             Опишите сцену и выберите подходящую модель. Если делаете видео из фото, добавьте стартовый кадр.
           </p>
         </div>
-        <div className="shrink-0 pt-1 text-right">
-          <div className="text-[9px] font-bold uppercase tracking-[0.13em] text-muted-foreground">Шаг 1 из 3</div>
-          <div className="mt-2 flex justify-end gap-1">
-            <span className="h-1 w-5 rounded-full bg-gold" />
-            <span className="h-1 w-3 rounded-full bg-white/10" />
-            <span className="h-1 w-3 rounded-full bg-white/10" />
-          </div>
-        </div>
       </div>
 
       {canUseSeedance25 ? (
         <div className="mx-auto mb-4 max-w-xl space-y-2">
-          <div className="px-1 text-[9px] font-black uppercase tracking-[0.16em] text-muted-foreground">
+          <div className="px-1 text-[11px] font-black uppercase tracking-[0.16em] text-muted-foreground">
             Быстрый выбор модели
           </div>
           <div className="fox-surface grid grid-cols-2 gap-2 rounded-[18px] p-1.5">
@@ -187,7 +179,7 @@ export function VideoTab() {
                   : 'border border-transparent text-muted-foreground hover:bg-gold/[0.05] hover:text-foreground'
               }`}
             >
-              <span className="block text-[9px] font-black uppercase tracking-[0.16em] text-gold">NEW</span>
+              <span className="block text-[11px] font-black uppercase tracking-[0.16em] text-gold">NEW</span>
               <span className="mt-0.5 block text-sm text-foreground">Seedance 2.5</span>
             </button>
             <button
@@ -199,7 +191,7 @@ export function VideoTab() {
                   : 'border border-transparent text-muted-foreground hover:bg-secondary/60 hover:text-foreground'
               }`}
             >
-              <span className="block text-[9px] uppercase tracking-[0.14em] opacity-70">Каталог</span>
+              <span className="block text-[11px] uppercase tracking-[0.14em] opacity-70">Каталог</span>
               <span className="mt-0.5 block text-sm">Другие модели</span>
             </button>
           </div>
@@ -244,12 +236,12 @@ export function VideoTab() {
               <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl border border-gold/20 bg-gold/[0.08]">
                 <Sparkles className="h-5 w-5 text-gold" />
               </div>
-              <p className="mb-2 text-[9px] font-black uppercase tracking-[0.16em] text-gold">Очередь Seedance</p>
+              <p className="mb-2 text-[11px] font-black uppercase tracking-[0.16em] text-gold">Очередь Seedance</p>
               <h3 className="text-lg font-bold text-foreground">Seedance 2.5</h3>
               {seedanceQueued ? (
                 <div className="mt-2 space-y-2 text-sm">
                   <p>Видео поставлено в очередь.</p>
-                  <p className="break-all font-mono text-[10px] text-muted-foreground">{seedanceQueued.task_id}</p>
+                  <p className="break-all font-mono text-[11px] text-muted-foreground">{seedanceQueued.task_id}</p>
                   <p className="text-xs leading-relaxed text-muted-foreground">
                     {seedanceQueued.admin_free
                       ? 'Для администратора списание отключено.'
@@ -273,7 +265,7 @@ export function VideoTab() {
               <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl border border-gold/20 bg-gold/[0.08]">
                 <VideoIcon className="h-5 w-5 text-gold" />
               </div>
-              <p className="mb-2 text-[9px] font-black uppercase tracking-[0.16em] text-gold">Результат</p>
+              <p className="mb-2 text-[11px] font-black uppercase tracking-[0.16em] text-gold">Результат</p>
               <h3 className="text-lg font-bold text-foreground">Видео-панель</h3>
               <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
                 Запустите генерацию — здесь появятся статус и готовое видео. Результат сохранится в истории.

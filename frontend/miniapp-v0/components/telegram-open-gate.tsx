@@ -164,7 +164,7 @@ export function TelegramOpenGate() {
             </div>
           </div>
 
-          <div className="inline-flex items-center gap-1.5 rounded-full border border-gold/20 bg-gold/[0.07] px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.14em] text-gold">
+          <div className="inline-flex items-center gap-1.5 rounded-full border border-gold/20 bg-gold/[0.07] px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.14em] text-gold">
             <Sparkles className="h-3 w-3" />
             Telegram Mini App
           </div>

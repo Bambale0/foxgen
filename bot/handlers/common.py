@@ -58,6 +58,7 @@ from bot.database import (
     use_prompt,
 )
 from bot.config import config
+from bot.product import product
 from bot.miniapp_links import (
     feed_bot_link as build_feed_bot_link,
     feed_link as build_feed_link,
@@ -1264,7 +1265,7 @@ def _get_user_menu(user_id: int) -> str:
 def _build_main_menu_text(user_credits: int, referral_bonus_text: str = "") -> str:
     bonus_block = f"\n{referral_bonus_text.strip()}\n" if referral_bonus_text else "\n"
     return (
-        "🏠 <b>HappyFox</b>\n"
+        f"🏠 <b>{html.escape(product.brand_name)}</b>\n"
         "Создавайте фото, видео и анимацию по описанию или референсам.\n"
         "Выберите задачу — дальше покажу только нужные шаги. 👇\n\n"
         "<b>Что можно сделать</b>\n"

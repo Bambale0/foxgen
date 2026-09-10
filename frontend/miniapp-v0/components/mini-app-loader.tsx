@@ -48,7 +48,7 @@ export function MiniAppLoader() {
             />
           </div>
 
-          <div className="inline-flex items-center gap-1.5 rounded-full border border-gold/20 bg-gold/[0.07] px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.14em] text-gold">
+          <div className="inline-flex items-center gap-1.5 rounded-full border border-gold/20 bg-gold/[0.07] px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.14em] text-gold">
             <Sparkles className="h-3 w-3" />
             Telegram Mini App
           </div>
@@ -60,7 +60,7 @@ export function MiniAppLoader() {
             <div className="h-full w-1/2 animate-[pulse_1.2s_ease-in-out_infinite] rounded-full bg-gradient-to-r from-gold/45 via-gold to-gold/45 shadow-[0_0_14px_rgba(255,106,0,0.35)]" />
           </div>
 
-          <div className="mt-5 flex items-center gap-2 text-[10px] text-muted-foreground">
+          <div className="mt-5 flex items-center gap-2 text-[11px] text-muted-foreground">
             <LoaderCircle className="h-3.5 w-3.5 animate-spin text-gold" />
             Получаем данные Telegram
           </div>

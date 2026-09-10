@@ -41,8 +41,10 @@ export function ResultCard({ task, onClose }: ResultCardProps) {
         )}
       >
         <button
+          type="button"
           onClick={onClose}
-          className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-full bg-secondary/80 transition-colors hover:bg-secondary"
+          aria-label="Закрыть результат"
+          className="absolute right-3 top-3 flex h-11 w-11 items-center justify-center rounded-full bg-secondary/80 transition-colors hover:bg-secondary"
         >
           <X className="h-4 w-4 text-muted-foreground" />
         </button>
@@ -70,7 +72,7 @@ export function ResultCard({ task, onClose }: ResultCardProps) {
               {isPending
                 ? 'Результат придёт в чат и появится в истории'
                 : isFailed
-                  ? 'Проверьте prompt, файлы и попробуйте снова'
+                  ? 'Проверьте описание и файлы, затем попробуйте снова'
                   : task.type === 'image'
                     ? 'Нажмите на изображение для полного просмотра'
                     : task.type === 'audio'
@@ -88,8 +90,10 @@ export function ResultCard({ task, onClose }: ResultCardProps) {
             {task.task_id}
           </code>
           <button
+            type="button"
             onClick={handleCopy}
-            className="text-muted-foreground transition-colors hover:text-foreground"
+            aria-label="Скопировать номер задачи"
+            className="flex h-11 w-11 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
           >
             <Copy className="h-4 w-4" />
           </button>
@@ -103,7 +107,7 @@ export function ResultCard({ task, onClose }: ResultCardProps) {
           >
             <img
               src={task.result_url}
-              alt="Generated result"
+              alt="Готовый результат"
               className="max-h-[70vh] w-full object-contain"
             />
             <span className="absolute right-3 top-3 inline-flex items-center gap-1.5 rounded-full border border-border/50 bg-background/75 px-3 py-1.5 text-xs text-foreground opacity-90 backdrop-blur">
@@ -173,7 +177,8 @@ export function ResultCard({ task, onClose }: ResultCardProps) {
               <button
                 type="button"
                 onClick={() => setViewerOpen(false)}
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/10 text-white"
+                aria-label="Закрыть полный просмотр"
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/10 text-white"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -182,7 +187,7 @@ export function ResultCard({ task, onClose }: ResultCardProps) {
             <div className="flex min-h-0 flex-1 items-center justify-center px-2 py-2">
               <img
                 src={task.result_url}
-                alt="Generated result full"
+                alt="Готовый результат в полном размере"
                 className="max-h-full max-w-full object-contain"
               />
             </div>
