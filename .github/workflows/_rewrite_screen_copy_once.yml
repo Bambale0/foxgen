@@ -1,0 +1,392 @@
+name: Rewrite HappyFox screen copy once
+
+on:
+  push:
+    branches:
+      - feat/rewrite-happyfox-screen-copy-20260910
+
+permissions:
+  contents: write
+
+jobs:
+  rewrite:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: feat/rewrite-happyfox-screen-copy-20260910
+          fetch-depth: 0
+      - name: Rewrite user-facing descriptions
+        shell: bash
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+
+          def replace(path: str, old: str, new: str) -> None:
+              file = Path(path)
+              text = file.read_text(encoding='utf-8')
+              if old not in text:
+                  raise SystemExit(f'missing expected copy in {path}: {old!r}')
+              file.write_text(text.replace(old, new), encoding='utf-8')
+
+          # Mini App — service and home screens.
+          replace('frontend/miniapp-v0/components/service-grid.tsx',
+                  'Загрузите референс — AI соберёт точный prompt для похожей генерации.',
+                  'Загрузите фото — получите готовый промпт, который передаст стиль и детали.')
+          replace('frontend/miniapp-v0/components/service-grid.tsx',
+                  'Говорящий аватар: загрузите фото персонажа и аудио.',
+                  'Загрузите фото и аудио — персонаж заговорит и оживёт в кадре.')
+          replace('frontend/miniapp-v0/components/service-grid.tsx',
+                  'Правки по исходнику: фон, стиль, детали, одежда, настроение.',
+                  'Загрузите исходник и напишите, что изменить: фон, стиль, одежду или детали.')
+          replace('frontend/miniapp-v0/components/service-grid.tsx',
+                  'Переход к видео-сценариям: стартовый кадр, движение, камера.',
+                  'Превратите изображение в короткое видео с нужным движением и камерой.')
+          replace('frontend/miniapp-v0/components/service-grid.tsx',
+                  'Помощь по задачам, оплате и результатам.',
+                  'Поможем с генерацией, оплатой или результатом.')
+          replace('frontend/miniapp-v0/components/service-grid.tsx',
+                  'Рефералка, материалы и условия.',
+                  'Приглашайте пользователей и получайте вознаграждение.')
+          replace('frontend/miniapp-v0/components/service-grid.tsx',
+                  'Дополнительные разделы и переходы.',
+                  'История, настройки и дополнительные возможности.')
+          replace('frontend/miniapp-v0/components/service-grid.tsx',
+                  'Быстрые инструменты для подготовки промптов, редактирования, анимации и поддержки.',
+                  'Выберите задачу — подготовим промпт, изменим фото, оживим кадр или поможем разобраться.')
+
+          replace('frontend/miniapp-v0/components/quick-action-grid.tsx',
+                  'Картинки, арты, редактирование',
+                  'Опишите идею или добавьте референс — получите готовое изображение')
+          replace('frontend/miniapp-v0/components/quick-action-grid.tsx',
+                  'Динамичные сцены и анимация',
+                  'Создайте ролик по тексту, фото или видео-референсу')
+          replace('frontend/miniapp-v0/components/quick-action-grid.tsx',
+                  'Motion и движение по референсу',
+                  'Добавьте движение, мимику и камеру к готовому изображению')
+          replace('frontend/miniapp-v0/components/quick-action-grid.tsx',
+                  'Идея, промпт и быстрый старт',
+                  'Поможет с идеей, промптом и выбором подходящей модели')
+
+          replace('frontend/miniapp-v0/components/tabs/services-tab.tsx',
+                  'Загрузите референс, чтобы собрать точный prompt.',
+                  'Добавьте фото — соберём промпт по его стилю и деталям.')
+          replace('frontend/miniapp-v0/components/tabs/services-tab.tsx',
+                  'Открываю Avatar: фото персонажа + аудио.',
+                  'Добавьте фото персонажа и аудио для говорящего аватара.')
+          replace('frontend/miniapp-v0/components/tabs/services-tab.tsx',
+                  'Открываю фото-сценарии и работу с исходниками.',
+                  'Выберите фото и расскажите, что хотите изменить.')
+          replace('frontend/miniapp-v0/components/tabs/services-tab.tsx',
+                  'Открываю видео-сценарии для анимации.',
+                  'Добавьте изображение и настройте движение будущего ролика.')
+          replace('frontend/miniapp-v0/components/tabs/services-tab.tsx',
+                  'Открываю помощь и обращение в поддержку.',
+                  'Расскажите, с чем нужна помощь.')
+          replace('frontend/miniapp-v0/components/tabs/services-tab.tsx',
+                  'Открываю партнёрский раздел.',
+                  'Здесь условия программы, ссылка, статистика и выплаты.')
+          replace('frontend/miniapp-v0/components/tabs/services-tab.tsx',
+                  'Открываю дополнительные разделы.',
+                  'Здесь история, настройки и другие возможности.')
+
+          replace('frontend/miniapp-v0/components/tabs/studio-tab.tsx',
+                  'Создавайте изображения и видео через проверенные модели без сложных меню — от идеи до результата за несколько шагов.',
+                  'Опишите идею или добавьте референс — HappyFox поможет превратить её в фото, видео или анимацию.')
+          replace('frontend/miniapp-v0/components/tabs/studio-tab.tsx',
+                  'Выберите действие — настройки появятся дальше',
+                  'Выберите, что хотите получить — дальше покажем только нужные настройки')
+          replace('frontend/miniapp-v0/components/tabs/studio-tab.tsx',
+                  'Последние генерации и их статус',
+                  'Последние генерации, результаты и статус')
+
+          replace('frontend/miniapp-v0/components/tabs/photo-tab.tsx',
+                  'Выберите модель, задайте формат и опишите идею. Референсы можно добавить при необходимости.',
+                  'Опишите, что хотите получить. При желании добавьте фото — оно поможет сохранить стиль, персонажа или детали.')
+          replace('frontend/miniapp-v0/components/tabs/photo-tab.tsx',
+                  'После запуска здесь появится статус задачи и готовое изображение. Все параметры сохраняются в истории.',
+                  'Запустите генерацию — здесь появятся статус и готовое изображение. Результат сохранится в истории.')
+
+          replace('frontend/miniapp-v0/components/tabs/video-tab.tsx',
+                  'Выберите подходящую модель, сценарий и длительность. Для image-to-video добавьте стартовый кадр.',
+                  'Опишите сцену и выберите подходящую модель. Если делаете видео из фото, добавьте стартовый кадр.')
+          replace('frontend/miniapp-v0/components/tabs/video-tab.tsx',
+                  'Задача отправлена в Kie.ai.',
+                  'Видео поставлено в очередь.')
+          replace('frontend/miniapp-v0/components/tabs/video-tab.tsx',
+                  'Результат придёт в Telegram. Если callback задержится, включён polling fallback.',
+                  'Готовый ролик придёт в Telegram автоматически. Статус также появится в истории.')
+          replace('frontend/miniapp-v0/components/tabs/video-tab.tsx',
+                  'Здесь появится ID последней задачи. Итоговое видео бот пришлёт автоматически.',
+                  'После запуска здесь появится статус последнего видео. Готовый ролик бот пришлёт автоматически.')
+          replace('frontend/miniapp-v0/components/tabs/video-tab.tsx',
+                  'После запуска здесь появятся очередь, task id и превью ролика. Все параметры сохраняются в истории.',
+                  'Запустите генерацию — здесь появятся статус и готовое видео. Результат сохранится в истории.')
+
+          replace('frontend/miniapp-v0/components/tabs/motion-tab.tsx',
+                  'Загрузите фото персонажа и видео с движением. Модель перенесёт динамику на ваш образ.',
+                  'Загрузите фото персонажа и ролик с нужным движением — HappyFox перенесёт его на ваш образ.')
+          replace('frontend/miniapp-v0/components/tabs/motion-tab.tsx',
+                  'Кого нужно оживить.',
+                  'Фото человека или персонажа, которого хотите оживить.')
+          replace('frontend/miniapp-v0/components/tabs/motion-tab.tsx',
+                  'Откуда берём движение.',
+                  'Ролик с движением, которое нужно повторить.')
+          replace('frontend/miniapp-v0/components/tabs/motion-tab.tsx',
+                  'После запуска здесь появится задача. Готовый ролик придёт в чат и историю.',
+                  'Запустите перенос движения — готовый ролик появится здесь, в чате и в истории.')
+
+          replace('frontend/miniapp-v0/components/tabs/feed-tab.tsx',
+                  'Публичные фото и видео, которые можно лайкнуть, открыть или повторить.',
+                  'Смотрите работы других пользователей, сохраняйте идеи и повторяйте понравившиеся генерации.')
+          replace('frontend/miniapp-v0/components/tabs/trends-tab.tsx',
+                  'Готовые фото- и видео-шаблоны от команды NEUROMIX.',
+                  'Готовые идеи для фото и видео — выберите тренд, добавьте свои данные и запустите генерацию.')
+
+          replace('frontend/miniapp-v0/components/info-block.tsx',
+                  'Добавляйте референсы для лучшего контроля над результатом генерации.',
+                  'Добавьте фото-пример, если важно сохранить стиль, персонажа или детали.')
+          replace('frontend/miniapp-v0/components/info-block.tsx',
+                  'Статусы задач обновляются автоматически, а готовые результаты появляются в истории.',
+                  'Статус обновится сам, а готовый результат сохранится в истории.')
+          replace('frontend/miniapp-v0/components/info-block.tsx',
+                  'На старте доступно 25🍌, чтобы спокойно протестировать первые сценарии.',
+                  'На старте доступно 25🍌 — хватит, чтобы попробовать первые генерации.')
+
+          # Mini App — helper, support, partner and auth screens.
+          replace('frontend/miniapp-v0/components/workspace-sheet.tsx',
+                  'Подскажет модель, настройки и поможет с запросом.',
+                  'Поможет с идеей, промптом, моделью и настройками.')
+          replace('frontend/miniapp-v0/components/workspace-sheet.tsx',
+                  'Анализ фото и prompt для похожей генерации.',
+                  'Разберёт фото и соберёт промпт для похожей генерации.')
+          replace('frontend/miniapp-v0/components/workspace-sheet.tsx',
+                  'Ваша ссылка, рефералы и партнёрский баланс.',
+                  'Ссылка, приглашённые пользователи, статистика и выплаты.')
+          replace('frontend/miniapp-v0/components/workspace-sheet.tsx',
+                  'Помощь по задачам, оплате и результатам.',
+                  'Помощь с генерацией, оплатой и результатами.')
+          replace('frontend/miniapp-v0/components/workspace-sheet.tsx',
+                  'Быстрые переходы к полезным разделам студии.',
+                  'История, настройки и другие возможности HappyFox.')
+          replace('frontend/miniapp-v0/components/workspace-sheet.tsx',
+                  'Фото → точный prompt',
+                  'Фото → точный промпт')
+          replace('frontend/miniapp-v0/components/workspace-sheet.tsx',
+                  'Загрузите референс. AI разберёт кадр и соберёт промпт для генерации похожего изображения:',
+                  'Загрузите фото — HappyFox разберёт кадр и соберёт промпт для похожей генерации:')
+          replace('frontend/miniapp-v0/components/workspace-sheet.tsx',
+                  'Проверьте, хватает ли баланса для выбранной модели и длительности.',
+                  'Проверьте баланс и стоимость выбранной модели.')
+          replace('frontend/miniapp-v0/components/workspace-sheet.tsx',
+                  'Если задача долго выполняется, откройте её детали и обновите статус.',
+                  'Если результат задерживается, откройте задачу — статус обновится автоматически.')
+          replace('frontend/miniapp-v0/components/workspace-sheet.tsx',
+                  'Для редактирования и анимации обязательно добавьте исходный файл.',
+                  'Для редактирования и анимации добавьте исходное фото или видео.')
+          replace('frontend/miniapp-v0/components/workspace-sheet.tsx',
+                  'Здравствуйте. Нужна помощь по задаче. Укажу номер задачи, выбранную модель и коротко опишу, что ожидал получить.',
+                  'Опишите, что делали, какую модель выбрали и что пошло не так. Если есть номер задачи — приложите его.')
+          replace('frontend/miniapp-v0/components/workspace-sheet.tsx',
+                  "{ label: 'Фото', description: 'Перейти к генерации изображений', action: onPhoto },",
+                  "{ label: 'Фото', description: 'Создать изображение по описанию или референсу', action: onPhoto },")
+          replace('frontend/miniapp-v0/components/workspace-sheet.tsx',
+                  "{ label: 'Видео', description: 'Перейти к генерации роликов', action: onVideo },",
+                  "{ label: 'Видео', description: 'Создать ролик по тексту, фото или видео', action: onVideo },")
+          replace('frontend/miniapp-v0/components/workspace-sheet.tsx',
+                  "{ label: 'Помощник', description: 'Подскажет модель и улучшит запрос', action: onAssistant },",
+                  "{ label: 'Помощник', description: 'Подобрать модель и улучшить промпт', action: onAssistant },")
+          replace('frontend/miniapp-v0/components/workspace-sheet.tsx',
+                  "{ label: 'Партнёрам', description: 'Посмотреть выгоду и материалы', action: onPartners },",
+                  "{ label: 'Партнёрам', description: 'Открыть ссылку, статистику и выплаты', action: onPartners },")
+          replace('frontend/miniapp-v0/components/workspace-sheet.tsx',
+                  "{ label: 'Поддержка', description: 'Собрать обращение и не забыть детали', action: onSupport },",
+                  "{ label: 'Поддержка', description: 'Получить помощь с генерацией или оплатой', action: onSupport },")
+
+          replace('frontend/miniapp-v0/components/balance-sheet.tsx',
+                  'Оплата проходит на защищённой странице ЮKassa. Лапки начисляются только после подтверждения платежа сервером.',
+                  'Оплата проходит на защищённой странице ЮKassa. После успешного платежа лапки начислятся автоматически.')
+          replace('frontend/miniapp-v0/components/balance-sheet.tsx',
+                  'После оплаты баланс обновится в Mini App.',
+                  'После оплаты баланс обновится автоматически.')
+
+          replace('frontend/miniapp-v0/components/partner-approval-sheet.tsx',
+                  'Кабинет, реферальная ссылка, статистика и выплаты после одобрения администратора.',
+                  'Приглашайте пользователей, следите за статистикой и получайте вознаграждение после одобрения заявки.')
+          replace('frontend/miniapp-v0/components/partner-approval-sheet.tsx',
+                  'Администратор уже получил заявку и ссылку на ваш Telegram-аккаунт. До решения реферальная ссылка не активна.',
+                  'Заявка уже на проверке. Когда администратор примет решение, статус обновится здесь.')
+          replace('frontend/miniapp-v0/components/partner-approval-sheet.tsx',
+                  'Партнёрский кабинет пока не активирован. Вы можете отправить заявку повторно — администратор рассмотрит её заново.',
+                  'Заявка не одобрена. Можно отправить её повторно после уточнения данных.')
+          replace('frontend/miniapp-v0/components/partner-approval-sheet.tsx',
+                  'Для новых партнёров доступ включается после ручной проверки. Нажмите кнопку — администратору придёт заявка с вашим Telegram-профилем.',
+                  'Отправьте заявку — после одобрения откроются партнёрская ссылка, статистика и выплаты.')
+          replace('frontend/miniapp-v0/components/partner-approval-sheet.tsx',
+                  'Реферальная ссылка активна и может закреплять новых пользователей.',
+                  'Делитесь ссылкой — новые пользователи, которые перейдут по ней, попадут в вашу статистику.')
+
+          replace('frontend/miniapp-v0/components/telegram-open-gate.tsx',
+                  'Войдите через Telegram, чтобы генерации, баланс и история работали в вашем аккаунте.',
+                  'Войдите через Telegram, чтобы сохранить баланс, историю и результаты в одном аккаунте.')
+          replace('frontend/miniapp-v0/components/telegram-open-gate.tsx',
+                  'Не получилось войти. Попробуйте открыть приложение напрямую.',
+                  'Не удалось войти через браузер. Откройте HappyFox прямо в Telegram.')
+
+          # Telegram — main/help/action screens.
+          replace('bot/handlers/common.py',
+                  '"🏠 <b>NEUROMIX</b>\\n"\n        "Привет! Я — твой AI-помощник для создания контента.\\n"\n        "Могу сгенерировать фото, видео и анимацию по тексту или референсам.\\n"\n        "Просто выбери, что хочешь сделать 👇\\n\\n"\n        "<b>Что умею</b>\\n"',
+                  '"🏠 <b>HappyFox</b>\\n"\n        "Создавайте фото, видео и анимацию по описанию или референсам.\\n"\n        "Выберите задачу — дальше покажу только нужные шаги. 👇\\n\\n"\n        "<b>Что можно сделать</b>\\n"')
+          replace('bot/handlers/common.py',
+                  '"🖼 Создать фото — опиши, что хочешь увидеть\\n"\n        "🎬 Создать видео — текст, фото или видео в ролик\\n"\n        "🎭 Оживить фото — перенести движение на персонажа\\n"\n        "🔁 Изменить фото — заменить фон, одежду, детали\\n"\n        "📸 Промпт по фото — нейросеть опишет твой снимок\\n"\n        "📱 Лента — смотри работы других пользователей\\n"\n        "📚 Библиотека промптов — готовые запросы на все случаи\\n"\n        "🤖 Помощник — подберёт модель и поможет с запросом\\n\\n"',
+                  '"🖼 Создать фото — по описанию или референсу\\n"\n        "🎬 Создать видео — по тексту, фото или готовому ролику\\n"\n        "🎭 Оживить фото — добавить или перенести движение\\n"\n        "🔁 Изменить фото — поменять фон, стиль, одежду или детали\\n"\n        "📸 Промпт по фото — разобрать кадр и получить готовый промпт\\n"\n        "📱 Лента — посмотреть работы других пользователей\\n"\n        "📚 Библиотека промптов — выбрать готовую идею для генерации\\n"\n        "🤖 Помощник — подобрать модель, настройки и улучшить промпт\\n\\n"')
+          replace('bot/handlers/common.py',
+                  '"Здесь можно выбрать модели по умолчанию и уведомления.\\n\\n"',
+                  '"Выберите модели по умолчанию и настройте уведомления — эти параметры будут использоваться в новых генерациях.\\n\\n"')
+          replace('bot/handlers/common.py',
+                  '"Этот режим переносит движение из видео на фото.\\n\\n"',
+                  '"Загрузите фото персонажа и ролик с движением — HappyFox перенесёт движение на ваш образ.\\n\\n"')
+          replace('bot/handlers/common.py',
+                  '"Выберите, что хотите получить. Можно использовать готовый сценарий "\n        "или открыть пошаговый режим."',
+                  '"Выберите, что хотите получить — дальше покажу только подходящие настройки."')
+          replace('bot/handlers/common.py',
+                  '"Здесь можно поменять стиль, фон, одежду, детали или настроение кадра.\\n"\n        "Сначала выберите сценарий ниже."',
+                  '"Загрузите исходное фото и выберите, что изменить: фон, стиль, одежду, детали или настроение."')
+          replace('bot/handlers/common.py',
+                  '"Выберите, как хотите сделать видео:\\n"',
+                  '"Выберите способ оживить изображение:\\n"')
+          replace('bot/handlers/common.py',
+                  '"Здесь находятся баланс, история, помощь и поддержка."',
+                  '"Баланс, история генераций, поддержка и другие полезные разделы."')
+          replace('bot/handlers/common.py',
+                  '"У этого элемента нет текста prompt."',
+                  '"У этого элемента нет текста промпта."')
+          replace('bot/handlers/common.py',
+                  '"Prompt отправлен"',
+                  '"Промпт отправлен"')
+          replace('bot/handlers/common.py',
+                  '"Здесь позже будет ссылка на канал с готовыми промптами и примерами.\\n\\n"\n        "Пока можно использовать:\\n"',
+                  '"Раздел с готовыми примерами ещё готовится.\\n\\n"\n        "Уже сейчас можно использовать:\\n"')
+          replace('bot/handlers/common.py',
+                  '"Когда добавите ссылку на канал, её можно будет поставить сюда отдельной кнопкой."',
+                  '"Так можно собрать сильный промпт, не дожидаясь готового примера."')
+          replace('bot/handlers/common.py',
+                  '"Если не получается генерация, оплата или выбор модели, сначала напишите AI-помощнику — "',
+                  '"Если что-то не работает с генерацией, оплатой или моделью, напишите AI-помощнику — "')
+
+          # MAX — same intents, user language instead of implementation details.
+          replace('bot/max_product_channel.py',
+                  '"Создавайте контент прямо в чате — без команд и длинных настроек.\\n\\n"',
+                  '"Выберите задачу — HappyFox проведёт по нужным шагам прямо в чате.\\n\\n"')
+          replace('bot/max_product_channel.py',
+                  '"🖼 Фото — генерация и редактирование по референсам\\n"\n            "🎬 Видео — текст → видео, фото → видео и видео → видео\\n"\n            "🎯 Motion Control — перенос движения из ролика на персонажа\\n"\n            "🎙 Озвучка — Gemini Omni Audio ID\\n"\n            "🎵 Suno — музыка, lyrics, cover и аудио-инструменты\\n"\n            "✨ Промпты — готовая библиотека прямо в MAX\\n"\n            "🤖 AI-помощник — выбор модели, промпта и настроек\\n\\n"',
+                  '"🖼 Фото — создайте новое изображение или измените готовое\\n"\n            "🎬 Видео — создайте ролик по тексту, фото или видео\\n"\n            "🎯 Motion Control — перенесите движение из ролика на персонажа\\n"\n            "🎙 Озвучка — создайте голосовой профиль для доступных сценариев\\n"\n            "🎵 Suno — создайте музыку и работайте с готовым аудио\\n"\n            "✨ Промпты — выберите готовую идею для генерации\\n"\n            "🤖 AI-помощник — поможет с идеей, промптом и выбором модели\\n\\n"')
+          replace('bot/max_product_channel.py',
+                  '"1 🐾 используется только внутри MAX и не смешивается с балансом Telegram.\\n\\n"\n            "Стоимость конкретной генерации всегда показывается до запуска. "\n            "Ниже можно сразу выбрать пакет пополнения."',
+                  '"Баланс MAX хранится отдельно от Telegram. Стоимость каждой генерации покажем до запуска.\\n\\n"\n            "Ниже можно выбрать пакет пополнения."')
+          replace('bot/max_product_channel.py',
+                  '"Пакеты уже настроены, но платёжный шлюз MAX сейчас недоступен. "\n                "Баланс и генерации продолжат работать с текущим остатком."',
+                  '"Пополнение сейчас недоступно. Текущий баланс и генерации продолжают работать."')
+          replace('bot/max_product_channel.py',
+                  '"Выберите пакет 🐾. Счёт создаётся только после выбора пакета, "\n            "а начисление идёт в отдельный MAX-баланс после подтверждения оплаты.\\n\\n"\n            "<i>Перед оплатой вы увидите сумму и количество 🐾.</i>"',
+                  '"Выберите пакет. Перед оплатой покажем сумму и количество 🐾. "\n            "После успешного платежа баланс MAX пополнится автоматически."')
+          replace('bot/max_product_channel.py',
+                  '"Пишите обычным сообщением — я помогу выбрать модель, улучшить prompt "\n            "и подобрать настройки под задачу.\\n\\n"',
+                  '"Опишите задачу обычным сообщением — помогу выбрать модель, улучшить промпт "\n            "и подобрать настройки.\\n\\n"')
+          replace('bot/max_product_channel.py',
+                  '"• что лучше для реалистичного product-фото\\n"',
+                  '"• что лучше для реалистичного рекламного фото товара\\n"')
+          replace('bot/max_product_channel.py',
+                  '"• перепиши мой prompt под fashion-рекламу\\n"',
+                  '"• улучши мой промпт для модной рекламы\\n"')
+          replace('bot/max_product_channel.py',
+                  'rendered = "У этой карточки пока нет текста prompt."',
+                  'rendered = "У этой карточки пока нет текста промпта."')
+          replace('bot/max_product_channel.py',
+                  '"Выберите модель. Цена указана прямо на кнопке. После выбора пришлите prompt; "\n                "референс можно приложить в том же сообщении, а для edit-моделей он обязателен."',
+                  '"Выберите модель — стоимость указана на кнопке. Затем отправьте описание и, если нужно, "\n                "фото-референс. Для редактирования исходное фото обязательно."')
+          replace('bot/max_product_channel.py',
+                  '"Сначала выберите исходник: только текст, фото или готовое видео. "\n                "Дальше покажу только совместимые модели и их стоимость."',
+                  '"Выберите, из чего сделать ролик: из текста, фото или готового видео. "\n                "Дальше покажу только подходящие модели и стоимость."')
+          replace('bot/max_product_channel.py',
+                  '"Мультимодальный раздел HappyFox: видео, озвучка и работа с голосовыми профилями.\\n\\n"\n                "• для видео выберите обычный экран «Создать видео» и Gemini Omni\\n"\n                "• для Audio ID откройте «Создать озвучку»"',
+                  '"Создавайте видео и голосовые профили в одном разделе.\\n\\n"\n                "• для ролика откройте «Создать видео» и выберите Gemini Omni\\n"\n                "• для голоса откройте «Создать озвучку»"')
+          replace('bot/max_product_channel.py',
+                  '"Если не получается генерация, оплата или выбор модели, сначала напишите AI-помощнику — "\n            "он видит актуальные модели, отдельный MAX-баланс и MAX-прайс.\\n\\n"\n            "Для обращения человеку удобно сразу прислать: что нажали, модель, примерное время ошибки "\n            "и Task ID, если он появился."',
+                  '"Если что-то не работает, напишите AI-помощнику или оператору.\\n\\n"\n            "Для быстрого ответа укажите, что делали, какую модель выбрали и когда возникла ошибка. "\n            "Если есть номер задачи — приложите его."')
+
+          # Product/meta copy and Telegram photo-to-prompt entry.
+          replace('bot/product.py',
+                  'brand_description="HappyFox — создание фото, видео и AI-контента в Telegram",',
+                  'brand_description="HappyFox — фото, видео и анимация по описанию и референсам",')
+          replace('bot/product.py',
+                  '"Я <b>HappyFox</b> — удобный AI-сервис для создания изображений, видео и другого контента.\\n\\n"\n        "👇 Выбирай генерацию в боте или открывай приложение, чтобы начать."',
+                  '"Я <b>HappyFox</b>. Создавайте фото, видео и анимацию по описанию или референсам.\\n\\n"\n        "👇 Выберите задачу в боте или откройте приложение."')
+          replace('bot/handlers/image_analyzer.py',
+                  '"Отправьте одно фото, и я превращу его в подробный промпт для генерации.\\n\\n"\n        "Это удобно, если нужно повторить стиль, композицию, образ, свет или предмет с картинки. "\n        "После анализа можно использовать текст в «Создать фото» или «Создать видео»."',
+                  '"Отправьте фото — HappyFox разберёт стиль, композицию, свет и детали и соберёт готовый промпт.\\n\\n"\n        "Используйте его, если хотите повторить образ или атмосферу кадра. "\n        "Готовый текст можно сразу взять в «Создать фото» или «Создать видео»."')
+
+          # Contract test: locks the user-facing wording without banning internal API identifiers.
+          Path('tests/test_happyfox_public_screen_copy.py').write_text(r'''from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def _read(path: str) -> str:
+    return (ROOT / path).read_text(encoding="utf-8")
+
+
+def test_public_screen_copy_uses_happyfox_brand() -> None:
+    telegram = _read("bot/handlers/common.py")
+    trends = _read("frontend/miniapp-v0/components/tabs/trends-tab.tsx")
+
+    assert '🏠 <b>HappyFox</b>' in telegram
+    assert '🏠 <b>NEUROMIX</b>' not in telegram
+    assert 'Готовые фото- и видео-шаблоны от команды NEUROMIX.' not in trends
+    assert 'Готовые идеи для фото и видео' in trends
+
+
+def test_miniapp_descriptions_hide_provider_plumbing() -> None:
+    video = _read("frontend/miniapp-v0/components/tabs/video-tab.tsx")
+    services = _read("frontend/miniapp-v0/components/service-grid.tsx")
+
+    assert 'Для image-to-video добавьте стартовый кадр.' not in video
+    assert 'Задача отправлена в Kie.ai.' not in video
+    assert 'polling fallback' not in video
+    assert 'После запуска здесь появятся очередь, task id' not in video
+    assert 'точный prompt для похожей генерации' not in services
+    assert 'Если делаете видео из фото' in video
+
+
+def test_max_descriptions_use_user_language() -> None:
+    max_copy = _read("bot/max_product_channel.py")
+
+    assert 'платёжный шлюз MAX' not in max_copy
+    assert 'MAX-прайс' not in max_copy
+    assert 'Task ID, если он появился' not in max_copy
+    assert 'улучшить prompt' not in max_copy
+    assert 'Если есть номер задачи — приложите его.' in max_copy
+
+
+def test_support_and_partner_descriptions_are_actionable() -> None:
+    workspace = _read("frontend/miniapp-v0/components/workspace-sheet.tsx")
+    partner = _read("frontend/miniapp-v0/components/partner-approval-sheet.tsx")
+
+    assert 'Расскажите, с чем нужна помощь.' in _read("frontend/miniapp-v0/components/tabs/services-tab.tsx")
+    assert 'Если есть номер задачи — приложите его.' in workspace
+    assert 'Отправьте заявку — после одобрения откроются партнёрская ссылка' in partner
+''', encoding='utf-8')
+          PY
+      - name: Validate rewritten sources
+        run: |
+          python3 -m compileall -q bot/product.py bot/handlers/common.py bot/handlers/image_analyzer.py bot/max_product_channel.py
+          python3 -m pytest -q tests/test_happyfox_public_screen_copy.py
+      - name: Commit rewritten copy
+        run: |
+          rm -f .github/workflows/_rewrite_screen_copy_once.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add bot frontend/miniapp-v0 tests/test_happyfox_public_screen_copy.py .github/workflows/_rewrite_screen_copy_once.yml
+          git commit -m "feat(copy): rewrite HappyFox screen descriptions"
+          git push origin HEAD:feat/rewrite-happyfox-screen-copy-20260910
