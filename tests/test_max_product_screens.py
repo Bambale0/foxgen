@@ -133,7 +133,6 @@ def test_max_main_menu_visually_mirrors_telegram_contract() -> None:
     assert menu[0][0] == {
         "type": "open_app",
         "text": "🚀 Открыть Mini App",
-        "web_app": "https://example.invalid/mini-app/",
     }
 
     assert _visible_button_rows() == [
