@@ -5,7 +5,7 @@ import logging
 from typing import Any
 
 from bot.database import get_feed_generations
-from bot.max_api import MaxApiError, callback_button, inline_keyboard, link_button
+from bot.max_api import MaxApiError, callback_button, inline_keyboard, open_app_button
 from bot.max_channel import _format_cost, _media_urls, _message_text
 from bot.max_product_channel import MaxProductChannelService
 from bot.max_store import (
@@ -19,7 +19,6 @@ from bot.max_store import (
 )
 from bot.max_ui import (
     back_home_menu,
-    image_model_menu,
     main_menu,
     more_menu,
     topup_menu,
@@ -144,7 +143,7 @@ def _feed_menu(index: int, total: int, *, mini_app_url: str = "") -> list[dict[s
             ]
         )
     if mini_app_url:
-        rows.append([link_button("🚀 Открыть в Mini App", mini_app_url)])
+        rows.append([open_app_button("🚀 Открыть в Mini App")])
     rows.append([callback_button("🏠 Главное меню", "max:home")])
     return [inline_keyboard(rows)]
 

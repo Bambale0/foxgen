@@ -10,7 +10,7 @@ from bot.database import (
     get_prompt_by_id,
     get_top_prompts,
 )
-from bot.max_api import callback_button, inline_keyboard, link_button
+from bot.max_api import callback_button, inline_keyboard, link_button, open_app_button
 from bot.max_assistant import max_ai_assistant_service
 from bot.max_channel import _format_cost, _message_text
 from bot.max_seedance25 import MaxSeedance25ChannelService
@@ -87,7 +87,7 @@ def _support_menu(support_contact: str, mini_app_url: str) -> list[dict[str, Any
     if contact.startswith("https://"):
         rows.append([link_button("💬 Написать оператору", contact)])
     if mini_app_url:
-        rows.append([link_button("🚀 Открыть Mini App", mini_app_url)])
+        rows.append([open_app_button("🚀 Открыть Mini App")])
     rows.append([callback_button("🏠 Главное меню", "max:home")])
     return [inline_keyboard(rows)]
 
@@ -120,7 +120,7 @@ def _prompt_menu(
         ],
     ]
     if mini_app_url:
-        rows.append([link_button("🚀 Библиотека в Mini App", mini_app_url)])
+        rows.append([open_app_button("🚀 Библиотека в Mini App")])
     rows.append([callback_button("🏠 Главное меню", "max:home")])
     return [inline_keyboard(rows)]
 

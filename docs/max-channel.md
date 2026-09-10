@@ -89,6 +89,21 @@ message_callback
 
 Incoming requests require the configured secret in `X-Max-Bot-Api-Secret`. Event receipts are claimed before execution so duplicate deliveries remain idempotent.
 
+## Native quick commands
+
+HappyFox reconciles the native MAX bot command menu on every enabled runtime start through the official bot commands API. The registered commands mirror the Telegram quick-command contract:
+
+```text
+/start    — Текстовый бот и главное меню
+/feed     — Лента работ
+/prompts  — Библиотека промптов
+/help     — Помощь и возможности
+/ref      — Партнёрская программа
+/earn     — Заработок на рефералах
+```
+
+Registration is not best-effort: startup writes the command list and reads bot info back to verify the exact visible order and descriptions. Production smoke repeats that verification so command drift fails the release gate.
+
 ## Runtime composition
 
 ```text

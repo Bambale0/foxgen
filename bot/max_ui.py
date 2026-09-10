@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from bot.max_api import callback_button, inline_keyboard, link_button
+from bot.max_api import callback_button, inline_keyboard, open_app_button
 from bot.max_catalog import MaxPresetManager, max_preset_manager
 
 IMAGE_LABELS = {
@@ -69,7 +69,7 @@ def main_menu(
     """MAX mirror of the HappyFox Telegram main menu."""
     rows: list[list[dict[str, Any]]] = []
     if mini_app_url:
-        rows.append([link_button("🚀 Открыть Mini App", mini_app_url)])
+        rows.append([open_app_button("🚀 Открыть Mini App")])
 
     video_prompt_price = _service_price(catalog, "video_prompt", default=3)
     rows.extend(
@@ -155,7 +155,7 @@ def video_model_selection_menu(
         "veo3_fast": 6,
         "veo3_lite": 6,
     }
-    for model in catalog.video_models().keys():
+    for model in catalog.video_models():
         duration = default_durations.get(model, 5)
         pricing_quality = (
             "720p"
