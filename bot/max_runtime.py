@@ -109,7 +109,7 @@ async def _ensure_max_quick_commands(client: MaxClient) -> None:
     info = await client.get_bot_info()
     declared = info.get("commands")
     if not isinstance(declared, list):
-        raise RuntimeError("MAX bot info did not return a commands list")
+        raise TypeError("MAX bot info did not return a commands list")
 
     actual = [
         (
