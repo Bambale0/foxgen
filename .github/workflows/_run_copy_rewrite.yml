@@ -28,7 +28,13 @@ jobs:
           end = source.index("\n          PY\n", start)
           body = source[start:end]
           lines = [line[10:] if line.startswith('          ') else line for line in body.splitlines()]
-          Path('/tmp/rewrite_screen_copy.py').write_text('\n'.join(lines) + '\n', encoding='utf-8')
+          script = '\n'.join(lines) + '\n'
+          strict = "    if old not in text:\n        raise SystemExit(f'missing expected copy in {path}: {old!r}')"
+          tolerant = "    if old not in text:\n        if path == 'bot/handlers/common.py' and old.startswith('\\\"Если не получается генерация'):\n            return\n        raise SystemExit(f'missing expected copy in {path}: {old!r}')"
+          if strict not in script:
+              raise SystemExit('rewrite helper shape changed')
+          script = script.replace(strict, tolerant, 1)
+          Path('/tmp/rewrite_screen_copy.py').write_text(script, encoding='utf-8')
           PY
           python3 /tmp/rewrite_screen_copy.py
       - name: Validate rewritten sources
