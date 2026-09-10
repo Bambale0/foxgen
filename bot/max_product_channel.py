@@ -87,7 +87,7 @@ def _support_menu(support_contact: str, mini_app_url: str) -> list[dict[str, Any
     if contact.startswith("https://"):
         rows.append([link_button("💬 Написать оператору", contact)])
     if mini_app_url:
-        rows.append([open_app_button("🚀 Открыть Mini App", mini_app_url)])
+        rows.append([open_app_button("🚀 Открыть Mini App")])
     rows.append([callback_button("🏠 Главное меню", "max:home")])
     return [inline_keyboard(rows)]
 
@@ -120,7 +120,7 @@ def _prompt_menu(
         ],
     ]
     if mini_app_url:
-        rows.append([open_app_button("🚀 Библиотека в Mini App", mini_app_url)])
+        rows.append([open_app_button("🚀 Библиотека в Mini App")])
     rows.append([callback_button("🏠 Главное меню", "max:home")])
     return [inline_keyboard(rows)]
 
