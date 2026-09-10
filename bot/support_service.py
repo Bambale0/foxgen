@@ -146,8 +146,10 @@ async def append_user_message(
     body: str,
     telegram_message_id: int | None,
     attachments: list[SupportAttachment] | None = None,
+    source: str = SUPPORT_SOURCE_MAIN,
 ) -> int:
     await ensure_internal_admin_support_schema()
+    normalized_source = _normalize_source(source)
     async with db_backend.connect() as connection:
         connection.row_factory = db_backend.Row
         cursor = await connection.execute(
@@ -156,9 +158,10 @@ async def append_user_message(
             FROM support_tickets st
             JOIN users u ON u.id = st.user_id
             WHERE st.id = ? AND u.telegram_id = ? AND st.status <> 'closed'
+              AND st.source = ?
             FOR UPDATE OF st
             """,
-            (ticket_id, telegram_id),
+            (ticket_id, telegram_id, normalized_source),
         )
         if not await cursor.fetchone():
             raise LookupError("support ticket not found")
@@ -197,8 +200,13 @@ async def append_user_message(
     return message_id
 
 
-async def latest_open_ticket_id(telegram_id: int) -> int | None:
+async def latest_open_ticket_id(
+    telegram_id: int,
+    *,
+    source: str = SUPPORT_SOURCE_MAIN,
+) -> int | None:
     await ensure_internal_admin_support_schema()
+    normalized_source = _normalize_source(source)
     async with db_backend.connect() as connection:
         connection.row_factory = db_backend.Row
         cursor = await connection.execute(
@@ -206,11 +214,11 @@ async def latest_open_ticket_id(telegram_id: int) -> int | None:
             SELECT st.id
             FROM support_tickets st
             JOIN users u ON u.id = st.user_id
-            WHERE u.telegram_id = ? AND st.status <> 'closed'
+            WHERE u.telegram_id = ? AND st.status <> 'closed' AND st.source = ?
             ORDER BY st.updated_at DESC, st.id DESC
             LIMIT 1
             """,
-            (telegram_id,),
+            (telegram_id, normalized_source),
         )
         row = await cursor.fetchone()
     return int(row["id"]) if row else None
