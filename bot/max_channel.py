@@ -210,7 +210,11 @@ class MaxChannelService:
         await self._respond(
             user_id,
             "🦊 <b>HappyFox в MAX</b>\n\nВыберите, что хотите создать.",
-            attachments=main_menu(balance, mini_app_url=self.settings.mini_app_url),
+            attachments=main_menu(
+                balance,
+                mini_app_url=self.settings.mini_app_url,
+                mini_app_bot_name=self.bot_name,
+            ),
             callback_id=callback_id,
         )
 
@@ -360,6 +364,7 @@ class MaxChannelService:
                 attachments=main_menu(
                     balance,
                     mini_app_url=self.settings.mini_app_url,
+                    mini_app_bot_name=self.bot_name,
                 ),
                 callback_id=callback_id,
             )
@@ -558,6 +563,7 @@ class MaxChannelService:
                 attachments=main_menu(
                     await get_max_balance(user_id),
                     mini_app_url=self.settings.mini_app_url,
+                    mini_app_bot_name=self.bot_name,
                 ),
                 callback_id=callback_id,
             )
@@ -604,6 +610,7 @@ class MaxChannelService:
             attachments=main_menu(
                 balance,
                 mini_app_url=self.settings.mini_app_url,
+                mini_app_bot_name=self.bot_name,
             ),
             callback_id=callback_id,
         )
@@ -725,7 +732,7 @@ class MaxChannelService:
                     inline_keyboard(
                         [
                             [
-                                open_app_button("🚀 Открыть Mini App")
+                                open_app_button("🚀 Открыть Mini App", web_app=self.bot_name)
                             ],
                             [callback_button("🏠 Главное меню", "max:home")],
                         ]
@@ -830,5 +837,6 @@ class MaxChannelService:
                 attachments=main_menu(
                     await get_max_balance(user_id),
                     mini_app_url=self.settings.mini_app_url,
+                    mini_app_bot_name=self.bot_name,
                 ),
             )

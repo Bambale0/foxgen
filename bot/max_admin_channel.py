@@ -12,8 +12,17 @@ from bot.max_store import clear_max_session, ensure_max_user, get_max_balance
 from bot.max_ui import main_menu
 
 
-def _admin_main_menu(balance: float, *, mini_app_url: str) -> list[dict[str, Any]]:
-    attachments = main_menu(balance, mini_app_url=mini_app_url)
+def _admin_main_menu(
+    balance: float,
+    *,
+    mini_app_url: str,
+    mini_app_bot_name: str = "",
+) -> list[dict[str, Any]]:
+    attachments = main_menu(
+        balance,
+        mini_app_url=mini_app_url,
+        mini_app_bot_name=mini_app_bot_name,
+    )
     rows = attachments[0]["payload"]["buttons"]
     rows.append([callback_button("🔧 Админ-панель", "max:admin")])
     return attachments
@@ -56,6 +65,7 @@ class MaxAdminChannelService(MaxCreationParityChannelService):
             attachments=_admin_main_menu(
                 balance,
                 mini_app_url=self.settings.mini_app_url,
+                mini_app_bot_name=self.bot_name,
             ),
             callback_id=callback_id,
         )
