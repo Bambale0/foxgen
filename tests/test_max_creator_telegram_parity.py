@@ -156,7 +156,7 @@ def test_max_image_uploaded_while_model_picker_open_is_preserved(
     monkeypatch,
 ) -> None:
     _prepare_database(tmp_path / "max-photo-pre-model-ref.db", monkeypatch)
-    service, client = _service()
+    service, _client = _service()
 
     asyncio.run(service.handle_update(_callback(806, "photo", "max:create_image")))
     selecting = asyncio.run(get_max_session(806))
