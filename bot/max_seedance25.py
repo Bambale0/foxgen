@@ -546,7 +546,11 @@ class MaxSeedance25ChannelService(MaxSunoFullChannelService):
             f"Задача: <code>{job.id[:12]}</code>\n"
             f"Списано: <b>{_format_cost(job.cost)} 🐾</b> · осталось <b>{_format_cost(balance)} 🐾</b>.\n\n"
             "Видео придёт сюда автоматически.",
-            attachments=main_menu(balance, mini_app_url=self.settings.mini_app_url),
+            attachments=main_menu(
+                balance,
+                mini_app_url=self.settings.mini_app_url,
+                mini_app_bot_name=self.bot_name,
+            ),
             callback_id=callback_id,
         )
 

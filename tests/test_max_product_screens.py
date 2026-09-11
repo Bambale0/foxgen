@@ -161,6 +161,19 @@ def test_max_main_menu_visually_mirrors_telegram_contract() -> None:
     }
 
 
+def test_max_main_menu_open_app_targets_current_bot() -> None:
+    menu = main_menu(
+        42,
+        mini_app_url="https://example.invalid/mini-app/",
+        mini_app_bot_name="happyfox_bot",
+    )[0]["payload"]["buttons"]
+    assert menu[0][0] == {
+        "type": "open_app",
+        "text": "🚀 Открыть Mini App",
+        "web_app": "happyfox_bot",
+    }
+
+
 def test_every_max_main_menu_screen_is_actionable(tmp_path, monkeypatch) -> None:
     _prepare_database(tmp_path / "max-product-screens.db", monkeypatch)
     service, client = _service()

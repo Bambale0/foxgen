@@ -132,7 +132,13 @@ def _feed_media_url(card: dict[str, Any]) -> str:
     return ""
 
 
-def _feed_menu(index: int, total: int, *, mini_app_url: str = "") -> list[dict[str, Any]]:
+def _feed_menu(
+    index: int,
+    total: int,
+    *,
+    mini_app_url: str = "",
+    mini_app_bot_name: str = "",
+) -> list[dict[str, Any]]:
     rows: list[list[dict[str, Any]]] = []
     if total > 1:
         rows.append(
@@ -143,7 +149,7 @@ def _feed_menu(index: int, total: int, *, mini_app_url: str = "") -> list[dict[s
             ]
         )
     if mini_app_url:
-        rows.append([open_app_button("🚀 Открыть в Mini App")])
+        rows.append([open_app_button("🚀 Открыть в Mini App", web_app=mini_app_bot_name)])
     rows.append([callback_button("🏠 Главное меню", "max:home")])
     return [inline_keyboard(rows)]
 
@@ -168,6 +174,7 @@ class MaxTelegramParityChannelService(MaxProductChannelService):
             attachments=main_menu(
                 balance,
                 mini_app_url=self.settings.mini_app_url,
+                mini_app_bot_name=self.bot_name,
                 catalog=self.catalog,
             ),
             callback_id=callback_id,
@@ -454,6 +461,7 @@ class MaxTelegramParityChannelService(MaxProductChannelService):
                 index,
                 total,
                 mini_app_url=self.settings.mini_app_url,
+                mini_app_bot_name=self.bot_name,
             ),
             callback_id=callback_id,
         )
