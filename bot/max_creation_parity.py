@@ -91,10 +91,7 @@ def _image_default_quality(model: str) -> str:
 
 def _image_refs_from_session(state: str, data: dict[str, Any]) -> list[str]:
     normalized_state = str(state or "")
-    if not (
-        normalized_state.startswith("parity:image:")
-        or normalized_state.startswith("image:")
-    ):
+    if not normalized_state.startswith(("parity:image:", "image:")):
         return []
 
     candidates: list[Any] = [data.get("image_urls")]
