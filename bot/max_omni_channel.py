@@ -346,6 +346,7 @@ class MaxOmniChannelService(MaxCreatorChannelService):
             attachments=main_menu(
                 balance,
                 mini_app_url=self.settings.mini_app_url,
+                mini_app_bot_name=self.bot_name,
             ),
             callback_id=callback_id,
         )

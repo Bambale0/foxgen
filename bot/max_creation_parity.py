@@ -90,24 +90,28 @@ def _image_default_quality(model: str) -> str:
 
 
 def _image_refs_from_session(state: str, data: dict[str, Any]) -> list[str]:
-    if not str(state or "").startswith("parity:image:"):
+    normalized_state = str(state or "")
+    if not (
+        normalized_state.startswith("parity:image:")
+        or normalized_state.startswith("image:")
+    ):
         return []
 
-    raw_refs: Any
-    if state == "parity:image:confirm":
-        input_data = data.get("input_data") or {}
-        raw_refs = input_data.get("image_urls") if isinstance(input_data, dict) else []
-    else:
-        raw_refs = data.get("image_urls")
+    candidates: list[Any] = [data.get("image_urls")]
+    input_data = data.get("input_data") or {}
+    if isinstance(input_data, dict):
+        candidates.append(input_data.get("image_urls"))
 
     refs: list[str] = []
-    if isinstance(raw_refs, list):
+    for raw_refs in candidates:
+        if not isinstance(raw_refs, list):
+            continue
         for value in raw_refs:
             url = str(value or "").strip()
             if url.startswith("https://") and url not in refs:
                 refs.append(url)
             if len(refs) >= 9:
-                break
+                return refs
     return refs
 
 
@@ -293,18 +297,17 @@ class MaxCreationParityChannelService(MaxTelegramParityChannelService):
     async def _open_image_models(self, user_id: int, *, callback_id: str = "") -> None:
         session = await get_max_session(user_id)
         refs = _image_refs_from_session(session.state, dict(session.data))
+        await save_max_session(
+            user_id,
+            "parity:image:select_model",
+            {"image_urls": refs},
+        )
         if refs:
-            await save_max_session(
-                user_id,
-                "parity:image:select_model",
-                {"image_urls": refs},
-            )
             text = (
                 "🖼 <b>Создать фото</b>\n\n"
                 f"Референсы сохранены: <b>{len(refs)}</b>. Выберите модель."
             )
         else:
-            await clear_max_session(user_id)
             text = "🖼 <b>Создать фото</b>\n\nВыберите модель."
 
         await self._respond(
@@ -688,6 +691,22 @@ class MaxCreationParityChannelService(MaxTelegramParityChannelService):
         update: dict[str, Any],
     ) -> bool:
         session = await get_max_session(user_id)
+        if session.state == "parity:image:select_model":
+            images, _ = _media_urls(update)
+            if images:
+                data = dict(session.data)
+                refs = _image_refs_from_session(session.state, data)
+                for url in images:
+                    if url not in refs and len(refs) < 9:
+                        refs.append(url)
+                data["image_urls"] = refs
+                await save_max_session(user_id, session.state, data)
+                await self._respond(
+                    user_id,
+                    f"Референсы сохранены: <b>{len(refs)}</b>. Теперь выберите модель.",
+                    attachments=image_model_menu(self.catalog),
+                )
+                return True
         if session.state in {"parity:image:refs", "parity:image:settings_prompt"}:
             return await self._prepare_image_message(
                 user_id,
