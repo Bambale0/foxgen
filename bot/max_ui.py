@@ -64,12 +64,15 @@ def main_menu(
     balance: float,
     *,
     mini_app_url: str = "",
+    mini_app_bot_name: str = "",
     catalog: MaxPresetManager = max_preset_manager,
 ) -> list[dict[str, Any]]:
     """MAX mirror of the HappyFox Telegram main menu."""
     rows: list[list[dict[str, Any]]] = []
     if mini_app_url:
-        rows.append([open_app_button("🚀 Открыть Mini App")])
+        rows.append(
+            [open_app_button("🚀 Открыть Mini App", web_app=mini_app_bot_name)]
+        )
 
     video_prompt_price = _service_price(catalog, "video_prompt", default=3)
     rows.extend(

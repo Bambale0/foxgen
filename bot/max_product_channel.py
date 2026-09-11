@@ -75,7 +75,11 @@ def _assistant_menu() -> list[dict[str, Any]]:
     ]
 
 
-def _support_menu(support_contact: str, mini_app_url: str) -> list[dict[str, Any]]:
+def _support_menu(
+    support_contact: str,
+    mini_app_url: str,
+    mini_app_bot_name: str = "",
+) -> list[dict[str, Any]]:
     rows: list[list[dict[str, Any]]] = [
         [callback_button("🤖 Спросить AI-помощника", "max:assistant")],
         [
@@ -87,7 +91,7 @@ def _support_menu(support_contact: str, mini_app_url: str) -> list[dict[str, Any
     if contact.startswith("https://"):
         rows.append([link_button("💬 Написать оператору", contact)])
     if mini_app_url:
-        rows.append([open_app_button("🚀 Открыть Mini App")])
+        rows.append([open_app_button("🚀 Открыть Mini App", web_app=mini_app_bot_name)])
     rows.append([callback_button("🏠 Главное меню", "max:home")])
     return [inline_keyboard(rows)]
 
@@ -99,6 +103,7 @@ def _prompt_menu(
     total: int,
     prompt_id: int,
     mini_app_url: str,
+    mini_app_bot_name: str = "",
 ) -> list[dict[str, Any]]:
     prev_index = (index - 1) % total
     next_index = (index + 1) % total
@@ -120,7 +125,7 @@ def _prompt_menu(
         ],
     ]
     if mini_app_url:
-        rows.append([open_app_button("🚀 Библиотека в Mini App")])
+        rows.append([open_app_button("🚀 Библиотека в Mini App", web_app=mini_app_bot_name)])
     rows.append([callback_button("🏠 Главное меню", "max:home")])
     return [inline_keyboard(rows)]
 
@@ -152,7 +157,11 @@ class MaxProductChannelService(MaxSeedance25ChannelService):
             "🤖 AI-помощник — поможет с идеей, промптом и выбором модели\n\n"
             f"🐾 <b>Баланс MAX:</b> {_format_cost(balance)}\n"
             "<i>Выберите нужный экран ниже.</i>",
-            attachments=main_menu(balance, mini_app_url=self.settings.mini_app_url),
+            attachments=main_menu(
+                balance,
+                mini_app_url=self.settings.mini_app_url,
+                mini_app_bot_name=self.bot_name,
+            ),
             callback_id=callback_id,
         )
 
@@ -253,7 +262,11 @@ class MaxProductChannelService(MaxSeedance25ChannelService):
                 user_id,
                 "😕 AI-помощник сейчас не ответил. Можно повторить вопрос или открыть поддержку — "
                 "остальные MAX-сценарии продолжают работать.",
-                attachments=_support_menu(self.support_contact, self.settings.mini_app_url),
+                attachments=_support_menu(
+                    self.support_contact,
+                    self.settings.mini_app_url,
+                    self.bot_name,
+                ),
             )
         return True
 
@@ -357,6 +370,7 @@ class MaxProductChannelService(MaxSeedance25ChannelService):
                 total=total,
                 prompt_id=prompt_id,
                 mini_app_url=self.settings.mini_app_url,
+                mini_app_bot_name=self.bot_name,
             ),
             callback_id=callback_id,
         )

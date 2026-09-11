@@ -151,6 +151,34 @@ def test_max_photo_follows_model_refs_settings_prompt_confirm(
     assert "max:cancel" in _callbacks(client.sent[-1])
 
 
+def test_max_image_uploaded_while_model_picker_open_is_preserved(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    _prepare_database(tmp_path / "max-photo-pre-model-ref.db", monkeypatch)
+    service, _client = _service()
+
+    asyncio.run(service.handle_update(_callback(806, "photo", "max:create_image")))
+    selecting = asyncio.run(get_max_session(806))
+    assert selecting.state == "parity:image:select_model"
+
+    asyncio.run(
+        service.handle_update(
+            _message(806, image_url="https://example.invalid/pre-model.jpg")
+        )
+    )
+    selecting = asyncio.run(get_max_session(806))
+    assert selecting.state == "parity:image:select_model"
+    assert selecting.data["image_urls"] == ["https://example.invalid/pre-model.jpg"]
+
+    asyncio.run(
+        service.handle_update(_callback(806, "model", "max:image:banana_pro"))
+    )
+    session = asyncio.run(get_max_session(806))
+    assert session.state == "parity:image:settings_prompt"
+    assert session.data["image_urls"] == ["https://example.invalid/pre-model.jpg"]
+
+
 def test_max_image_model_change_preserves_uploaded_references(
     tmp_path,
     monkeypatch,
