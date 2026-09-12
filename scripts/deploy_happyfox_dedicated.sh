@@ -206,7 +206,32 @@ for seo_file in robots.txt sitemap.xml; do
 done
 
 [[ "$(tr -d '\r\n' </var/www/happyfox-app/mini-app/revision.txt)" == "$EXPECTED_SHA" ]]
-nginx -t
+
+# Keep the dedicated HappyFox edge deterministic and low-latency:
+# TLS 1.2 only, HTTP/2 for browser multiplexing, persistent local upstream
+# connections, and immutable caching for hashed Next.js assets.
+nginx_site="/etc/nginx/sites-available/happyfox.conf"
+certbot_options="/etc/letsencrypt/options-ssl-nginx.conf"
+[[ -s "$nginx_site" && -s "$certbot_options" ]] || {
+  echo "HappyFox nginx or Certbot SSL options are missing" >&2
+  exit 1
+}
+nginx_site_backup="$(mktemp)"
+certbot_options_backup="$(mktemp)"
+cp -a "$nginx_site" "$nginx_site_backup"
+cp -a "$certbot_options" "$certbot_options_backup"
+python3 scripts/tune_happyfox_nginx.py \
+  --site "$nginx_site" \
+  --certbot-options "$certbot_options"
+if ! nginx -t; then
+  cp -a "$nginx_site_backup" "$nginx_site"
+  cp -a "$certbot_options_backup" "$certbot_options"
+  rm -f "$nginx_site_backup" "$certbot_options_backup"
+  nginx -t
+  echo "HappyFox nginx tuning failed; previous configuration restored" >&2
+  exit 1
+fi
+rm -f "$nginx_site_backup" "$certbot_options_backup"
 systemctl reload nginx
 
 curl -fsS --retry 8 --retry-delay 2 --retry-all-errors --max-time 20 "$API_ORIGIN/health" >/dev/null
