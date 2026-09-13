@@ -1,51 +1,42 @@
 from __future__ import annotations
 
 import asyncio
+from functools import wraps
 from typing import Any
 
-_cache: dict[int, Any] = {}
-_locks: dict[int, asyncio.Lock] = {}
+_CACHE_STATE_ATTR = "_happyfox_bot_identity_cache_state"
+_INSTALLED_ATTR = "_happyfox_bot_identity_cache_installed"
 
 
-def _bot_cache_key(bot: Any) -> int:
-    bot_id = getattr(bot, "id", None)
-    try:
-        return int(bot_id) if bot_id is not None else id(bot)
-    except (TypeError, ValueError):
-        return id(bot)
+def install_bot_identity_cache(bot: Any) -> None:
+    """Cache Bot.get_me() on one long-lived bot instance."""
+    if bool(getattr(bot, _INSTALLED_ATTR, False)):
+        return
 
+    original_get_me = bot.get_me
+    lock = asyncio.Lock()
+    state: dict[str, Any] = {"value": None}
 
-async def get_bot_me_cached(bot: Any) -> Any:
-    """Return Telegram bot identity without repeated Bot API calls."""
-    key = _bot_cache_key(bot)
-    cached = _cache.get(key)
-    if cached is not None:
-        return cached
-
-    lock = _locks.get(key)
-    if lock is None:
-        lock = asyncio.Lock()
-        _locks[key] = lock
-
-    async with lock:
-        cached = _cache.get(key)
+    @wraps(original_get_me)
+    async def cached_get_me(*args: Any, **kwargs: Any) -> Any:
+        cached = state["value"]
         if cached is not None:
             return cached
-        me = await bot.get_me()
-        _cache[key] = me
-        return me
+
+        async with lock:
+            cached = state["value"]
+            if cached is not None:
+                return cached
+            identity = await original_get_me(*args, **kwargs)
+            state["value"] = identity
+            return identity
+
+    bot.get_me = cached_get_me
+    setattr(bot, _CACHE_STATE_ATTR, state)
+    setattr(bot, _INSTALLED_ATTR, True)
 
 
-async def get_bot_username_cached(bot: Any) -> str:
-    me = await get_bot_me_cached(bot)
-    return str(getattr(me, "username", "") or "").strip().lstrip("@")
-
-
-def clear_bot_identity_cache(bot: Any | None = None) -> None:
-    if bot is None:
-        _cache.clear()
-        _locks.clear()
-        return
-    key = _bot_cache_key(bot)
-    _cache.pop(key, None)
-    _locks.pop(key, None)
+def clear_bot_identity_cache(bot: Any) -> None:
+    state = getattr(bot, _CACHE_STATE_ATTR, None)
+    if isinstance(state, dict):
+        state["value"] = None

@@ -20,8 +20,6 @@ from typing import Any
 
 from aiohttp import web
 
-from bot.services.bot_identity_cache import get_bot_me_cached
-
 logger = logging.getLogger(__name__)
 
 _INTERNAL_PREFIX = "/internal/v1"
@@ -118,7 +116,7 @@ async def _instagram_bot_username(app: web.Application) -> str:
     if username:
         return username
 
-    me = await get_bot_me_cached(bot)
+    me = await bot.get_me()
     username = str(getattr(me, "username", "") or "").strip().lstrip("@")
     if not username:
         raise RuntimeError("Telegram bot username is unavailable")

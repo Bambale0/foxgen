@@ -9,7 +9,6 @@ from urllib.parse import parse_qsl, urlencode
 from aiohttp import web
 
 from bot.config import config
-from bot.services.bot_identity_cache import get_bot_me_cached
 from bot.trend_api import setup_trend_routes
 from bot.trend_task_privacy import sanitize_task_api_payload
 from bot.trend_visibility import (
@@ -104,7 +103,7 @@ def _build_browser_init_data(user: dict[str, Any], bot_token: str) -> str:
 async def browser_telegram_auth_config(request: web.Request) -> web.Response:
     try:
         bot = request.app["bot"]
-        me = await get_bot_me_cached(bot)
+        me = await bot.get_me()
         response = web.json_response(
             {
                 "ok": True,

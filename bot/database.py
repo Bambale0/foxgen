@@ -6938,7 +6938,7 @@ async def _ensure_bot_settings_table(db: db_backend.Connection) -> None:
 
 
 _BOT_SETTING_CACHE: dict[str, tuple[float, str | None]] = {}
-_BOT_SETTING_CACHE_TTL_SECONDS = 60.0
+_BOT_SETTING_CACHE_TTL_SECONDS = 5.0
 
 
 async def get_bot_setting(key: str, default: str | None = None) -> str | None:
