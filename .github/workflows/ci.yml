@@ -108,7 +108,9 @@ jobs:
       - name: Install locked dependencies
         run: |
           python -m pip install --quiet --upgrade pip
-          pip install --require-hashes -r requirements.lock
+          pip install --quiet pytest pytest-asyncio pytest-mock ruff
+          pip install --quiet -r requirements.lock
+          python -m pip check
       - name: Synthetic callback ACK load suite
         run: |
           pytest tests/test_callback_ack_load.py -q --tb=short
