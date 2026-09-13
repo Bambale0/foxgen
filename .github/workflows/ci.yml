@@ -89,9 +89,37 @@ jobs:
         run: |
           pytest tests/ \
             --ignore=tests/live \
-            -m "not live_smoke" \
+            -m "not live_smoke and not load" \
             -q \
             --tb=short
+
+
+  callback-load:
+    name: Callback load test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.lock
+      - name: Install locked dependencies
+        run: |
+          python -m pip install --quiet --upgrade pip
+          pip install --quiet pytest pytest-asyncio pytest-mock ruff
+          pip install --quiet -r requirements.lock
+          python -m pip check
+      - name: Synthetic callback ACK load suite
+        run: |
+          pytest tests/test_callback_ack_load.py -q --tb=short
+          python -m scripts.load_test_callback_ack \
+            --requests 500 \
+            --concurrency 100 \
+            --network-delay-ms 340 \
+            --handler-delay-ms 520 \
+            --failure-every 17
 
   python-security:
     name: Python dependency audit
