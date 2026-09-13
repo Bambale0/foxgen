@@ -77,11 +77,16 @@ from bot.keyboards import (
     get_required_subscription_keyboard,
 )
 from bot.services.bot_identity_cache import install_bot_identity_cache
+from bot.services.callback_ack import (
+    EarlyCallbackAckMiddleware,
+    install_early_callback_ack_session_middleware,
+)
 from bot.services.telegram_telemetry import (
     TelegramResolvedHandlerTelemetryMiddleware,
     TelegramUpdateTelemetryMiddleware,
     install_telegram_bot_api_telemetry,
     log_telegram_webhook_ack,
+    record_telegram_stage,
 )
 from bot.services.preset_manager import preset_manager
 from bot.services.redis_service import redis_service
@@ -430,9 +435,18 @@ class AccessGuardMiddleware(BaseMiddleware):
         event: types.TelegramObject,
         data: dict[str, Any],
     ) -> Any:
+        guard_started = time.perf_counter()
+
+        async def pass_to_handler() -> Any:
+            record_telegram_stage(
+                "access_guard",
+                (time.perf_counter() - guard_started) * 1000,
+            )
+            return await handler(event, data)
+
         user = getattr(event, "from_user", None)
         if not user:
-            return await handler(event, data)
+            return await pass_to_handler()
 
         is_admin_user = config.is_admin(user.id)
         is_subscription_check_callback = (
@@ -453,9 +467,9 @@ class AccessGuardMiddleware(BaseMiddleware):
                 )
                 return None
             if is_subscription_check_callback:
-                return await handler(event, data)
+                return await pass_to_handler()
             if is_admin_management_event:
-                return await handler(event, data)
+                return await pass_to_handler()
             if await is_channel_subscription_required():
                 bot = data.get("bot") or getattr(event, "bot", None)
                 if not bot:
@@ -470,7 +484,7 @@ class AccessGuardMiddleware(BaseMiddleware):
         except Exception:
             logger.exception("Access guard failed; passing update through")
 
-        return await handler(event, data)
+        return await pass_to_handler()
 
     async def _reply(self, event: types.TelegramObject, text: str) -> None:
         if isinstance(event, types.CallbackQuery):
@@ -2519,6 +2533,9 @@ def setup_dispatcher() -> Dispatcher:
     access_guard = AccessGuardMiddleware()
     dp.message.outer_middleware(access_guard)
     dp.callback_query.outer_middleware(access_guard)
+    # AccessGuard remains outermost. Early callback ACK starts only after access
+    # checks pass, then overlaps Telegram ACK latency with legacy handler work.
+    dp.callback_query.outer_middleware(EarlyCallbackAckMiddleware())
 
     # ⭐ КРИТИЧЕСКИ ВАЖНО: Порядок роутеров в aiogram 3.x
     # Первый зарегистрированный роутер имеет НАИВЫСШИЙ приоритет!
@@ -4728,6 +4745,9 @@ async def main():
     bot = Bot(
         token=config.BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML)
     )
+    # Register ACK reuse first so duplicate legacy callback.answer() calls are
+    # intercepted before request telemetry and never hit Telegram twice.
+    install_early_callback_ack_session_middleware(bot)
     install_telegram_bot_api_telemetry(bot)
 
     try:
