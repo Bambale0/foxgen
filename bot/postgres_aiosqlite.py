@@ -3,17 +3,82 @@ from __future__ import annotations
 import asyncio
 import os
 import re
-from collections.abc import Mapping
+from collections.abc import Awaitable, Callable, Mapping
+from contextlib import suppress
 from datetime import date, datetime
 from functools import lru_cache
 from typing import Any
 
 import aiosqlite
 import psycopg
-
+from psycopg_pool import AsyncConnectionPool
 
 _HELPERS_READY = False
 _HELPERS_LOCK: asyncio.Lock | None = None
+_POSTGRES_POOL: AsyncConnectionPool | None = None
+_POSTGRES_POOL_LOCK: asyncio.Lock | None = None
+
+
+def _get_pool_lock() -> asyncio.Lock:
+    global _POSTGRES_POOL_LOCK
+    if _POSTGRES_POOL_LOCK is None:
+        _POSTGRES_POOL_LOCK = asyncio.Lock()
+    return _POSTGRES_POOL_LOCK
+
+
+def _pool_int_env(name: str, default: int, *, minimum: int) -> int:
+    try:
+        value = int(os.getenv(name, str(default)))
+    except (TypeError, ValueError):
+        value = default
+    return max(minimum, value)
+
+
+def _pool_float_env(name: str, default: float, *, minimum: float) -> float:
+    try:
+        value = float(os.getenv(name, str(default)))
+    except (TypeError, ValueError):
+        value = default
+    return max(minimum, value)
+
+
+async def _get_postgres_pool() -> AsyncConnectionPool:
+    global _POSTGRES_POOL
+    if _POSTGRES_POOL is not None:
+        return _POSTGRES_POOL
+
+    async with _get_pool_lock():
+        if _POSTGRES_POOL is not None:
+            return _POSTGRES_POOL
+
+        min_size = _pool_int_env("POSTGRES_POOL_MIN_SIZE", 2, minimum=1)
+        max_size = _pool_int_env("POSTGRES_POOL_MAX_SIZE", 16, minimum=min_size)
+        timeout = _pool_float_env("POSTGRES_POOL_TIMEOUT_SECONDS", 5.0, minimum=0.1)
+        pool = AsyncConnectionPool(
+            conninfo=_normalize_postgres_dsn(),
+            min_size=min_size,
+            max_size=max_size,
+            timeout=timeout,
+            open=False,
+        )
+        await pool.open()
+        try:
+            await pool.wait(timeout=timeout)
+        except Exception:
+            await pool.close()
+            raise
+        _POSTGRES_POOL = pool
+        return pool
+
+
+async def close_postgres_pool() -> None:
+    global _POSTGRES_POOL
+    pool = _POSTGRES_POOL
+    _POSTGRES_POOL = None
+    if pool is not None:
+        await pool.close()
+
+
 _LASTROWID_TABLES = {
     "batch_jobs",
     "feed_comments",
@@ -696,8 +761,14 @@ async def _ensure_postgres_helpers(conn: psycopg.AsyncConnection) -> None:
 
 
 class PostgresConnection:
-    def __init__(self, conn: psycopg.AsyncConnection):
+    def __init__(
+        self,
+        conn: psycopg.AsyncConnection,
+        *,
+        release: Callable[[psycopg.AsyncConnection], Awaitable[None]] | None = None,
+    ):
         self._conn = conn
+        self._release = release
         self._closed = False
         self.row_factory = None
         self.total_changes = 0
@@ -729,7 +800,7 @@ class PostgresConnection:
                                 )
                                 id_row = await id_cur.fetchone()
                                 lastrowid = id_row[0] if id_row else None
-                        except Exception:
+                        except psycopg.Error:
                             lastrowid = None
                 if rowcount and rowcount > 0 and not cur.description:
                     self.total_changes += int(rowcount)
@@ -784,17 +855,21 @@ class PostgresConnection:
         if self._closed:
             return
         self._closed = True
-        await self._conn.close()
+        if self._release is None:
+            await self._conn.close()
+            return
+
+        with suppress(psycopg.Error):
+            await self._conn.rollback()
+        await self._release(self._conn)
 
     async def __aenter__(self):
         return self
 
     async def __aexit__(self, exc_type, exc, tb):
         if exc_type:
-            try:
+            with suppress(psycopg.Error):
                 await self.rollback()
-            except Exception:
-                pass
         await self.close()
         return False
 
@@ -805,11 +880,14 @@ class PostgresConnect:
 
     async def _ensure(self) -> PostgresConnection:
         if self._conn is None:
-            raw_conn = await psycopg.AsyncConnection.connect(
-                _normalize_postgres_dsn()
-            )
-            await _ensure_postgres_helpers(raw_conn)
-            self._conn = PostgresConnection(raw_conn)
+            pool = await _get_postgres_pool()
+            raw_conn = await pool.getconn()
+            try:
+                await _ensure_postgres_helpers(raw_conn)
+            except Exception:
+                await pool.putconn(raw_conn)
+                raise
+            self._conn = PostgresConnection(raw_conn, release=pool.putconn)
         return self._conn
 
     def __await__(self):
