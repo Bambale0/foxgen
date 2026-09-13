@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from 'next'
 import { BRAND_DESCRIPTION, BRAND_LOGO, BRAND_NAME } from '@/lib/brand'
 import './globals.css'
 
-const telegramBootstrapScript = `
+const miniAppBootstrapScript = `
 (function () {
   var attempts = 0;
 
@@ -17,36 +17,47 @@ const telegramBootstrapScript = `
     }
   } catch (e) {}
 
-  function configureTelegram() {
-    attempts += 1;
-    var webApp = window.Telegram && window.Telegram.WebApp;
-
-    if (!webApp) {
-      if (attempts < 50) {
-        window.setTimeout(configureTelegram, 100);
+  function remember(platform, initData) {
+    var value = String(initData || '').trim();
+    if (!value) return false;
+    try {
+      window.__BANANO_MINIAPP_PLATFORM__ = platform;
+      if (platform === 'max') {
+        window.__BANANO_MAX_INIT_DATA__ = value;
+        if (window.sessionStorage) window.sessionStorage.setItem('__banano_max_init_data', value);
+      } else {
+        window.__BANANO_TG_INIT_DATA__ = value;
+        if (window.sessionStorage) window.sessionStorage.setItem('__banano_tg_init_data', value);
       }
+    } catch (e) {}
+    return true;
+  }
+
+  function configureMiniApp() {
+    attempts += 1;
+
+    var maxWebApp = window.WebApp;
+    if (maxWebApp && remember('max', maxWebApp.initData)) {
+      try { if (maxWebApp.ready) maxWebApp.ready(); } catch (e) {}
+      try { if (maxWebApp.expand) maxWebApp.expand(); } catch (e) {}
       return;
     }
 
-    try { if (webApp.ready) webApp.ready(); } catch (e) {}
-    try { if (webApp.expand) webApp.expand(); } catch (e) {}
-    try { if (webApp.setHeaderColor) webApp.setHeaderColor('#050505'); } catch (e) {}
-    try { if (webApp.setBackgroundColor) webApp.setBackgroundColor('#050505'); } catch (e) {}
-    try { if (webApp.setBottomBarColor) webApp.setBottomBarColor('#080808'); } catch (e) {}
+    var telegramWebApp = window.Telegram && window.Telegram.WebApp;
+    if (telegramWebApp && remember('telegram', telegramWebApp.initData)) {
+      try { if (telegramWebApp.ready) telegramWebApp.ready(); } catch (e) {}
+      try { if (telegramWebApp.expand) telegramWebApp.expand(); } catch (e) {}
+      try { if (telegramWebApp.setHeaderColor) telegramWebApp.setHeaderColor('#050505'); } catch (e) {}
+      try { if (telegramWebApp.setBackgroundColor) telegramWebApp.setBackgroundColor('#050505'); } catch (e) {}
+      try { if (telegramWebApp.setBottomBarColor) telegramWebApp.setBottomBarColor('#080808'); } catch (e) {}
+      return;
+    }
 
-    try {
-      var initData = String(webApp.initData || '').trim();
-      if (initData) {
-        window.__BANANO_TG_INIT_DATA__ = initData;
-        if (window.sessionStorage) {
-          window.sessionStorage.setItem('__banano_tg_init_data', initData);
-        }
-      }
-    } catch (e) {}
+    if (attempts < 50) window.setTimeout(configureMiniApp, 100);
   }
 
-  configureTelegram();
-  window.addEventListener('load', configureTelegram, { once: true });
+  configureMiniApp();
+  window.addEventListener('load', configureMiniApp, { once: true });
 })();
 `
 
@@ -78,9 +89,10 @@ export default function RootLayout({
     <html lang="ru" className="bg-background">
       <head>
         <script src="/mini-app/telegram-web-app.js" />
+        <script src="https://st.max.ru/js/max-web-app.js" />
         <script
           id="telegram-early-ready"
-          dangerouslySetInnerHTML={{ __html: telegramBootstrapScript }}
+          dangerouslySetInnerHTML={{ __html: miniAppBootstrapScript }}
         />
       </head>
       <body className="font-sans antialiased">

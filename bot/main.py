@@ -72,6 +72,7 @@ from bot.handlers.payments import (
 from bot.browser_auth import setup_browser_auth_routes
 from bot.feed_reference_media import setup_feed_reference_media_routes
 from bot.miniapp import setup_miniapp_routes
+from bot.max_miniapp import install_max_miniapp_middleware
 from bot.keyboards import (
     get_main_menu_button_keyboard,
     get_required_subscription_keyboard,
@@ -4652,6 +4653,7 @@ def setup_web_server(dp: Dispatcher, bot: Bot) -> web.Application:
     setup_browser_auth_routes(app)
     setup_feed_reference_media_routes(app)
     setup_miniapp_routes(app)
+    install_max_miniapp_middleware(app)
 
     # Вебхук Telegram
     async def telegram_webhook_handler(request: web.Request) -> web.Response:

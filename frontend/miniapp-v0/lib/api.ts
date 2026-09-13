@@ -27,6 +27,16 @@ declare global {
         openInvoice?: (url: string, callback?: (status: string) => void) => void
       }
     }
+    WebApp?: {
+      initData?: string
+      initDataUnsafe?: { start_param?: string }
+      platform?: string
+      version?: string
+      ready?: () => void
+      expand?: () => void
+      openLink?: (url: string) => void
+      openMaxLink?: (url: string) => void
+    }
     __BANANO_MINIAPP_CONFIG__?: {
       botUsername?: string
       miniAppUrl?: string
@@ -36,16 +46,35 @@ declare global {
       search?: string
     }
     __BANANO_TG_INIT_DATA__?: string
+    __BANANO_MAX_INIT_DATA__?: string
+    __BANANO_MINIAPP_PLATFORM__?: 'telegram' | 'max'
   }
 }
 
 const INIT_DATA_STORAGE_KEY = '__banano_tg_init_data'
+const MAX_INIT_DATA_STORAGE_KEY = '__banano_max_init_data'
 
 function getWebApp() {
   if (typeof window === 'undefined') {
     return null
   }
   return window.Telegram?.WebApp || null
+}
+
+export function getMiniAppPlatform(): 'telegram' | 'max' | 'browser' {
+  if (typeof window === 'undefined') return 'browser'
+  const explicit = window.__BANANO_MINIAPP_PLATFORM__
+  if (explicit === 'max' || explicit === 'telegram') return explicit
+
+  const params = getLaunchParams()
+  if (window.WebApp?.initData || params.get('WebAppData')) return 'max'
+  if (window.Telegram?.WebApp?.initData || params.get('tgWebAppData')) return 'telegram'
+  return 'browser'
+}
+
+function getMaxWebApp() {
+  if (typeof window === 'undefined') return null
+  return window.WebApp || null
 }
 
 function getLaunchParams(): URLSearchParams {
@@ -72,9 +101,12 @@ function getTelegramLaunchValue(name: string): string {
 }
 
 function getInitDataFromLocation(): string {
-  // tgWebAppData may appear in hash OR search params depending on Telegram version
-  const raw = getTelegramLaunchValue('tgWebAppData')
-  if (raw) return raw
+  const launch = getLaunchParams()
+  const platform = getMiniAppPlatform()
+  const preferredKey = platform === 'max' ? 'WebAppData' : 'tgWebAppData'
+  const alternateKey = platform === 'max' ? 'tgWebAppData' : 'WebAppData'
+  const direct = String(launch.get(preferredKey) || launch.get(alternateKey) || '').trim()
+  if (direct) return direct
 
   if (typeof window === 'undefined') return ''
 
@@ -82,7 +114,7 @@ function getInitDataFromLocation(): string {
     const value = String(rawValue || '').trim()
     if (!value) return ''
     const params = new URLSearchParams(value.startsWith('#') || value.startsWith('?') ? value.slice(1) : value)
-    return String(params.get('tgWebAppData') || '').trim()
+    return String(params.get(preferredKey) || params.get(alternateKey) || '').trim()
   }
 
   try {
@@ -102,29 +134,44 @@ function getInitDataFromLocation(): string {
 }
 
 export function getInitData(): string {
-  // Prefer initData from location hash (tgWebAppData) — it's available
-  // before window.Telegram.WebApp is fully initialized. This is critical
-  // on slow networks/VPN where the Telegram SDK CDN may be delayed.
+  const platform = getMiniAppPlatform()
   const fromLocation = getInitDataFromLocation()
-  const fromTelegram = getWebApp()?.initData || ''
+  const fromBridge =
+    platform === 'max'
+      ? String(getMaxWebApp()?.initData || '').trim()
+      : String(getWebApp()?.initData || '').trim()
   const fromWindow =
     typeof window !== 'undefined'
-      ? String(window.__BANANO_TG_INIT_DATA__ || '').trim()
+      ? String(
+          platform === 'max'
+            ? window.__BANANO_MAX_INIT_DATA__ || ''
+            : window.__BANANO_TG_INIT_DATA__ || '',
+        ).trim()
       : ''
-  const initData = fromLocation || fromTelegram || fromWindow
+  const initData = fromLocation || fromBridge || fromWindow
+
   if (initData && typeof window !== 'undefined') {
     try {
-      window.__BANANO_TG_INIT_DATA__ = initData
-      window.sessionStorage.setItem(INIT_DATA_STORAGE_KEY, initData)
+      if (platform === 'max') {
+        window.__BANANO_MINIAPP_PLATFORM__ = 'max'
+        window.__BANANO_MAX_INIT_DATA__ = initData
+        window.sessionStorage.setItem(MAX_INIT_DATA_STORAGE_KEY, initData)
+      } else {
+        window.__BANANO_MINIAPP_PLATFORM__ = 'telegram'
+        window.__BANANO_TG_INIT_DATA__ = initData
+        window.sessionStorage.setItem(INIT_DATA_STORAGE_KEY, initData)
+      }
     } catch {}
     return initData
   }
 
   if (typeof window !== 'undefined') {
     try {
-      const fromStorage = window.sessionStorage.getItem(INIT_DATA_STORAGE_KEY) || ''
+      const storageKey = platform === 'max' ? MAX_INIT_DATA_STORAGE_KEY : INIT_DATA_STORAGE_KEY
+      const fromStorage = window.sessionStorage.getItem(storageKey) || ''
       if (fromStorage) {
-        window.__BANANO_TG_INIT_DATA__ = fromStorage
+        if (platform === 'max') window.__BANANO_MAX_INIT_DATA__ = fromStorage
+        else window.__BANANO_TG_INIT_DATA__ = fromStorage
         return fromStorage
       }
     } catch {}
@@ -135,6 +182,8 @@ export function getInitData(): string {
 export function hasTelegramInitData(): boolean {
   return Boolean(getInitData())
 }
+
+export const hasMiniAppInitData = hasTelegramInitData
 
 export function waitForTelegramInitData(timeoutMs = 10000): Promise<boolean> {
   if (hasTelegramInitData()) {
@@ -161,8 +210,26 @@ export function waitForTelegramInitData(timeoutMs = 10000): Promise<boolean> {
   })
 }
 
+export const waitForMiniAppInitData = waitForTelegramInitData
+
 export function getStartParamFallback(): string {
   if (typeof window === "undefined") return ""
+
+  const platform = getMiniAppPlatform()
+  if (platform === 'max') {
+    const directMax = String(getMaxWebApp()?.initDataUnsafe?.start_param || '').trim()
+    if (directMax) return directMax
+    const params = getLaunchParams()
+    const fromLaunch = String(
+      params.get('WebAppStartParam') || params.get('startapp') || '',
+    ).trim()
+    if (fromLaunch) return fromLaunch
+    const initData = getInitData()
+    const fromInit = initData
+      ? String(new URLSearchParams(initData).get('start_param') || '').trim()
+      : ''
+    if (fromInit) return fromInit
+  }
 
   // 1. Check Telegram initDataUnsafe.start_param (standard Telegram API)
   const direct = String(getWebApp()?.initDataUnsafe?.start_param || "").trim()
@@ -375,7 +442,10 @@ async function parseJson<T>(response: Response): Promise<T> {
 }
 
 async function postJson<T>(path: string, payload: Record<string, unknown>): Promise<T> {
-  const nextPayload = { ...payload }
+  const nextPayload: Record<string, unknown> = { ...payload }
+  if (!nextPayload.platform) {
+    nextPayload.platform = getMiniAppPlatform()
+  }
   const startParamFallback = getStartParamFallback()
   if (startParamFallback && !nextPayload.start_param_fallback) {
     nextPayload.start_param_fallback = startParamFallback
@@ -396,7 +466,7 @@ async function postJson<T>(path: string, payload: Record<string, unknown>): Prom
 export async function bootstrapApp(): Promise<BootstrapResponse> {
   const initData = getInitData()
   if (!initData) {
-    throw new Error('Откройте mini app из Telegram и попробуйте снова.')
+    throw new Error('Откройте Mini App из Telegram или MAX и попробуйте снова.')
   }
   return postJson<BootstrapResponse>('bootstrap', { init_data: initData })
 }
@@ -408,7 +478,7 @@ export async function createPayment(payload: {
 }): Promise<CreatePaymentResponse> {
   const initData = getInitData()
   if (!initData) {
-    throw new Error('Откройте mini app из Telegram и попробуйте снова.')
+    throw new Error('Откройте Mini App из Telegram или MAX и попробуйте снова.')
   }
   return postJson<CreatePaymentResponse>('create-payment', {
     init_data: initData,
@@ -421,7 +491,7 @@ export async function createPayment(payload: {
 export async function fetchTaskDetail(taskId: string): Promise<TaskDetail> {
   const initData = getInitData()
   if (!initData) {
-    throw new Error('Откройте mini app из Telegram и попробуйте снова.')
+    throw new Error('Откройте Mini App из Telegram или MAX и попробуйте снова.')
   }
   const response = await postJson<{ ok: true; task: TaskDetail }>('task-detail', {
     init_data: initData,
@@ -622,6 +692,7 @@ async function uploadFileAsJson(
     },
     body: JSON.stringify({
       init_data: initData,
+      platform: getMiniAppPlatform(),
       file_kind: fileKind,
       filename: file.name,
       content_type: file.type,
@@ -644,7 +715,7 @@ export async function uploadFile(
 ): Promise<UploadedFile> {
   const initData = getInitData()
   if (!initData) {
-    throw new Error('Откройте mini app из Telegram и попробуйте снова.')
+    throw new Error('Откройте Mini App из Telegram или MAX и попробуйте снова.')
   }
 
   const normalizedFile = normalizedMediaUploadFile(file)
@@ -658,6 +729,7 @@ export async function uploadFile(
   sendMiniAppClientLog('upload-start', uploadLogPayload)
   const formData = new FormData()
   formData.append('init_data', initData)
+  formData.append('platform', getMiniAppPlatform())
   formData.append('file_kind', fileKind)
   formData.append('file', normalizedFile)
 
@@ -749,7 +821,7 @@ export async function generateImage(payload: {
 }> {
   const initData = getInitData()
   if (!initData) {
-    throw new Error('Откройте mini app из Telegram и попробуйте снова.')
+    throw new Error('Откройте Mini App из Telegram или MAX и попробуйте снова.')
   }
 
   const response = await postJson<{
@@ -821,7 +893,7 @@ export async function fetchPrompts(payload: {
 } = {}): Promise<PromptItem[]> {
   const initData = getInitData()
   if (!initData) {
-    throw new Error('Откройте mini app из Telegram и попробуйте снова.')
+    throw new Error('Откройте Mini App из Telegram или MAX и попробуйте снова.')
   }
   const response = await postJson<{ ok: true; prompts: PromptItem[] }>('prompts', {
     init_data: initData,
@@ -837,7 +909,7 @@ export async function fetchPrompts(payload: {
 export async function fetchPromptDetail(promptId: number): Promise<PromptItem> {
   const initData = getInitData()
   if (!initData) {
-    throw new Error('Откройте mini app из Telegram и попробуйте снова.')
+    throw new Error('Откройте Mini App из Telegram или MAX и попробуйте снова.')
   }
   const response = await postJson<{ ok: true; prompt: PromptItem }>('prompts/detail', {
     init_data: initData,
@@ -859,7 +931,7 @@ export async function fetchPromptLink(promptId: number): Promise<string> {
 export async function likePrompt(promptId: number): Promise<PromptItem> {
   const initData = getInitData()
   if (!initData) {
-    throw new Error('Откройте mini app из Telegram и попробуйте снова.')
+    throw new Error('Откройте Mini App из Telegram или MAX и попробуйте снова.')
   }
   const response = await postJson<{ ok: true; prompt: PromptItem }>('prompts/like', {
     init_data: initData,
@@ -879,7 +951,7 @@ export async function submitPrompt(payload: {
 }): Promise<PromptItem> {
   const initData = getInitData()
   if (!initData) {
-    throw new Error('Откройте mini app из Telegram и попробуйте снова.')
+    throw new Error('Откройте Mini App из Telegram или MAX и попробуйте снова.')
   }
   const response = await postJson<{ ok: true; prompt: PromptItem }>('prompts/submit', {
     init_data: initData,
@@ -897,7 +969,7 @@ export async function submitPrompt(payload: {
 export async function deactivatePrompt(promptId: number): Promise<PromptItem | null> {
   const initData = getInitData()
   if (!initData) {
-    throw new Error('Откройте mini app из Telegram и попробуйте снова.')
+    throw new Error('Откройте Mini App из Telegram или MAX и попробуйте снова.')
   }
   const response = await postJson<{ ok: true; prompt: PromptItem | null }>('prompts/deactivate', {
     init_data: initData,
@@ -914,7 +986,7 @@ export async function fetchFeed(payload: {
 } = {}): Promise<{ feed: FeedItem[]; models: Array<{ id: string; label: string }> }> {
   const initData = getInitData()
   if (!initData) {
-    throw new Error('Откройте mini app из Telegram и попробуйте снова.')
+    throw new Error('Откройте Mini App из Telegram или MAX и попробуйте снова.')
   }
   const response = await postJson<{
     ok: true
@@ -933,7 +1005,7 @@ export async function fetchFeed(payload: {
 export async function fetchFeedItem(genId: number): Promise<FeedItem> {
   const initData = getInitData()
   if (!initData) {
-    throw new Error('Откройте mini app из Telegram и попробуйте снова.')
+    throw new Error('Откройте Mini App из Telegram или MAX и попробуйте снова.')
   }
   const response = await postJson<{ ok: true; feed_item: FeedItem }>('feed/item', {
     init_data: initData,
@@ -945,7 +1017,7 @@ export async function fetchFeedItem(genId: number): Promise<FeedItem> {
 export async function fetchMyFeed(limit = 80, offset = 0): Promise<FeedItem[]> {
   const initData = getInitData()
   if (!initData) {
-    throw new Error('Откройте mini app из Telegram и попробуйте снова.')
+    throw new Error('Откройте Mini App из Telegram или MAX и попробуйте снова.')
   }
   const response = await postJson<{ ok: true; feed: FeedItem[] }>('feed/my', {
     init_data: initData,
@@ -962,7 +1034,7 @@ export async function fetchProfileFeed(
 ): Promise<{ profile: ProfileSummary; feed: FeedItem[] }> {
   const initData = getInitData()
   if (!initData) {
-    throw new Error('Откройте mini app из Telegram и попробуйте снова.')
+    throw new Error('Откройте Mini App из Telegram или MAX и попробуйте снова.')
   }
   const response = await postJson<{ ok: true; profile: ProfileSummary; feed: FeedItem[] }>('feed/profile', {
     init_data: initData,
@@ -981,7 +1053,7 @@ export async function likeFeedItem(
 ): Promise<FeedItem> {
   const initData = getInitData()
   if (!initData) {
-    throw new Error('Откройте mini app из Telegram и попробуйте снова.')
+    throw new Error('Откройте Mini App из Telegram или MAX и попробуйте снова.')
   }
   const response = await postJson<{ ok: true; feed_item: FeedItem }>('feed/like', {
     init_data: initData,
@@ -997,7 +1069,7 @@ export async function shareFeedItem(
 ): Promise<{ item: FeedItem; link: string; postLink: string; remixLink: string }> {
   const initData = getInitData()
   if (!initData) {
-    throw new Error('Откройте mini app из Telegram и попробуйте снова.')
+    throw new Error('Откройте Mini App из Telegram или MAX и попробуйте снова.')
   }
   const response = await postJson<{
     ok: true
@@ -1033,7 +1105,7 @@ export async function fetchFeedComments(
 ): Promise<FeedComment[]> {
   const initData = getInitData()
   if (!initData) {
-    throw new Error('Откройте mini app из Telegram и попробуйте снова.')
+    throw new Error('Откройте Mini App из Telegram или MAX и попробуйте снова.')
   }
   const response = await postJson<{ ok: true; comments: FeedComment[] }>('feed/comments', {
     init_data: initData,
@@ -1051,7 +1123,7 @@ export async function addFeedComment(
 ): Promise<{ comment: FeedComment; commentsCount: number }> {
   const initData = getInitData()
   if (!initData) {
-    throw new Error('Откройте mini app из Telegram и попробуйте снова.')
+    throw new Error('Откройте Mini App из Telegram или MAX и попробуйте снова.')
   }
   const response = await postJson<{ ok: true; comment: FeedComment; comments_count: number }>('feed/comment', {
     init_data: initData,
@@ -1065,7 +1137,7 @@ export async function addFeedComment(
 export async function removeFeedItem(genId: number): Promise<void> {
   const initData = getInitData()
   if (!initData) {
-    throw new Error('Откройте mini app из Telegram и попробуйте снова.')
+    throw new Error('Откройте Mini App из Telegram или MAX и попробуйте снова.')
   }
   const response = await postJson<{ ok: true; removed: boolean }>('feed/remove', {
     init_data: initData,
@@ -1088,7 +1160,7 @@ export async function publishGeneration(
 ): Promise<FeedItem> {
   const initData = getInitData()
   if (!initData) {
-    throw new Error('Откройте mini app из Telegram и попробуйте снова.')
+    throw new Error('Откройте Mini App из Telegram или MAX и попробуйте снова.')
   }
   const response = await postJson<{ ok: true; feed_item: FeedItem }>('generations/share', {
     init_data: initData,
@@ -1105,7 +1177,7 @@ export async function publishGeneration(
 export async function setFeedItemBlurred(genId: number, blurred: boolean): Promise<FeedItem> {
   const initData = getInitData()
   if (!initData) {
-    throw new Error('Откройте mini app из Telegram и попробуйте снова.')
+    throw new Error('Откройте Mini App из Telegram или MAX и попробуйте снова.')
   }
   const response = await postJson<{ ok: true; feed_item: FeedItem }>('feed/blur', {
     init_data: initData,
@@ -1118,7 +1190,7 @@ export async function setFeedItemBlurred(genId: number, blurred: boolean): Promi
 export async function unpublishGeneration(taskId: string): Promise<void> {
   const initData = getInitData()
   if (!initData) {
-    throw new Error('Откройте mini app из Telegram и попробуйте снова.')
+    throw new Error('Откройте Mini App из Telegram или MAX и попробуйте снова.')
   }
   const response = await postJson<{ ok: true; removed: boolean }>('feed/remove', {
     init_data: initData,
@@ -1132,7 +1204,7 @@ export async function unpublishGeneration(taskId: string): Promise<void> {
 export async function saveGenerationPrompt(taskId: string): Promise<void> {
   const initData = getInitData()
   if (!initData) {
-    throw new Error('Откройте mini app из Telegram и попробуйте снова.')
+    throw new Error('Откройте Mini App из Telegram или MAX и попробуйте снова.')
   }
   await postJson<{ ok: true }>('generations/share-library', {
     init_data: initData,
@@ -1143,7 +1215,7 @@ export async function saveGenerationPrompt(taskId: string): Promise<void> {
 export async function removeGenerationPrompt(taskId: string): Promise<void> {
   const initData = getInitData()
   if (!initData) {
-    throw new Error('Откройте mini app из Telegram и попробуйте снова.')
+    throw new Error('Откройте Mini App из Telegram или MAX и попробуйте снова.')
   }
   await postJson<{ ok: true; removed: boolean }>('generations/remove-library', {
     init_data: initData,
@@ -1165,7 +1237,7 @@ export async function remixFeedItem(payload: {
 }> {
   const initData = getInitData()
   if (!initData) {
-    throw new Error('Откройте mini app из Telegram и попробуйте снова.')
+    throw new Error('Откройте Mini App из Telegram или MAX и попробуйте снова.')
   }
   const response = await postJson<{
     ok: true
@@ -1223,7 +1295,7 @@ export async function remixFeedItem(payload: {
 export async function executeMiniAppAction(action: string): Promise<void> {
   const initData = getInitData()
   if (!initData) {
-    throw new Error('Откройте mini app из Telegram и попробуйте снова.')
+    throw new Error('Откройте Mini App из Telegram или MAX и попробуйте снова.')
   }
 
   await postJson<{ ok: true }>('action', {
@@ -1269,7 +1341,7 @@ export async function generateVideo(payload: {
 }> {
   const initData = getInitData()
   if (!initData) {
-    throw new Error('Откройте mini app из Telegram и попробуйте снова.')
+    throw new Error('Откройте Mini App из Telegram или MAX и попробуйте снова.')
   }
   const startImage = restoreProviderUploadUrl(payload.startImage)
   const imageReferences = restoreProviderUploadUrls(payload.references)
@@ -1372,7 +1444,7 @@ export async function askAIAssistant(payload: {
 }): Promise<{ reply: string }> {
   const initData = getInitData()
   if (!initData) {
-    throw new Error('Откройте mini app из Telegram и попробуйте снова.')
+    throw new Error('Откройте Mini App из Telegram или MAX и попробуйте снова.')
   }
 
   const response = await postJson<{ ok: true; reply: string }>('ai-assistant', {
@@ -1401,7 +1473,7 @@ export async function generateMotion(payload: {
 }> {
   const initData = getInitData()
   if (!initData) {
-    throw new Error('Откройте mini app из Telegram и попробуйте снова.')
+    throw new Error('Откройте Mini App из Telegram или MAX и попробуйте снова.')
   }
   const imageUrl = restoreProviderUploadUrl(payload.imageUrl)
   const videoUrl = restoreProviderUploadUrl(payload.videoUrl)
@@ -1476,7 +1548,7 @@ export async function photoToPrompt(payload: {
 }> {
   const initData = getInitData()
   if (!initData) {
-    throw new Error('Откройте mini app из Telegram и попробуйте снова.')
+    throw new Error('Откройте Mini App из Telegram или MAX и попробуйте снова.')
   }
 
   const response = await postJson<{
@@ -1518,7 +1590,7 @@ export async function fetchPartnerOverview(): Promise<{
 }> {
   const initData = getInitData()
   if (!initData) {
-    throw new Error('Откройте mini app из Telegram и попробуйте снова.')
+    throw new Error('Откройте Mini App из Telegram или MAX и попробуйте снова.')
   }
 
   const response = await postJson<{
@@ -1550,7 +1622,7 @@ export async function fetchPartnerOverview(): Promise<{
 export async function saveProfileChannel(channelUrl: string): Promise<string> {
   const initData = getInitData()
   if (!initData) {
-    throw new Error('Откройте mini app из Telegram и попробуйте снова.')
+    throw new Error('Откройте Mini App из Telegram или MAX и попробуйте снова.')
   }
   const response = await postJson<{ ok: true; channel_url: string }>('profile/channel', {
     init_data: initData,

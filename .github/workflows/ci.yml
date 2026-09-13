@@ -180,6 +180,8 @@ jobs:
         run: node e2e/critical-flows.mjs
       - name: Telegram startup on Chromium and iPhone WebKit
         run: node e2e/telegram-startup.mjs
+      - name: MAX startup on Chromium and iPhone WebKit
+        run: node e2e/max-startup.mjs
 
   docker:
     name: Production Docker image

@@ -5,6 +5,7 @@ import { useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Coins, CreditCard, Gift, Loader2, Receipt, Sparkles, Star, X } from 'lucide-react'
 import { useApp } from '@/lib/app-context'
+import { getMiniAppPlatform } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
@@ -21,6 +22,13 @@ function getTelegramPaymentBridge(): TelegramPaymentBridge | null {
   return ((window as Window & {
     Telegram?: { WebApp?: TelegramPaymentBridge }
   }).Telegram?.WebApp || null)
+}
+
+function getMaxPaymentBridge(): { openLink?: (url: string) => void } | null {
+  if (typeof window === 'undefined') return null
+  return ((window as Window & {
+    WebApp?: { openLink?: (url: string) => void }
+  }).WebApp || null)
 }
 
 function pawLabel(amount: number): string {
@@ -40,6 +48,8 @@ function formatPaws(amount: number): string {
 export function BalanceSheet() {
   const { state, isBalanceOpen, closeBalance, refreshTasks } = useApp()
   const { paymentPackages, user, recentTasks, mode } = state
+  const platform = getMiniAppPlatform()
+  const isMax = platform === 'max'
   const [loadingPayment, setLoadingPayment] = useState<string | null>(null)
 
   const totalSpent = recentTasks.reduce((sum, task) => sum + task.cost, 0)
@@ -47,8 +57,17 @@ export function BalanceSheet() {
   const videoTasks = recentTasks.filter((task) => task.type === 'video').length
 
   const openExternalPayment = (url: string) => {
-    const webApp = getTelegramPaymentBridge()
+    const maxWebApp = isMax ? getMaxPaymentBridge() : null
+    if (maxWebApp?.openLink) {
+      try {
+        maxWebApp.openLink(url)
+        return
+      } catch {
+        // Continue to browser fallback.
+      }
+    }
 
+    const webApp = getTelegramPaymentBridge()
     if (webApp?.openLink) {
       try {
         webApp.openLink(url)
@@ -181,7 +200,7 @@ export function BalanceSheet() {
                   </div>
                   <div className="rounded-2xl border border-gold/20 bg-black/25 px-4 py-3 text-right">
                     <p className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground">Статус</p>
-                    <p className="mt-1 text-sm font-bold text-foreground">{mode === 'live' ? 'Онлайн' : 'Telegram'}</p>
+                    <p className="mt-1 text-sm font-bold text-foreground">{mode === 'live' ? (isMax ? 'MAX' : 'Онлайн') : (isMax ? 'MAX' : 'Telegram')}</p>
                   </div>
                 </div>
               </div>
@@ -274,7 +293,7 @@ export function BalanceSheet() {
                             )}
                             ЮKassa
                           </Button>
-                          {hasLava ? (
+                          {!isMax && hasLava ? (
                             <Button
                               onClick={() => handleTopup(pkg.id, 'lava')}
                               disabled={Boolean(loadingPayment)}
@@ -290,20 +309,22 @@ export function BalanceSheet() {
                               {lavaLabel}
                             </Button>
                           ) : null}
-                          <Button
-                            onClick={() => handleTopup(pkg.id, 'telegram_stars')}
-                            disabled={Boolean(loadingPayment)}
-                            variant="secondary"
-                            size="sm"
-                            className="w-full"
-                          >
-                            {starsLoading ? (
-                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                            ) : (
-                              <Star className="h-3.5 w-3.5" />
-                            )}
-                            Stars
-                          </Button>
+                          {!isMax ? (
+                            <Button
+                              onClick={() => handleTopup(pkg.id, 'telegram_stars')}
+                              disabled={Boolean(loadingPayment)}
+                              variant="secondary"
+                              size="sm"
+                              className="w-full"
+                            >
+                              {starsLoading ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <Star className="h-3.5 w-3.5" />
+                              )}
+                              Stars
+                            </Button>
+                          ) : null}
                         </div>
                       </div>
                     )
