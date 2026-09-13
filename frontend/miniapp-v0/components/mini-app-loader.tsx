@@ -50,7 +50,7 @@ export function MiniAppLoader() {
 
           <div className="inline-flex items-center gap-1.5 rounded-full border border-gold/20 bg-gold/[0.07] px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.14em] text-gold">
             <Sparkles className="h-3 w-3" />
-            Telegram Mini App
+            HappyFox Mini App
           </div>
           <p className="mt-3 text-xs text-muted-foreground">
             Подготавливаем вашу студию
@@ -62,7 +62,7 @@ export function MiniAppLoader() {
 
           <div className="mt-5 flex items-center gap-2 text-[11px] text-muted-foreground">
             <LoaderCircle className="h-3.5 w-3.5 animate-spin text-gold" />
-            Получаем данные Telegram
+            Получаем данные входа
           </div>
         </div>
       </section>

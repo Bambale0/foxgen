@@ -5,6 +5,8 @@ const outDir = join(process.cwd(), 'out')
 const localTelegramJs = 'telegram-web-app.js'
 const localTelegramSrc = `/mini-app/${localTelegramJs}`
 const telegramScript = `<script src="${localTelegramSrc}"></script>`
+const maxBridgeSrc = 'https://st.max.ru/js/max-web-app.js'
+const maxBridgeScript = `<script src="${maxBridgeSrc}"></script>`
 const inlineMiniappCss = process.env.MINIAPP_INLINE_CSS === '1'
 const assetVersion =
   process.env.MINIAPP_ASSET_VERSION ||
@@ -16,6 +18,8 @@ const telegramSdkScriptPattern =
   /<script\b(?=[^>]*\bsrc=(["'])https:\/\/telegram\.org\/js\/telegram-web-app\.js(?:\?[^"']*)?\1)[^>]*>\s*<\/script>/gi
 const localTelegramScriptPattern =
   /<script\b(?=[^>]*\bsrc=(["'])\/mini-app\/telegram-web-app\.js\1)[^>]*>\s*<\/script>/gi
+const maxBridgeScriptPattern =
+  /<script\b(?=[^>]*\bsrc=(["'])https:\/\/st\.max\.ru\/js\/max-web-app\.js\1)[^>]*>\s*<\/script>/gi
 const telegramSdkPreloadPattern =
   /<link\b(?=[^>]*\brel=(["'])preload\1)(?=[^>]*\bhref=(["'])https:\/\/telegram\.org\/js\/telegram-web-app\.js(?:\?[^"']*)?\2)[^>]*\/?>/gi
 const scriptTagPattern = /<script\b(?![^>]*\bsrc=)[^>]*>[\s\S]*?<\/script>/gi
@@ -93,6 +97,17 @@ function assertTelegramStartupContract(html, file, earlyScript) {
     throw new Error('Telegram SDK must load synchronously before application scripts')
   }
 
+  const maxIndex = html.indexOf(maxBridgeScript)
+  if (maxIndex < 0) {
+    throw new Error(`MAX Bridge script is missing from ${file}`)
+  }
+  if (firstNextRuntime?.index != null && maxIndex > firstNextRuntime.index) {
+    throw new Error(`MAX Bridge must load before Next.js runtime scripts in ${file}`)
+  }
+  if (/\bdefer\b/i.test(maxBridgeScript) || /\basync\b/i.test(maxBridgeScript)) {
+    throw new Error('MAX Bridge must load synchronously before application scripts')
+  }
+
   if (/TelegramWebviewProxy|window\.webkit|window\.external\.notify/.test(earlyScript)) {
     throw new Error(`Mini App bootstrap must not bypass Telegram.WebApp SDK in ${file}`)
   }
@@ -127,6 +142,7 @@ for (const file of htmlFiles(outDir)) {
       .replace(telegramSdkPreloadPattern, '')
       .replace(telegramSdkScriptPattern, '')
       .replace(localTelegramScriptPattern, '')
+      .replace(maxBridgeScriptPattern, '')
       .replace(telegramEarlyScriptPattern, ''),
   )
 
@@ -134,7 +150,7 @@ for (const file of htmlFiles(outDir)) {
     throw new Error(`Cannot find <head> in ${file}`)
   }
 
-  const telegramHeadScripts = `${telegramScript}${earlyScript}`
+  const telegramHeadScripts = `${telegramScript}${maxBridgeScript}${earlyScript}`
   const charsetMatch = stripped.match(charsetPattern)
   const nextHtmlWithTelegram = charsetMatch
     ? stripped.replace(charsetMatch[0], `${charsetMatch[0]}${telegramHeadScripts}`)
@@ -150,5 +166,5 @@ for (const file of htmlFiles(outDir)) {
 }
 
 console.log(
-  `Patched Telegram head scripts in ${patched} HTML files. inline css: ${inlineMiniappCss ? 'on' : 'off'}. asset version: ${assetVersion}.`,
+  `Patched Mini App bridge head scripts in ${patched} HTML files. inline css: ${inlineMiniappCss ? 'on' : 'off'}. asset version: ${assetVersion}.`,
 )
