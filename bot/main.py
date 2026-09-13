@@ -2455,6 +2455,12 @@ async def on_shutdown(bot: Bot):
         await redis_service.close()
     except Exception:
         logger.exception("Failed to close Redis client")
+
+    try:
+        await db_backend.close()
+    except Exception:
+        logger.exception("Failed to close database backend")
+
     await bot.delete_webhook()
     await bot.session.close()
 
