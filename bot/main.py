@@ -24,6 +24,8 @@ from aiogram import BaseMiddleware, Bot, Dispatcher, types
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from aiogram.exceptions import TelegramBadRequest
+from aiogram.methods.base import TelegramMethod
+from aiogram.utils.serialization import deserialize_telegram_object_to_python
 from aiogram.fsm.storage.base import BaseStorage, StateType, StorageKey
 from aiogram.fsm.storage.memory import MemoryStorage, SimpleEventIsolation
 from aiogram.types import (
@@ -59,6 +61,7 @@ from bot.handlers import (
     payments_router,
 )
 from bot.handlers.common import ensure_feed_cache_warmup
+from bot.handlers.fast_start import router as fast_start_router
 from bot.handlers.payments import (
     cleanup_stale_cryptobot_pending,
     handle_cryptobot_webhook,
@@ -2514,6 +2517,7 @@ def setup_dispatcher() -> Dispatcher:
     # 4. batch_generation_router (пакетная генерация)
     # 5. common_router (общие команды /start /help - самые общие)
 
+    dp.include_router(fast_start_router)  # Plain /start fast webhook reply
     dp.include_router(generation_router)  # FSM состояния - ПЕРВЫЙ!
     dp.include_router(image_analyzer_router)  # Анализ фото в промпт
     dp.include_router(admin_router)  # Админ-команды
@@ -2548,10 +2552,24 @@ async def handle_telegram_webhook(
         # Создаём объект Update
         update = Update(**update_data)
 
+        message_text = str(getattr(getattr(update, "message", None), "text", "") or "").strip()
+        message_parts = message_text.split()
+        direct_reply_candidate = bool(
+            len(message_parts) == 1
+            and (
+                message_parts[0].lower() == "/start"
+                or message_parts[0].lower().startswith("/start@")
+            )
+        )
+
         async def _process_update():
             try:
                 async with _TELEGRAM_WEBHOOK_SEMAPHORE:
-                    await dp.feed_update(bot, update)
+                    return await dp.feed_update(
+                        bot,
+                        update,
+                        webhook_reply_enabled=direct_reply_candidate,
+                    )
             except TelegramBadRequest as e:
                 error_msg = str(e).lower()
                 if (
@@ -2573,6 +2591,28 @@ async def handle_telegram_webhook(
         task = asyncio.create_task(_process_update())
         _TELEGRAM_WEBHOOK_TASKS.add(task)
         task.add_done_callback(_TELEGRAM_WEBHOOK_TASKS.discard)
+
+        if direct_reply_candidate:
+            try:
+                result = await asyncio.wait_for(
+                    asyncio.shield(task),
+                    timeout=0.1,
+                )
+            except TimeoutError:
+                result = None
+
+            if isinstance(result, TelegramMethod):
+                payload = deserialize_telegram_object_to_python(
+                    result,
+                    default=bot.default,
+                    include_api_method_name=True,
+                )
+                logger.info(
+                    "Telegram webhook direct reply used: method=%s update_id=%s",
+                    result.__api_method__,
+                    update.update_id,
+                )
+                return web.json_response(payload)
 
         return web.Response(text="OK", status=200)
     except TelegramBadRequest as e:
