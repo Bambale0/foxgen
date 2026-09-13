@@ -6,7 +6,6 @@ from typing import Any
 
 import aiosqlite
 
-
 DATABASE_PATH = os.getenv("DATABASE_PATH", "bot.db")
 DATABASE_URL = os.getenv("DATABASE_URL", "")
 SQLITE_BUSY_TIMEOUT_MS = int(os.getenv("SQLITE_BUSY_TIMEOUT_MS", "30000"))
@@ -73,3 +72,10 @@ def connect(database_path: str | None = None, *args, **kwargs):
     return _ConfiguredSqliteConnection(
         aiosqlite.connect(database_path, *args, **kwargs)
     )
+
+async def close() -> None:
+    if not is_postgres():
+        return
+    from bot.postgres_aiosqlite import close_postgres_pool
+
+    await close_postgres_pool()
