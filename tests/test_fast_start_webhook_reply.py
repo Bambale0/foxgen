@@ -6,7 +6,6 @@ from aiogram.client.default import DefaultBotProperties
 from aiogram.methods import SendMessage
 
 from bot.config import config
-from bot.main import handle_telegram_webhook
 
 
 class _Request:
@@ -43,6 +42,8 @@ def _plain_start_update() -> dict:
 
 
 def test_plain_start_can_reply_directly_in_webhook(monkeypatch) -> None:
+    from bot.main import handle_telegram_webhook
+
     monkeypatch.setattr(config, "WEBHOOK_SECRET_TOKEN", "")
     monkeypatch.setattr(config, "INTERNAL_API_SECRET", "")
 
@@ -63,6 +64,8 @@ def test_plain_start_can_reply_directly_in_webhook(monkeypatch) -> None:
 
 
 def test_deep_link_start_stays_background(monkeypatch) -> None:
+    from bot.main import handle_telegram_webhook
+
     monkeypatch.setattr(config, "WEBHOOK_SECRET_TOKEN", "")
     monkeypatch.setattr(config, "INTERNAL_API_SECRET", "")
 
