@@ -1,5 +1,5 @@
 import type { CreatePaymentResponse, PaymentProvider } from './types'
-import { getApiBasePath, getInitData, getStartParamFallback } from './api'
+import { getApiBasePath, getInitData, getMiniAppPlatform, getStartParamFallback } from './api'
 
 export async function createPayment(payload: {
   packageId: string
@@ -9,7 +9,7 @@ export async function createPayment(payload: {
 }): Promise<CreatePaymentResponse> {
   const initData = getInitData()
   if (!initData) {
-    throw new Error('Откройте mini app из Telegram и попробуйте снова.')
+    throw new Error('Откройте Mini App из Telegram или MAX и попробуйте снова.')
   }
 
   const response = await fetch(`${getApiBasePath()}/create-payment`, {
@@ -20,6 +20,7 @@ export async function createPayment(payload: {
     },
     body: JSON.stringify({
       init_data: initData,
+      platform: getMiniAppPlatform(),
       start_param_fallback: getStartParamFallback(),
       package_id: payload.packageId,
       provider: payload.provider,
