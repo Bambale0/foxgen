@@ -73,6 +73,7 @@ from bot.keyboards import (
     get_main_menu_button_keyboard,
     get_required_subscription_keyboard,
 )
+from bot.services.bot_identity_cache import install_bot_identity_cache
 from bot.services.preset_manager import preset_manager
 from bot.services.redis_service import redis_service
 from bot.services.subscription_service import (
@@ -2327,6 +2328,16 @@ async def _cleanup_loop():
 async def on_startup(bot: Bot, dispatcher: Dispatcher | None = None):
     """Действия при старте бота"""
     logger.info("Bot starting...")
+
+    # Bot identity is immutable for the lifetime of this process. Cache and
+    # warm it before accepting user traffic so request handlers never pay a
+    # Telegram getMe round-trip (measured at 300-1300 ms in production).
+    install_bot_identity_cache(bot)
+    try:
+        me = await bot.get_me()
+        logger.info("Telegram bot identity warmed: @%s", me.username or "")
+    except Exception:
+        logger.exception("Telegram bot identity warmup failed during startup")
 
     # База данных уже инициализирована в main() функции
     logger.info("Database already initialized")
