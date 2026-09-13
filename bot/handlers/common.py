@@ -2098,18 +2098,32 @@ async def _bot_username(bot: Bot) -> str:
         return ""
 
 
-async def _sync_telegram_profile(user: types.User | None) -> None:
+async def _sync_telegram_profile(
+    user: types.User | None,
+    stored_user=None,
+) -> None:
     if not user:
         return
+
+    profile_values = {
+        "username": getattr(user, "username", None),
+        "first_name": getattr(user, "first_name", None),
+        "last_name": getattr(user, "last_name", None),
+    }
+    if stored_user is not None and all(
+        str(getattr(stored_user, field, None) or "") == str(value or "")
+        for field, value in profile_values.items()
+    ):
+        return
+
     try:
-        await update_user_profile(
-            user.id,
-            username=getattr(user, "username", None),
-            first_name=getattr(user, "first_name", None),
-            last_name=getattr(user, "last_name", None),
-        )
+        await update_user_profile(user.id, **profile_values)
     except Exception:
-        logger.debug("Unable to sync Telegram profile for %s", getattr(user, "id", None), exc_info=True)
+        logger.debug(
+            "Unable to sync Telegram profile for %s",
+            getattr(user, "id", None),
+            exc_info=True,
+        )
 
 
 async def _notify_partner_if_new_referral(
@@ -3794,7 +3808,7 @@ async def cmd_start(message: types.Message, state: FSMContext):
 
     # Создаём или получаем пользователя (referred_by=NULL для новых)
     user = await get_or_create_user(message.from_user.id)
-    await _sync_telegram_profile(message.from_user)
+    await _sync_telegram_profile(message.from_user, stored_user=user)
 
     # Пытаемся привязать реферала через единый сервис (если есть код и пользователь новый/без привязки)
     if user and not user.referred_by and referral_code_from_args:

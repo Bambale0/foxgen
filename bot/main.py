@@ -73,6 +73,7 @@ from bot.keyboards import (
     get_main_menu_button_keyboard,
     get_required_subscription_keyboard,
 )
+from bot.services.bot_identity_cache import get_bot_me_cached
 from bot.services.preset_manager import preset_manager
 from bot.services.redis_service import redis_service
 from bot.services.subscription_service import (
@@ -2370,6 +2371,12 @@ async def on_startup(bot: Bot, dispatcher: Dispatcher | None = None):
         await redis_service.get_client()
     except Exception:
         logger.exception("Redis warmup failed during startup")
+
+    try:
+        me = await get_bot_me_cached(bot)
+        logger.info("Telegram bot identity warmed: @%s", me.username or "")
+    except Exception:
+        logger.exception("Telegram bot identity warmup failed during startup")
 
     # Устанавливаем вебхук для Telegram (если используем webhook mode).
     # TELEGRAM_WEBHOOK_URL can point at a dedicated ingress relay while all
