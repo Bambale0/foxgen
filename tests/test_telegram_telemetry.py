@@ -70,6 +70,7 @@ def test_update_summary_correlates_bot_api_and_handler(caplog) -> None:
         )
 
     async def update_handler(event, data):
+        telemetry.record_telegram_stage("access_guard", 12.5)
         handler_middleware = telemetry.TelegramResolvedHandlerTelemetryMiddleware()
 
         async def concrete_handler(_event, _data):
@@ -91,6 +92,9 @@ def test_update_summary_correlates_bot_api_and_handler(caplog) -> None:
     assert "route=/start" in text
     assert "test_update_summary_correlates_bot_api_and_handler" in text
     assert "telegram_update update_id=321" in text
+    assert "handler_ms=" in text
+    assert "non_handler_ms=" in text
+    assert "stages=access_guard:12.5" in text
     assert "bot_api_calls=1" in text
     assert "bot_api_slowest_method=sendMessage" in text
 

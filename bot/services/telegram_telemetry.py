@@ -47,11 +47,16 @@ class TelegramTelemetryContext:
     user_id: int | None = None
     chat_id: int | None = None
     handler_name: str = "-"
+    handler_duration_ms: float = 0.0
+    stage_timings: dict[str, float] = field(default_factory=dict)
     bot_api_calls: int = 0
     bot_api_total_ms: float = 0.0
     bot_api_slowest_ms: float = 0.0
     bot_api_slowest_method: str = "-"
     bot_api_methods: list[str] = field(default_factory=list)
+
+    def record_stage(self, name: str, duration_ms: float) -> None:
+        self.stage_timings[name] = self.stage_timings.get(name, 0.0) + duration_ms
 
     def record_bot_api(self, method: str, duration_ms: float) -> None:
         self.bot_api_calls += 1
@@ -72,6 +77,13 @@ _CURRENT_TELEGRAM_CONTEXT: ContextVar[TelegramTelemetryContext | None] = Context
 def current_telegram_context() -> TelegramTelemetryContext | None:
     """Return the current update telemetry context, if called inside one."""
     return _CURRENT_TELEGRAM_CONTEXT.get()
+
+
+def record_telegram_stage(name: str, duration_ms: float) -> None:
+    """Record one named stage in the current update context."""
+    context = _CURRENT_TELEGRAM_CONTEXT.get()
+    if context is not None:
+        context.record_stage(name, duration_ms)
 
 
 def _clean_route(value: Any) -> str:
@@ -190,9 +202,15 @@ class TelegramUpdateTelemetryMiddleware(BaseMiddleware):
                 )
 
             log_method = logger.warning if duration_ms >= SLOW_UPDATE_MS else logger.info
+            non_handler_ms = max(0.0, duration_ms - context.handler_duration_ms)
+            stages = ",".join(
+                f"{name}:{value:.1f}"
+                for name, value in sorted(context.stage_timings.items())
+            ) or "-"
             log_method(
                 "telegram_update update_id=%s event_type=%s route=%s handler=%s "
-                "user_id=%s chat_id=%s duration_ms=%.1f outcome=%s error_type=%s "
+                "user_id=%s chat_id=%s duration_ms=%.1f handler_ms=%.1f "
+                "non_handler_ms=%.1f stages=%s outcome=%s error_type=%s "
                 "bot_api_calls=%s bot_api_total_ms=%.1f bot_api_slowest_method=%s "
                 "bot_api_slowest_ms=%.1f bot_api_methods=%s release=%s",
                 context.update_id,
@@ -202,6 +220,9 @@ class TelegramUpdateTelemetryMiddleware(BaseMiddleware):
                 context.user_id if context.user_id is not None else "-",
                 context.chat_id if context.chat_id is not None else "-",
                 duration_ms,
+                context.handler_duration_ms,
+                non_handler_ms,
+                stages,
                 outcome,
                 error_type,
                 context.bot_api_calls,
@@ -226,7 +247,12 @@ class TelegramResolvedHandlerTelemetryMiddleware(BaseMiddleware):
         context = _CURRENT_TELEGRAM_CONTEXT.get()
         if context is not None:
             context.handler_name = _handler_name(data)
-        return await handler(event, data)
+        started = time.perf_counter()
+        try:
+            return await handler(event, data)
+        finally:
+            if context is not None:
+                context.handler_duration_ms += (time.perf_counter() - started) * 1000
 
 
 async def telegram_bot_api_telemetry_middleware(
