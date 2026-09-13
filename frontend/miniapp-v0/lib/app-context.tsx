@@ -315,7 +315,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setState(prev => ({ ...prev, isLoading: true, error: null }))
     const hasInitData = hasTelegramInitData() || await waitForTelegramInitData(5000)
     if (!hasInitData) {
-      applyLockedState('Telegram не передал данные входа. Закройте окно и откройте Mini App заново из Telegram.')
+      applyLockedState('Не получены данные входа. Закройте окно и откройте Mini App заново из Telegram или MAX.')
       return
     }
     try {
