@@ -77,6 +77,12 @@ from bot.keyboards import (
     get_required_subscription_keyboard,
 )
 from bot.services.bot_identity_cache import install_bot_identity_cache
+from bot.services.telegram_telemetry import (
+    TelegramResolvedHandlerTelemetryMiddleware,
+    TelegramUpdateTelemetryMiddleware,
+    install_telegram_bot_api_telemetry,
+    log_telegram_webhook_ack,
+)
 from bot.services.preset_manager import preset_manager
 from bot.services.redis_service import redis_service
 from bot.services.subscription_service import (
@@ -2499,6 +2505,15 @@ def setup_dispatcher() -> Dispatcher:
     """Настройка диспетчера с роутерами"""
     dp = Dispatcher(storage=_build_dispatcher_storage())
 
+    # End-to-end Telegram telemetry. The update middleware establishes
+    # correlation context; resolved-handler middleware enriches it after aiogram
+    # routing chooses the concrete handler.
+    dp.update.outer_middleware(TelegramUpdateTelemetryMiddleware())
+    resolved_handler_telemetry = TelegramResolvedHandlerTelemetryMiddleware()
+    for observer_name, observer in dp.observers.items():
+        if observer_name not in {"update", "error"}:
+            observer.middleware(resolved_handler_telemetry)
+
     # Регистрируем глобальный обработчик ошибок
     dp.errors.register(errors_handler)
     access_guard = AccessGuardMiddleware()
@@ -2531,6 +2546,7 @@ async def handle_telegram_webhook(
     request: web.Request, bot: Bot, dp: Dispatcher
 ) -> web.Response:
     """Обработчик вебхука от Telegram"""
+    webhook_started = time.perf_counter()
     expected_secret = config.telegram_webhook_secret
     if expected_secret:
         actual_secret = request.headers.get("X-Telegram-Bot-Api-Secret-Token", "")
@@ -2612,8 +2628,19 @@ async def handle_telegram_webhook(
                     result.__api_method__,
                     update.update_id,
                 )
+                log_telegram_webhook_ack(
+                    update_id=update.update_id,
+                    mode="direct",
+                    started_at=webhook_started,
+                )
                 return web.json_response(payload)
 
+        ack_mode = "background_direct_timeout" if direct_reply_candidate else "background"
+        log_telegram_webhook_ack(
+            update_id=update.update_id,
+            mode=ack_mode,
+            started_at=webhook_started,
+        )
         return web.Response(text="OK", status=200)
     except TelegramBadRequest as e:
         # Ошибки Telegram API (chat not found, user blocked bot, etc.)
@@ -4701,6 +4728,7 @@ async def main():
     bot = Bot(
         token=config.BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML)
     )
+    install_telegram_bot_api_telemetry(bot)
 
     try:
         asyncio.create_task(_nexus_image_poller_loop(bot))
