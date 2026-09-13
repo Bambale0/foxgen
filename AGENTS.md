@@ -184,6 +184,49 @@ When a connected repository is available through GitHub tools, prefer repository
 
 ---
 
+## Observability-first engineering — mandatory
+
+Treat logs, telemetry, metrics, and traceability as part of the feature or fix itself, not as cleanup work after something breaks.
+
+For every non-trivial backend flow, asynchronous job, webhook, bot handler, provider integration, payment path, generation pipeline, queue/job, or performance-sensitive code path:
+
+- Inspect existing logs and telemetry before changing behavior. Establish a baseline from production or the closest safe environment instead of guessing.
+- If current telemetry cannot explain where time or failures occur, add instrumentation first or in the same change before attempting speculative optimization.
+- Make one user action reconstructable end-to-end from logs without reading source code.
+- Use stable correlation identifiers across the whole flow. Reuse identifiers that already exist, such as `request_id`, `update_id`, `task_id`, `job_id`, `order_id`, or provider task IDs. Do not invent unrelated IDs when an existing one can be propagated.
+- Log the event type, stage, result, and duration of important steps. Prefer structured key/value or JSON-compatible logs over prose-only messages.
+- Measure external calls separately from application work. Record at least the provider/method, operation, duration, outcome/status, retry count when relevant, and timeout/error category.
+- For Telegram/MAX/bot updates, make it possible to see the update type, command or callback route, handler/flow name, relevant update ID, total handler duration, and Bot API method durations where material.
+- For generation/provider jobs, make it possible to see model/provider, internal task ID, external provider task ID when available, enqueue/start/complete timestamps or durations, delivery status, and retry/fallback path.
+- For HTTP/webhooks, make it possible to see route, status, correlation ID, processing duration, and whether work was acknowledged immediately or completed inline/background.
+- For performance work, record before/after measurements and use representative percentiles when enough samples exist (at least p50/p95; add p99 for high-volume or latency-sensitive paths).
+- On errors, log the failure stage, exception/error category, correlation ID, and enough safe context to diagnose the issue. Never log secrets, tokens, full authorization headers, private keys, payment credentials, or unnecessary personal data.
+- Avoid duplicate noisy logs. Prefer a small number of stable, searchable event names that make dashboards/grep queries obvious.
+- After deploy, verify that the new telemetry actually appears in production and that correlation IDs/durations are useful. Do not claim observability is complete based only on unit tests.
+- When reviewing a bug report such as “slow”, “stuck”, “not delivered”, or “nothing happened”, start from logs/telemetry and identify the slow/failing stage before changing architecture.
+
+### Minimum telemetry contract
+
+A production-critical flow should normally expose enough information to answer these questions quickly:
+
+1. What user/system event started the flow?
+2. Which handler/service/provider processed it?
+3. Which correlation/task/update/order ID ties the steps together?
+4. How long did each important stage take?
+5. Which external calls were made and how long did they take?
+6. Did the operation succeed, fail, retry, fall back, or time out?
+7. Was the final result delivered to the user/client?
+8. Which exact deploy/revision handled the event when that matters for diagnosis?
+
+If the current system cannot answer these questions, improving observability is part of the engineering task and should be addressed before or alongside deeper refactoring.
+
+### Definition-of-done addition
+
+For non-trivial runtime changes, the change is not done until relevant logging/telemetry exists and has been verified in the deployed environment or the closest safe runtime environment available.
+
+
+---
+
 ## HappyFox brand and marketing identity
 
 `HappyFox` is the only public-facing product and brand name.
