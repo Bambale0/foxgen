@@ -19,7 +19,6 @@ from aiohttp import web
 
 from bot import db as db_backend
 from bot.config import config
-from bot.services.bot_identity_cache import get_bot_me_cached
 
 FILE_KIND_MAP: dict[str, dict[str, Any]] = {}
 
@@ -1044,21 +1043,16 @@ async def _get_user_context(app: web.Application, init_data: str, start_param_fa
 
     user = await get_or_create_user(telegram_id, referral_code=referral_code)
 
-    profile_values = {
-        "username": telegram_user.get("username"),
-        "first_name": telegram_user.get("first_name"),
-        "last_name": telegram_user.get("last_name"),
-        "photo_url": telegram_user.get("photo_url"),
-    }
-    profile_changed = any(
-        str(getattr(user, field, None) or "") != str(value or "")
-        for field, value in profile_values.items()
-    )
-    if profile_changed:
-        try:
-            await update_user_profile(telegram_id, **profile_values)
-        except Exception:
-            logger.exception("Unable to sync Mini App profile for %s", telegram_id)
+    try:
+        await update_user_profile(
+            telegram_id,
+            username=telegram_user.get("username"),
+            first_name=telegram_user.get("first_name"),
+            last_name=telegram_user.get("last_name"),
+            photo_url=telegram_user.get("photo_url"),
+        )
+    except Exception:
+        logger.exception("Unable to sync Mini App profile for %s", telegram_id)
 
     if not payload.get("start_param") and not start_param_fallback:
         logger.info(
@@ -2311,7 +2305,7 @@ async def _send_batch_edit(app: web.Application, telegram_id: int):
 async def _send_partner(app: web.Application, telegram_id: int):
     stats = await get_partner_overview(telegram_id)
     user = await get_or_create_user(telegram_id)
-    me = await get_bot_me_cached(app["bot"])
+    me = await app["bot"].get_me()
     referral_link = (
         build_referral_link(me.username, user.referral_code)
         if user.referral_code
@@ -2398,7 +2392,7 @@ async def miniapp_index(request: web.Request) -> web.Response:
     )
     response: web.StreamResponse
     try:
-        me = await get_bot_me_cached(request.app["bot"])
+        me = await request.app["bot"].get_me()
         runtime_config = {
             "botUsername": str(me.username or ""),
             "miniAppUrl": config.mini_app_url,
@@ -2595,19 +2589,7 @@ async def miniapp_bootstrap(request: web.Request) -> web.Response:
         telegram_id, ctx = await _get_user_context(request.app, init_data, body.get("start_param_fallback"))
         user = ctx["user"]
         telegram_user = ctx["payload"]["user"]
-        (
-            me,
-            recent_tasks,
-            partner_stats,
-            saved_references,
-            notifications,
-        ) = await asyncio.gather(
-            get_bot_me_cached(request.app["bot"]),
-            _fetch_recent_tasks(telegram_id),
-            get_partner_overview(telegram_id),
-            list_saved_references(telegram_id, limit=24),
-            get_and_clear_miniapp_notifications(telegram_id),
-        )
+        me = await request.app["bot"].get_me()
         profile_link = (
             build_profile_link(me.username, user.referral_code)
             if me.username and user.referral_code
@@ -2618,6 +2600,8 @@ async def miniapp_bootstrap(request: web.Request) -> web.Response:
             if me.username and user.referral_code
             else config.mini_app_url
         )
+        recent_tasks = await _fetch_recent_tasks(telegram_id)
+        partner_stats = await get_partner_overview(telegram_id)
         data = {
             "ok": True,
             "telegram_id": telegram_id,
@@ -2685,9 +2669,10 @@ async def miniapp_bootstrap(request: web.Request) -> web.Response:
             ],
             "recent_tasks": recent_tasks,
             "saved_references": [
-                _saved_reference_payload(item) for item in saved_references
+                _saved_reference_payload(item)
+                for item in await list_saved_references(telegram_id, limit=24)
             ],
-            "notifications": notifications,
+            "notifications": await get_and_clear_miniapp_notifications(telegram_id),
         }
         return web.json_response(data)
     except Exception as e:
@@ -3235,7 +3220,7 @@ async def miniapp_prompt_link(request: web.Request) -> web.Response:
             return web.json_response({"ok": False, "error": "Промпт не найден"}, status=404)
         if not (prompt["status"] == "approved" and prompt["is_public"]) and prompt["author_id"] != user.id:
             return web.json_response({"ok": False, "error": "Промпт недоступен"}, status=403)
-        me = await get_bot_me_cached(request.app["bot"])
+        me = await request.app["bot"].get_me()
         link = build_prompt_link(me.username, prompt_id) if me.username else config.mini_app_url
         return web.json_response({"ok": True, "prompt": prompt, "link": link})
     except Exception as e:
@@ -3488,7 +3473,7 @@ async def miniapp_profile_feed(request: web.Request) -> web.Response:
             if is_admin or is_mine:
                 item["can_blur"] = True
 
-        me = await get_bot_me_cached(request.app["bot"])
+        me = await request.app["bot"].get_me()
         profile = _miniapp_profile_payload(
             author,
             me.username or "",
@@ -3568,7 +3553,7 @@ async def miniapp_generation_share(request: web.Request) -> web.Response:
             _invalidate_feed_and_profile_caches()
         except Exception:
             logger.exception("Failed to invalidate feed caches after Mini App publish")
-        me = await get_bot_me_cached(request.app["bot"])
+        me = await request.app["bot"].get_me()
         author_referral_code = str(card.get("author_referral_code") or "").strip().upper()
         publication_link = (
             build_feed_link(me.username, card["id"], author_referral_code)
@@ -3672,7 +3657,7 @@ async def miniapp_feed_share(request: web.Request) -> web.Response:
         card = await increment_feed_share(gen_id, allow_profile=allow_profile)
         if not card:
             return web.json_response({"ok": False, "error": "Публикация не найдена"}, status=404)
-        me = await get_bot_me_cached(request.app["bot"])
+        me = await request.app["bot"].get_me()
         author_referral_code = str(card.get("author_referral_code") or "").strip().upper()
         is_image_feed_item = str(card.get("gen_type") or "").strip().lower() == "image"
         post_link = (
@@ -4824,7 +4809,7 @@ async def miniapp_partner_overview(request: web.Request) -> web.Response:
         telegram_id, _ctx = await _get_user_context(request.app, init_data, body.get("start_param_fallback"))
         stats = await get_partner_overview(telegram_id)
         user = await get_or_create_user(telegram_id)
-        me = await get_bot_me_cached(request.app["bot"])
+        me = await request.app["bot"].get_me()
 
         referral_link = (
             build_referral_link(me.username, user.referral_code)
