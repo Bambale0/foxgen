@@ -24,6 +24,10 @@ server {
 }
 server {
     server_name happy-fox.online;
+    root /var/www/happyfox-landing;
+    index index.html;
+    location = / { try_files /mini-app/landing/index.html =404; }
+    location /mini-app/ { try_files $uri $uri/ =404; }
     listen 443 ssl ipv6only=on;
 }
 """
@@ -35,21 +39,23 @@ def test_tune_happyfox_site_enables_h2_keepalive_and_static_cache() -> None:
     assert "upstream happyfox_backend {" in tuned
     assert "server 127.0.0.1:1888;" in tuned
     assert "keepalive 64;" in tuned
-    assert tuned.count("proxy_pass http://happyfox_backend;") == 2
-    assert tuned.count('proxy_set_header Connection "";') == 2
-    assert tuned.count("proxy_socket_keepalive on;") == 2
-    assert tuned.count("proxy_buffering off;") == 2
-    assert tuned.count("proxy_request_buffering off;") == 2
+    assert tuned.count("proxy_pass http://happyfox_backend;") == 3
+    assert tuned.count('proxy_set_header Connection "";') == 3
+    assert tuned.count("proxy_socket_keepalive on;") == 3
+    assert tuned.count("proxy_buffering off;") == 3
+    assert tuned.count("proxy_request_buffering off;") == 3
     assert "listen 443 ssl http2;" in tuned
     assert "listen [::]:443 ssl http2;" in tuned
     assert "listen 443 ssl http2 ipv6only=on;" in tuned
     assert "ssl_protocols" not in tuned
     assert "location ^~ /mini-app/_next/static/" in tuned
     assert 'Cache-Control "public, max-age=31536000, immutable"' in tuned
-    assert "location = /mini-app/ {" in tuned
-    assert "error_page 418 =200 /mini-app/index.html;" in tuned
-    assert "if ($request_method = OPTIONS) { return 204; }" in tuned
-    assert "if ($request_method = POST) { return 418; }" in tuned
+    assert tuned.count("location /mini-app/api/ {") == 2
+    assert tuned.count("location /mini-app/ { try_files $uri $uri/ /mini-app/index.html; }") == 2
+    assert tuned.count("location = /mini-app/ {") == 2
+    assert tuned.count("error_page 418 =200 /mini-app/index.html;") == 2
+    assert tuned.count("if ($request_method = OPTIONS) { return 204; }") == 2
+    assert tuned.count("if ($request_method = POST) { return 418; }") == 2
 
 
 def test_tune_happyfox_site_is_idempotent() -> None:
