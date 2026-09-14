@@ -448,6 +448,9 @@ $(proxy_common_block)
     }
 
     location = /mini-app/ {
+        error_page 418 =200 /mini-app/index.html;
+        if (\$request_method = OPTIONS) { return 204; }
+        if (\$request_method = POST) { return 418; }
         try_files /mini-app/index.html =404;
         add_header Cache-Control "no-cache, no-store, must-revalidate" always;
         add_header Pragma "no-cache" always;
@@ -508,6 +511,9 @@ $(proxy_common_block)
     }
 
     location = /mini-app/ {
+        error_page 418 =200 /mini-app/index.html;
+        if (\$request_method = OPTIONS) { return 204; }
+        if (\$request_method = POST) { return 418; }
         try_files /mini-app/index.html =404;
         add_header Cache-Control "no-cache, no-store, must-revalidate" always;
         add_header Pragma "no-cache" always;

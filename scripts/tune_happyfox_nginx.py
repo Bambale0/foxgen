@@ -21,6 +21,18 @@ STATIC_BLOCK = """    location ^~ /mini-app/_next/static/ {
 
 """
 
+MINIAPP_ROOT_BLOCK = """    location = /mini-app/ {
+        error_page 418 =200 /mini-app/index.html;
+        if ($request_method = OPTIONS) { return 204; }
+        if ($request_method = POST) { return 418; }
+        try_files /mini-app/index.html =404;
+        add_header Cache-Control "no-cache, no-store, must-revalidate" always;
+        add_header Pragma "no-cache" always;
+        add_header Expires "0" always;
+    }
+
+"""
+
 
 def tune_certbot_options(text: str) -> str:
     pattern = re.compile(r"(?m)^ssl_protocols\s+[^;]+;\s*$")
@@ -87,6 +99,16 @@ def _add_static_cache(text: str) -> str:
     return text.replace(marker, STATIC_BLOCK + marker, 1)
 
 
+def _allow_max_root_launch_methods(text: str) -> str:
+    if "location = /mini-app/ {" in text and "error_page 418 =200 /mini-app/index.html;" in text:
+        return text
+
+    marker = "    location /mini-app/ { try_files $uri $uri/ /mini-app/index.html; }"
+    if marker not in text:
+        raise ValueError("HappyFox app static fallback location was not found")
+    return text.replace(marker, MINIAPP_ROOT_BLOCK + marker, 1)
+
+
 def tune_site(text: str) -> str:
     if "server_name api.happy-fox.online;" not in text:
         raise ValueError("HappyFox API server block was not found")
@@ -100,6 +122,7 @@ def tune_site(text: str) -> str:
     text = _remove_site_ssl_protocols(text)
     text = _tune_proxy_locations(text)
     text = _add_static_cache(text)
+    text = _allow_max_root_launch_methods(text)
     return text
 
 
