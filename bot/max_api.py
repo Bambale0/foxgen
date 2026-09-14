@@ -407,6 +407,12 @@ def setup_max_routes(
 ) -> None:
     settings.validate_enabled()
 
+    async def launch_mini_app(_request: web.Request) -> web.Response:
+        target = str(settings.mini_app_url or "").strip()
+        if not target.startswith("https://"):
+            return web.json_response({"error": "mini_app_unavailable"}, status=404)
+        raise web.HTTPFound(location=target)
+
     async def webhook(request: web.Request) -> web.Response:
         if not verify_max_webhook_secret(request, settings.webhook_secret):
             return web.json_response({"error": "unauthorized"}, status=401)
@@ -429,4 +435,5 @@ def setup_max_routes(
         await mark_max_event_processed(event_key)
         return web.json_response({"ok": True})
 
+    app.router.add_get(settings.webhook_path, launch_mini_app)
     app.router.add_post(settings.webhook_path, webhook)
