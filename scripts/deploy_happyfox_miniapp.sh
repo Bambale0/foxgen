@@ -250,6 +250,35 @@ if [[ -s "$bundle_dir/landing/index.html" && -s "$bundle_dir/happyfox-brand.webp
   echo "[happyfox-miniapp] LANDING_OK ${BASE_URL}/landing/ revision=${EXPECTED_SHA}"
 fi
 
+# MAX may probe or launch the Mini App root with OPTIONS/POST before rendering.
+# The static nginx handler must not leak a visible 405 page for those methods.
+root_options_status="$(
+  curl -sS -o /dev/null -w '%{http_code}' \
+    --max-time 20 \
+    -A "$MOBILE_SAFARI_UA" \
+    -H 'Origin: https://max.ru' \
+    -X OPTIONS "${BASE_URL}/" || true
+)"
+[[ "$root_options_status" == "204" ]] || {
+  echo "HappyFox Mini App root OPTIONS failed: expected 204, got ${root_options_status:-transport-error}" >&2
+  exit 1
+}
+
+root_post_status="$(
+  curl --ignore-content-length -sS -o "$work/root-post.html" -w '%{http_code}' \
+    --max-time 20 \
+    -A "$MOBILE_SAFARI_UA" \
+    -X POST "${BASE_URL}/" || true
+)"
+[[ "$root_post_status" == "200" ]] || {
+  echo "HappyFox Mini App root POST failed: expected 200, got ${root_post_status:-transport-error}" >&2
+  exit 1
+}
+grep -Fq 'HappyFox' "$work/root-post.html" || {
+  echo "HappyFox Mini App root POST did not resolve to the application HTML" >&2
+  exit 1
+}
+
 # A malformed bootstrap request must reach aiohttp and fail closed. 405 means
 # nginx/static routing swallowed the POST, which makes the Mini App appear dead
 # (and is especially visible in Telegram's iOS WebView).
