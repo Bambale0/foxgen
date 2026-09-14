@@ -142,21 +142,25 @@ def _add_max_webhook_launch_compat(text: str) -> str:
     if api_marker not in text:
         raise ValueError("HappyFox API server block was not found")
 
-    api_section = text.split(api_marker, 1)[1].split("\nserver {", 1)[0]
+    prefix, rest = text.split(api_marker, 1)
+    if "\nserver {" not in rest:
+        raise ValueError("HappyFox API server block terminator was not found")
+    api_section, suffix = rest.split("\nserver {", 1)
     if (
         "location = /max/webhook {" in api_section
         and "return 302 https://app.happy-fox.online/mini-app/" in api_section
     ):
         return text
 
-    marker = "    client_max_body_size 200m;\n    location / {"
-    if marker not in text:
+    marker = "    location / {"
+    if marker not in api_section:
         raise ValueError("HappyFox API proxy fallback was not found")
-    return text.replace(
+    api_section = api_section.replace(
         marker,
-        "    client_max_body_size 200m;\n" + MAX_WEBHOOK_LAUNCH_COMPAT_BLOCK + "    location / {",
+        MAX_WEBHOOK_LAUNCH_COMPAT_BLOCK + marker,
         1,
     )
+    return prefix + api_marker + api_section + "\nserver {" + suffix
 
 
 def _add_static_cache(text: str) -> str:
