@@ -46,6 +46,10 @@ def test_tune_happyfox_site_enables_h2_keepalive_and_static_cache() -> None:
     assert "ssl_protocols" not in tuned
     assert "location ^~ /mini-app/_next/static/" in tuned
     assert 'Cache-Control "public, max-age=31536000, immutable"' in tuned
+    assert "location = /mini-app/ {" in tuned
+    assert "error_page 418 =200 /mini-app/index.html;" in tuned
+    assert "if ($request_method = OPTIONS) { return 204; }" in tuned
+    assert "if ($request_method = POST) { return 418; }" in tuned
 
 
 def test_tune_happyfox_site_is_idempotent() -> None:
