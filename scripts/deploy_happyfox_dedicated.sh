@@ -249,9 +249,28 @@ grep -Fq "<loc>${LANDING_ORIGIN}/</loc>" <<<"$sitemap_body" || {
   exit 1
 }
 
-bootstrap_status="$(curl -sS -o /dev/null -w '%{http_code}' -X POST --max-time 20 \
-  -H 'Content-Type: application/json' -d '{}' "$APP_ORIGIN/mini-app/api/bootstrap" || true)"
-[[ "$bootstrap_status" =~ ^(400|401|403)$ ]]
+for miniapp_origin in "$APP_ORIGIN" "$LANDING_ORIGIN"; do
+  root_options_status="$(curl -sS -o /dev/null -w '%{http_code}' -X OPTIONS --max-time 20 \
+    -H 'Origin: https://max.ru' "$miniapp_origin/mini-app/" || true)"
+  [[ "$root_options_status" == "204" ]] || {
+    echo "HappyFox Mini App root OPTIONS failed for $miniapp_origin: $root_options_status" >&2
+    exit 1
+  }
+
+  root_post_status="$(curl -sS -o /dev/null -w '%{http_code}' -X POST --max-time 20 \
+    "$miniapp_origin/mini-app/" || true)"
+  [[ "$root_post_status" == "200" ]] || {
+    echo "HappyFox Mini App root POST failed for $miniapp_origin: $root_post_status" >&2
+    exit 1
+  }
+
+  bootstrap_status="$(curl -sS -o /dev/null -w '%{http_code}' -X POST --max-time 20 \
+    -H 'Content-Type: application/json' -d '{}' "$miniapp_origin/mini-app/api/bootstrap" || true)"
+  [[ "$bootstrap_status" =~ ^(400|401|403)$ ]] || {
+    echo "HappyFox Mini App bootstrap ingress failed for $miniapp_origin: $bootstrap_status" >&2
+    exit 1
+  }
+done
 
 max_status="$(curl -sS -o /dev/null -w '%{http_code}' -X POST --max-time 20 \
   -H 'Content-Type: application/json' -d '{}' "$API_ORIGIN/max/webhook" || true)"
