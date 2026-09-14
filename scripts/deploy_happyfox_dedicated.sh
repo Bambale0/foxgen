@@ -272,6 +272,10 @@ for miniapp_origin in "$APP_ORIGIN" "$LANDING_ORIGIN"; do
   }
 done
 
+max_launch_status="$(curl -sS -o /dev/null -w '%{http_code}' -X GET --max-time 20 \
+  "$API_ORIGIN/max/webhook" || true)"
+[[ "$max_launch_status" == "302" ]]
+
 max_status="$(curl -sS -o /dev/null -w '%{http_code}' -X POST --max-time 20 \
   -H 'Content-Type: application/json' -d '{}' "$API_ORIGIN/max/webhook" || true)"
 [[ "$max_status" == "401" ]]

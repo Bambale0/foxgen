@@ -11,6 +11,24 @@ UPSTREAM_BLOCK = """upstream happyfox_backend {
 
 """
 
+MAX_WEBHOOK_LAUNCH_COMPAT_BLOCK = """    location = /max/webhook {
+        if ($request_method = GET) { return 302 https://app.happy-fox.online/mini-app/; }
+        proxy_pass http://happyfox_backend;
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+        proxy_socket_keepalive on;
+        proxy_buffering off;
+        proxy_request_buffering off;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 900s;
+        proxy_send_timeout 900s;
+    }
+
+"""
+
 STATIC_BLOCK = """    location ^~ /mini-app/_next/static/ {
         try_files $uri =404;
         access_log off;
@@ -118,6 +136,33 @@ def _tune_proxy_locations(text: str) -> str:
     return "\n".join(output) + "\n"
 
 
+
+def _add_max_webhook_launch_compat(text: str) -> str:
+    api_marker = "server_name api.happy-fox.online;"
+    if api_marker not in text:
+        raise ValueError("HappyFox API server block was not found")
+
+    prefix, rest = text.split(api_marker, 1)
+    if "\nserver {" not in rest:
+        raise ValueError("HappyFox API server block terminator was not found")
+    api_section, suffix = rest.split("\nserver {", 1)
+    if (
+        "location = /max/webhook {" in api_section
+        and "return 302 https://app.happy-fox.online/mini-app/" in api_section
+    ):
+        return text
+
+    marker = "    location / {"
+    if marker not in api_section:
+        raise ValueError("HappyFox API proxy fallback was not found")
+    api_section = api_section.replace(
+        marker,
+        MAX_WEBHOOK_LAUNCH_COMPAT_BLOCK + marker,
+        1,
+    )
+    return prefix + api_marker + api_section + "\nserver {" + suffix
+
+
 def _add_static_cache(text: str) -> str:
     if "location ^~ /mini-app/_next/static/" in text:
         return text
@@ -140,7 +185,16 @@ def _allow_max_root_launch_methods(text: str) -> str:
 
 
 def _enable_landing_miniapp_compat(text: str) -> str:
-    if LANDING_MINIAPP_COMPAT_BLOCK in text:
+    landing_marker = "server_name happy-fox.online;"
+    if landing_marker not in text:
+        raise ValueError("HappyFox landing server block was not found")
+
+    landing_section = text.split(landing_marker, 1)[1].split("\nserver {", 1)[0]
+    if (
+        "location /mini-app/api/ {" in landing_section
+        and "location = /mini-app/ {" in landing_section
+        and "try_files $uri $uri/ /mini-app/index.html;" in landing_section
+    ):
         return text
 
     marker = """    location = / { try_files /mini-app/landing/index.html =404; }
@@ -167,6 +221,7 @@ def tune_site(text: str) -> str:
     text = _enable_http2(text)
     text = _remove_site_ssl_protocols(text)
     text = _tune_proxy_locations(text)
+    text = _add_max_webhook_launch_compat(text)
     text = _add_static_cache(text)
     text = _allow_max_root_launch_methods(text)
     text = _enable_landing_miniapp_compat(text)
