@@ -39,17 +39,19 @@ def test_tune_happyfox_site_enables_h2_keepalive_and_static_cache() -> None:
     assert "upstream happyfox_backend {" in tuned
     assert "server 127.0.0.1:1888;" in tuned
     assert "keepalive 64;" in tuned
-    assert tuned.count("proxy_pass http://happyfox_backend;") == 3
-    assert tuned.count('proxy_set_header Connection "";') == 3
-    assert tuned.count("proxy_socket_keepalive on;") == 3
-    assert tuned.count("proxy_buffering off;") == 3
-    assert tuned.count("proxy_request_buffering off;") == 3
+    assert tuned.count("proxy_pass http://happyfox_backend;") == 4
+    assert tuned.count('proxy_set_header Connection "";') == 4
+    assert tuned.count("proxy_socket_keepalive on;") == 4
+    assert tuned.count("proxy_buffering off;") == 4
+    assert tuned.count("proxy_request_buffering off;") == 4
     assert "listen 443 ssl http2;" in tuned
     assert "listen [::]:443 ssl http2;" in tuned
     assert "listen 443 ssl http2 ipv6only=on;" in tuned
     assert "ssl_protocols" not in tuned
     assert "location ^~ /mini-app/_next/static/" in tuned
     assert 'Cache-Control "public, max-age=31536000, immutable"' in tuned
+    assert "location = /max/webhook {" in tuned
+    assert "return 302 https://app.happy-fox.online/mini-app/" in tuned
     assert tuned.count("location /mini-app/api/ {") == 2
     assert tuned.count("location /mini-app/ { try_files $uri $uri/ /mini-app/index.html; }") == 2
     assert tuned.count("location = /mini-app/ {") == 2
