@@ -34,6 +34,35 @@ MINIAPP_ROOT_BLOCK = """    location = /mini-app/ {
 """
 
 
+LANDING_MINIAPP_COMPAT_BLOCK = """    location /mini-app/api/ {
+        proxy_pass http://happyfox_backend;
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+        proxy_socket_keepalive on;
+        proxy_buffering off;
+        proxy_request_buffering off;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 900s;
+        proxy_send_timeout 900s;
+    }
+
+    location = /mini-app/ {
+        error_page 418 =200 /mini-app/index.html;
+        if ($request_method = OPTIONS) { return 204; }
+        if ($request_method = POST) { return 418; }
+        try_files /mini-app/index.html =404;
+        add_header Cache-Control "no-cache, no-store, must-revalidate" always;
+        add_header Pragma "no-cache" always;
+        add_header Expires "0" always;
+    }
+
+    location /mini-app/ { try_files $uri $uri/ /mini-app/index.html; }
+"""
+
+
 def tune_certbot_options(text: str) -> str:
     pattern = re.compile(r"(?m)^ssl_protocols\s+[^;]+;\s*$")
     if not pattern.search(text):
@@ -109,6 +138,23 @@ def _allow_max_root_launch_methods(text: str) -> str:
     return text.replace(marker, MINIAPP_ROOT_BLOCK + marker, 1)
 
 
+
+def _enable_landing_miniapp_compat(text: str) -> str:
+    if LANDING_MINIAPP_COMPAT_BLOCK in text:
+        return text
+
+    marker = """    location = / { try_files /mini-app/landing/index.html =404; }
+    location /mini-app/ { try_files $uri $uri/ =404; }"""
+    if marker not in text:
+        raise ValueError("HappyFox landing Mini App fallback was not found")
+
+    replacement = (
+        "    location = / { try_files /mini-app/landing/index.html =404; }\n"
+        + LANDING_MINIAPP_COMPAT_BLOCK
+    )
+    return text.replace(marker, replacement, 1)
+
+
 def tune_site(text: str) -> str:
     if "server_name api.happy-fox.online;" not in text:
         raise ValueError("HappyFox API server block was not found")
@@ -123,6 +169,7 @@ def tune_site(text: str) -> str:
     text = _tune_proxy_locations(text)
     text = _add_static_cache(text)
     text = _allow_max_root_launch_methods(text)
+    text = _enable_landing_miniapp_compat(text)
     return text
 
 
