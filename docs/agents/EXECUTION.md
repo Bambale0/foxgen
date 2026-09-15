@@ -46,7 +46,7 @@ Reusable material:
 
 ### Skills/guides reviewed
 
-- `Bambale0/skills`: `skills/engineering/ask-matt/SKILL.md`
+- `Bambale0/skills`: `skills/engineering/ask-matt/SKILL.md`, `skills/engineering/code-review/SKILL.md`
 - `Bambale0/claw`: `AGENTS.md`
 - `wondelai/skills`: `technical-documentation/SKILL.md`
 - `anthropics/skills`: searched for relevant repository-instruction/documentation guidance; no directly applicable skill was identified, so no unrelated skill is being forced into the change.
@@ -105,12 +105,12 @@ No database or runtime migration. Merge the documentation change through the nor
 6. [x] Rewrite `AGENTS.md` using Start as the baseline and HappyFox constraints as repository-specific extensions.
 7. [x] Review the diff for lost Foxgen constraints and accidental Start-only concepts.
 8. [x] Open PR #250.
-9. [ ] Verify CI for exact PR commit `b1528f90d95382d8035d7e39dd50817099b93441`.
-10. [ ] Run the `Bambale0/skills` `code-review` flow against fixed point `main` on both Standards and Spec axes; resolve findings.
-11. [ ] Re-run full exact-SHA CI after the clarified branch/review/auto-deploy policy update.
-12. [ ] Merge PR #250 after review + CI are green.
+9. [x] Earlier exact-head CI #1305 succeeded for `914025df758c1c9694b4e158df89107ee5cd0391`; later policy edits intentionally invalidated that SHA as the merge candidate.
+10. [x] Run the `Bambale0/skills` `code-review` flow against fixed point `main` on both Standards and Spec axes; resolve findings.
+11. [ ] Run full exact-SHA CI for the final review-clean branch head. The authoritative evidence is the GitHub check attached to that immutable head SHA; do not edit this ledger after it passes merely to copy the run number, because that would create a new untested SHA.
+12. [ ] Merge PR #250 after review + final-head CI are green.
 13. [ ] Verify canonical HappyFox auto-deploy, deployed revision, health, and channel reconciliation.
-14. [ ] Record final verification here.
+14. [ ] Record post-merge/deploy verification in the PR/deployment record without mutating the already-tested source solely to embed its own CI result.
 
 ### Review evidence
 
@@ -125,6 +125,44 @@ Static review after the AGENTS rewrite confirmed:
 - Foxgen project isolation is explicit;
 - all four mandatory engineering/skill sources are named;
 - no runtime code, schema, API, secret, provider, pricing, or deployment behavior changed.
+
+### Code review — Standards axis
+
+Fixed point: `main` at `cfa94e102fe745b26623fbc12c582ddefc0e9ac1`.
+
+Reviewed the PR diff against the repository instruction contract, Start-derived engineering baseline, documentation guidance, and the reviewer skill's smell baseline.
+
+Findings:
+
+1. **Hard documentation/process finding — resolved:** the execution ledger still named an obsolete intermediate SHA (`b1528f90...`) as the pending exact-head CI target after later commits had moved the branch. This violated the live-ledger/current-evidence requirement. The stale reference is replaced with historical evidence plus an explicit final-head CI gate.
+2. **Hard evidence finding — resolved:** the ledger listed `ask-matt` but not the `code-review` skill actually used for this review. The reviewed-skill list is updated.
+3. Code-smell baseline: N/A for runtime code because the PR changes only Markdown process documentation. No material documentation duplication or contradictory release rule remains after the clarified canonical auto-deploy exception.
+
+Standards result after fixes: **clean; 0 unresolved findings**.
+
+### Code review — Spec axis
+
+Originating requirements:
+
+- adapt the stronger `Bambale0/start` AGENTS workflow to HappyFox rather than blindly copying Start-specific product rules;
+- place an explicit 100% AGENTS-compliance rule at the beginning;
+- always use the repository's AGENTS instructions;
+- use a branch, invoke the reviewer skill, drive checks/review to green, merge through PR, then allow canonical auto-deploy instead of direct changes to `main`;
+- do not require a separate confirmation for the canonical exact-SHA production checkout reset when it occurs inside that approved reviewed/green auto-deploy path.
+
+Result:
+
+- 100% compliance contract: implemented at the top of `AGENTS.md`;
+- Start engineering workflow: adapted;
+- HappyFox-specific branding, project isolation, APIX transport-only boundary, observability, parity, and production invariants: retained;
+- direct-to-main changes: explicitly prohibited;
+- reviewer skill gate: explicit;
+- exact-head CI gate: explicit;
+- canonical auto-deploy authorization: explicit and narrowly scoped;
+- manual/destructive reset outside canonical deploy: still prohibited without explicit approval;
+- Start-only multi-company/vertical-pack concepts: not introduced.
+
+Spec result: **clean; 0 unresolved findings**.
 
 ### Risks
 
