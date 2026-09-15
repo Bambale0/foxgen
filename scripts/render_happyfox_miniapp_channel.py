@@ -55,16 +55,16 @@ def render_html(html: str, channel: str) -> str:
 def render_tree(root: Path, channel: str) -> int:
     if not root.is_dir():
         raise ValueError(f"Mini App root does not exist: {root}")
-    changed = 0
+    processed = 0
     for path in sorted(root.rglob("*.html")):
         original = path.read_text(encoding="utf-8")
         rendered = render_html(original, channel)
         if rendered != original:
             path.write_text(rendered, encoding="utf-8")
-            changed += 1
-    if changed == 0:
-        raise ValueError(f"no HTML files were rendered under {root}")
-    return changed
+        processed += 1
+    if processed == 0:
+        raise ValueError(f"no HTML files were found under {root}")
+    return processed
 
 
 def main() -> int:
@@ -74,8 +74,8 @@ def main() -> int:
     parser.add_argument("root", type=Path)
     parser.add_argument("channel", choices=sorted(VALID_CHANNELS))
     args = parser.parse_args()
-    changed = render_tree(args.root, args.channel)
-    print(f"rendered channel={args.channel} html_files={changed} root={args.root}")
+    processed = render_tree(args.root, args.channel)
+    print(f"rendered channel={args.channel} html_files={processed} root={args.root}")
     return 0
 
 
