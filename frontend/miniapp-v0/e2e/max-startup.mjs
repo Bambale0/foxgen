@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict'
-import { spawn } from 'node:child_process'
+import { execFileSync, spawn } from 'node:child_process'
+import { cpSync, rmSync } from 'node:fs'
 import { chromium, devices, webkit } from 'playwright'
 
 const baseUrl = 'http://127.0.0.1:4174/mini-app/'
+const serverDir = '.e2e-max'
 const initData = 'query_id=max-e2e&user=%7B%22id%22%3A515151%2C%22first_name%22%3A%22Max%22%7D&auth_date=1787972400&hash=test'
 
 const bootstrapPayload = {
@@ -44,9 +46,17 @@ async function waitForServer(url, timeoutMs = 20_000) {
   throw new Error(`Static server did not start: ${url}`)
 }
 
+rmSync(serverDir, { recursive: true, force: true })
+cpSync('out', serverDir, { recursive: true })
+execFileSync(
+  'python3',
+  ['../../scripts/render_happyfox_miniapp_channel.py', serverDir, 'max'],
+  { stdio: 'inherit' },
+)
+
 const server = spawn(
   'python3',
-  ['-m', 'http.server', '4174', '--directory', '.e2e-server'],
+  ['-m', 'http.server', '4174', '--directory', serverDir],
   { stdio: 'inherit' },
 )
 
@@ -163,7 +173,7 @@ try {
 
       assert.equal(state.platform, 'max', `${target.name}: platform cache mismatch`)
       assert.equal(state.cached, initData, `${target.name}: MAX initData cache mismatch`)
-      assert.equal(state.bridgeInitData, initData, `${target.name}: MAX tinitData mismatch`)
+      assert.equal(state.bridgeInitData, initData, `${target.name}: MAX initData mismatch`)
       assert.equal(state.readyCalled, true, `${target.name}: MAX ready() was not called`)
       assert.equal(state.expandCalled, true, `${target.name}: MAX expand() was not called`)
       assert.equal(
@@ -173,8 +183,10 @@ try {
       )
 
       const maxIndex = state.scripts.findIndex((script) => script.src === 'https://st.max.ru/js/max-web-app.js')
+      const telegramIndex = state.scripts.findIndex((script) => script.src === '/mini-app/telegram-web-app.js')
       const firstNextIndex = state.scripts.findIndex((script) => script.src.startsWith('/mini-app/_next/static/'))
       assert.ok(maxIndex >= 0, `${target.name}: MAX Bridge script missing`)
+      assert.equal(telegramIndex, -1, `${target.name}: Telegram SDK must not load on MAX host`)
       assert.ok(
         firstNextIndex < 0 || maxIndex < firstNextIndex,
         `${target.name}: MAX Bridge must load before Next.js runtime`,
@@ -188,4 +200,5 @@ try {
   }
 } finally {
   server.kill('SIGTERM')
+  rmSync(serverDir, { recursive: true, force: true })
 }
