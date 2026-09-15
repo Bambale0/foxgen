@@ -10,7 +10,8 @@ This document describes the accepted production path. Historical NEUROMIX servic
 Product:          happyfox
 Dedicated host:   happyfox
 Landing:          https://happy-fox.online/
-Mini App:         https://app.happy-fox.online/mini-app/
+Telegram Mini App:https://app.happy-fox.online/mini-app/
+MAX Mini App:     https://max.happy-fox.online/mini-app/  # after DNS/TLS activation
 API/webhooks:     https://api.happy-fox.online
 Compose project:  foxgen-happyfox
 Container:        foxgen-happyfox-bot
