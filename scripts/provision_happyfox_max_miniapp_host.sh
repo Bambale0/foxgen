@@ -3,9 +3,9 @@ set -Eeuo pipefail
 IFS=$'\n\t'
 umask 027
 
-DOMAIN="${MAX_MINIAPP_DOMAIN:-max.happy-fox.online}"
+DOMAIN="max.happy-fox.online"
 CERTBOT_EMAIL="${CERTBOT_EMAIL:-}"
-WEB_ROOT="${MAX_MINIAPP_WEB_ROOT:-/var/www/happyfox-max}"
+WEB_ROOT="/var/www/happyfox-max"
 MINIAPP_ROOT="$WEB_ROOT/mini-app"
 SITE_AVAILABLE="/etc/nginx/sites-available/happyfox-max.conf"
 SITE_ENABLED="/etc/nginx/sites-enabled/happyfox-max.conf"
@@ -15,8 +15,6 @@ CONFIG_FILE="$CONFIG_DIR/max-miniapp.env"
 log() { printf '[happyfox-max-host] %s\n' "$*"; }
 die() { printf '[happyfox-max-host] ERROR: %s\n' "$*" >&2; exit 1; }
 
-[[ "$DOMAIN" =~ ^[A-Za-z0-9.-]+$ ]] || die "invalid MAX Mini App domain"
-[[ "$DOMAIN" != "app.happy-fox.online" ]] || die "MAX domain must differ from Telegram domain"
 [[ -n "$CERTBOT_EMAIL" ]] || die "CERTBOT_EMAIL is required"
 command -v nginx >/dev/null || die "nginx is required"
 command -v certbot >/dev/null || die "certbot is required"
@@ -126,10 +124,8 @@ systemctl reload nginx
 
 cat > "$CONFIG_FILE" <<EOF
 MAX_MINIAPP_ORIGIN='https://$DOMAIN'
-MAX_MINIAPP_ROOT='$MINIAPP_ROOT'
 EOF
 chmod 0600 "$CONFIG_FILE"
 
-curl -fsS --retry 5 --retry-delay 2 --retry-all-errors --max-time 20 "https://$DOMAIN/" >/dev/null 2>&1 || true
 log "READY origin=https://$DOMAIN config=$CONFIG_FILE"
 log "Next: run scripts/activate_happyfox_channel_miniapps.sh <verified-main-sha>, then set the MAX partner Mini App URL to https://$DOMAIN/mini-app/"
