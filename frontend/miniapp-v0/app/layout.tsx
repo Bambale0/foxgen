@@ -2,10 +2,8 @@ import type { Metadata, Viewport } from 'next'
 import { BRAND_DESCRIPTION, BRAND_LOGO, BRAND_NAME } from '@/lib/brand'
 import './globals.css'
 
-const miniAppBootstrapScript = `
+const miniAppLaunchSnapshotScript = `
 (function () {
-  var attempts = 0;
-
   try {
     window.__BANANO_INITIAL_LAUNCH__ = {
       hash: window.location.hash || '',
@@ -16,6 +14,12 @@ const miniAppBootstrapScript = `
       window.sessionStorage.setItem('__banano_initial_search', window.location.search || '');
     }
   } catch (e) {}
+})();
+`
+
+const miniAppBootstrapScript = `
+(function () {
+  var attempts = 0;
 
   function remember(platform, initData) {
     var value = String(initData || '').trim();
@@ -36,13 +40,6 @@ const miniAppBootstrapScript = `
   function configureMiniApp() {
     attempts += 1;
 
-    var maxWebApp = window.WebApp;
-    if (maxWebApp && remember('max', maxWebApp.initData)) {
-      try { if (maxWebApp.ready) maxWebApp.ready(); } catch (e) {}
-      try { if (maxWebApp.expand) maxWebApp.expand(); } catch (e) {}
-      return;
-    }
-
     var telegramWebApp = window.Telegram && window.Telegram.WebApp;
     if (telegramWebApp && remember('telegram', telegramWebApp.initData)) {
       try { if (telegramWebApp.ready) telegramWebApp.ready(); } catch (e) {}
@@ -50,6 +47,13 @@ const miniAppBootstrapScript = `
       try { if (telegramWebApp.setHeaderColor) telegramWebApp.setHeaderColor('#050505'); } catch (e) {}
       try { if (telegramWebApp.setBackgroundColor) telegramWebApp.setBackgroundColor('#050505'); } catch (e) {}
       try { if (telegramWebApp.setBottomBarColor) telegramWebApp.setBottomBarColor('#080808'); } catch (e) {}
+      return;
+    }
+
+    var maxWebApp = window.WebApp;
+    if (maxWebApp && remember('max', maxWebApp.initData)) {
+      try { if (maxWebApp.ready) maxWebApp.ready(); } catch (e) {}
+      try { if (maxWebApp.expand) maxWebApp.expand(); } catch (e) {}
       return;
     }
 
@@ -89,6 +93,10 @@ export default function RootLayout({
     <html lang="ru" className="bg-background">
       <head>
         <script src="/mini-app/telegram-web-app.js" />
+        <script
+          id="miniapp-launch-snapshot"
+          dangerouslySetInnerHTML={{ __html: miniAppLaunchSnapshotScript }}
+        />
         <script src="https://st.max.ru/js/max-web-app.js" />
         <script
           id="telegram-early-ready"
