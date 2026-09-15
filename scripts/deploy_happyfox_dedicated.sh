@@ -243,7 +243,7 @@ max_miniapp_origin=""
 max_miniapp_domain=""
 max_miniapp_root=""
 if [[ -n "$MAX_MINI_APP_URL_EFFECTIVE" ]]; then
-  read -r max_miniapp_origin max_miniapp_domain < <(
+  IFS='|' read -r max_miniapp_origin max_miniapp_domain < <(
     python3 - "$MAX_MINI_APP_URL_EFFECTIVE" <<'PY'
 import sys
 from urllib.parse import urlsplit
@@ -251,7 +251,7 @@ from urllib.parse import urlsplit
 parsed = urlsplit(sys.argv[1].strip())
 if parsed.scheme != "https" or not parsed.hostname:
     raise SystemExit("MAX_MINI_APP_URL must be HTTPS")
-print(f"https://{parsed.netloc} {parsed.hostname}")
+print(f"https://{parsed.netloc}|{parsed.hostname}")
 PY
   )
 fi
