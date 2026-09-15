@@ -102,12 +102,26 @@ No database or runtime migration. Merge the documentation change through the nor
 3. [x] Review relevant repository docs, CI, deployment, dependencies, and tests.
 4. [x] Review mandatory skill sources.
 5. [x] Create this execution ledger before editing `AGENTS.md`.
-6. [ ] Rewrite `AGENTS.md` using Start as the baseline and HappyFox constraints as repository-specific extensions.
-7. [ ] Review the diff for lost Foxgen constraints and accidental Start-only concepts.
-8. [ ] Open PR.
-9. [ ] Verify CI for the exact PR commit.
+6. [x] Rewrite `AGENTS.md` using Start as the baseline and HappyFox constraints as repository-specific extensions.
+7. [x] Review the diff for lost Foxgen constraints and accidental Start-only concepts.
+8. [x] Open PR #250.
+9. [ ] Verify CI for exact PR commit `b1528f90d95382d8035d7e39dd50817099b93441`.
 10. [ ] Complete code/documentation review and merge if all gates are green.
 11. [ ] Record final verification here.
+
+### Review evidence
+
+Static review after the AGENTS rewrite confirmed:
+
+- the file begins with the 100% compliance contract;
+- no Start-only multi-company/vertical-pack concepts are present;
+- HappyFox branding remains explicit;
+- MAX/Telegram/Mini App parity remains explicit;
+- Instagram applicability is explicit;
+- APIX remains transport-only;
+- Foxgen project isolation is explicit;
+- all four mandatory engineering/skill sources are named;
+- no runtime code, schema, API, secret, provider, pricing, or deployment behavior changed.
 
 ### Risks
 
