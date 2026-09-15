@@ -103,6 +103,7 @@ COPY --from=builder /opt/venv /opt/venv
 COPY --chown=app:app . /app
 COPY --from=miniapp-builder --chown=app:app /build/miniapp/out /app/frontend/miniapp-v0/out
 
+# deploy_happyfox_dedicated.sh runs scripts/ensure_telegram_webhook.py first; the image hook below then restores the WebApp menu.
 RUN printf '%s\n' "${VCS_REF}" > /app/frontend/miniapp-v0/out/revision.txt \
     && python scripts/apply_visible_copy_fixes.py \
     && python scripts/apply_happyfox_product_copy.py \
