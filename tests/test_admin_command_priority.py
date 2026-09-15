@@ -19,4 +19,5 @@ def test_admin_command_clears_existing_fsm_before_rendering_panel() -> None:
 
     assert "state: FSMContext" in block
     assert "await state.clear()" in block
+    assert block.index("if not is_admin") < block.index("await state.clear()")
     assert block.index("await state.clear()") < block.index("stats = await get_admin_stats()")
