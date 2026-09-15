@@ -2551,9 +2551,11 @@ def setup_dispatcher() -> Dispatcher:
     # 5. common_router (общие команды /start /help - самые общие)
 
     dp.include_router(fast_start_router)  # Plain /start fast webhook reply
-    dp.include_router(generation_router)  # FSM состояния - ПЕРВЫЙ!
+    # Global admin commands must preempt state-specific text handlers so /admin
+    # is never interpreted as an image/video prompt while an FSM is active.
+    dp.include_router(admin_router)  # Админ-команды/interrupts
+    dp.include_router(generation_router)  # FSM генерации
     dp.include_router(image_analyzer_router)  # Анализ фото в промпт
-    dp.include_router(admin_router)  # Админ-команды
     dp.include_router(payments_router)  # Платежи
     dp.include_router(batch_generation_router)  # Пакетная генерация
     dp.include_router(common_router)  # Общие команды - ПОСЛЕДНИЙ!
