@@ -4,16 +4,16 @@ import { join } from 'node:path'
 const outDir = join(process.cwd(), 'out')
 const localTelegramJs = 'telegram-web-app.js'
 const localTelegramSrc = `/mini-app/${localTelegramJs}`
-const telegramScript = `<script src="${localTelegramSrc}"></script>`
 const maxBridgeSrc = 'https://st.max.ru/js/max-web-app.js'
-const maxBridgeScript = `<script src="${maxBridgeSrc}"></script>`
 const inlineMiniappCss = process.env.MINIAPP_INLINE_CSS === '1'
 const assetVersion =
   process.env.MINIAPP_ASSET_VERSION ||
   new Date().toISOString().replace(/\D/g, '').slice(0, 14)
 
-const telegramEarlyScriptPattern =
-  /<script\b(?=[^>]*\bid=(["'])telegram-early-ready\1)[^>]*>[\s\S]*?<\/script>/gi
+const bridgeLoaderScriptPattern =
+  /<script\b(?=[^>]*\bid=(["'])miniapp-bridge-loader\1)[^>]*>[\s\S]*?<\/script>/gi
+const earlyScriptPattern =
+  /<script\b(?=[^>]*\bid=(["'])miniapp-early-ready\1)[^>]*>[\s\S]*?<\/script>/gi
 const telegramSdkScriptPattern =
   /<script\b(?=[^>]*\bsrc=(["'])https:\/\/telegram\.org\/js\/telegram-web-app\.js(?:\?[^"']*)?\1)[^>]*>\s*<\/script>/gi
 const localTelegramScriptPattern =
@@ -25,7 +25,7 @@ const telegramSdkPreloadPattern =
 const scriptTagPattern = /<script\b(?![^>]*\bsrc=)[^>]*>[\s\S]*?<\/script>/gi
 const charsetPattern = /<head><meta\b[^>]*(?:charset|charSet)=(["'])utf-8\1[^>]*\/?>/i
 const stylesheetPattern =
-  /<link\b(?=[^>]*\brel=(["'])stylesheet\1)(?=[^>]*\bhref=(["'])(\/mini-app\/_next\/static\/css\/[^"']+\.css)\2)[^>]*\/?>/i
+  /<link\b(?=[^>]*\brel=(["'])stylesheet\1)(?=[^>]*\bhref=(["'])(\/mini-app\/_next\/static\/[^"']+\.css)\2)[^>]*\/?>/i
 const nextRuntimeScriptPattern = /<script\b[^>]*\bsrc=(["'])\/mini-app\/_next\/static\/[^"']+\.js(?:\?[^"']*)?\1[^>]*>/i
 
 function htmlFiles(dir) {
@@ -41,13 +41,19 @@ function htmlFiles(dir) {
   })
 }
 
-function removeQueuedTelegramScripts(html) {
+function removeQueuedBridgeScripts(html) {
   return html.replace(scriptTagPattern, (tag) => {
     if (!tag.includes('self.__next_s')) {
       return tag
     }
 
-    return tag.includes(localTelegramSrc) || tag.includes(localTelegramJs) || tag.includes('telegram-early-ready') ? '' : tag
+    return tag.includes(localTelegramSrc) ||
+      tag.includes(localTelegramJs) ||
+      tag.includes(maxBridgeSrc) ||
+      tag.includes('miniapp-bridge-loader') ||
+      tag.includes('miniapp-early-ready')
+      ? ''
+      : tag
   })
 }
 
@@ -82,40 +88,52 @@ function versionStaticAssets(html) {
   )
 }
 
-function assertTelegramStartupContract(html, file, earlyScript) {
-  const telegramIndex = html.indexOf(telegramScript)
-  if (telegramIndex < 0) {
-    throw new Error(`Telegram SDK script is missing from ${file}`)
+function assertBridgeStartupContract(html, file, bridgeLoaderScript, earlyScript) {
+  const loaderIndex = html.indexOf(bridgeLoaderScript)
+  if (loaderIndex < 0) {
+    throw new Error(`Mini App bridge loader is missing from ${file}`)
+  }
+
+  const earlyIndex = html.indexOf(earlyScript)
+  if (earlyIndex < loaderIndex) {
+    throw new Error(`Mini App bootstrap must follow the bridge loader in ${file}`)
   }
 
   const firstNextRuntime = html.match(nextRuntimeScriptPattern)
-  if (firstNextRuntime?.index != null && telegramIndex > firstNextRuntime.index) {
-    throw new Error(`Telegram SDK must load before Next.js runtime scripts in ${file}`)
+  if (firstNextRuntime?.index != null && loaderIndex > firstNextRuntime.index) {
+    throw new Error(`Mini App bridge loader must run before Next.js runtime scripts in ${file}`)
+  }
+  if (firstNextRuntime?.index != null && earlyIndex > firstNextRuntime.index) {
+    throw new Error(`Mini App bootstrap must run before Next.js runtime scripts in ${file}`)
   }
 
-  if (/\bdefer\b/i.test(telegramScript) || /\basync\b/i.test(telegramScript)) {
-    throw new Error('Telegram SDK must load synchronously before application scripts')
+  if (!bridgeLoaderScript.includes(localTelegramSrc)) {
+    throw new Error(`Mini App bridge loader is missing Telegram SDK source in ${file}`)
+  }
+  if (!bridgeLoaderScript.includes(maxBridgeSrc)) {
+    throw new Error(`Mini App bridge loader is missing MAX Bridge source in ${file}`)
+  }
+  if (!bridgeLoaderScript.includes('document.write')) {
+    throw new Error(`Mini App bridge loader must synchronously load the selected bridge in ${file}`)
   }
 
-  const maxIndex = html.indexOf(maxBridgeScript)
-  if (maxIndex < 0) {
-    throw new Error(`MAX Bridge script is missing from ${file}`)
+  localTelegramScriptPattern.lastIndex = 0
+  maxBridgeScriptPattern.lastIndex = 0
+  if (localTelegramScriptPattern.test(html)) {
+    throw new Error(`Telegram SDK must not be loaded unconditionally in ${file}`)
   }
-  if (firstNextRuntime?.index != null && maxIndex > firstNextRuntime.index) {
-    throw new Error(`MAX Bridge must load before Next.js runtime scripts in ${file}`)
-  }
-  if (/\bdefer\b/i.test(maxBridgeScript) || /\basync\b/i.test(maxBridgeScript)) {
-    throw new Error('MAX Bridge must load synchronously before application scripts')
+  if (maxBridgeScriptPattern.test(html)) {
+    throw new Error(`MAX Bridge must not be loaded unconditionally in ${file}`)
   }
 
   if (/TelegramWebviewProxy|window\.webkit|window\.external\.notify/.test(earlyScript)) {
-    throw new Error(`Mini App bootstrap must not bypass Telegram.WebApp SDK in ${file}`)
+    throw new Error(`Mini App bootstrap must not bypass platform SDKs in ${file}`)
   }
 }
 
-// Copy local telegram-web-app.js into out/ so it is served from the same origin.
-// The SDK is intentionally synchronous: Telegram requires it to initialize before
-// application bundles, and WKWebView is particularly sensitive to this ordering.
+// The Telegram SDK is served locally so Telegram WebView startup never depends
+// on a second external origin. The early bridge loader chooses exactly one
+// platform SDK from signed launch parameters before application bundles run.
 const publicTelegramJs = join(process.cwd(), 'public', localTelegramJs)
 const outTelegramJs = join(outDir, localTelegramJs)
 if (existsSync(publicTelegramJs)) {
@@ -129,35 +147,41 @@ let patched = 0
 
 for (const file of htmlFiles(outDir)) {
   const html = readFileSync(file, 'utf8')
-  telegramEarlyScriptPattern.lastIndex = 0
+  bridgeLoaderScriptPattern.lastIndex = 0
+  earlyScriptPattern.lastIndex = 0
 
-  const earlyScript = html.match(telegramEarlyScriptPattern)?.[0]
+  const bridgeLoaderScript = html.match(bridgeLoaderScriptPattern)?.[0]
+  const earlyScript = html.match(earlyScriptPattern)?.[0]
 
+  if (!bridgeLoaderScript) {
+    throw new Error(`Cannot find miniapp-bridge-loader script in ${file}`)
+  }
   if (!earlyScript) {
-    throw new Error(`Cannot find telegram-early-ready script in ${file}`)
+    throw new Error(`Cannot find miniapp-early-ready script in ${file}`)
   }
 
-  const stripped = removeQueuedTelegramScripts(
+  const stripped = removeQueuedBridgeScripts(
     html
       .replace(telegramSdkPreloadPattern, '')
       .replace(telegramSdkScriptPattern, '')
       .replace(localTelegramScriptPattern, '')
       .replace(maxBridgeScriptPattern, '')
-      .replace(telegramEarlyScriptPattern, ''),
+      .replace(bridgeLoaderScriptPattern, '')
+      .replace(earlyScriptPattern, ''),
   )
 
   if (!stripped.includes('<head>')) {
     throw new Error(`Cannot find <head> in ${file}`)
   }
 
-  const telegramHeadScripts = `${telegramScript}${maxBridgeScript}${earlyScript}`
+  const bridgeHeadScripts = `${bridgeLoaderScript}${earlyScript}`
   const charsetMatch = stripped.match(charsetPattern)
-  const nextHtmlWithTelegram = charsetMatch
-    ? stripped.replace(charsetMatch[0], `${charsetMatch[0]}${telegramHeadScripts}`)
-    : stripped.replace('<head>', `<head>${telegramHeadScripts}`)
-  const nextHtml = versionStaticAssets(inlineMiniappStyles(nextHtmlWithTelegram))
+  const nextHtmlWithBridge = charsetMatch
+    ? stripped.replace(charsetMatch[0], `${charsetMatch[0]}${bridgeHeadScripts}`)
+    : stripped.replace('<head>', `<head>${bridgeHeadScripts}`)
+  const nextHtml = versionStaticAssets(inlineMiniappStyles(nextHtmlWithBridge))
 
-  assertTelegramStartupContract(nextHtml, file, earlyScript)
+  assertBridgeStartupContract(nextHtml, file, bridgeLoaderScript, earlyScript)
 
   if (nextHtml !== html) {
     writeFileSync(file, nextHtml)
@@ -166,5 +190,5 @@ for (const file of htmlFiles(outDir)) {
 }
 
 console.log(
-  `Patched Mini App bridge head scripts in ${patched} HTML files. inline css: ${inlineMiniappCss ? 'on' : 'off'}. asset version: ${assetVersion}.`,
+  `Patched Mini App platform bridge loader in ${patched} HTML files. inline css: ${inlineMiniappCss ? 'on' : 'off'}. asset version: ${assetVersion}.`,
 )
