@@ -243,7 +243,7 @@ Therefore the application origin and bridge selection must not depend on an ordi
 2. MAX can be switched independently to `https://max.happy-fox.online/mini-app/` without changing Telegram.
 3. Telegram launches load only Telegram WebApp SDK; MAX launches load only MAX Bridge.
 4. Browser fallback remains available when neither platform provides signed launch data.
-5. `MAX_MINI_APP_URL` is preserved by production deploy and is never silently forced back to `MINI_APP_URL`.
+5. Dedicated production keeps MAX on the proven Telegram app origin until `HAPPYFOX_MAX_APP_ORIGIN` is explicitly set; after cutover it derives `MAX_MINI_APP_URL` from that dedicated origin.
 6. After MAX origin activation, exact-SHA deploy publishes the same verified static bundle to its Nginx-resolved Mini App root and smoke-checks it.
 7. MAX webhook GET compatibility redirect follows the configured MAX Mini App URL instead of a hardcoded Telegram app URL.
 8. Existing Telegram and MAX startup E2E pass in Chromium and iPhone WebKit.
@@ -293,12 +293,12 @@ Use existing Mini App bootstrap/browser-auth logs and channel startup E2E. Post-
 1. [x] Audit current Telegram/MAX bridge startup, runtime config, deploy scripts and tests.
 2. [x] Verify current MAX platform launch contract in official documentation.
 3. [x] Create isolated working branch.
-4. [ ] Replace unconditional dual-bridge loading with early launch-data-based single-bridge loading.
-5. [ ] Extend Telegram/MAX E2E to prove the other platform bridge is not loaded.
-6. [ ] Preserve independent `MAX_MINI_APP_URL` in dedicated production deploy.
-7. [ ] Publish/smoke an independently configured MAX origin after activation.
-8. [ ] Make MAX webhook compatibility redirect use configured MAX Mini App URL.
-9. [ ] Add HappyFox MAX-origin deployment profile/docs for `max.happy-fox.online`.
+4. [x] Replace unconditional dual-bridge loading with early launch-data-based single-bridge loading.
+5. [x] Extend Telegram/MAX E2E to prove the other platform bridge is not loaded.
+6. [x] Add explicit, fail-safe `HAPPYFOX_MAX_APP_ORIGIN` cutover while keeping the existing app origin as the default.
+7. [x] Add exact-artifact publication/smoke support for an independently configured MAX origin after activation.
+8. [x] Make MAX webhook compatibility redirect use configured MAX Mini App URL.
+9. [x] Add HappyFox MAX-origin deployment profile/docs for `max.happy-fox.online`.
 10. [ ] Run focused tests and full exact-head CI.
 11. [ ] Run Standards + Spec review against current `main`.
 12. [ ] Merge only after green review/CI; canonical deploy must remain non-breaking before DNS activation.
