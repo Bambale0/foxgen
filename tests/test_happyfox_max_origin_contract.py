@@ -30,8 +30,9 @@ def test_production_workflow_keeps_max_origin_configurable() -> None:
 
     assert "MAX_APP_ORIGIN: ${{ vars.HAPPYFOX_MAX_APP_ORIGIN || 'https://app.happy-fox.online' }}" in workflow
     assert 'HAPPYFOX_MAX_APP_ORIGIN="$max_app_origin"' in workflow
-    assert 'MAX Mini App: `\${MAX_APP_ORIGIN}/mini-app/`' not in workflow
-    assert 'MAX Mini App: \\`${MAX_APP_ORIGIN}/mini-app/\\`' in workflow
+    assert '${MAX_APP_ORIGIN}/mini-app/' in workflow
+    assert "curl -sS -D - -o /dev/null" in workflow
+    assert "curl -sS -I --max-time 20 https://api.happy-fox.online/max/webhook" not in workflow
 
 
 def test_max_domain_activation_is_guarded_and_tls_only() -> None:
