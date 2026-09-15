@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from pathlib import Path
 
 from scripts.render_happyfox_miniapp_channel import render_html, render_tree
