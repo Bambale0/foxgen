@@ -296,8 +296,7 @@ RU/EN inputs accepted by channel-specific normalizers should include the documen
 Specific/global command routers must win before state-specific or broad fallback handlers.
 
 - The Instagram `/start iglink_*` Telegram router must run before a generic legacy `/start` handler.
-- Telegram admin commands such as `/admin` must run before generation/image-analyzer FSM text handlers. An authorized `/admin` interrupts and clears the previous FSM before rendering the admin panel, so command text can never become a paid/free generation prompt.
-- A denied `/admin` request must not clear the caller's existing FSM.
+- Telegram admin commands such as `/admin` must run before generation/image-analyzer FSM text handlers, so command text can never be interpreted as a generation prompt.
 
 ## 14. Completion criteria
 
