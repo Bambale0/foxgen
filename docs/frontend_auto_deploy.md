@@ -20,4 +20,4 @@ Canonical sources:
 
 Do not use old `tanyapi`, `cdn.chillcreative.ru`, `cdn.sh`, Tanya frontend profiles or NEUROMIX checkout paths as HappyFox production instructions.
 
-The current public HappyFox Mini App is documented as `https://app.happy-fox.online/mini-app/`; host-specific deployment paths remain runtime/environment configuration.
+Telegram Mini App remains `https://app.happy-fox.online/mini-app/`. MAX has an independently configurable origin, targeted at `https://max.happy-fox.online/mini-app/` after DNS/TLS activation. Both are published from the same verified main SHA; host-specific deployment paths remain runtime/environment configuration.
