@@ -12,6 +12,8 @@ const assetVersion =
   process.env.MINIAPP_ASSET_VERSION ||
   new Date().toISOString().replace(/\D/g, '').slice(0, 14)
 
+const launchSnapshotScriptPattern =
+  /<script\b(?=[^>]*\bid=(["'])miniapp-launch-snapshot\1)[^>]*>[\s\S]*?<\/script>/gi
 const telegramEarlyScriptPattern =
   /<script\b(?=[^>]*\bid=(["'])telegram-early-ready\1)[^>]*>[\s\S]*?<\/script>/gi
 const telegramSdkScriptPattern =
@@ -47,7 +49,12 @@ function removeQueuedTelegramScripts(html) {
       return tag
     }
 
-    return tag.includes(localTelegramSrc) || tag.includes(localTelegramJs) || tag.includes('telegram-early-ready') ? '' : tag
+    return tag.includes(localTelegramSrc) ||
+      tag.includes(localTelegramJs) ||
+      tag.includes('miniapp-launch-snapshot') ||
+      tag.includes('telegram-early-ready')
+      ? ''
+      : tag
   })
 }
 
@@ -82,7 +89,7 @@ function versionStaticAssets(html) {
   )
 }
 
-function assertTelegramStartupContract(html, file, earlyScript) {
+function assertTelegramStartupContract(html, file, launchSnapshotScript, earlyScript) {
   const telegramIndex = html.indexOf(telegramScript)
   if (telegramIndex < 0) {
     throw new Error(`Telegram SDK script is missing from ${file}`)
@@ -97,9 +104,20 @@ function assertTelegramStartupContract(html, file, earlyScript) {
     throw new Error('Telegram SDK must load synchronously before application scripts')
   }
 
+  const snapshotIndex = html.indexOf(launchSnapshotScript)
+  if (snapshotIndex < 0) {
+    throw new Error(`Mini App launch snapshot is missing from ${file}`)
+  }
+  if (snapshotIndex < telegramIndex) {
+    throw new Error(`Telegram SDK must load before the launch snapshot in ${file}`)
+  }
+
   const maxIndex = html.indexOf(maxBridgeScript)
   if (maxIndex < 0) {
     throw new Error(`MAX Bridge script is missing from ${file}`)
+  }
+  if (snapshotIndex > maxIndex) {
+    throw new Error(`Mini App launch snapshot must run before MAX Bridge in ${file}`)
   }
   if (firstNextRuntime?.index != null && maxIndex > firstNextRuntime.index) {
     throw new Error(`MAX Bridge must load before Next.js runtime scripts in ${file}`)
@@ -129,10 +147,15 @@ let patched = 0
 
 for (const file of htmlFiles(outDir)) {
   const html = readFileSync(file, 'utf8')
+  launchSnapshotScriptPattern.lastIndex = 0
   telegramEarlyScriptPattern.lastIndex = 0
 
+  const launchSnapshotScript = html.match(launchSnapshotScriptPattern)?.[0]
   const earlyScript = html.match(telegramEarlyScriptPattern)?.[0]
 
+  if (!launchSnapshotScript) {
+    throw new Error(`Cannot find miniapp-launch-snapshot script in ${file}`)
+  }
   if (!earlyScript) {
     throw new Error(`Cannot find telegram-early-ready script in ${file}`)
   }
@@ -143,6 +166,7 @@ for (const file of htmlFiles(outDir)) {
       .replace(telegramSdkScriptPattern, '')
       .replace(localTelegramScriptPattern, '')
       .replace(maxBridgeScriptPattern, '')
+      .replace(launchSnapshotScriptPattern, '')
       .replace(telegramEarlyScriptPattern, ''),
   )
 
@@ -150,14 +174,14 @@ for (const file of htmlFiles(outDir)) {
     throw new Error(`Cannot find <head> in ${file}`)
   }
 
-  const telegramHeadScripts = `${telegramScript}${maxBridgeScript}${earlyScript}`
+  const telegramHeadScripts = `${telegramScript}${launchSnapshotScript}${maxBridgeScript}${earlyScript}`
   const charsetMatch = stripped.match(charsetPattern)
   const nextHtmlWithTelegram = charsetMatch
     ? stripped.replace(charsetMatch[0], `${charsetMatch[0]}${telegramHeadScripts}`)
     : stripped.replace('<head>', `<head>${telegramHeadScripts}`)
   const nextHtml = versionStaticAssets(inlineMiniappStyles(nextHtmlWithTelegram))
 
-  assertTelegramStartupContract(nextHtml, file, earlyScript)
+  assertTelegramStartupContract(nextHtml, file, launchSnapshotScript, earlyScript)
 
   if (nextHtml !== html) {
     writeFileSync(file, nextHtml)
