@@ -2544,8 +2544,8 @@ def setup_dispatcher() -> Dispatcher:
     # тем, у кого более специфичный фильтр (например, StateFilter)
     #
     # Правильный порядок:
-    # 1. generation_router (FSM состояния - самые специфичные)
-    # 2. admin_router (админ команды)
+    # 1. fast_start_router / admin_router (глобальные команды-прерывания)
+    # 2. generation_router / image_analyzer_router (FSM генерации)
     # 3. payments_router (платежи)
     # 4. batch_generation_router (пакетная генерация)
     # 5. common_router (общие команды /start /help - самые общие)
@@ -2553,7 +2553,7 @@ def setup_dispatcher() -> Dispatcher:
     dp.include_router(fast_start_router)  # Plain /start fast webhook reply
     # Global admin commands must preempt state-specific text handlers so /admin
     # is never interpreted as an image/video prompt while an FSM is active.
-    dp.include_router(admin_router)  # Админ-команды/interrupts
+    dp.include_router(admin_router)  # Админ-команды
     dp.include_router(generation_router)  # FSM генерации
     dp.include_router(image_analyzer_router)  # Анализ фото в промпт
     dp.include_router(payments_router)  # Платежи
