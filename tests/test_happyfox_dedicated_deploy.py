@@ -32,6 +32,10 @@ def test_dedicated_deploy_pins_three_public_origins_and_runtime_db() -> None:
     assert 'Sitemap: ${LANDING_ORIGIN}/sitemap.xml' in deploy
     assert '<loc>${LANDING_ORIGIN}/</loc>' in deploy
     assert "backup_db.sh" in deploy
+    assert "scripts/happyfox_docker_prune.sh" in deploy
+    assert "happyfox-docker-prune.service" in deploy
+    assert "happyfox-docker-prune.timer" in deploy
+    assert "systemctl enable --now happyfox-docker-prune.timer" in deploy
 
 
 def test_happyfox_runtime_uses_configurable_public_dns() -> None:
