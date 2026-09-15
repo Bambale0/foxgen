@@ -137,6 +137,14 @@ PY
 
 python3 scripts/validate_happyfox_env.py .env .env.happyfox.runtime .env.postgres
 
+# Keep Docker/containerd growth bounded on the dedicated HappyFox host. The
+# cleanup is age-bounded and intentionally never prunes volumes.
+install -m 0755 scripts/happyfox_docker_prune.sh /usr/local/sbin/happyfox-docker-prune
+install -m 0644 deploy/systemd/happyfox-docker-prune.service /etc/systemd/system/happyfox-docker-prune.service
+install -m 0644 deploy/systemd/happyfox-docker-prune.timer /etc/systemd/system/happyfox-docker-prune.timer
+systemctl daemon-reload
+systemctl enable --now happyfox-docker-prune.timer
+
 # Writable bind mounts belong to the non-root runtime UID from the Dockerfile.
 for path in data static/uploads logs backups outputs; do
   install -d -m 0755 "$path"
