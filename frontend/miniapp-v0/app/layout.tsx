@@ -2,20 +2,50 @@ import type { Metadata, Viewport } from 'next'
 import { BRAND_DESCRIPTION, BRAND_LOGO, BRAND_NAME } from '@/lib/brand'
 import './globals.css'
 
+const miniAppBridgeLoaderScript = `
+(function () {
+  function parseParams(raw) {
+    try {
+      var value = String(raw || '');
+      if (value.charAt(0) === '#' || value.charAt(0) === '?') value = value.slice(1);
+      return new URLSearchParams(value);
+    } catch (e) {
+      return new URLSearchParams();
+    }
+  }
+
+  var hash = window.location.hash || '';
+  var search = window.location.search || '';
+
+  try {
+    window.__BANANO_INITIAL_LAUNCH__ = { hash: hash, search: search };
+    if (window.sessionStorage) {
+      window.sessionStorage.setItem('__banano_initial_hash', hash);
+      window.sessionStorage.setItem('__banano_initial_search', search);
+    }
+  } catch (e) {}
+
+  var hashParams = parseParams(hash);
+  var searchParams = parseParams(search);
+  function launchValue(name) {
+    return String(hashParams.get(name) || searchParams.get(name) || '').trim();
+  }
+
+  var telegramData = launchValue('tgWebAppData');
+  var maxData = launchValue('WebAppData');
+  var platform = maxData && !telegramData ? 'max' : 'telegram';
+  window.__BANANO_MINIAPP_PLATFORM_HINT__ = platform;
+
+  var src = platform === 'max'
+    ? 'https://st.max.ru/js/max-web-app.js'
+    : '/mini-app/telegram-web-app.js';
+  document.write('<script src="' + src + '"><\\/script>');
+})();
+`
+
 const miniAppBootstrapScript = `
 (function () {
   var attempts = 0;
-
-  try {
-    window.__BANANO_INITIAL_LAUNCH__ = {
-      hash: window.location.hash || '',
-      search: window.location.search || ''
-    };
-    if (window.sessionStorage) {
-      window.sessionStorage.setItem('__banano_initial_hash', window.location.hash || '');
-      window.sessionStorage.setItem('__banano_initial_search', window.location.search || '');
-    }
-  } catch (e) {}
 
   function remember(platform, initData) {
     var value = String(initData || '').trim();
@@ -36,21 +66,23 @@ const miniAppBootstrapScript = `
   function configureMiniApp() {
     attempts += 1;
 
-    var maxWebApp = window.WebApp;
-    if (maxWebApp && remember('max', maxWebApp.initData)) {
-      try { if (maxWebApp.ready) maxWebApp.ready(); } catch (e) {}
-      try { if (maxWebApp.expand) maxWebApp.expand(); } catch (e) {}
-      return;
-    }
-
-    var telegramWebApp = window.Telegram && window.Telegram.WebApp;
-    if (telegramWebApp && remember('telegram', telegramWebApp.initData)) {
-      try { if (telegramWebApp.ready) telegramWebApp.ready(); } catch (e) {}
-      try { if (telegramWebApp.expand) telegramWebApp.expand(); } catch (e) {}
-      try { if (telegramWebApp.setHeaderColor) telegramWebApp.setHeaderColor('#050505'); } catch (e) {}
-      try { if (telegramWebApp.setBackgroundColor) telegramWebApp.setBackgroundColor('#050505'); } catch (e) {}
-      try { if (telegramWebApp.setBottomBarColor) telegramWebApp.setBottomBarColor('#080808'); } catch (e) {}
-      return;
+    if (window.__BANANO_MINIAPP_PLATFORM_HINT__ === 'max') {
+      var maxWebApp = window.WebApp;
+      if (maxWebApp && remember('max', maxWebApp.initData)) {
+        try { if (maxWebApp.ready) maxWebApp.ready(); } catch (e) {}
+        try { if (maxWebApp.expand) maxWebApp.expand(); } catch (e) {}
+        return;
+      }
+    } else {
+      var telegramWebApp = window.Telegram && window.Telegram.WebApp;
+      if (telegramWebApp && remember('telegram', telegramWebApp.initData)) {
+        try { if (telegramWebApp.ready) telegramWebApp.ready(); } catch (e) {}
+        try { if (telegramWebApp.expand) telegramWebApp.expand(); } catch (e) {}
+        try { if (telegramWebApp.setHeaderColor) telegramWebApp.setHeaderColor('#050505'); } catch (e) {}
+        try { if (telegramWebApp.setBackgroundColor) telegramWebApp.setBackgroundColor('#050505'); } catch (e) {}
+        try { if (telegramWebApp.setBottomBarColor) telegramWebApp.setBottomBarColor('#080808'); } catch (e) {}
+        return;
+      }
     }
 
     if (attempts < 50) window.setTimeout(configureMiniApp, 100);
@@ -88,10 +120,12 @@ export default function RootLayout({
   return (
     <html lang="ru" className="bg-background">
       <head>
-        <script src="/mini-app/telegram-web-app.js" />
-        <script src="https://st.max.ru/js/max-web-app.js" />
         <script
-          id="telegram-early-ready"
+          id="miniapp-bridge-loader"
+          dangerouslySetInnerHTML={{ __html: miniAppBridgeLoaderScript }}
+        />
+        <script
+          id="miniapp-early-ready"
           dangerouslySetInnerHTML={{ __html: miniAppBootstrapScript }}
         />
       </head>
