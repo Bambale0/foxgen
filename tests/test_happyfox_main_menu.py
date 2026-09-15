@@ -42,6 +42,7 @@ def test_happyfox_main_menu_matches_product_layout(monkeypatch):
 
     mini_app_button = markup.inline_keyboard[0][0]
     assert mini_app_button.web_app is not None
+    assert mini_app_button.url is None
     assert "app.happy-fox.online/mini-app/" in mini_app_button.web_app.url
     assert "ref=FOX42" in mini_app_button.web_app.url
 
