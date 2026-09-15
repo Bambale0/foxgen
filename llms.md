@@ -25,9 +25,10 @@ Never reuse another product's:
 Production identity:
 
 ```text
-landing:       https://happy-fox.online/
-mini app:      https://app.happy-fox.online/mini-app/
-api/webhooks:  https://api.happy-fox.online
+landing:            https://happy-fox.online/
+telegram mini app:  https://app.happy-fox.online/mini-app/
+max mini app:       https://max.happy-fox.online/mini-app/  # after activation
+api/webhooks:       https://api.happy-fox.online
 compose:       foxgen-happyfox
 container:     foxgen-happyfox-bot
 database:      happyfox_cutover
