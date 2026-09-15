@@ -7,17 +7,19 @@ HappyFox combines multiple delivery channels over one generation and infrastruct
 - Telegram bot;
 - Telegram Mini App;
 - MAX bot;
+- MAX Mini App;
 - Instagram Professional Creator/Business channel;
 - provider/payment webhooks;
 - internal/admin APIs.
 
-The Python backend is the runtime authority. The Next.js Mini App is built as a static export.
+The Python backend is the runtime authority. The Next.js Mini App is built as a static export. Telegram and MAX use the same verified frontend artifact but may serve it from separate public origins so each platform owns its launch/bridge context.
 
 ## 2. Production topology
 
 ```text
 Telegram updates ───────────────┐
 Telegram Mini App HTTPS ────────┤
+MAX Mini App HTTPS ─────────────┤
 MAX webhook HTTPS ──────────────┼──> HappyFox aiohttp/aiogram backend
 Instagram webhook HTTPS ────────┤          │
 Provider/payment webhooks ──────┘          ├─ PostgreSQL 17
@@ -27,7 +29,8 @@ Provider/payment webhooks ──────┘          ├─ PostgreSQL 17
                                            └─ billing ledgers
 
 Landing:                 https://happy-fox.online/
-Mini App:                https://app.happy-fox.online/mini-app/
+Telegram Mini App:       https://app.happy-fox.online/mini-app/
+MAX Mini App:            https://max.happy-fox.online/mini-app/
 API/webhooks/media:      https://api.happy-fox.online
 Telegram webhook URL:    https://api.happy-fox.online/webhook
 MAX webhook:             https://api.happy-fox.online/max/webhook
@@ -37,6 +40,8 @@ Database:                happyfox_cutover
 Redis prefix:            foxgen_happyfox
 Production branch:       main
 ```
+
+The dedicated MAX hostname may remain inactive during staged rollout. Until DNS/TLS is ready, `HAPPYFOX_MAX_APP_ORIGIN` safely defaults to the Telegram app origin; once activated it becomes `https://max.happy-fox.online` without changing the frontend source or API/data plane.
 
 Exact server/IP details are runtime/deployment configuration, not product constants.
 
@@ -56,7 +61,9 @@ MAX identities are native MAX `user_id` values. MAX administrators are database-
 
 ## 4. Telegram surface
 
-Telegram is the full-featured surface. Its native system menu is reserved for quick commands, while the Mini App is opened from explicit inline buttons. Deployment must reconcile the menu back to `type=commands` and must never replace it with `MenuButtonWebApp`.
+Telegram is the full-featured surface. Its native system menu is reserved for quick commands, while the Mini App is opened from explicit inline `WebAppInfo` buttons. Deployment must reconcile the menu back to `type=commands` and must never replace it with `MenuButtonWebApp`.
+
+The canonical Telegram Mini App public URL is `https://app.happy-fox.online/mini-app/`. MAX-specific origin changes must not rewrite this URL.
 
 Current quick commands: `/start`, `/feed`, `/prompts`, `/help`, `/ref`, `/earn`.
 
@@ -82,9 +89,12 @@ Safety properties:
 - YooKassa orders are stored in the MAX payment ledger;
 - payment reconciliation verifies remote provider state;
 - admin roles are stored in `max_admins` and can be claimed through one-time hashed invite tokens;
-- `MAX_BOT_NAME` is required in production so referral/payment deep links cannot silently degrade.
+- `MAX_BOT_NAME` is required in production so referral/payment deep links cannot silently degrade;
+- `MAX_MINI_APP_URL` is independent from Telegram `MINI_APP_URL` and resolves to the MAX-specific public origin after that origin is activated.
 
 MAX generation workers are durable channel workers and must not create fake Telegram users.
+
+MAX bot buttons use the platform-native Mini App opening primitive rather than ordinary external links. The dedicated MAX Mini App origin changes where the registered app is served, not the shared generation/data core.
 
 ## 6. Instagram transport
 
@@ -237,7 +247,9 @@ Stack:
 - Jest contract/unit tests;
 - Playwright Chromium and WebKit journeys.
 
-Telegram Mini App authorization is server-validated using Telegram initData HMAC. Browser Telegram Login is independently verified before a signed browser initData session is issued.
+One exact frontend build is published to the Telegram webroot and the prepared MAX webroot. Each public origin routes `/mini-app/api/` to the same HappyFox backend. This preserves one release artifact while isolating platform browser/bridge state by origin.
+
+Telegram Mini App authorization is server-validated using Telegram initData HMAC. Browser Telegram Login is independently verified before a signed browser initData session is issued. MAX Mini App authentication remains MAX-native and does not reuse Telegram identity data.
 
 ## 14. Internal/admin API
 
@@ -281,6 +293,8 @@ CI gates:
 - Chromium + iPhone WebKit journeys;
 - production Docker image/runtime verification;
 - PostgreSQL 17 client verification.
+
+Production deploy always publishes the verified Mini App bundle to both `/var/www/happyfox-app/mini-app` and `/var/www/happyfox-max/mini-app`. A separate MAX hostname is activated only after DNS and TLS succeed; no different frontend build or manual source copy is allowed.
 
 Python runtime versions are pinned in `requirements.lock`; `requirements.txt` remains the human-maintained dependency intent file.
 
