@@ -6,8 +6,8 @@ umask 027
 PROJECT_DIR="${PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 EXPECTED_SHA="${1:-$(git -C "$PROJECT_DIR" rev-parse HEAD)}"
 CONFIG_FILE="${HAPPYFOX_MAX_MINIAPP_CONFIG:-/etc/foxgen-happyfox/max-miniapp.env}"
-APP_ROOT="${HAPPYFOX_TELEGRAM_MINIAPP_ROOT:-/var/www/happyfox-app/mini-app}"
-MAX_ROOT_DEFAULT="/var/www/happyfox-max/mini-app"
+APP_ROOT="/var/www/happyfox-app/mini-app"
+MAX_MINIAPP_ROOT="/var/www/happyfox-max/mini-app"
 RUNTIME_ENV="${HAPPYFOX_RUNTIME_ENV:-$PROJECT_DIR/.env.happyfox.runtime}"
 NGINX_SITE="${HAPPYFOX_NGINX_SITE:-/etc/nginx/sites-available/happyfox.conf}"
 IMAGE="${HAPPYFOX_IMAGE:-foxgen-happyfox-bot:local}"
@@ -22,11 +22,30 @@ if [[ ! -s "$CONFIG_FILE" ]]; then
   exit 0
 fi
 
-# shellcheck disable=SC1090
-source "$CONFIG_FILE"
-: "${MAX_MINIAPP_ORIGIN:?MAX_MINIAPP_ORIGIN is required in $CONFIG_FILE}"
-MAX_MINIAPP_ROOT="${MAX_MINIAPP_ROOT:-$MAX_ROOT_DEFAULT}"
-MAX_MINIAPP_ORIGIN="${MAX_MINIAPP_ORIGIN%/}"
+MAX_MINIAPP_ORIGIN="$(python3 - "$CONFIG_FILE" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+values: list[str] = []
+for raw in path.read_text(encoding="utf-8").splitlines():
+    line = raw.strip()
+    if not line or line.startswith("#"):
+        continue
+    if "=" not in line:
+        raise SystemExit(f"invalid activation config line: {line!r}")
+    key, value = line.split("=", 1)
+    if key.strip() != "MAX_MINIAPP_ORIGIN":
+        raise SystemExit(f"unsupported activation config key: {key.strip()!r}")
+    value = value.strip()
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+        value = value[1:-1]
+    values.append(value)
+if len(values) != 1 or not values[0]:
+    raise SystemExit("activation config must contain exactly one MAX_MINIAPP_ORIGIN")
+print(values[0].rstrip("/"))
+PY
+)"
 
 python3 - "$MAX_MINIAPP_ORIGIN" <<'PY'
 import sys
