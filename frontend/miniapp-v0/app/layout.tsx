@@ -2,6 +2,40 @@ import type { Metadata, Viewport } from 'next'
 import { BRAND_DESCRIPTION, BRAND_LOGO, BRAND_NAME } from '@/lib/brand'
 import './globals.css'
 
+const miniAppBridgeLoaderScript = `
+(function () {
+  var rawHash = window.location.hash || '';
+  var rawSearch = window.location.search || '';
+  var launch = new URLSearchParams(rawHash.charAt(0) === '#' ? rawHash.slice(1) : rawHash);
+  var search = new URLSearchParams(rawSearch.charAt(0) === '?' ? rawSearch.slice(1) : rawSearch);
+
+  search.forEach(function (value, key) {
+    if (!launch.has(key)) launch.set(key, value);
+  });
+
+  var hostname = String(window.location.hostname || '').toLowerCase();
+  var maxHost = hostname === 'max.happy-fox.online';
+  var hasMaxLaunch =
+    launch.has('WebAppData') ||
+    launch.has('WebAppPlatform') ||
+    launch.has('WebAppVersion') ||
+    launch.has('WebAppStartParam');
+  var hasTelegramLaunch =
+    launch.has('tgWebAppData') ||
+    launch.has('tgWebAppPlatform') ||
+    launch.has('tgWebAppVersion') ||
+    launch.has('tgWebAppStartParam');
+
+  var useMax = maxHost || (hasMaxLaunch && !hasTelegramLaunch);
+  var src = useMax
+    ? 'https://st.max.ru/js/max-web-app.js'
+    : '/mini-app/telegram-web-app.js';
+
+  window.__BANANO_BRIDGE_KIND__ = useMax ? 'max' : 'telegram';
+  document.write('<script src="' + src + '"><\\/script>');
+})();
+`
+
 const miniAppBootstrapScript = `
 (function () {
   var attempts = 0;
@@ -88,8 +122,10 @@ export default function RootLayout({
   return (
     <html lang="ru" className="bg-background">
       <head>
-        <script src="/mini-app/telegram-web-app.js" />
-        <script src="https://st.max.ru/js/max-web-app.js" />
+        <script
+          id="miniapp-bridge-loader"
+          dangerouslySetInnerHTML={{ __html: miniAppBridgeLoaderScript }}
+        />
         <script
           id="telegram-early-ready"
           dangerouslySetInnerHTML={{ __html: miniAppBootstrapScript }}
