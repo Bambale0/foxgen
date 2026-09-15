@@ -360,8 +360,8 @@ The dedicated MAX hostname is an existing #254 infrastructure invariant. Messeng
 8. [x] MAX startup E2E rejects Telegram SDK while preserving existing Bridge/initData/order assertions.
 9. [x] Keep #254 deploy/domain/TLS code unchanged.
 10. [x] Update frontend contract tests and MAX documentation.
-11. [ ] Re-run Standards review on the final design and resolve findings.
-12. [ ] Re-run Spec review on the final design and resolve findings.
+11. [x] Re-run Standards review on the final design and resolve findings.
+12. [x] Re-run Spec review on the final design and resolve findings.
 13. [ ] Run exact-head full CI to green, including Docker.
 14. [ ] Merge PR #256.
 15. [ ] Verify main CI, canonical auto-deploy, exact revision and current shared-origin native launches.
@@ -374,7 +374,37 @@ The dedicated MAX hostname is an existing #254 infrastructure invariant. Messeng
 - `wondelai/skills`: exact-SHA/staged-release discipline.
 - `anthropics/skills`: searched for directly applicable Mini App host/bridge guidance; no specific matching skill selected.
 
-### Review note
+### Code review — Standards axis
 
-Do not treat the earlier review of the removed post-export renderer as final evidence. The final dynamic-loader implementation requires a fresh Standards + Spec review before the merge-candidate SHA is frozen.
+Fixed point: `main` at `d70c76da9b34a03f4b4941aab8dfe877fdb0b9d9`.
+
+Findings and resolutions:
+
+1. The post-export renderer design was invalid because Next hydration restored the removed foreign bridge. Telegram startup E2E exposed this before merge. The renderer, its deploy integration and its dedicated test were deleted.
+2. The replacement is source-level: the layout contains one synchronous bridge loader and no unconditional external Telegram/MAX script tags.
+3. The static-export patcher now treats the loader as part of the startup contract, removes queued/direct duplicate bridge scripts and requires loader + bootstrap to precede Next runtime.
+4. Existing Telegram and MAX startup assertions for initData and SDK/Bridge ordering are preserved; only foreign-bridge absence was added.
+5. PR #254 deploy/domain/TLS implementation is unchanged, avoiding a second source of truth.
+6. Client-side platform choice is not an authorization boundary; existing server-side signed launch-data validation remains unchanged.
+
+Standards result: **clean; 0 unresolved findings**.
+
+### Code review — Spec axis
+
+Checked against the user's requested end state:
+
+- Telegram remains on `app.happy-fox.online`.
+- MAX can remain on that shared origin today and move to `max.happy-fox.online` after DNS/TLS activation.
+- On the shared origin, Telegram and MAX are distinguished by their native launch-parameter namespaces before either SDK is loaded.
+- On the dedicated MAX host, hostname additionally forces MAX Bridge.
+- Exactly one messenger bridge is loaded for a native launch.
+- Product UI/backend stay shared.
+- No APIX/Tanyapi/other-project change is introduced.
+- No manual source edit will be required tomorrow; #254 already owns the MAX origin switch.
+
+Spec result: **clean; 0 unresolved findings**.
+
+### Final pre-CI gate
+
+Earlier CI runs were intentionally invalidated by implementation changes. The next branch head is the only merge candidate. Full PR CI must pass on that exact SHA, including backend regression, dependency audit, callback load, Telegram/MAX Chromium+WebKit startup and production Docker verification. Do not edit this ledger merely to copy the successful run number afterward.
 
