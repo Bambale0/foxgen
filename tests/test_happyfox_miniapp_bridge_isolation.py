@@ -41,13 +41,16 @@ def test_shared_variant_preserves_both_bridges() -> None:
     assert 'happyfox-miniapp-channel" content="shared' in rendered
 
 
-def test_renderer_is_repeatable(tmp_path: Path) -> None:
+def test_renderer_is_repeatable_and_ignores_unrelated_html(tmp_path: Path) -> None:
     index = tmp_path / "index.html"
+    unrelated = tmp_path / "static.html"
     index.write_text(HTML, encoding="utf-8")
+    unrelated.write_text("<html><head><title>Static</title></head><body>ok</body></html>", encoding="utf-8")
 
     assert render_tree(tmp_path, "telegram") == 1
     assert render_tree(tmp_path, "telegram") == 1
     assert 'https://st.max.ru/js/max-web-app.js' not in index.read_text(encoding="utf-8")
+    assert unrelated.read_text(encoding="utf-8") == "<html><head><title>Static</title></head><body>ok</body></html>"
 
 
 def test_production_deploy_isolates_bridges_only_after_max_origin_split() -> None:
