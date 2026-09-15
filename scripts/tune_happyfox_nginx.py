@@ -13,7 +13,7 @@ UPSTREAM_BLOCK = """upstream happyfox_backend {
 """
 
 MAX_WEBHOOK_LAUNCH_COMPAT_BLOCK = """    location = /max/webhook {
-        if ($request_method = GET) { return 302 {max_miniapp_url}; }
+        if ($request_method = GET) { return 302 __MAX_MINIAPP_URL__; }
         proxy_pass http://happyfox_backend;
         proxy_http_version 1.1;
         proxy_set_header Connection "";
@@ -182,8 +182,9 @@ def _add_max_webhook_launch_compat(text: str, *, max_miniapp_url: str) -> str:
         raise ValueError("HappyFox API proxy fallback was not found")
     api_section = api_section.replace(
         marker,
-        MAX_WEBHOOK_LAUNCH_COMPAT_BLOCK.format(
-            max_miniapp_url=max_miniapp_url,
+        MAX_WEBHOOK_LAUNCH_COMPAT_BLOCK.replace(
+            "__MAX_MINIAPP_URL__",
+            max_miniapp_url,
         )
         + marker,
         1,
