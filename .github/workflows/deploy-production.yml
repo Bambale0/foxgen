@@ -196,7 +196,7 @@ jobs:
               "$miniapp_origin/mini-app/" || true)"
             [ "$post_status" = "200" ]
           done
-          max_location="$(curl -sS -I --max-time 20 https://api.happy-fox.online/max/webhook \
+          max_location="$(curl -sS -D - -o /dev/null --max-time 20 https://api.happy-fox.online/max/webhook \
             | awk 'BEGIN{IGNORECASE=1} /^location:/ {gsub(/\r/, "", $2); print $2; exit}')"
           [ "$max_location" = "$MAX_APP_ORIGIN/mini-app/" ]
 
