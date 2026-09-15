@@ -173,8 +173,10 @@ try {
       )
 
       const maxIndex = state.scripts.findIndex((script) => script.src === 'https://st.max.ru/js/max-web-app.js')
+      const telegramIndex = state.scripts.findIndex((script) => script.src === '/mini-app/telegram-web-app.js')
       const firstNextIndex = state.scripts.findIndex((script) => script.src.startsWith('/mini-app/_next/static/'))
       assert.ok(maxIndex >= 0, `${target.name}: MAX Bridge script missing`)
+      assert.equal(telegramIndex, -1, `${target.name}: Telegram SDK must not load for MAX launch`)
       assert.ok(
         firstNextIndex < 0 || maxIndex < firstNextIndex,
         `${target.name}: MAX Bridge must load before Next.js runtime`,

@@ -59,7 +59,7 @@ API:                https://api.happy-fox.online
 MAX webhook:        https://api.happy-fox.online/max/webhook
 ```
 
-Telegram and MAX serve the **same verified frontend revision**, but from different public origins. This deliberately isolates Telegram WebApp launch state from MAX Bridge launch state while preserving one source tree and one release artifact.
+Telegram and MAX serve the **same verified frontend revision**. A synchronous bridge loader runs before the application bootstrap and selects exactly one native bridge from launch parameters (`tgWebApp*` vs `WebApp*`); `max.happy-fox.online` also forces the MAX bridge after dedicated-origin activation. This works on the current shared origin and on the future split origins without duplicating the frontend artifact.
 
 The dedicated `happyfox` host owns the application/data plane. `apix` is a Telegram transport relay only and is not a MAX or HappyFox application host.
 
@@ -266,7 +266,9 @@ MAX parity is a release invariant. Before merge/deploy, regression coverage must
 9. Telegram Mini App remains `https://app.happy-fox.online/mini-app/`;
 10. MAX Mini App resolves to the dedicated configured origin after activation;
 11. Telegram Chromium/iPhone WebKit and MAX Chromium/iPhone WebKit startup E2E are green;
-12. both public origins expose the exact deployed revision when the dedicated MAX domain is enabled.
+12. both public origins expose the exact deployed revision when the dedicated MAX domain is enabled;
+13. a Telegram launch loads the Telegram SDK and no MAX Bridge, while a MAX launch loads the MAX Bridge and no Telegram SDK;
+14. the same bridge-selection contract works before dedicated-origin activation on the shared app origin and after activation on `max.happy-fox.online`.
 
 ## Dark-by-default contract
 

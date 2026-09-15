@@ -129,12 +129,14 @@ try {
       const headContract = await page.evaluate(() => {
         const scripts = Array.from(document.head.querySelectorAll('script'))
         const sdk = scripts.find((script) => script.getAttribute('src') === '/mini-app/telegram-web-app.js')
+        const max = scripts.find((script) => script.getAttribute('src') === 'https://st.max.ru/js/max-web-app.js')
         const early = scripts.find((script) => script.id === 'telegram-early-ready')
         const firstNextIndex = scripts.findIndex((script) =>
           String(script.getAttribute('src') || '').startsWith('/mini-app/_next/static/'),
         )
         return {
           sdkIndex: sdk ? scripts.indexOf(sdk) : -1,
+          maxIndex: max ? scripts.indexOf(max) : -1,
           firstNextIndex,
           sdkAsync: sdk?.async ?? null,
           sdkDefer: sdk?.defer ?? null,
@@ -143,6 +145,7 @@ try {
       })
 
       assert.ok(headContract.sdkIndex >= 0, `${target.name}: Telegram SDK script missing`)
+      assert.equal(headContract.maxIndex, -1, `${target.name}: MAX Bridge must not load for Telegram launch`)
       assert.ok(
         headContract.firstNextIndex < 0 || headContract.sdkIndex < headContract.firstNextIndex,
         `${target.name}: Telegram SDK must execute before Next.js runtime`,
