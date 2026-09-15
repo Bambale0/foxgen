@@ -38,6 +38,15 @@ def test_frontend_api_understands_max_webappdata_but_prefers_telegram() -> None:
     assert "platform: getMiniAppPlatform()" in api
 
 
+def test_server_injection_does_not_overwrite_early_launch_snapshot() -> None:
+    miniapp = (ROOT / "bot" / "miniapp.py").read_text()
+
+    assert "existing=window.__BANANO_INITIAL_LAUNCH__" in miniapp
+    assert "if(existing&&(existing.hash||existing.search)){return;}" in miniapp
+    assert '"initial_hash_len"' in miniapp
+    assert '"max_init_data_len"' in miniapp
+
+
 def test_max_payment_path_does_not_offer_telegram_stars_unconditionally() -> None:
     balance = (MINIAPP / "components" / "balance-sheet.tsx").read_text()
     payment_api = (MINIAPP / "lib" / "payment-api.ts").read_text()
