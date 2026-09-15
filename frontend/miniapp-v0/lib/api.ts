@@ -67,8 +67,10 @@ export function getMiniAppPlatform(): 'telegram' | 'max' | 'browser' {
   if (explicit === 'max' || explicit === 'telegram') return explicit
 
   const params = getLaunchParams()
-  if (window.WebApp?.initData || params.get('WebAppData')) return 'max'
-  if (window.Telegram?.WebApp?.initData || params.get('tgWebAppData')) return 'telegram'
+  if (params.get('tgWebAppData')) return 'telegram'
+  if (params.get('WebAppData')) return 'max'
+  if (window.Telegram?.WebApp?.initData) return 'telegram'
+  if (window.WebApp?.initData) return 'max'
   return 'browser'
 }
 
