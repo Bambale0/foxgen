@@ -184,3 +184,110 @@ The user explicitly clarified the required engineering path:
 Direct changes to `main` are not allowed for ordinary engineering work. The canonical deploy workflow's exact-SHA synchronization, including its existing `git reset --hard "$EXPECTED_SHA"`, is authorized without a separate confirmation when it runs only as part of this reviewed, green, exact-SHA auto-deploy path. Manual/destructive resets outside that path remain prohibited without specific approval.
 
 The current execution environment does not expose the parallel `Agent` sub-agent tool referenced by the `code-review` skill. The two required review axes will therefore be executed independently in this session against the same fixed point and reported separately; this platform limitation must not be represented as the literal parallel-subagent implementation.
+
+---
+
+## Active Feature Execution — dedicated MAX Mini App origin
+
+### Task
+
+Separate the MAX Mini App origin from Telegram so each messenger opens the shared HappyFox frontend through its own platform-specific public origin. Target MAX origin: `https://max.happy-fox.online/mini-app/`. Telegram remains on `https://app.happy-fox.online/mini-app/`.
+
+### Baseline
+
+- Repository: `Bambale0/foxgen`
+- Base branch: `main`
+- Baseline SHA: `a01bedc79767cbde4ad248cbf0bf95b6d6006a72`
+- Working branch: `feat/max-dedicated-miniapp-domain`
+
+### Fresh audit
+
+Already exists:
+
+- `MAX_MINI_APP_URL` is already a distinct runtime setting in `bot/max_api.py`.
+- MAX uses native `open_app` buttons and reads the registered MAX bot/app name separately from Telegram.
+- The shared frontend already contains platform-specific Telegram/MAX authentication handling and browser E2E coverage.
+- Production deploy already publishes the exact verified frontend bundle and verifies Telegram/MAX startup compatibility.
+
+Partial/problematic:
+
+- `scripts/deploy_happyfox_dedicated.sh` currently overwrites `MAX_MINI_APP_URL` to the Telegram app origin on every deploy.
+- `scripts/tune_happyfox_nginx.py` hardcodes the MAX webhook GET compatibility redirect to `https://app.happy-fox.online/mini-app/`.
+- CI deploy passes only API/app/landing origins; there is no separately configurable MAX app origin.
+- Documentation and examples describe one Mini App origin for both Telegram and MAX.
+
+Missing:
+
+- Dedicated production origin contract for MAX.
+- Dedicated static webroot/nginx activation path for `max.happy-fox.online`.
+- Release smoke that verifies MAX can serve the same exact revision from its own origin after activation.
+- Regression tests preventing deploy from collapsing MAX back onto the Telegram origin.
+
+### Intended outcome / acceptance criteria
+
+1. Telegram stays on `https://app.happy-fox.online/mini-app/`.
+2. MAX can use `https://max.happy-fox.online/mini-app/` without sharing Telegram's public origin.
+3. Both origins serve the exact same verified frontend revision from the same HappyFox release.
+4. MAX API/webhook remains on `https://api.happy-fox.online/max/webhook`.
+5. Deploy is backward-compatible before DNS activation: until a dedicated MAX origin is enabled, production may continue using the current app origin.
+6. After DNS/certificate activation, changing `HAPPYFOX_MAX_APP_ORIGIN` is sufficient to make deploy canonicalize `MAX_MINI_APP_URL` to the MAX origin.
+7. No Telegram button or Telegram Mini App URL changes as part of this feature.
+8. No cross-project/APIX changes.
+9. Nginx activation is deterministic, TLS-verified, and does not disable certificate validation.
+10. CI/regression covers split-origin topology and MAX/Telegram E2E remains green.
+
+### No-hardcode decision
+
+The hostname is an infrastructure default, not mutable business configuration. Production switching is controlled through `HAPPYFOX_MAX_APP_ORIGIN`; MAX runtime continues to consume the typed `MAX_MINI_APP_URL` environment setting. No product/business policy is hardcoded.
+
+### Schema/API/UI
+
+- Database: N/A.
+- API schema: N/A.
+- UI: same frontend and UX; only public MAX origin changes.
+- Telegram: no intended change.
+- MAX: launch/return links resolve to the MAX-specific origin after activation.
+
+### Security / ownership
+
+- MAX and Telegram identity/ledger isolation remains unchanged.
+- TLS certificates remain mandatory.
+- MAX auth validation remains server-side.
+- No secrets are added to repository files.
+
+### Observability / smoke
+
+- Deploy summary must state Telegram Mini App origin and MAX Mini App origin separately.
+- Public revision smoke must verify the exact commit from the MAX origin after it is enabled.
+- Existing MAX connectivity/subscription smoke remains required.
+
+### Test seams
+
+- deployment-script contract;
+- nginx tuning/config contract;
+- MAX settings/runtime tests;
+- Telegram + MAX browser startup E2E;
+- exact-source Docker and public revision smoke.
+
+### Implementation steps
+
+1. [x] Read current `AGENTS.md`, MAX docs/settings, deploy workflow, deploy script, nginx tuner and existing tests.
+2. [x] Audit existing split settings and identify deploy-time forced coupling.
+3. [x] Create branch from current `main`.
+4. [ ] Add a separately configurable MAX public app origin with safe backward-compatible default.
+5. [ ] Publish the verified frontend artifact to a dedicated MAX webroot.
+6. [ ] Add deterministic MAX-domain nginx activation tooling/template for use after DNS exists.
+7. [ ] Parameterize MAX launch compatibility redirect and deployment smoke.
+8. [ ] Update docs/examples/topology.
+9. [ ] Add regression tests.
+10. [ ] Run focused and full CI, including Telegram/MAX startup E2E.
+11. [ ] Run standards/spec code review and resolve findings.
+12. [ ] Merge only after exact-head CI is green. Do not activate the new public MAX origin until DNS/TLS are ready.
+13. [ ] After user creates DNS, activate TLS/nginx for `max.happy-fox.online`, set the production MAX origin, deploy exact main SHA, and verify real MAX launch.
+
+### Skills/guides
+
+- `Bambale0/skills`: `implement`; repository-required TDD/code-review flow will be used for regression/review.
+- `wondelai/skills`: `release-it` identified as relevant to deployment/release safety.
+- `Bambale0/claw`: searched for relevant deployment/debug guidance; no more specific safe guide selected yet.
+- `anthropics/skills`: searched narrowly for deployment/web-app guidance; no directly applicable skill selected, so none is being forced into the change.
