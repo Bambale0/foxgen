@@ -578,6 +578,46 @@ For each change:
 13. verify deployed revision and telemetry when deployment occurs;
 14. deliver the required report.
 
+## Mandatory branch, review, merge, and auto-deploy workflow
+
+Do not make ordinary engineering changes directly on `main`.
+
+For every code, configuration, CI/CD, migration, runtime, or material documentation change:
+
+1. Create a dedicated branch from the current verified `main` baseline.
+2. Make the smallest coherent change on that branch.
+3. Run the relevant focused checks.
+4. Invoke and apply the `Bambale0/skills` `code-review` skill against the fixed point `main` (or the explicit baseline supplied by the user).
+5. Review both axes required by that skill:
+   - **Standards** — repository rules and engineering standards;
+   - **Spec** — the originating user request/spec/acceptance criteria.
+6. Resolve all material review findings. Do not merge with unresolved high-severity findings.
+7. Run the repository's full applicable CI on the exact branch head SHA and require it to be green.
+8. Merge through a Pull Request. Do not bypass the reviewed PR path with direct writes to `main`.
+9. Let the canonical GitHub Actions production workflow auto-deploy the verified `main` SHA when that workflow applies.
+10. Verify the deployed revision, health, channel reconciliation, and relevant telemetry after auto-deploy.
+
+### Canonical auto-deploy authorization
+
+The user has explicitly approved the normal HappyFox release path:
+
+`branch → reviewer skill → findings resolved → exact-SHA CI green → PR merge → canonical auto-deploy → production verification`.
+
+Within that approved path, the existing production workflow may execute its exact-SHA synchronization command, including:
+
+`git reset --hard "$EXPECTED_SHA"`
+
+on the dedicated HappyFox production checkout **without asking for separate confirmation each time**, provided all of the following are true:
+
+- the command is executed only by the canonical repository deployment workflow;
+- the SHA is the exact verified `main` SHA produced by the reviewed PR merge;
+- required CI for that SHA is green;
+- repository provenance and production host checks pass;
+- no unrelated data, volume, secret, database, or infrastructure deletion is performed;
+- the deploy workflow's normal rollback path remains available.
+
+This authorization does **not** permit arbitrary/manual `git reset --hard`, direct production edits, force pushes, destructive cleanup, or bypassing branch/review/CI gates. Those remain subject to the destructive-action rules.
+
 ## Standard delivery report
 
 Every completed engineering response must state:
