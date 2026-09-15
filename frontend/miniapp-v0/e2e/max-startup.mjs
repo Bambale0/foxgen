@@ -47,9 +47,18 @@ async function waitForServer(url, timeoutMs = 20_000) {
   throw new Error(`Static server did not start: ${url}`)
 }
 
+rmSync(serverDir, { recursive: true, force: true })
+mkdirSync(serverDir, { recursive: true })
+cpSync('out', miniAppDir, { recursive: true })
+execFileSync(
+  'python3',
+  ['../../scripts/render_happyfox_miniapp_channel.py', miniAppDir, 'max'],
+  { stdio: 'inherit' },
+)
+
 const server = spawn(
   'python3',
-  ['-m', 'http.server', '4174', '--directory', '.e2e-server'],
+  ['-m', 'http.server', '4174', '--directory', serverDir],
   { stdio: 'inherit' },
 )
 
@@ -176,8 +185,10 @@ try {
       )
 
       const maxIndex = state.scripts.findIndex((script) => script.src === 'https://st.max.ru/js/max-web-app.js')
+      const telegramIndex = state.scripts.findIndex((script) => script.src === '/mini-app/telegram-web-app.js')
       const firstNextIndex = state.scripts.findIndex((script) => script.src.startsWith('/mini-app/_next/static/'))
       assert.ok(maxIndex >= 0, `${target.name}: MAX Bridge script missing`)
+      assert.equal(telegramIndex, -1, `${target.name}: Telegram SDK must not load on MAX host`)
       assert.ok(
         firstNextIndex < 0 || maxIndex < firstNextIndex,
         `${target.name}: MAX Bridge must load before Next.js runtime`,
@@ -191,4 +202,5 @@ try {
   }
 } finally {
   server.kill('SIGTERM')
+  rmSync(serverDir, { recursive: true, force: true })
 }
