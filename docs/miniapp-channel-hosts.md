@@ -28,7 +28,7 @@ The repository still builds one generic static export. `scripts/render_happyfox_
 
 ## Transition safety
 
-The production split is server-activated. Until `/etc/foxgen-happyfox/max-miniapp.env` exists, `scripts/activate_happyfox_channel_miniapps.sh` is a no-op and the current shared host remains untouched.
+The production split is server-activated. Until `/etc/foxgen-happyfox/max-miniapp.env` exists, `scripts/activate_happyfox_channel_miniapps.sh` keeps shared launch mode active and restores the shared MAX redirect if a previous split is being rolled back.
 
 This is deliberate: merging the preparation must not break the currently registered MAX Mini App URL before DNS and TLS for `max.happy-fox.online` exist.
 
@@ -57,7 +57,7 @@ This is deliberate: merging the preparation must not break the currently registe
 
    `https://max.ru/<botName>?startapp`
 
-The post-deploy workflow `Reconcile HappyFox Mini App channel split` reruns activation after later successful production deploys. Once the server activation config exists, future deploys return to the split state automatically.
+The canonical `Deploy HappyFox production` workflow runs the same reconciliation step after every verified deployment. Once the server activation config exists, future deploys return to the split state automatically; without the config, the same step keeps shared launch mode active.
 
 ## Release invariants
 
@@ -80,4 +80,4 @@ Do not delete DNS/certificates as a first rollback step. To return temporarily t
 2. set the MAX partner Mini App URL back to `https://app.happy-fox.online/mini-app/`;
 3. run the canonical HappyFox production deployment for the verified main SHA.
 
-That restores the generic shared bundle to `app.happy-fox.online`. Keep the dedicated MAX vhost available until the rollback has been verified.
+The reconciliation step restores the shared MAX redirect and the canonical deploy restores the generic shared bundle to `app.happy-fox.online`. Keep the dedicated MAX vhost available until the rollback has been verified.
