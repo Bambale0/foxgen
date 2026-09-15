@@ -266,7 +266,9 @@ MAX parity is a release invariant. Before merge/deploy, regression coverage must
 9. Telegram Mini App remains `https://app.happy-fox.online/mini-app/`;
 10. MAX Mini App resolves to the dedicated configured origin after activation;
 11. Telegram Chromium/iPhone WebKit and MAX Chromium/iPhone WebKit startup E2E are green;
-12. both public origins expose the exact deployed revision when the dedicated MAX domain is enabled;\n13. after split activation, Telegram HTML contains the Telegram SDK and no MAX Bridge, while MAX HTML contains the MAX Bridge and no Telegram SDK;\n14. before split activation, shared-origin mode still contains both bridges for backward compatibility.
+12. both public origins expose the exact deployed revision when the dedicated MAX domain is enabled;
+13. after split activation, Telegram HTML contains the Telegram SDK and no MAX Bridge, while MAX HTML contains the MAX Bridge and no Telegram SDK;
+14. before split activation, shared-origin mode still contains both bridges for backward compatibility.
 
 ## Dark-by-default contract
 
