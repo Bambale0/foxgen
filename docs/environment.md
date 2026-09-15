@@ -29,6 +29,11 @@ WEBHOOK_PORT=1888
 MINI_APP_URL=https://app.happy-fox.online/mini-app/
 STATIC_BASE_URL=https://api.happy-fox.online
 
+MAX_ENABLED=0
+MAX_WEBHOOK_URL=https://api.happy-fox.online/max/webhook
+MAX_WEBHOOK_PATH=/max/webhook
+MAX_MINI_APP_URL=https://max.happy-fox.online/mini-app/
+
 DATABASE_URL=postgresql://happyfox:change-me@127.0.0.1:5432/happyfox
 REDIS_URL=redis://127.0.0.1:6379/3
 REDIS_PREFIX=foxgen_happyfox
@@ -52,7 +57,29 @@ Use `.env.happyfox.example` as the actual template.
 
 The native Telegram system menu is `commands`; it is not a Mini App launcher.
 
+`MINI_APP_URL` belongs to Telegram and remains `https://app.happy-fox.online/mini-app/` in production.
+
 Do not reuse one bot token in competing active runtimes.
+
+## MAX
+
+MAX has its own launch URL even though Telegram and MAX use the same frontend source and exact release artifact:
+
+```dotenv
+MAX_WEBHOOK_URL=https://api.happy-fox.online/max/webhook
+MAX_WEBHOOK_PATH=/max/webhook
+MAX_MINI_APP_URL=https://max.happy-fox.online/mini-app/
+```
+
+The canonical deployment control is `HAPPYFOX_MAX_APP_ORIGIN`. Before the dedicated MAX DNS/TLS endpoint exists, the deployment workflow safely defaults this origin to `https://app.happy-fox.online`, preserving current production. After `max.happy-fox.online` is activated, set the production variable to:
+
+```text
+https://max.happy-fox.online
+```
+
+The exact-SHA deployment then canonicalizes `MAX_MINI_APP_URL` to the dedicated MAX URL. Do not change Telegram `MINI_APP_URL` when doing this.
+
+The same frontend bundle is published to `/var/www/happyfox-app/mini-app` and `/var/www/happyfox-max/mini-app`; separate public origins isolate platform WebView/bridge state without creating a second application/data plane.
 
 ## Public HTTP
 
@@ -67,7 +94,7 @@ WEBHOOK_PORT=1888
 
 The aiohttp port should normally remain private behind Nginx/reverse proxy.
 
-`MINI_APP_URL` is the public Telegram Mini App URL.
+`MINI_APP_URL` is the public Telegram Mini App URL. `MAX_MINI_APP_URL` is the public MAX Mini App URL.
 
 `STATIC_BASE_URL` is the public base used when generated/uploaded media must be reachable from external providers.
 
@@ -157,6 +184,8 @@ YOOKASSA_REQUEST_TIMEOUT_SECONDS=30
 YOOKASSA_PENDING_TTL_HOURS=168
 ```
 
+MAX payment return links use the MAX-native return/deep-link configuration where available; Telegram YooKassa return remains on the Telegram Mini App origin.
+
 ### Lava Top
 
 ```dotenv
@@ -213,7 +242,7 @@ NEXT_PUBLIC_MINIAPP_BASE_PATH=/mini-app
 NEXT_PUBLIC_MINIAPP_ORIGIN=https://app.happy-fox.online
 ```
 
-`NEXT_PUBLIC_MINIAPP_ORIGIN` is the browser origin used by landing-page web CTAs. Keep the route itself in `NEXT_PUBLIC_MINIAPP_BASE_PATH`; production resolves to `https://app.happy-fox.online/mini-app/` and referral/start parameters are appended to that URL.
+`NEXT_PUBLIC_MINIAPP_ORIGIN` is the browser origin used by landing-page web CTAs. It intentionally remains the Telegram/browser landing origin even when MAX serves the same static bundle from `max.happy-fox.online`; MAX bot launch uses the native MAX Mini App registration/open-app contour, not this landing CTA constant.
 
 Anything beginning `NEXT_PUBLIC_` can be read by users.
 
@@ -255,3 +284,16 @@ Turning `INSTAGRAM_ENABLED` from `0` to `1` is a production channel activation. 
 - first-free-photo smoke;
 - paid video top-up/resume smoke;
 - rollback action (`INSTAGRAM_ENABLED=0` + redeploy/restart).
+
+## MAX dedicated-origin activation change control
+
+Activating `max.happy-fox.online` is an infrastructure rollout, not a second product runtime. Record:
+
+- exact deployed SHA and `/var/www/happyfox-max/mini-app/revision.txt`;
+- DNS resolution to the HappyFox production edge;
+- successful TLS issuance and `nginx -t`;
+- revision/OPTIONS/POST/bootstrap smoke from `https://max.happy-fox.online/mini-app/`;
+- MAX partner-platform Mini App URL set to the same HTTPS URL;
+- `HAPPYFOX_MAX_APP_ORIGIN=https://max.happy-fox.online` in production variables;
+- successful exact-SHA redeploy and MAX native `open_app` launch;
+- rollback: restore `HAPPYFOX_MAX_APP_ORIGIN=https://app.happy-fox.online` and redeploy.
