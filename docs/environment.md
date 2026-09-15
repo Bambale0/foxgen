@@ -26,7 +26,10 @@ TELEGRAM_WEBHOOK_URL=https://api.happy-fox.online/webhook
 TELEGRAM_WEBHOOK_IP_ADDRESS=
 WEBHOOK_BIND_HOST=127.0.0.1
 WEBHOOK_PORT=1888
+# Telegram Mini App origin
 MINI_APP_URL=https://app.happy-fox.online/mini-app/
+# MAX uses its own origin after DNS/TLS activation
+MAX_MINI_APP_URL=https://max.happy-fox.online/mini-app/
 STATIC_BASE_URL=https://api.happy-fox.online
 
 DATABASE_URL=postgresql://happyfox:change-me@127.0.0.1:5432/happyfox
