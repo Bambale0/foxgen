@@ -67,6 +67,7 @@ def test_bootstrap_preserves_max_and_instagram_runtime_credentials() -> None:
             "MAX_WEBHOOK_URL": "https://stale.example/max/webhook",
             "MAX_WEBHOOK_PATH": "/max/webhook",
             "MAX_BOT_NAME": "happyfox_max",
+            "MAX_MINI_APP_URL": "https://max.happy-fox.online/mini-app/",
             "MAX_PAYMENT_RETURN_URL": "https://max.ru/happyfox?start=max_payment",
             "INSTAGRAM_ENABLED": "1",
             "INSTAGRAM_APP_ID": "ig-app",
@@ -85,7 +86,7 @@ def test_bootstrap_preserves_max_and_instagram_runtime_credentials() -> None:
     assert values["MAX_ACCESS_TOKEN"] == "max-access"
     assert values["MAX_WEBHOOK_SECRET"] == "max-secret"
     assert values["MAX_WEBHOOK_URL"] == "https://alena.chillcreative.ru/max/webhook"
-    assert values["MAX_MINI_APP_URL"] == "https://alena.chillcreative.ru/mini-app/"
+    assert values["MAX_MINI_APP_URL"] == "https://max.happy-fox.online/mini-app/"
     assert values["INSTAGRAM_ENABLED"] == "1"
     assert values["INSTAGRAM_APP_SECRET"] == "ig-secret"
     assert values["INSTAGRAM_VERIFY_TOKEN"] == "ig-verify"
