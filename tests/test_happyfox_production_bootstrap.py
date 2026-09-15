@@ -1,4 +1,5 @@
 from pathlib import Path
+import subprocess
 
 from scripts.prepare_happyfox_production import (
     build_runtime_values,
@@ -323,4 +324,12 @@ def test_max_runtime_recovery_preserves_explicit_dedicated_origin() -> None:
 
     assert values["MINI_APP_URL"] == "https://alena.chillcreative.ru/mini-app/"
     assert values["MAX_MINI_APP_URL"] == "https://max.happy-fox.online/mini-app/"
+
+def test_dedicated_deploy_shell_syntax_is_valid() -> None:
+    subprocess.run(
+        ["bash", "-n", "scripts/deploy_happyfox_dedicated.sh"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
 
