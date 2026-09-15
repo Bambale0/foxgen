@@ -74,6 +74,16 @@ try {
       const context = await browser.newContext({ ...target.device })
       const page = await context.newPage()
       let bootstrapRequest = null
+      let telegramSdkRequests = 0
+
+      await page.route('**/mini-app/telegram-web-app.js', async (route) => {
+        telegramSdkRequests += 1
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/javascript',
+          body: '// Telegram SDK must not be requested during MAX startup.\n',
+        })
+      })
 
       await page.addInitScript(
         ({ initDataValue, bridgePlatform }) => {
@@ -172,9 +182,16 @@ try {
         `${target.name}: Telegram browser gate must not appear inside MAX`,
       )
 
+      const loaderIndex = state.scripts.findIndex((script) => script.id === 'miniapp-bridge-loader')
       const maxIndex = state.scripts.findIndex((script) => script.src === 'https://st.max.ru/js/max-web-app.js')
+      const telegramIndex = state.scripts.findIndex((script) => script.src === '/mini-app/telegram-web-app.js')
+      const earlyIndex = state.scripts.findIndex((script) => script.id === 'miniapp-early-ready')
       const firstNextIndex = state.scripts.findIndex((script) => script.src.startsWith('/mini-app/_next/static/'))
-      assert.ok(maxIndex >= 0, `${target.name}: MAX Bridge script missing`)
+      assert.ok(loaderIndex >= 0, `${target.name}: platform bridge loader missing`)
+      assert.ok(maxIndex > loaderIndex, `${target.name}: MAX Bridge script missing or loaded too early`)
+      assert.equal(telegramIndex, -1, `${target.name}: Telegram SDK must not load in MAX`)
+      assert.equal(telegramSdkRequests, 0, `${target.name}: MAX startup requested Telegram SDK`)
+      assert.ok(earlyIndex > maxIndex, `${target.name}: bootstrap must run after MAX Bridge`)
       assert.ok(
         firstNextIndex < 0 || maxIndex < firstNextIndex,
         `${target.name}: MAX Bridge must load before Next.js runtime`,

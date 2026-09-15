@@ -153,6 +153,7 @@ jobs:
           env \
             HAPPYFOX_API_ORIGIN=https://api.happy-fox.online \
             HAPPYFOX_APP_ORIGIN=https://app.happy-fox.online \
+            HAPPYFOX_MAX_APP_ORIGIN='${{ vars.HAPPYFOX_MAX_APP_ORIGIN }}' \
             HAPPYFOX_LANDING_ORIGIN=https://happy-fox.online \
             HAPPYFOX_DATABASE_NAME=happyfox_cutover \
             bash scripts/deploy_happyfox_dedicated.sh "$expected_sha"
@@ -167,9 +168,19 @@ jobs:
           revision="$(curl -fsS --retry 5 --retry-delay 2 --retry-all-errors --max-time 20 \
             "https://app.happy-fox.online/mini-app/revision.txt?revision=${EXPECTED_SHA}")"
           [ "$revision" = "$EXPECTED_SHA" ]
+          max_app_origin='${{ vars.HAPPYFOX_MAX_APP_ORIGIN }}'
+          if [ -n "$max_app_origin" ]; then
+            max_revision="$(curl -fsS --retry 5 --retry-delay 2 --retry-all-errors --max-time 20 \
+              "${max_app_origin%/}/mini-app/revision.txt?revision=${EXPECTED_SHA}")"
+            [ "$max_revision" = "$EXPECTED_SHA" ]
+          fi
           curl -fsS --retry 5 --retry-delay 2 --retry-all-errors --max-time 20 \
             https://happy-fox.online/ >/dev/null
-          for miniapp_origin in https://app.happy-fox.online https://happy-fox.online; do
+          miniapp_origins=(https://app.happy-fox.online https://happy-fox.online)
+          if [ -n "$max_app_origin" ]; then
+            miniapp_origins+=("${max_app_origin%/}")
+          fi
+          for miniapp_origin in "${miniapp_origins[@]}"; do
             options_status="$(curl -sS -o /dev/null -w '%{http_code}' -X OPTIONS --max-time 20 \
               -H 'Origin: https://max.ru' "$miniapp_origin/mini-app/" || true)"
             [ "$options_status" = "204" ]
@@ -191,6 +202,12 @@ jobs:
             echo '- Secrets/runtime overlay: server-authoritative; Actions does not overwrite it'
             echo '- API/webhooks: `https://api.happy-fox.online`'
             echo '- Mini App: `https://app.happy-fox.online/mini-app/`'
+            max_app_origin='${{ vars.HAPPYFOX_MAX_APP_ORIGIN }}'
+            if [ -n "$max_app_origin" ]; then
+              echo "- MAX Mini App: ${max_app_origin%/}/mini-app/"
+            else
+              echo '- MAX Mini App: uses runtime `MAX_MINI_APP_URL` until dedicated origin activation'
+            fi
             echo '- Landing: `https://happy-fox.online/`'
             echo '- Telegram webhook and MAX subscription are reconciled by the deploy gate.'
           } >> "$GITHUB_STEP_SUMMARY"

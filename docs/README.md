@@ -48,7 +48,8 @@ MAX / Instagram ────────┤
 Payment/provider hooks ─┘
 
 Landing:          https://happy-fox.online/
-Mini App:         https://app.happy-fox.online/mini-app/
+Telegram Mini App:https://app.happy-fox.online/mini-app/
+MAX Mini App:     https://max.happy-fox.online/mini-app/  # after DNS/TLS activation
 API/webhooks:     https://api.happy-fox.online
 Compose:          foxgen-happyfox
 Container:        foxgen-happyfox-bot

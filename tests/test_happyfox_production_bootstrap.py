@@ -1,3 +1,4 @@
+import subprocess
 from pathlib import Path
 
 from scripts.prepare_happyfox_production import (
@@ -67,6 +68,7 @@ def test_bootstrap_preserves_max_and_instagram_runtime_credentials() -> None:
             "MAX_WEBHOOK_URL": "https://stale.example/max/webhook",
             "MAX_WEBHOOK_PATH": "/max/webhook",
             "MAX_BOT_NAME": "happyfox_max",
+            "MAX_MINI_APP_URL": "https://max.happy-fox.online/mini-app/",
             "MAX_PAYMENT_RETURN_URL": "https://max.ru/happyfox?start=max_payment",
             "INSTAGRAM_ENABLED": "1",
             "INSTAGRAM_APP_ID": "ig-app",
@@ -85,7 +87,7 @@ def test_bootstrap_preserves_max_and_instagram_runtime_credentials() -> None:
     assert values["MAX_ACCESS_TOKEN"] == "max-access"
     assert values["MAX_WEBHOOK_SECRET"] == "max-secret"
     assert values["MAX_WEBHOOK_URL"] == "https://alena.chillcreative.ru/max/webhook"
-    assert values["MAX_MINI_APP_URL"] == "https://alena.chillcreative.ru/mini-app/"
+    assert values["MAX_MINI_APP_URL"] == "https://max.happy-fox.online/mini-app/"
     assert values["INSTAGRAM_ENABLED"] == "1"
     assert values["INSTAGRAM_APP_SECRET"] == "ig-secret"
     assert values["INSTAGRAM_VERIFY_TOKEN"] == "ig-verify"
@@ -255,3 +257,79 @@ def test_production_workflow_syncs_with_server_gh_before_deploy() -> None:
     assert "deploy_happyfox_dedicated.sh" in workflow
     assert "HAPPYFOX_DATABASE_NAME=happyfox_cutover" in workflow
     assert "HAPPYFOX_RUNTIME_ENV" not in workflow
+
+def test_max_miniapp_url_is_required_and_https_when_max_is_enabled() -> None:
+    base = build_runtime_values(
+        _legacy(),
+        {},
+        database_name="happyfox",
+        redis_db=4,
+    )
+    base.update(
+        {
+            "MAX_ENABLED": "1",
+            "MAX_ACCESS_TOKEN": "max-access",
+            "MAX_WEBHOOK_SECRET": "max-secret",
+            "MAX_WEBHOOK_URL": "https://alena.chillcreative.ru/max/webhook",
+            "MAX_BOT_NAME": "happyfox_max",
+            "MAX_PAYMENT_RETURN_URL": "https://max.ru/happyfox?start=max_payment",
+            "YOOKASSA_SHOP_ID": "shop",
+            "YOOKASSA_SECRET_KEY": "secret",
+        }
+    )
+
+    missing = dict(base)
+    missing.pop("MAX_MINI_APP_URL", None)
+    assert "MAX_MINI_APP_URL is required when MAX_ENABLED=1" in validate(missing)
+
+    insecure = dict(base)
+    insecure["MAX_MINI_APP_URL"] = "http://max.happy-fox.online/mini-app/"
+    assert "MAX_MINI_APP_URL must use https://" in validate(insecure)
+
+
+def test_dedicated_deploy_supports_optional_max_origin_without_changing_telegram() -> None:
+    script = Path("scripts/deploy_happyfox_dedicated.sh").read_text(encoding="utf-8")
+    workflow = Path(".github/workflows/deploy-production.yml").read_text(encoding="utf-8")
+    profile = Path("deploy/happyfox-max-miniapp.env.example").read_text(encoding="utf-8")
+
+    assert 'APP_ORIGIN="${HAPPYFOX_APP_ORIGIN:-https://app.happy-fox.online}"' in script
+    assert 'MAX_APP_ORIGIN="${HAPPYFOX_MAX_APP_ORIGIN:-}"' in script
+    assert 'values["MINI_APP_URL"] = f"{app}/mini-app/"' in script
+    assert 'values["MAX_MINI_APP_URL"] = f"{app}/mini-app/"' in script
+    assert "if max_app_override:" in script
+    assert "resolve_happyfox_miniapp_nginx_path.py" in script
+    assert '--max-miniapp-url "${MAX_MINI_APP_URL_EFFECTIVE:-${APP_ORIGIN}/mini-app/}"' in script
+    assert "HAPPYFOX_MAX_APP_ORIGIN='${{ vars.HAPPYFOX_MAX_APP_ORIGIN }}'" in workflow
+    assert "FRONTEND_DOMAIN=max.happy-fox.online" in profile
+    assert "BACKEND_ORIGIN=https://api.happy-fox.online" in profile
+    assert "BACKEND_SSH_HOST=" in profile
+    assert "MINI_APP_URL=" not in profile
+
+
+def test_max_runtime_recovery_preserves_explicit_dedicated_origin() -> None:
+    values = build_runtime_values(
+        _legacy(),
+        {
+            "MAX_ENABLED": "1",
+            "MAX_ACCESS_TOKEN": "max-access",
+            "MAX_WEBHOOK_SECRET": "max-secret",
+            "MAX_WEBHOOK_PATH": "/max/webhook",
+            "MAX_BOT_NAME": "happyfox_max",
+            "MAX_MINI_APP_URL": "https://max.happy-fox.online/mini-app/",
+            "MAX_PAYMENT_RETURN_URL": "https://max.ru/happyfox?start=max_payment",
+        },
+        database_name="happyfox",
+        redis_db=9,
+    )
+
+    assert values["MINI_APP_URL"] == "https://alena.chillcreative.ru/mini-app/"
+    assert values["MAX_MINI_APP_URL"] == "https://max.happy-fox.online/mini-app/"
+
+def test_dedicated_deploy_shell_syntax_is_valid() -> None:
+    subprocess.run(
+        ["bash", "-n", "scripts/deploy_happyfox_dedicated.sh"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+

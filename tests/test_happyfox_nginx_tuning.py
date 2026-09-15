@@ -34,7 +34,10 @@ server {
 
 
 def test_tune_happyfox_site_enables_h2_keepalive_and_static_cache() -> None:
-    tuned = tune_site(_site())
+    tuned = tune_site(
+        _site(),
+        max_miniapp_url="https://max.happy-fox.online/mini-app/",
+    )
 
     assert "upstream happyfox_backend {" in tuned
     assert "server 127.0.0.1:1888;" in tuned
@@ -51,7 +54,7 @@ def test_tune_happyfox_site_enables_h2_keepalive_and_static_cache() -> None:
     assert "location ^~ /mini-app/_next/static/" in tuned
     assert 'Cache-Control "public, max-age=31536000, immutable"' in tuned
     assert "location = /max/webhook {" in tuned
-    assert "return 302 https://app.happy-fox.online/mini-app/" in tuned
+    assert "return 302 https://max.happy-fox.online/mini-app/" in tuned
     assert tuned.count("location /mini-app/api/ {") == 2
     assert tuned.count("location /mini-app/ { try_files $uri $uri/ /mini-app/index.html; }") == 2
     assert tuned.count("location = /mini-app/ {") == 2
@@ -61,9 +64,26 @@ def test_tune_happyfox_site_enables_h2_keepalive_and_static_cache() -> None:
 
 
 def test_tune_happyfox_site_is_idempotent() -> None:
-    once = tune_site(_site())
-    twice = tune_site(once)
+    once = tune_site(
+        _site(),
+        max_miniapp_url="https://max.happy-fox.online/mini-app/",
+    )
+    twice = tune_site(
+        once,
+        max_miniapp_url="https://max.happy-fox.online/mini-app/",
+    )
     assert twice == once
+
+
+def test_tune_happyfox_site_updates_existing_max_redirect() -> None:
+    once = tune_site(_site())
+    switched = tune_site(
+        once,
+        max_miniapp_url="https://max.happy-fox.online/mini-app/",
+    )
+
+    assert "return 302 https://max.happy-fox.online/mini-app/" in switched
+    assert "return 302 https://app.happy-fox.online/mini-app/" not in switched
 
 
 def test_tune_certbot_options_keeps_only_tls12() -> None:

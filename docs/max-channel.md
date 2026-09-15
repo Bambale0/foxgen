@@ -52,10 +52,11 @@ It must never read or mutate Telegram user balances, Telegram transactions, Tele
 ## Production topology
 
 ```text
-Landing:      https://happy-fox.online/
-Mini App:     https://app.happy-fox.online/mini-app/
-API:          https://api.happy-fox.online
-MAX webhook:  https://api.happy-fox.online/max/webhook
+Landing:           https://happy-fox.online/
+Telegram Mini App: https://app.happy-fox.online/mini-app/
+MAX Mini App:      https://max.happy-fox.online/mini-app/
+API:               https://api.happy-fox.online
+MAX webhook:       https://api.happy-fox.online/max/webhook
 ```
 
 The dedicated `happyfox` host owns the application/data plane. `apix` is a Telegram transport relay only and is not a MAX or HappyFox application host.
@@ -72,12 +73,29 @@ MAX_WEBHOOK_URL=https://api.happy-fox.online/max/webhook
 MAX_WEBHOOK_PATH=/max/webhook
 MAX_API_BASE=https://platform-api2.max.ru
 MAX_BOT_NAME=your_bot_name
-MAX_MINI_APP_URL=https://app.happy-fox.online/mini-app/
+MAX_MINI_APP_URL=https://max.happy-fox.online/mini-app/
 MAX_PAYMENT_RETURN_URL=https://max.ru/your_bot_name?start=max_payment
 MAX_PAYMENT_RECONCILE_SECONDS=30
 ```
 
 `MAX_WEBHOOK_URL` must be HTTPS and its path must match `MAX_WEBHOOK_PATH`.
+
+### Dedicated MAX Mini App origin activation
+
+The MAX Mini App is intentionally isolated from Telegram at the origin level. The same verified frontend artifact is published to both origins, but the launch bridge is selected from the platform launch parameters and only one platform SDK is loaded.
+
+Before DNS exists, keep the live `MAX_MINI_APP_URL` unchanged. Do not point production at an unresolved hostname.
+
+After `max.happy-fox.online` resolves to the dedicated HappyFox host:
+
+1. Copy `deploy/happyfox-max-miniapp.env.example` to a root-readable runtime config and set `CERTBOT_EMAIL`.
+2. Provision the HTTPS vhost with `scripts/install_miniapp_frontend_https_host.sh --config <file> --install`. The profile deliberately leaves `BACKEND_SSH_HOST` empty so this provisioning step cannot overwrite Telegram `MINI_APP_URL`.
+3. Set the repository/environment variable `HAPPYFOX_MAX_APP_ORIGIN=https://max.happy-fox.online` for canonical production deploys. Until this explicit cutover flag is set, deploy keeps MAX on the already-working Telegram app origin even if stale channel values exist.
+4. In the MAX partner settings, set the bot Mini App URL to `https://max.happy-fox.online/mini-app/`.
+5. Run the normal exact-SHA HappyFox production deploy. It republishes the verified bundle to the MAX Nginx root, rewrites the MAX webhook GET compatibility redirect, and smoke-checks the MAX origin.
+6. Verify a real `open_app` launch inside MAX. Do not replace native `open_app` with an ordinary external URL button.
+
+The existing MAX buttons already use the native registered-app launch mechanism. The application URL belongs in MAX partner/runtime configuration, not in a generic `openLink` fallback.
 
 Production MAX uses Webhook with:
 
@@ -217,7 +235,8 @@ MAX parity is a release invariant. Before merge/deploy, regression coverage must
 6. prompt analysis uses MAX balance and refunds failures once;
 7. MAX never mutates Telegram balance/FSM tables;
 8. production runtime composes the parity layer;
-9. Mini App URL remains `https://app.happy-fox.online/mini-app/`.
+9. MAX Mini App URL is independently configurable and, after dedicated-origin activation, remains `https://max.happy-fox.online/mini-app/`;
+10. Telegram startup never loads the MAX Bridge, and MAX startup never loads the Telegram SDK.
 
 ## Dark-by-default contract
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import re
 from pathlib import Path
+from urllib.parse import urlsplit, urlunsplit
 
 UPSTREAM_BLOCK = """upstream happyfox_backend {
     server 127.0.0.1:1888;
@@ -12,7 +13,7 @@ UPSTREAM_BLOCK = """upstream happyfox_backend {
 """
 
 MAX_WEBHOOK_LAUNCH_COMPAT_BLOCK = """    location = /max/webhook {
-        if ($request_method = GET) { return 302 https://app.happy-fox.online/mini-app/; }
+        if ($request_method = GET) { return 302 __MAX_MINIAPP_URL__; }
         proxy_pass http://happyfox_backend;
         proxy_http_version 1.1;
         proxy_set_header Connection "";
@@ -137,27 +138,55 @@ def _tune_proxy_locations(text: str) -> str:
 
 
 
-def _add_max_webhook_launch_compat(text: str) -> str:
+def _normalize_public_https_url(value: str) -> str:
+    parsed = urlsplit(value.strip())
+    if (
+        parsed.scheme != "https"
+        or not parsed.hostname
+        or parsed.username
+        or parsed.password
+        or parsed.query
+        or parsed.fragment
+    ):
+        raise ValueError("MAX Mini App URL must be a public HTTPS URL")
+    path = parsed.path or "/"
+    return urlunsplit(("https", parsed.netloc, path, "", ""))
+
+
+def _add_max_webhook_launch_compat(text: str, *, max_miniapp_url: str) -> str:
     api_marker = "server_name api.happy-fox.online;"
     if api_marker not in text:
         raise ValueError("HappyFox API server block was not found")
 
+    max_miniapp_url = _normalize_public_https_url(max_miniapp_url)
     prefix, rest = text.split(api_marker, 1)
     if "\nserver {" not in rest:
         raise ValueError("HappyFox API server block terminator was not found")
     api_section, suffix = rest.split("\nserver {", 1)
-    if (
-        "location = /max/webhook {" in api_section
-        and "return 302 https://app.happy-fox.online/mini-app/" in api_section
-    ):
-        return text
+
+    if "location = /max/webhook {" in api_section:
+        redirect_pattern = re.compile(
+            r"if \(\$request_method = GET\) \{ return 302 https://[^;\s]+; \}"
+        )
+        if not redirect_pattern.search(api_section):
+            raise ValueError("HappyFox MAX webhook GET redirect was not found")
+        api_section = redirect_pattern.sub(
+            f"if ($request_method = GET) {{ return 302 {max_miniapp_url}; }}",
+            api_section,
+            count=1,
+        )
+        return prefix + api_marker + api_section + "\nserver {" + suffix
 
     marker = "    location / {"
     if marker not in api_section:
         raise ValueError("HappyFox API proxy fallback was not found")
     api_section = api_section.replace(
         marker,
-        MAX_WEBHOOK_LAUNCH_COMPAT_BLOCK + marker,
+        MAX_WEBHOOK_LAUNCH_COMPAT_BLOCK.replace(
+            "__MAX_MINIAPP_URL__",
+            max_miniapp_url,
+        )
+        + marker,
         1,
     )
     return prefix + api_marker + api_section + "\nserver {" + suffix
@@ -209,7 +238,11 @@ def _enable_landing_miniapp_compat(text: str) -> str:
     return text.replace(marker, replacement, 1)
 
 
-def tune_site(text: str) -> str:
+def tune_site(
+    text: str,
+    *,
+    max_miniapp_url: str = "https://app.happy-fox.online/mini-app/",
+) -> str:
     if "server_name api.happy-fox.online;" not in text:
         raise ValueError("HappyFox API server block was not found")
     if "server_name app.happy-fox.online;" not in text:
@@ -221,7 +254,10 @@ def tune_site(text: str) -> str:
     text = _enable_http2(text)
     text = _remove_site_ssl_protocols(text)
     text = _tune_proxy_locations(text)
-    text = _add_max_webhook_launch_compat(text)
+    text = _add_max_webhook_launch_compat(
+        text,
+        max_miniapp_url=max_miniapp_url,
+    )
     text = _add_static_cache(text)
     text = _allow_max_root_launch_methods(text)
     text = _enable_landing_miniapp_compat(text)
@@ -232,12 +268,19 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--site", required=True, type=Path)
     parser.add_argument("--certbot-options", required=True, type=Path)
+    parser.add_argument(
+        "--max-miniapp-url",
+        default="https://app.happy-fox.online/mini-app/",
+    )
     args = parser.parse_args()
 
     site_text = args.site.read_text(encoding="utf-8")
     certbot_text = args.certbot_options.read_text(encoding="utf-8")
 
-    args.site.write_text(tune_site(site_text), encoding="utf-8")
+    args.site.write_text(
+        tune_site(site_text, max_miniapp_url=args.max_miniapp_url),
+        encoding="utf-8",
+    )
     args.certbot_options.write_text(
         tune_certbot_options(certbot_text),
         encoding="utf-8",
