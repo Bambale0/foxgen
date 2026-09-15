@@ -1,3 +1,5 @@
+import pytest
+
 from scripts.tune_happyfox_nginx import tune_certbot_options, tune_site
 
 
@@ -60,10 +62,45 @@ def test_tune_happyfox_site_enables_h2_keepalive_and_static_cache() -> None:
     assert tuned.count("if ($request_method = POST) { return 418; }") == 2
 
 
+def test_tune_happyfox_site_routes_max_launch_to_dedicated_origin() -> None:
+    tuned = tune_site(
+        _site(),
+        max_app_origin="https://max.happy-fox.online",
+    )
+
+    assert "return 302 https://max.happy-fox.online/mini-app/" in tuned
+    assert "return 302 https://app.happy-fox.online/mini-app/" not in tuned
+
+
+def test_tune_happyfox_site_updates_existing_max_redirect() -> None:
+    current = tune_site(_site())
+    dedicated = tune_site(
+        current,
+        max_app_origin="https://max.happy-fox.online",
+    )
+
+    assert dedicated.count("location = /max/webhook {") == 1
+    assert "return 302 https://max.happy-fox.online/mini-app/" in dedicated
+
+
 def test_tune_happyfox_site_is_idempotent() -> None:
-    once = tune_site(_site())
-    twice = tune_site(once)
+    once = tune_site(_site(), max_app_origin="https://max.happy-fox.online")
+    twice = tune_site(once, max_app_origin="https://max.happy-fox.online")
     assert twice == once
+
+
+@pytest.mark.parametrize(
+    "origin",
+    [
+        "http://max.happy-fox.online",
+        "https://max.happy-fox.online/mini-app",
+        "https://max.happy-fox.online?x=1",
+        "max.happy-fox.online",
+    ],
+)
+def test_tune_happyfox_site_rejects_invalid_max_origin(origin: str) -> None:
+    with pytest.raises(ValueError, match="MAX app origin"):
+        tune_site(_site(), max_app_origin=origin)
 
 
 def test_tune_certbot_options_keeps_only_tls12() -> None:

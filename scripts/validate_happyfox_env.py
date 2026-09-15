@@ -4,6 +4,7 @@ import argparse
 import os
 import re
 from pathlib import Path
+from urllib.parse import urlsplit
 
 BLOCKED_MARKERS = (
     "tanyapi.chillcreative.ru",
@@ -72,6 +73,26 @@ def _enabled(values: dict[str, str], key: str) -> bool:
     return values.get(key, "").strip().lower() in _TRUE_VALUES
 
 
+def _is_https_url(value: str) -> bool:
+    parsed = urlsplit(value.strip())
+    return (
+        parsed.scheme == "https"
+        and bool(parsed.hostname)
+        and parsed.username is None
+        and parsed.password is None
+    )
+
+
+def _is_https_mini_app_url(value: str) -> bool:
+    parsed = urlsplit(value.strip())
+    return (
+        _is_https_url(value)
+        and bool(parsed.path)
+        and not parsed.query
+        and not parsed.fragment
+    )
+
+
 def validate(values: dict[str, str]) -> list[str]:
     errors: list[str] = []
 
@@ -102,6 +123,7 @@ def validate(values: dict[str, str]) -> list[str]:
         "SUPPORT_CONTACT",
         "YOOKASSA_RETURN_URL",
         "MAX_WEBHOOK_URL",
+        "MAX_MINI_APP_URL",
         "MAX_PAYMENT_RETURN_URL",
     ):
         value = values.get(key, "").strip().lower()
@@ -136,6 +158,7 @@ def validate(values: dict[str, str]) -> list[str]:
             "MAX_WEBHOOK_SECRET",
             "MAX_WEBHOOK_URL",
             "MAX_BOT_NAME",
+            "MAX_MINI_APP_URL",
             "MAX_PAYMENT_RETURN_URL",
             "YOOKASSA_SHOP_ID",
             "YOOKASSA_SECRET_KEY",
@@ -146,11 +169,14 @@ def validate(values: dict[str, str]) -> list[str]:
         if max_bot_name and not re.fullmatch(r"[A-Za-z0-9_]+", max_bot_name):
             errors.append("MAX_BOT_NAME contains unsupported characters")
         max_webhook_url = values.get("MAX_WEBHOOK_URL", "").strip()
-        if max_webhook_url and not max_webhook_url.startswith("https://"):
-            errors.append("MAX_WEBHOOK_URL must use https://")
+        if max_webhook_url and not _is_https_url(max_webhook_url):
+            errors.append("MAX_WEBHOOK_URL must use a valid https:// URL")
+        max_mini_app_url = values.get("MAX_MINI_APP_URL", "").strip()
+        if max_mini_app_url and not _is_https_mini_app_url(max_mini_app_url):
+            errors.append("MAX_MINI_APP_URL must use a valid https:// URL")
         max_payment_return_url = values.get("MAX_PAYMENT_RETURN_URL", "").strip()
-        if max_payment_return_url and not max_payment_return_url.startswith("https://"):
-            errors.append("MAX_PAYMENT_RETURN_URL must use https://")
+        if max_payment_return_url and not _is_https_url(max_payment_return_url):
+            errors.append("MAX_PAYMENT_RETURN_URL must use a valid https:// URL")
 
     payment_provider = values.get("PAYMENT_PROVIDER", "lava").strip().lower()
     payment_requirements: dict[str, tuple[str, ...]] = {

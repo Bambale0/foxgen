@@ -7,6 +7,7 @@ PROJECT_DIR="${PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 EXPECTED_SHA="${1:-$(git -C "$PROJECT_DIR" rev-parse HEAD)}"
 API_ORIGIN="${HAPPYFOX_API_ORIGIN:-https://api.happy-fox.online}"
 APP_ORIGIN="${HAPPYFOX_APP_ORIGIN:-https://app.happy-fox.online}"
+MAX_APP_ORIGIN="${HAPPYFOX_MAX_APP_ORIGIN:-$APP_ORIGIN}"
 LANDING_ORIGIN="${HAPPYFOX_LANDING_ORIGIN:-https://happy-fox.online}"
 DATABASE_NAME="${HAPPYFOX_DATABASE_NAME:-happyfox_cutover}"
 TELEGRAM_RELAY_IP="${HAPPYFOX_TELEGRAM_RELAY_IP:-2.27.160.11}"
@@ -21,6 +22,13 @@ RUNTIME_ENV="$PROJECT_DIR/.env.happyfox.runtime"
   echo "HAPPYFOX_DATABASE_NAME must be a simple SQL identifier" >&2
   exit 1
 }
+for origin_name in API_ORIGIN APP_ORIGIN MAX_APP_ORIGIN LANDING_ORIGIN; do
+  origin="${!origin_name}"
+  [[ "$origin" =~ ^https://[^/]+$ ]] || {
+    echo "$origin_name must be an HTTPS origin without a path" >&2
+    exit 1
+  }
+done
 
 cd "$PROJECT_DIR"
 [[ -s .env && -s "$RUNTIME_ENV" ]] || {
@@ -45,21 +53,10 @@ main_sha="$(gh api "repos/${GITHUB_REPO}/commits/main" --jq .sha)"
   exit 1
 }
 
-# MAX uses the Russian Trusted PKI. Keep the host trust store reproducible too,
-# not only the container image, so host-side diagnostics and future tooling use
-# the same verified chain without disabling TLS verification.
 bash scripts/install_russian_trusted_ca.sh
-
-# Recover protected channel values from the server-side channel overlay before
-# canonicalizing public URLs. GitHub Actions never replaces this runtime file:
-# the production host is authoritative for secrets and channel credentials.
 python3 scripts/recover_happyfox_channel_runtime.py "$PROJECT_DIR"
 
-# Dedicated-host topology is intentionally split: all backend/webhook/media
-# traffic uses api.happy-fox.online, while the Telegram/MAX UI lives on the app
-# origin. The production DB name and durable provider-result persistence are
-# server-authoritative so an old CI secret cannot regress production behavior.
-python3 - "$RUNTIME_ENV" "$API_ORIGIN" "$APP_ORIGIN" "$DATABASE_NAME" "$TELEGRAM_RELAY_IP" <<'PY'
+python3 - "$RUNTIME_ENV" "$API_ORIGIN" "$APP_ORIGIN" "$MAX_APP_ORIGIN" "$DATABASE_NAME" "$TELEGRAM_RELAY_IP" <<'PY'
 from pathlib import Path
 import ipaddress
 import os
@@ -69,8 +66,9 @@ from urllib.parse import urlsplit, urlunsplit
 path = Path(sys.argv[1])
 api = sys.argv[2].rstrip("/")
 app = sys.argv[3].rstrip("/")
-database_name = sys.argv[4]
-telegram_relay_ip = sys.argv[5].strip()
+max_app = sys.argv[4].rstrip("/")
+database_name = sys.argv[5]
+telegram_relay_ip = sys.argv[6].strip()
 values: dict[str, str] = {}
 for raw in path.read_text(encoding="utf-8").splitlines():
     line = raw.strip()
@@ -87,9 +85,6 @@ values["STATIC_BASE_URL"] = api
 values["MINI_APP_URL"] = f"{app}/mini-app/"
 values["YOOKASSA_RETURN_URL"] = f"{app}/mini-app/"
 values["PERSIST_PROVIDER_RESULTS"] = "1"
-# Telegram ingress may be pinned to the apix relay IP, but the public
-# webhook URL/SNI stays canonical to HappyFox. Do not preserve alternate
-# project domains from stale runtime overlays.
 values["TELEGRAM_WEBHOOK_URL"] = f"{api}/webhook"
 if not telegram_relay_ip:
     raise SystemExit("HAPPYFOX_TELEGRAM_RELAY_IP must not be empty")
@@ -113,9 +108,9 @@ if values.get("MAX_ENABLED", "").lower() in {"1", "true", "yes", "on"}:
     if not max_path.startswith("/"):
         raise SystemExit("MAX_WEBHOOK_PATH must start with /")
     values["MAX_WEBHOOK_URL"] = f"{api}{max_path}"
-    values["MAX_MINI_APP_URL"] = f"{app}/mini-app/"
+    values["MAX_MINI_APP_URL"] = f"{max_app}/mini-app/"
     if not values.get("MAX_PAYMENT_RETURN_URL", "").startswith("https://max.ru/"):
-        values["MAX_PAYMENT_RETURN_URL"] = f"{app}/mini-app/"
+        values["MAX_PAYMENT_RETURN_URL"] = f"{max_app}/mini-app/"
 
 
 def quote(value: str) -> str:
@@ -134,15 +129,12 @@ PY
 
 python3 scripts/validate_happyfox_env.py .env .env.happyfox.runtime .env.postgres
 
-# Keep Docker/containerd growth bounded on the dedicated HappyFox host. The
-# cleanup is age-bounded and intentionally never prunes volumes.
 install -m 0755 scripts/happyfox_docker_prune.sh /usr/local/sbin/happyfox-docker-prune
 install -m 0644 deploy/systemd/happyfox-docker-prune.service /etc/systemd/system/happyfox-docker-prune.service
 install -m 0644 deploy/systemd/happyfox-docker-prune.timer /etc/systemd/system/happyfox-docker-prune.timer
 systemctl daemon-reload
 systemctl enable --now happyfox-docker-prune.timer
 
-# Writable bind mounts belong to the non-root runtime UID from the Dockerfile.
 for path in data static/uploads logs backups outputs; do
   install -d -m 0755 "$path"
   chown -R 10001:10001 "$path"
@@ -158,12 +150,10 @@ for i in $(seq 1 60); do
   [[ "$i" -lt 60 ]] || { echo "HappyFox data plane did not become ready" >&2; exit 1; }
 done
 
-# A verified rollback point is mandatory before replacing a healthy runtime.
 if docker inspect foxgen-happyfox-bot >/dev/null 2>&1; then
   current_state="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' foxgen-happyfox-bot 2>/dev/null || true)"
   if [[ "$current_state" == "healthy" ]]; then
-    docker exec -e SEND_BACKUP_TO_ADMINS=0 foxgen-happyfox-bot \
-      bash /app/scripts/backup_db.sh
+    docker exec -e SEND_BACKUP_TO_ADMINS=0 foxgen-happyfox-bot bash /app/scripts/backup_db.sh
   fi
 fi
 
@@ -175,8 +165,7 @@ docker build \
 image_revision="$(docker inspect -f '{{index .Config.Labels "org.opencontainers.image.revision"}}' foxgen-happyfox-bot:local)"
 [[ "$image_revision" == "$EXPECTED_SHA" ]]
 
-COMPOSE_PROJECT_NAME=foxgen-happyfox \
-  HAPPYFOX_IMAGE=foxgen-happyfox-bot:local \
+COMPOSE_PROJECT_NAME=foxgen-happyfox HAPPYFOX_IMAGE=foxgen-happyfox-bot:local \
   docker compose -f compose.backend.yml up -d --no-build bot
 
 for i in $(seq 1 60); do
@@ -193,23 +182,20 @@ done
 runtime_revision="$(docker inspect -f '{{index .Config.Labels "org.opencontainers.image.revision"}}' foxgen-happyfox-bot)"
 [[ "$runtime_revision" == "$EXPECTED_SHA" ]]
 
-# Publish the exact static bundle embedded in the verified backend image.
-for webroot in /var/www/happyfox-app /var/www/happyfox-landing; do
+for webroot in /var/www/happyfox-app /var/www/happyfox-max /var/www/happyfox-landing; do
   install -d -m 0755 "$webroot/mini-app"
   find "$webroot/mini-app" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
 done
 cid="$(docker create foxgen-happyfox-bot:local)"
 trap 'docker rm -f "$cid" >/dev/null 2>&1 || true' EXIT
 docker cp "$cid:/app/frontend/miniapp-v0/out/." /var/www/happyfox-app/mini-app/
+docker cp "$cid:/app/frontend/miniapp-v0/out/." /var/www/happyfox-max/mini-app/
 docker cp "$cid:/app/frontend/miniapp-v0/out/." /var/www/happyfox-landing/mini-app/
 docker rm "$cid" >/dev/null
 trap - EXIT
-find /var/www/happyfox-app /var/www/happyfox-landing -type d -exec chmod 0755 {} +
-find /var/www/happyfox-app /var/www/happyfox-landing -type f -exec chmod 0644 {} +
+find /var/www/happyfox-app /var/www/happyfox-max /var/www/happyfox-landing -type d -exec chmod 0755 {} +
+find /var/www/happyfox-app /var/www/happyfox-max /var/www/happyfox-landing -type f -exec chmod 0644 {} +
 
-# The public landing is served from the domain root, while Next exports metadata
-# routes under /mini-app. Publish canonical crawl artifacts at the actual public
-# URLs so nginx serves text/XML instead of falling back to landing HTML.
 for seo_file in robots.txt sitemap.xml; do
   source_file="/var/www/happyfox-landing/mini-app/${seo_file}"
   [[ -s "$source_file" ]] || { echo "Missing HappyFox SEO artifact: $source_file" >&2; exit 1; }
@@ -217,10 +203,8 @@ for seo_file in robots.txt sitemap.xml; do
 done
 
 [[ "$(tr -d '\r\n' </var/www/happyfox-app/mini-app/revision.txt)" == "$EXPECTED_SHA" ]]
+[[ "$(tr -d '\r\n' </var/www/happyfox-max/mini-app/revision.txt)" == "$EXPECTED_SHA" ]]
 
-# Keep the dedicated HappyFox edge deterministic and low-latency:
-# TLS 1.2 only, HTTP/2 for browser multiplexing, persistent local upstream
-# connections, and immutable caching for hashed Next.js assets.
 nginx_site="/etc/nginx/sites-available/happyfox.conf"
 certbot_options="/etc/letsencrypt/options-ssl-nginx.conf"
 [[ -s "$nginx_site" && -s "$certbot_options" ]] || {
@@ -233,7 +217,8 @@ cp -a "$nginx_site" "$nginx_site_backup"
 cp -a "$certbot_options" "$certbot_options_backup"
 python3 scripts/tune_happyfox_nginx.py \
   --site "$nginx_site" \
-  --certbot-options "$certbot_options"
+  --certbot-options "$certbot_options" \
+  --max-app-origin "$MAX_APP_ORIGIN"
 if ! nginx -t; then
   cp -a "$nginx_site_backup" "$nginx_site"
   cp -a "$certbot_options_backup" "$certbot_options"
@@ -248,6 +233,10 @@ systemctl reload nginx
 curl -fsS --retry 8 --retry-delay 2 --retry-all-errors --max-time 20 "$API_ORIGIN/health" >/dev/null
 live_revision="$(curl -fsS --retry 8 --retry-delay 2 --retry-all-errors --max-time 20 "$APP_ORIGIN/mini-app/revision.txt?revision=$EXPECTED_SHA")"
 [[ "$live_revision" == "$EXPECTED_SHA" ]]
+if [[ "$MAX_APP_ORIGIN" != "$APP_ORIGIN" ]]; then
+  max_live_revision="$(curl -fsS --retry 8 --retry-delay 2 --retry-all-errors --max-time 20 "$MAX_APP_ORIGIN/mini-app/revision.txt?revision=$EXPECTED_SHA")"
+  [[ "$max_live_revision" == "$EXPECTED_SHA" ]]
+fi
 curl -fsS --retry 5 --retry-delay 2 --retry-all-errors --max-time 20 "$LANDING_ORIGIN/" | grep -Fq 'https://t.me/'
 robots_body="$(curl -fsS --retry 5 --retry-delay 2 --retry-all-errors --max-time 20 "$LANDING_ORIGIN/robots.txt")"
 grep -Fq "Sitemap: ${LANDING_ORIGIN}/sitemap.xml" <<<"$robots_body" || {
@@ -260,7 +249,11 @@ grep -Fq "<loc>${LANDING_ORIGIN}/</loc>" <<<"$sitemap_body" || {
   exit 1
 }
 
-for miniapp_origin in "$APP_ORIGIN" "$LANDING_ORIGIN"; do
+miniapp_origins=("$APP_ORIGIN" "$LANDING_ORIGIN")
+if [[ "$MAX_APP_ORIGIN" != "$APP_ORIGIN" && "$MAX_APP_ORIGIN" != "$LANDING_ORIGIN" ]]; then
+  miniapp_origins+=("$MAX_APP_ORIGIN")
+fi
+for miniapp_origin in "${miniapp_origins[@]}"; do
   root_options_status="$(curl -sS -o /dev/null -w '%{http_code}' -X OPTIONS --max-time 20 \
     -H 'Origin: https://max.ru' "$miniapp_origin/mini-app/" || true)"
   [[ "$root_options_status" == "204" ]] || {
@@ -283,9 +276,14 @@ for miniapp_origin in "$APP_ORIGIN" "$LANDING_ORIGIN"; do
   }
 done
 
-max_launch_status="$(curl -sS -o /dev/null -w '%{http_code}' -X GET --max-time 20 \
-  "$API_ORIGIN/max/webhook" || true)"
-[[ "$max_launch_status" == "302" ]]
+# The compatibility route redirects only GET. Use a real GET while collecting
+# response headers; `curl -I` would send HEAD and miss the nginx condition.
+max_launch_location="$(curl -sS -D - -o /dev/null --max-time 20 "$API_ORIGIN/max/webhook" \
+  | awk 'BEGIN{IGNORECASE=1} /^location:/ {gsub(/\r/, "", $2); print $2; exit}' || true)"
+[[ "$max_launch_location" == "$MAX_APP_ORIGIN/mini-app/" ]] || {
+  echo "MAX launch compatibility redirect mismatch: $max_launch_location" >&2
+  exit 1
+}
 
 max_status="$(curl -sS -o /dev/null -w '%{http_code}' -X POST --max-time 20 \
   -H 'Content-Type: application/json' -d '{}' "$API_ORIGIN/max/webhook" || true)"
@@ -299,15 +297,10 @@ kie_status="$(curl -sS -o /dev/null -w '%{http_code}' -X POST --max-time 20 \
   -H 'Content-Type: application/json' -d '{}' "$API_ORIGIN/webhook/kie_ai" || true)"
 [[ "$kie_status" =~ ^(400|401|403)$ ]]
 
-# Telegram and MAX webhook configuration is part of the release, not a manual
-# afterthought. MAX refreshes its subscription during startup; the explicit
-# authenticated smoke below also proves container TLS trust to the MAX API.
 docker exec foxgen-happyfox-bot python /app/scripts/ensure_telegram_webhook.py
 docker exec foxgen-happyfox-bot python -m scripts.check_max_connectivity
 docker logs foxgen-happyfox-bot 2>&1 | grep -F "$API_ORIGIN/max/webhook" >/dev/null
 
-# Keep the post-migration state backed up with the matching PG17 client.
-docker exec -e SEND_BACKUP_TO_ADMINS=0 foxgen-happyfox-bot \
-  bash /app/scripts/backup_db.sh
+docker exec -e SEND_BACKUP_TO_ADMINS=0 foxgen-happyfox-bot bash /app/scripts/backup_db.sh
 
-echo "[happyfox-dedicated] DEPLOY_OK revision=$EXPECTED_SHA api=$API_ORIGIN app=$APP_ORIGIN landing=$LANDING_ORIGIN db=$DATABASE_NAME"
+echo "[happyfox-dedicated] DEPLOY_OK revision=$EXPECTED_SHA api=$API_ORIGIN telegram_app=$APP_ORIGIN max_app=$MAX_APP_ORIGIN landing=$LANDING_ORIGIN db=$DATABASE_NAME"
