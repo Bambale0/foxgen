@@ -95,12 +95,12 @@ redis
 2. Call `getWebhookInfo`: expected URL is `https://api.happy-fox.online/webhook`, `pending_update_count=0`, `last_error_message` empty.
 3. Confirm `happyfox-telegram-egress.service` is active and `api.telegram.org:443` is reachable from the runtime.
 4. Confirm the relay TLS endpoint accepts `api.happy-fox.online` on the configured fixed Telegram ingress IP.
-5. Confirm Telegram native menu type is `commands` and the quick-command list is registered.
+5. Confirm Telegram native menu type is `web_app`, its URL is the current versioned HappyFox Mini App URL, and the quick-command list is still registered.
 6. Distinguish expected Mini App auth failure without valid `initData` from backend outage.
 7. Check PostgreSQL/Redis and provider/payment-specific logs.
 8. Reproduce with a safe test user before changing production state.
 
-A blue WebApp button replacing Telegram's command menu is a regression: reset `setChatMenuButton` to `type=commands`; do not remove the inline Mini App button.
+A native Telegram menu that is not the current HappyFox `web_app` launcher is a regression. Reconcile it to the versioned Mini App URL; keep signed `initData` validation intact and treat browser login as fallback-only.
 
 Relay TLS is operational state: the apix relay maintains its own Let's Encrypt certificate for `api.happy-fox.online`. Verify renewal on the relay with a forced-IP HTTPS request to the configured ingress IP before reloading nginx; do not copy private keys between hosts.
 
