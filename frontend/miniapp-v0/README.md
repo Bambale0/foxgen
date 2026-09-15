@@ -33,11 +33,14 @@ Normal runtime is Telegram WebView with signed `initData`. A direct browser/curl
 
 ## Deploy
 
-Current public Mini App:
+Production Mini App origins:
 
 ```text
-https://app.happy-fox.online/mini-app/
+Telegram: https://app.happy-fox.online/mini-app/
+MAX:      https://max.happy-fox.online/mini-app/  # after DNS/TLS activation
 ```
+
+The same verified static export is used on both origins, but startup loads exactly one platform bridge from the launch parameters.
 
 Release flow:
 
