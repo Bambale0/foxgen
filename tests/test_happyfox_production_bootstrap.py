@@ -294,7 +294,8 @@ def test_dedicated_deploy_supports_optional_max_origin_without_changing_telegram
     assert 'APP_ORIGIN="${HAPPYFOX_APP_ORIGIN:-https://app.happy-fox.online}"' in script
     assert 'MAX_APP_ORIGIN="${HAPPYFOX_MAX_APP_ORIGIN:-}"' in script
     assert 'values["MINI_APP_URL"] = f"{app}/mini-app/"' in script
-    assert 'values.get("MAX_MINI_APP_URL", "").strip() or f"{app}/mini-app/"' in script
+    assert 'values["MAX_MINI_APP_URL"] = f"{app}/mini-app/"' in script
+    assert "if max_app_override:" in script
     assert "resolve_happyfox_miniapp_nginx_path.py" in script
     assert '--max-miniapp-url "${MAX_MINI_APP_URL_EFFECTIVE:-${APP_ORIGIN}/mini-app/}"' in script
     assert "HAPPYFOX_MAX_APP_ORIGIN='${{ vars.HAPPYFOX_MAX_APP_ORIGIN }}'" in workflow
