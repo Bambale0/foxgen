@@ -299,7 +299,7 @@ The hostname is an infrastructure default, not mutable business configuration. P
 
 ### Task
 
-Finish the Telegram/MAX Mini App split on top of merged PR #254 without duplicating its domain/TLS/runtime machinery. Keep the current shared-origin behavior until MAX DNS/TLS is activated, then publish messenger-specific HTML variants from the same verified frontend artifact.
+Finish Telegram/MAX Mini App launch isolation on top of merged PR #254 without duplicating its domain/TLS/runtime machinery. The same frontend must choose exactly one native messenger bridge before application bootstrap, both on today's shared origin and on tomorrow's dedicated MAX origin.
 
 ### Baseline
 
@@ -307,113 +307,74 @@ Finish the Telegram/MAX Mini App split on top of merged PR #254 without duplicat
 - Base branch: `main`
 - Baseline SHA: `d70c76da9b34a03f4b4941aab8dfe877fdb0b9d9`
 - Working branch: `fix/miniapp-native-bridge-isolation`
-- Existing infrastructure owner: merged PR #254 (`feat(max): isolate Mini App on dedicated origin`)
+- Existing infrastructure owner: merged PR #254.
 - Superseded duplicate infrastructure work: PR #255 closed unmerged.
 
 ### Fresh audit
 
-Already implemented by #254:
+PR #254 already owns the separate MAX origin, webroot, DNS/TLS activation, nginx, `HAPPYFOX_MAX_APP_ORIGIN`, runtime URL canonicalization and production smoke. The remaining launch bug is inside the shared frontend: static HTML loaded Telegram SDK and MAX Bridge together before application bootstrap.
 
-- Telegram Mini App origin `app.happy-fox.online`;
-- optional dedicated MAX origin `max.happy-fox.online`;
-- `HAPPYFOX_MAX_APP_ORIGIN` deploy parameter;
-- separate MAX static webroot;
-- DNS/TLS activation script;
-- nginx MAX origin/redirect handling;
-- runtime `MAX_MINI_APP_URL` canonicalization;
-- revision/OPTIONS/POST/bootstrap smoke;
-- backward-compatible shared-origin mode before activation.
+The first implementation in this branch tried to remove the foreign bridge from the built HTML after export. Browser E2E proved that approach invalid: Next hydration restored the bridge from its serialized layout tree. That implementation was removed rather than merged.
 
-Remaining gap:
+### Final design / acceptance criteria
 
-- both published webroots still contained the same generic HTML, which loaded both Telegram SDK and MAX Bridge even after the origins were split;
-- startup E2E did not require the foreign bridge to be absent.
-
-### Intended outcome / acceptance criteria
-
-1. Before split activation (`MAX_APP_ORIGIN == APP_ORIGIN`), the app bundle remains `shared` and contains both bridges so current MAX registration is not broken.
-2. After split activation, `/var/www/happyfox-app/mini-app` is rendered `telegram` and contains Telegram SDK only.
-3. After split activation, `/var/www/happyfox-max/mini-app` is rendered `max` and contains MAX Bridge only.
-4. Both variants come from the same exact verified Docker-image frontend export and preserve the same revision.
-5. Telegram startup E2E on Chromium and iPhone WebKit rejects MAX Bridge.
-6. MAX startup E2E on Chromium and iPhone WebKit rejects Telegram SDK.
-7. No duplicate domain/TLS/nginx activation mechanism is introduced.
-8. No database/API/business-config changes are introduced.
-9. Merge only after two-axis review and exact-head CI are green; canonical auto-deploy then verifies production.
+1. Source layout contains one early `miniapp-bridge-loader`, not two direct SDK tags.
+2. The loader runs synchronously before `telegram-early-ready` and before Next runtime.
+3. Telegram launch parameters (`tgWebApp*`) select only `/mini-app/telegram-web-app.js`.
+4. MAX launch parameters (`WebApp*`) select only `https://st.max.ru/js/max-web-app.js`.
+5. `max.happy-fox.online` forces MAX bridge after dedicated-origin activation.
+6. On the current shared `app.happy-fox.online` origin, MAX continues to work because its launch parameters select MAX while Telegram launch parameters select Telegram.
+7. Static export patching preserves the loader and removes queued/direct duplicate bridge tags.
+8. Telegram and MAX startup E2E each reject the foreign bridge on Chromium and iPhone WebKit while retaining their existing initData/ordering assertions.
+9. PR #254 deployment/domain/TLS logic remains unchanged.
+10. No database/API/business-config/cross-project changes.
 
 ### No-hardcode/configuration decision
 
-No mutable business configuration is introduced. The existing #254 infrastructure switch `HAPPYFOX_MAX_APP_ORIGIN` remains the single source of truth for whether split-origin mode is active. Bridge variant selection is derived deterministically from that existing setting.
+The dedicated MAX hostname is an existing #254 infrastructure invariant. Messenger selection itself is derived from the platform's signed-launch parameter namespace; no mutable business configuration, secret, price, provider or policy is introduced.
 
 ### Schema/API/UI/security
 
 - Schema: N/A.
 - Public API: unchanged.
 - Product UI: unchanged.
-- Telegram/MAX authorization: unchanged and remains server-side.
-- Frontend release artifact: one source/one build; only published HTML bridge tags differ by channel.
-- Instagram applicability: N/A; Instagram does not use Telegram/MAX Mini App bridges.
+- Server-side Telegram/MAX auth: unchanged.
+- Deployment topology: unchanged from #254.
+- Instagram applicability: N/A.
 
-### Observability and verification
+### Observability / verification
 
-- deployment verifies bridge tags directly in the published static roots;
-- public revision smoke from #254 remains unchanged;
-- existing backend bootstrap/auth logs remain the signal for invalid or missing signed launch data;
-- CI covers renderer unit contracts and real Telegram/MAX startup journeys.
+- static export patcher fails if the loader is absent, ordered after Next, missing either platform launch contract, or if direct dual bridge tags survive;
+- Telegram/MAX browser E2E verify actual DOM bridge selection and initData bootstrap;
+- existing production revision/health/MAX redirect smoke from #254 remains authoritative.
 
 ### Implementation progress
 
-1. [x] Re-read current `AGENTS.md` and #254 deploy/docs/tests.
-2. [x] Close duplicate PR #255 rather than layering a second infrastructure mechanism.
-3. [x] Create a fresh branch from current main.
-4. [x] Add idempotent `shared|telegram|max` static HTML renderer.
-5. [x] Make canonical production deploy choose shared mode before activation and isolated variants after activation.
-6. [x] Add production bridge-tag assertions.
-7. [x] Strengthen Telegram startup E2E to use Telegram-only HTML and reject MAX Bridge.
-8. [x] Strengthen MAX startup E2E to use MAX-only HTML and reject Telegram SDK.
-9. [x] Add renderer/deploy regression tests.
-10. [x] Update MAX channel documentation.
-11. [x] Run Standards review against fixed current main and resolve findings.
-12. [x] Run Spec review against user requirement and resolve findings.
-13. [ ] Run exact-head CI to green.
-14. [ ] Merge PR.
-15. [ ] Verify canonical production deploy and current preactivation shared mode remain healthy.
-16. [ ] After DNS/TLS activation, verify real Telegram + MAX native launches on their separate origins.
+1. [x] Re-read current AGENTS and merged #254.
+2. [x] Close duplicate PR #255.
+3. [x] Create fresh branch from current main and open PR #256.
+4. [x] Discover via browser E2E that post-export tag removal is restored by Next hydration; delete that approach.
+5. [x] Add launch-aware synchronous bridge loader to source layout.
+6. [x] Update static export patcher to preserve/assert loader ordering and remove direct/queued duplicate bridge tags.
+7. [x] Telegram startup E2E rejects MAX Bridge while preserving existing SDK/initData/order assertions.
+8. [x] MAX startup E2E rejects Telegram SDK while preserving existing Bridge/initData/order assertions.
+9. [x] Keep #254 deploy/domain/TLS code unchanged.
+10. [x] Update frontend contract tests and MAX documentation.
+11. [ ] Re-run Standards review on the final design and resolve findings.
+12. [ ] Re-run Spec review on the final design and resolve findings.
+13. [ ] Run exact-head full CI to green, including Docker.
+14. [ ] Merge PR #256.
+15. [ ] Verify main CI, canonical auto-deploy, exact revision and current shared-origin native launches.
+16. [ ] After user creates DNS: activate `max.happy-fox.online`, set MAX partner URL, and verify real-client launches on both separate origins.
 
 ### Skills/guides
 
-- `Bambale0/skills`: diagnosing-bugs, TDD, code-review, resolving-merge-conflicts guidance already applied in this incident/workflow.
+- `Bambale0/skills`: diagnosing-bugs, TDD, code-review, resolving-merge-conflicts.
 - `Bambale0/claw`: evidence-first debugger guidance.
-- `wondelai/skills`: release discipline for exact-SHA and staged activation.
-- `anthropics/skills`: searched previously for directly applicable Mini App host/bridge guidance; none selected because no specific matching skill was found.
+- `wondelai/skills`: exact-SHA/staged-release discipline.
+- `anthropics/skills`: searched for directly applicable Mini App host/bridge guidance; no specific matching skill selected.
 
+### Review note
 
-### Code review — Standards axis
+Do not treat the earlier review of the removed post-export renderer as final evidence. The final dynamic-loader implementation requires a fresh Standards + Spec review before the merge-candidate SHA is frozen.
 
-Fixed point: `main` at `d70c76da9b34a03f4b4941aab8dfe877fdb0b9d9`.
-
-Findings resolved before final CI:
-
-1. MAX startup E2E initially imported the renderer but still served the legacy `.e2e-server`, so it did not actually exercise the MAX-only bundle. Fixed to render/copy into a dedicated `.e2e-max/mini-app` root.
-2. The first MAX E2E rewrite accidentally dropped the existing guarantee that MAX Bridge loads before Next runtime. The test was restored to a minimal diff and preserves that ordering assertion.
-3. The renderer initially attempted to enforce bridge counts on every exported HTML file. That could fail on unrelated static HTML with no messenger bridge. It now skips non-bridge HTML while remaining strict for every bridge-bearing Mini App document.
-4. Documentation/source-line escaping defects introduced during editing were normalized before CI.
-
-Standards result: **clean; 0 unresolved findings**.
-
-### Code review — Spec axis
-
-Checked against the user's requirement and merged #254:
-
-- Telegram remains on `app.happy-fox.online`.
-- Dedicated MAX origin remains owned by #254; no duplicate DNS/TLS/nginx mechanism exists in this PR.
-- Before activation, `MAX_APP_ORIGIN == APP_ORIGIN` deterministically keeps the shared bundle with both bridges.
-- After activation, the same verified artifact is rendered Telegram-only on the Telegram root and MAX-only on the MAX root.
-- Telegram and MAX native startup paths remain unchanged.
-- No database, API, pricing, payment, provider, or cross-project behavior changes.
-
-Spec result: **clean; 0 unresolved findings**.
-
-### Final pre-CI gate
-
-The next immutable branch head is the merge candidate. Full PR CI must pass on that exact SHA. Do not edit this ledger merely to copy the CI run number after success, because that would create a new untested head.
