@@ -173,7 +173,7 @@ def validate(values: dict[str, str]) -> list[str]:
             errors.append("MAX_WEBHOOK_URL must use a valid https:// URL")
         max_mini_app_url = values.get("MAX_MINI_APP_URL", "").strip()
         if max_mini_app_url and not _is_https_mini_app_url(max_mini_app_url):
-            errors.append("MAX_MINI_APP_URL must use a valid https:// URL without query or fragment")
+            errors.append("MAX_MINI_APP_URL must use a valid https:// URL")
         max_payment_return_url = values.get("MAX_PAYMENT_RETURN_URL", "").strip()
         if max_payment_return_url and not _is_https_url(max_payment_return_url):
             errors.append("MAX_PAYMENT_RETURN_URL must use a valid https:// URL")
