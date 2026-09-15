@@ -1,11 +1,8 @@
 import assert from 'node:assert/strict'
-import { execFileSync, spawn } from 'node:child_process'
-import { cpSync, mkdirSync, rmSync } from 'node:fs'
+import { spawn } from 'node:child_process'
 import { chromium, devices, webkit } from 'playwright'
 
 const baseUrl = 'http://127.0.0.1:4174/mini-app/'
-const serverDir = '.e2e-telegram'
-const miniAppDir = `${serverDir}/mini-app`
 const initData = 'query_id=e2e-startup&user=%7B%22id%22%3A424242%7D&auth_date=1787972400&hash=test'
 
 const bootstrapPayload = {
@@ -46,18 +43,9 @@ async function waitForServer(url, timeoutMs = 20_000) {
   throw new Error(`Static server did not start: ${url}`)
 }
 
-rmSync(serverDir, { recursive: true, force: true })
-mkdirSync(serverDir, { recursive: true })
-cpSync('out', miniAppDir, { recursive: true })
-execFileSync(
-  'python3',
-  ['../../scripts/render_happyfox_miniapp_channel.py', miniAppDir, 'telegram'],
-  { stdio: 'inherit' },
-)
-
 const server = spawn(
   'python3',
-  ['-m', 'http.server', '4174', '--directory', serverDir],
+  ['-m', 'http.server', '4174', '--directory', '.e2e-server'],
   { stdio: 'inherit' },
 )
 
@@ -157,7 +145,7 @@ try {
       })
 
       assert.ok(headContract.sdkIndex >= 0, `${target.name}: Telegram SDK script missing`)
-      assert.equal(headContract.maxIndex, -1, `${target.name}: MAX Bridge must not load on Telegram host`)
+      assert.equal(headContract.maxIndex, -1, `${target.name}: MAX Bridge must not load for Telegram launch`)
       assert.ok(
         headContract.firstNextIndex < 0 || headContract.sdkIndex < headContract.firstNextIndex,
         `${target.name}: Telegram SDK must execute before Next.js runtime`,
@@ -178,5 +166,4 @@ try {
   }
 } finally {
   server.kill('SIGTERM')
-  rmSync(serverDir, { recursive: true, force: true })
 }
