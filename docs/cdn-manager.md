@@ -4,10 +4,11 @@ The old `cdn.sh` Tanya/NEUROMIX profile workflow is not the canonical HappyFox p
 
 HappyFox Mini App is released from the same verified `foxgen/main` SHA as the backend through the current CI/deploy workflows.
 
-Current public Mini App:
+HappyFox Mini App origins:
 
 ```text
-https://app.happy-fox.online/mini-app/
+Telegram: https://app.happy-fox.online/mini-app/
+MAX:      https://max.happy-fox.online/mini-app/  # after DNS/TLS activation
 ```
 
 Use:
