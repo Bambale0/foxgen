@@ -102,6 +102,7 @@ def validate(values: dict[str, str]) -> list[str]:
         "SUPPORT_CONTACT",
         "YOOKASSA_RETURN_URL",
         "MAX_WEBHOOK_URL",
+        "MAX_MINI_APP_URL",
         "MAX_PAYMENT_RETURN_URL",
     ):
         value = values.get(key, "").strip().lower()
@@ -148,6 +149,11 @@ def validate(values: dict[str, str]) -> list[str]:
         max_webhook_url = values.get("MAX_WEBHOOK_URL", "").strip()
         if max_webhook_url and not max_webhook_url.startswith("https://"):
             errors.append("MAX_WEBHOOK_URL must use https://")
+        max_mini_app_url = values.get("MAX_MINI_APP_URL", "").strip()
+        if not max_mini_app_url:
+            errors.append("MAX_MINI_APP_URL is required when MAX_ENABLED=1")
+        elif not max_mini_app_url.startswith("https://"):
+            errors.append("MAX_MINI_APP_URL must use https://")
         max_payment_return_url = values.get("MAX_PAYMENT_RETURN_URL", "").strip()
         if max_payment_return_url and not max_payment_return_url.startswith("https://"):
             errors.append("MAX_PAYMENT_RETURN_URL must use https://")
