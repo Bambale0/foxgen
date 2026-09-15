@@ -1,5 +1,5 @@
-from pathlib import Path
 import subprocess
+from pathlib import Path
 
 from scripts.prepare_happyfox_production import (
     build_runtime_values,
