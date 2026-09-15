@@ -53,20 +53,9 @@ main_sha="$(gh api "repos/${GITHUB_REPO}/commits/main" --jq .sha)"
   exit 1
 }
 
-# MAX uses the Russian Trusted PKI. Keep the host trust store reproducible too,
-# not only the container image, so host-side diagnostics and future tooling use
-# the same verified chain without disabling TLS verification.
 bash scripts/install_russian_trusted_ca.sh
-
-# Recover protected channel values from the server-side channel overlay before
-# canonicalizing public URLs. GitHub Actions never replaces this runtime file:
-# the production host is authoritative for secrets and channel credentials.
 python3 scripts/recover_happyfox_channel_runtime.py "$PROJECT_DIR"
 
-# Dedicated-host topology is intentionally split: backend/webhook/media traffic
-# uses api.happy-fox.online, Telegram UI uses APP_ORIGIN, and MAX UI may use a
-# dedicated MAX_APP_ORIGIN. Until DNS/TLS for that origin is activated, the
-# default stays equal to APP_ORIGIN so current production remains deployable.
 python3 - "$RUNTIME_ENV" "$API_ORIGIN" "$APP_ORIGIN" "$MAX_APP_ORIGIN" "$DATABASE_NAME" "$TELEGRAM_RELAY_IP" <<'PY'
 from pathlib import Path
 import ipaddress
@@ -96,9 +85,6 @@ values["STATIC_BASE_URL"] = api
 values["MINI_APP_URL"] = f"{app}/mini-app/"
 values["YOOKASSA_RETURN_URL"] = f"{app}/mini-app/"
 values["PERSIST_PROVIDER_RESULTS"] = "1"
-# Telegram ingress may be pinned to the apix relay IP, but the public
-# webhook URL/SNI stays canonical to HappyFox. Do not preserve alternate
-# project domains from stale runtime overlays.
 values["TELEGRAM_WEBHOOK_URL"] = f"{api}/webhook"
 if not telegram_relay_ip:
     raise SystemExit("HAPPYFOX_TELEGRAM_RELAY_IP must not be empty")
@@ -143,15 +129,12 @@ PY
 
 python3 scripts/validate_happyfox_env.py .env .env.happyfox.runtime .env.postgres
 
-# Keep Docker/containerd growth bounded on the dedicated HappyFox host. The
-# cleanup is age-bounded and intentionally never prunes volumes.
 install -m 0755 scripts/happyfox_docker_prune.sh /usr/local/sbin/happyfox-docker-prune
 install -m 0644 deploy/systemd/happyfox-docker-prune.service /etc/systemd/system/happyfox-docker-prune.service
 install -m 0644 deploy/systemd/happyfox-docker-prune.timer /etc/systemd/system/happyfox-docker-prune.timer
 systemctl daemon-reload
 systemctl enable --now happyfox-docker-prune.timer
 
-# Writable bind mounts belong to the non-root runtime UID from the Dockerfile.
 for path in data static/uploads logs backups outputs; do
   install -d -m 0755 "$path"
   chown -R 10001:10001 "$path"
@@ -167,12 +150,10 @@ for i in $(seq 1 60); do
   [[ "$i" -lt 60 ]] || { echo "HappyFox data plane did not become ready" >&2; exit 1; }
 done
 
-# A verified rollback point is mandatory before replacing a healthy runtime.
 if docker inspect foxgen-happyfox-bot >/dev/null 2>&1; then
   current_state="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' foxgen-happyfox-bot 2>/dev/null || true)"
   if [[ "$current_state" == "healthy" ]]; then
-    docker exec -e SEND_BACKUP_TO_ADMINS=0 foxgen-happyfox-bot \
-      bash /app/scripts/backup_db.sh
+    docker exec -e SEND_BACKUP_TO_ADMINS=0 foxgen-happyfox-bot bash /app/scripts/backup_db.sh
   fi
 fi
 
@@ -184,8 +165,7 @@ docker build \
 image_revision="$(docker inspect -f '{{index .Config.Labels "org.opencontainers.image.revision"}}' foxgen-happyfox-bot:local)"
 [[ "$image_revision" == "$EXPECTED_SHA" ]]
 
-COMPOSE_PROJECT_NAME=foxgen-happyfox \
-  HAPPYFOX_IMAGE=foxgen-happyfox-bot:local \
+COMPOSE_PROJECT_NAME=foxgen-happyfox HAPPYFOX_IMAGE=foxgen-happyfox-bot:local \
   docker compose -f compose.backend.yml up -d --no-build bot
 
 for i in $(seq 1 60); do
@@ -202,9 +182,6 @@ done
 runtime_revision="$(docker inspect -f '{{index .Config.Labels "org.opencontainers.image.revision"}}' foxgen-happyfox-bot)"
 [[ "$runtime_revision" == "$EXPECTED_SHA" ]]
 
-# Publish the exact static bundle embedded in the verified backend image. The
-# MAX webroot is prepared on every release even before DNS is activated, so
-# switching the public MAX origin never requires a different frontend build.
 for webroot in /var/www/happyfox-app /var/www/happyfox-max /var/www/happyfox-landing; do
   install -d -m 0755 "$webroot/mini-app"
   find "$webroot/mini-app" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
@@ -219,9 +196,6 @@ trap - EXIT
 find /var/www/happyfox-app /var/www/happyfox-max /var/www/happyfox-landing -type d -exec chmod 0755 {} +
 find /var/www/happyfox-app /var/www/happyfox-max /var/www/happyfox-landing -type f -exec chmod 0644 {} +
 
-# The public landing is served from the domain root, while Next exports metadata
-# routes under /mini-app. Publish canonical crawl artifacts at the actual public
-# URLs so nginx serves text/XML instead of falling back to landing HTML.
 for seo_file in robots.txt sitemap.xml; do
   source_file="/var/www/happyfox-landing/mini-app/${seo_file}"
   [[ -s "$source_file" ]] || { echo "Missing HappyFox SEO artifact: $source_file" >&2; exit 1; }
@@ -231,9 +205,6 @@ done
 [[ "$(tr -d '\r\n' </var/www/happyfox-app/mini-app/revision.txt)" == "$EXPECTED_SHA" ]]
 [[ "$(tr -d '\r\n' </var/www/happyfox-max/mini-app/revision.txt)" == "$EXPECTED_SHA" ]]
 
-# Keep the dedicated HappyFox edge deterministic and low-latency:
-# TLS 1.2 only, HTTP/2 for browser multiplexing, persistent local upstream
-# connections, and immutable caching for hashed Next.js assets.
 nginx_site="/etc/nginx/sites-available/happyfox.conf"
 certbot_options="/etc/letsencrypt/options-ssl-nginx.conf"
 [[ -s "$nginx_site" && -s "$certbot_options" ]] || {
@@ -305,7 +276,9 @@ for miniapp_origin in "${miniapp_origins[@]}"; do
   }
 done
 
-max_launch_location="$(curl -sS -I --max-time 20 "$API_ORIGIN/max/webhook" \
+# The compatibility route redirects only GET. Use a real GET while collecting
+# response headers; `curl -I` would send HEAD and miss the nginx condition.
+max_launch_location="$(curl -sS -D - -o /dev/null --max-time 20 "$API_ORIGIN/max/webhook" \
   | awk 'BEGIN{IGNORECASE=1} /^location:/ {gsub(/\r/, "", $2); print $2; exit}' || true)"
 [[ "$max_launch_location" == "$MAX_APP_ORIGIN/mini-app/" ]] || {
   echo "MAX launch compatibility redirect mismatch: $max_launch_location" >&2
@@ -324,15 +297,10 @@ kie_status="$(curl -sS -o /dev/null -w '%{http_code}' -X POST --max-time 20 \
   -H 'Content-Type: application/json' -d '{}' "$API_ORIGIN/webhook/kie_ai" || true)"
 [[ "$kie_status" =~ ^(400|401|403)$ ]]
 
-# Telegram and MAX webhook configuration is part of the release, not a manual
-# afterthought. MAX refreshes its subscription during startup; the explicit
-# authenticated smoke below also proves container TLS trust to the MAX API.
 docker exec foxgen-happyfox-bot python /app/scripts/ensure_telegram_webhook.py
 docker exec foxgen-happyfox-bot python -m scripts.check_max_connectivity
 docker logs foxgen-happyfox-bot 2>&1 | grep -F "$API_ORIGIN/max/webhook" >/dev/null
 
-# Keep the post-migration state backed up with the matching PG17 client.
-docker exec -e SEND_BACKUP_TO_ADMINS=0 foxgen-happyfox-bot \
-  bash /app/scripts/backup_db.sh
+docker exec -e SEND_BACKUP_TO_ADMINS=0 foxgen-happyfox-bot bash /app/scripts/backup_db.sh
 
 echo "[happyfox-dedicated] DEPLOY_OK revision=$EXPECTED_SHA api=$API_ORIGIN telegram_app=$APP_ORIGIN max_app=$MAX_APP_ORIGIN landing=$LANDING_ORIGIN db=$DATABASE_NAME"
