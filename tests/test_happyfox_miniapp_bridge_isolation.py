@@ -1,5 +1,3 @@
-from pathlib import Path
-
 from scripts.render_happyfox_miniapp_channel import render_html, render_tree
 
 
@@ -39,7 +37,7 @@ def test_shared_variant_preserves_both_bridges() -> None:
     assert 'happyfox-miniapp-channel" content="shared' in rendered
 
 
-def test_renderer_is_repeatable_and_ignores_unrelated_html(tmp_path: Path) -> None:
+def test_renderer_is_repeatable_and_ignores_unrelated_html(tmp_path) -> None:
     index = tmp_path / "index.html"
     unrelated = tmp_path / "static.html"
     index.write_text(HTML, encoding="utf-8")
