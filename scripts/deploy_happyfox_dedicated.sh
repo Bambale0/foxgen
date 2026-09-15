@@ -87,13 +87,10 @@ values["STATIC_BASE_URL"] = api
 values["MINI_APP_URL"] = f"{app}/mini-app/"
 values["YOOKASSA_RETURN_URL"] = f"{app}/mini-app/"
 values["PERSIST_PROVIDER_RESULTS"] = "1"
-telegram_webhook_url = values.get("TELEGRAM_WEBHOOK_URL", "").strip()
-if not telegram_webhook_url:
-    telegram_webhook_url = f"{api}/webhook"
-parsed_telegram_webhook = urlsplit(telegram_webhook_url)
-if parsed_telegram_webhook.scheme != "https" or not parsed_telegram_webhook.netloc:
-    raise SystemExit("TELEGRAM_WEBHOOK_URL must be an HTTPS URL")
-values["TELEGRAM_WEBHOOK_URL"] = telegram_webhook_url
+# Telegram ingress may be pinned to the apix relay IP, but the public
+# webhook URL/SNI stays canonical to HappyFox. Do not preserve alternate
+# project domains from stale runtime overlays.
+values["TELEGRAM_WEBHOOK_URL"] = f"{api}/webhook"
 if not telegram_relay_ip:
     raise SystemExit("HAPPYFOX_TELEGRAM_RELAY_IP must not be empty")
 try:
@@ -136,6 +133,14 @@ tmp.replace(path)
 PY
 
 python3 scripts/validate_happyfox_env.py .env .env.happyfox.runtime .env.postgres
+
+# Keep Docker/containerd growth bounded on the dedicated HappyFox host. The
+# cleanup is age-bounded and intentionally never prunes volumes.
+install -m 0755 scripts/happyfox_docker_prune.sh /usr/local/sbin/happyfox-docker-prune
+install -m 0644 deploy/systemd/happyfox-docker-prune.service /etc/systemd/system/happyfox-docker-prune.service
+install -m 0644 deploy/systemd/happyfox-docker-prune.timer /etc/systemd/system/happyfox-docker-prune.timer
+systemctl daemon-reload
+systemctl enable --now happyfox-docker-prune.timer
 
 # Writable bind mounts belong to the non-root runtime UID from the Dockerfile.
 for path in data static/uploads logs backups outputs; do

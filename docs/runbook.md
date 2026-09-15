@@ -51,6 +51,25 @@ If a protected/internal health route is used, follow deployment monitoring confi
 
 Check PostgreSQL/Redis through existing diagnostic scripts/preflight where possible.
 
+## Docker disk housekeeping
+
+HappyFox must keep `happyfox-docker-prune.timer` enabled. It runs daily and removes only unused Docker/containerd artifacts older than five days. Volumes are excluded by design.
+
+Useful checks:
+
+```bash
+systemctl status happyfox-docker-prune.timer
+systemctl list-timers happyfox-docker-prune.timer --all
+journalctl -u happyfox-docker-prune.service --since "2 days ago"
+df -h /
+du -sh /var/lib/containerd
+```
+
+If disk usage rises unexpectedly, inspect `/var/lib/containerd` and Docker accounting before touching application data. Do not manually delete containerd directories and do not prune Docker volumes.
+
+The September 2026 outage was caused by stale containerd image/snapshot accumulation exhausting the root filesystem. PostgreSQL then could not complete checkpoints and repeatedly entered crash recovery, which made the HappyFox backend return 502.
+
+
 ## Logs
 
 Use container/system logs for the HappyFox runtime. Filter for the incident and redact tokens, headers, signed webhook bodies and payment secrets before sharing.
@@ -83,7 +102,7 @@ redis
 
 A blue WebApp button replacing Telegram's command menu is a regression: reset `setChatMenuButton` to `type=commands`; do not remove the inline Mini App button.
 
-Relay TLS is operational state: when the `happy-fox.online` certificate renews on the dedicated host, update the `api.happy-fox.online` certificate copy used by the relay and verify it with a forced-IP HTTPS health check before reloading nginx.
+Relay TLS is operational state: the apix relay maintains its own Let's Encrypt certificate for `api.happy-fox.online`. Verify renewal on the relay with a forced-IP HTTPS request to the configured ingress IP before reloading nginx; do not copy private keys between hosts.
 
 ## Instagram status
 

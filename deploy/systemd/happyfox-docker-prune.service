@@ -1,0 +1,18 @@
+[Unit]
+Description=HappyFox prune unused Docker artifacts older than 5 days
+Documentation=https://github.com/Bambale0/foxgen
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/happyfox-docker-prune
+User=root
+Group=root
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=full
