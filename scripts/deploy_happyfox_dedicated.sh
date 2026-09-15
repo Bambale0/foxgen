@@ -131,9 +131,10 @@ if values.get("MAX_ENABLED", "").lower() in {"1", "true", "yes", "on"}:
             raise SystemExit("HAPPYFOX_MAX_APP_ORIGIN must be a public HTTPS origin")
         values["MAX_MINI_APP_URL"] = f"https://{parsed_max_app.netloc}/mini-app/"
     else:
-        values["MAX_MINI_APP_URL"] = (
-            values.get("MAX_MINI_APP_URL", "").strip() or f"{app}/mini-app/"
-        )
+        # Dedicated MAX origin activation is explicit. Until the operator sets
+        # HAPPYFOX_MAX_APP_ORIGIN, keep MAX on the already-working app origin
+        # regardless of stale/recovered channel values.
+        values["MAX_MINI_APP_URL"] = f"{app}/mini-app/"
 
     if not values.get("MAX_PAYMENT_RETURN_URL", "").startswith("https://max.ru/"):
         values["MAX_PAYMENT_RETURN_URL"] = values["MAX_MINI_APP_URL"]
