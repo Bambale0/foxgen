@@ -51,15 +51,28 @@ getent ahostsv4 "$DOMAIN" >/dev/null 2>&1 || {
 
 install -d -m 0755 "$WEBROOT" "$ACME_ROOT/.well-known/acme-challenge" "$(dirname "$SITE_AVAILABLE")" "$(dirname "$SITE_ENABLED")"
 backup=""
+had_site=0
+had_enabled=0
 if [[ -e "$SITE_AVAILABLE" ]]; then
+  had_site=1
   backup="${SITE_AVAILABLE}.bak.$(date -u +%Y%m%dT%H%M%SZ)"
   cp -a "$SITE_AVAILABLE" "$backup"
+fi
+if [[ -e "$SITE_ENABLED" || -L "$SITE_ENABLED" ]]; then
+  had_enabled=1
 fi
 
 rollback() {
   rc=$?
-  if [[ $rc -ne 0 && -n "$backup" && -e "$backup" ]]; then
-    cp -a "$backup" "$SITE_AVAILABLE" || true
+  if [[ $rc -ne 0 ]]; then
+    if [[ $had_site -eq 1 && -n "$backup" && -e "$backup" ]]; then
+      cp -a "$backup" "$SITE_AVAILABLE" || true
+    else
+      rm -f "$SITE_AVAILABLE" || true
+    fi
+    if [[ $had_enabled -eq 0 ]]; then
+      rm -f "$SITE_ENABLED" || true
+    fi
     nginx -t >/dev/null 2>&1 && systemctl reload nginx || true
   fi
   exit "$rc"
