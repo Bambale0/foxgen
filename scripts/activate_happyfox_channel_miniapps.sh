@@ -11,14 +11,36 @@ MAX_MINIAPP_ROOT="/var/www/happyfox-max/mini-app"
 RUNTIME_ENV="${HAPPYFOX_RUNTIME_ENV:-$PROJECT_DIR/.env.happyfox.runtime}"
 NGINX_SITE="${HAPPYFOX_NGINX_SITE:-/etc/nginx/sites-available/happyfox.conf}"
 IMAGE="${HAPPYFOX_IMAGE:-foxgen-happyfox-bot:local}"
+SHARED_ORIGIN="https://app.happy-fox.online"
+DEDICATED_MAX_ORIGIN="https://max.happy-fox.online"
 
 log() { printf '[happyfox-miniapp-split] %s\n' "$*"; }
 die() { printf '[happyfox-miniapp-split] ERROR: %s\n' "$*" >&2; exit 1; }
 
 [[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]] || die "expected a full 40-character SHA"
 
+restore_shared_redirect() {
+  [[ -s "$NGINX_SITE" ]] || return 0
+  python3 - "$NGINX_SITE" "$SHARED_ORIGIN" "$DEDICATED_MAX_ORIGIN" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+shared = sys.argv[2].rstrip("/")
+dedicated = sys.argv[3].rstrip("/")
+text = path.read_text(encoding="utf-8")
+old = f"return 302 {dedicated}/mini-app/;"
+new = f"return 302 {shared}/mini-app/;"
+if old in text:
+    path.write_text(text.replace(old, new, 1), encoding="utf-8")
+PY
+  nginx -t
+  systemctl reload nginx
+}
+
 if [[ ! -s "$CONFIG_FILE" ]]; then
-  log "split config is absent; keeping transitional shared Mini App host"
+  restore_shared_redirect
+  log "split config is absent; shared Mini App launch mode is active"
   exit 0
 fi
 
@@ -54,16 +76,15 @@ value = sys.argv[1]
 parsed = urlsplit(value)
 if (
     parsed.scheme != "https"
-    or not parsed.hostname
+    or parsed.hostname != "max.happy-fox.online"
+    or parsed.port not in {None, 443}
     or parsed.username
     or parsed.password
     or parsed.query
     or parsed.fragment
     or parsed.path not in {"", "/"}
 ):
-    raise SystemExit("MAX_MINIAPP_ORIGIN must be a bare HTTPS origin")
-if parsed.hostname == "app.happy-fox.online":
-    raise SystemExit("MAX Mini App split origin must differ from Telegram app.happy-fox.online")
+    raise SystemExit("MAX_MINIAPP_ORIGIN must be https://max.happy-fox.online")
 PY
 
 [[ -s "$RUNTIME_ENV" ]] || die "HappyFox runtime env is missing: $RUNTIME_ENV"
