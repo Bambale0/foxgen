@@ -16,9 +16,8 @@ def test_dedicated_deploy_pins_three_public_origins_and_runtime_db() -> None:
     assert "TELEGRAM_WEBHOOK_URL" in deploy
     assert "TELEGRAM_WEBHOOK_IP_ADDRESS" in deploy
     assert "HAPPYFOX_TELEGRAM_RELAY_IP:-2.27.160.11" in deploy
-    assert 'telegram_webhook_url = values.get("TELEGRAM_WEBHOOK_URL", "").strip()' in deploy
-    assert 'values["TELEGRAM_WEBHOOK_URL"] = telegram_webhook_url' in deploy
-    assert 'values["TELEGRAM_WEBHOOK_URL"] = f"{api}/webhook"' not in deploy
+    assert 'values["TELEGRAM_WEBHOOK_URL"] = f"{api}/webhook"' in deploy
+    assert 'telegram_webhook_url = values.get("TELEGRAM_WEBHOOK_URL", "").strip()' not in deploy
     assert 'values["TELEGRAM_WEBHOOK_IP_ADDRESS"] = telegram_relay_ip' in deploy
     assert 'values["PERSIST_PROVIDER_RESULTS"] = "1"' in deploy
     assert "HAPPYFOX_GITHUB_REPO:-Bambale0/foxgen" in deploy
