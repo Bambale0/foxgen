@@ -184,3 +184,143 @@ The user explicitly clarified the required engineering path:
 Direct changes to `main` are not allowed for ordinary engineering work. The canonical deploy workflow's exact-SHA synchronization, including its existing `git reset --hard "$EXPECTED_SHA"`, is authorized without a separate confirmation when it runs only as part of this reviewed, green, exact-SHA auto-deploy path. Manual/destructive resets outside that path remain prohibited without specific approval.
 
 The current execution environment does not expose the parallel `Agent` sub-agent tool referenced by the `code-review` skill. The two required review axes will therefore be executed independently in this session against the same fixed point and reported separately; this platform limitation must not be represented as the literal parallel-subagent implementation.
+
+---
+
+## Active Feature — Telegram/MAX Mini App host split
+
+### Task
+
+Keep Telegram Mini App on `https://app.happy-fox.online/mini-app/` and prepare MAX Mini App for `https://max.happy-fox.online/mini-app/` so each messenger launches its own native Mini App bridge correctly while the product UI/backend stay shared.
+
+### Baseline
+
+- Repository: `Bambale0/foxgen`
+- Base branch: `main`
+- Baseline SHA: `a01bedc79767cbde4ad248cbf0bf95b6d6006a72`
+- Working branch: `feat/split-telegram-max-miniapp-hosts`
+- Superseded investigation: PR #252 was closed unmerged after confirming a frontend bootstrap patch alone could not explain Telegram choosing an external browser before page JavaScript executes.
+
+### Fresh audit
+
+What already exists:
+
+- Telegram bot buttons use native `web_app=WebAppInfo(...)` and the Telegram app origin `app.happy-fox.online`.
+- MAX already has a separate `MAX_MINI_APP_URL` runtime setting and native `open_app` buttons.
+- Telegram and MAX currently share one static frontend export and one backend API.
+- The shared HTML currently loads both Telegram SDK and MAX Bridge.
+- Production CI already runs Telegram and MAX startup E2E on Chromium and iPhone WebKit.
+- Production deploy publishes exact-SHA static assets and reconciles Telegram/MAX channel runtime.
+
+What is partial:
+
+- MAX's separate URL setting currently resolves to the same `app.happy-fox.online` Mini App as Telegram.
+- Nginx has MAX launch compatibility on the shared app domain.
+- Existing startup E2E validates each bridge but did not require the other messenger bridge to be absent.
+
+What is missing:
+
+- dedicated `max.happy-fox.online` static/API ingress;
+- channel-specific published HTML variants from the same verified build;
+- an activation mechanism that is safe before DNS exists;
+- durable post-deploy reconciliation after the split is enabled;
+- explicit documentation/rollback for the separate launch hosts.
+
+Reusable components:
+
+- current Next.js static export;
+- `MAX_MINI_APP_URL` setting and MAX `open_app` buttons;
+- shared backend `/mini-app/api/` routes;
+- exact-SHA production image as the immutable static bundle source;
+- existing Telegram/MAX browser startup E2E.
+
+### Intended outcome and acceptance criteria
+
+1. Telegram canonical Mini App remains `https://app.happy-fox.online/mini-app/`.
+2. MAX canonical Mini App becomes `https://max.happy-fox.online/mini-app/` after DNS/TLS activation.
+3. Both hosts publish the same exact verified frontend revision and use the same HappyFox backend API.
+4. Telegram host loads `/mini-app/telegram-web-app.js` and does not load MAX Bridge.
+5. MAX host loads `https://st.max.ru/js/max-web-app.js` and does not load Telegram SDK.
+6. Before the MAX subdomain is provisioned, merging/deploying this preparation does not change the current production MAX launch host.
+7. After one-time server provisioning, successful future production deploys automatically reconcile both channel-specific variants.
+8. MAX `/mini-app/api/` reaches the shared backend and unsupported/invalid bootstrap requests fail closed at the application seam rather than nginx 404/405.
+9. MAX launch redirect and runtime setting point to the dedicated MAX origin after activation.
+10. Telegram and MAX startup E2E pass on Chromium and iPhone WebKit using their isolated static variants.
+
+### No-hardcode/configuration decision
+
+- Canonical product domains are infrastructure invariants and are documented in deploy/provisioning surfaces.
+- Activation is not controlled by source edits: the server-side `/etc/foxgen-happyfox/max-miniapp.env` file is the explicit operations switch created only after DNS/TLS provisioning.
+- No prices, prompts, provider/model choices, business thresholds, secrets or mutable commercial configuration are added.
+
+### Schema/API/UI changes
+
+- Database/schema: none.
+- Public backend API contract: unchanged.
+- Telegram UI: unchanged.
+- MAX UI: unchanged; launch origin changes after activation.
+- Frontend codebase: one source remains; deployment renders channel-specific bridge variants.
+
+### Permissions/security scope
+
+- Telegram signed `initData` and MAX signed launch data continue to be validated by their existing backend paths.
+- The split does not make client-side bridge detection an authorization boundary.
+- No credentials are committed. TLS provisioning uses Certbot on the production host and the activation file contains only public origin/root configuration.
+- Dedicated MAX nginx CSP permits MAX bridge/frame origins without adding Telegram bridge execution to the MAX host.
+
+### Observability plan
+
+- Existing production bootstrap/auth logs remain the backend signal for missing launch data.
+- Activation script validates live HTML bridge isolation, exact revision, MAX bootstrap ingress, bot health and MAX launch redirect.
+- The post-deploy reconciliation workflow records exact commit and whether the server-side split is active or intentionally remains no-op.
+
+### Verification layers
+
+- Unit/domain behavior: channel renderer contract tests.
+- Database/repository integration: N/A; no data change.
+- Authorization/ownership: existing channel auth remains unchanged; backend regression required.
+- Migrations: N/A.
+- External adapter contract: MAX native `open_app`/registered Mini App URL and Telegram native WebApp button remain their platform launch mechanisms.
+- Workflow/idempotency/retry: activation is rerunnable from the immutable exact-SHA Docker image; provisioning is DNS/TLS-gated.
+- API integration: dedicated MAX nginx proxies `/mini-app/api/` to the same backend.
+- Telegram bot behavior: existing inline WebApp target retained; isolated startup E2E required.
+- MAX bot behavior: existing `open_app` retained; isolated startup E2E required.
+- Mini App behavior/E2E: Telegram and MAX Chromium + iPhone WebKit startup must each assert absence of the other bridge.
+- Instagram applicability: N/A; Instagram does not use Telegram/MAX Mini App launch bridges.
+- Smoke/deployability: exact-source Docker plus no-op preactivation deploy and live postactivation checks.
+- Observability/audit: activation health/revision/bridge/redirect checks plus existing backend logs.
+- No-hardcode/admin configurability: server activation config is an infrastructure switch; no business config introduced.
+- Documentation: `docs/miniapp-channel-hosts.md` and `docs/max-channel.md` updated.
+
+### Implementation progress
+
+1. [x] Audit current Telegram/MAX launch code, runtime settings, deploy scripts, nginx tuning and startup E2E.
+2. [x] Close speculative PR #252 without merging.
+3. [x] Create branch from current `main`.
+4. [x] Add `shared`/`telegram`/`max` static renderer with bridge-count validation.
+5. [x] Add server-side activation that is a no-op while MAX split config is absent.
+6. [x] Make activation source both variants from the exact verified Docker image so reruns are idempotent.
+7. [x] Add one-time DNS/TLS/nginx provisioning for `max.happy-fox.online`.
+8. [x] Add post-production-deploy reconciliation workflow.
+9. [x] Make nginx tuning preserve a configured dedicated MAX redirect across future deploys.
+10. [x] Strengthen Telegram startup E2E to use Telegram-only published HTML and reject MAX Bridge.
+11. [x] Strengthen MAX startup E2E to use MAX-only published HTML and reject Telegram SDK.
+12. [x] Add unit/contract coverage for renderer, activation transition and nginx redirect durability.
+13. [x] Document topology, one-time activation, release invariants and rollback.
+14. [ ] Run two-axis code review against `main` and resolve findings.
+15. [ ] Run exact-head PR CI to green.
+16. [ ] Merge through PR and verify canonical production deploy remains healthy in preactivation/no-op mode.
+17. [ ] After DNS exists: provision `max.happy-fox.online`, activate current verified main SHA, update MAX Partner Mini App URL, and verify a real MAX launch plus Telegram launch.
+
+### Skills/guides used
+
+- `Bambale0/skills`: `ask-matt`, `diagnosing-bugs`, `tdd`, `code-review`, `resolving-merge-conflicts`.
+- `Bambale0/claw`: debugger guidance used for evidence-first production diagnosis.
+- `wondelai/skills`: release guidance used for exact-SHA, staged activation and rollback discipline.
+- `anthropics/skills`: searched for directly relevant Telegram/MAX Mini App host-splitting guidance; no applicable skill was identified, so no unrelated skill was forced into the task.
+
+### Risks and follow-up
+
+- DNS/TLS and the MAX Partner Mini App URL cannot be activated until `max.happy-fox.online` exists publicly; the repository is deliberately designed to remain in shared transition mode until then.
+- A production deploy after split activation briefly publishes the generic app bundle before the post-deploy reconciliation workflow re-renders the Telegram-only variant; the MAX dedicated root is not removed by the canonical deploy and remains available until reconciliation updates it to the new exact SHA.
+- Tomorrow's final acceptance requires real-client launch checks in both Telegram and MAX because CI can validate bridge/startup contracts but cannot impersonate the messenger's platform-side Mini App registration.
