@@ -184,3 +184,129 @@ The user explicitly clarified the required engineering path:
 Direct changes to `main` are not allowed for ordinary engineering work. The canonical deploy workflow's exact-SHA synchronization, including its existing `git reset --hard "$EXPECTED_SHA"`, is authorized without a separate confirmation when it runs only as part of this reviewed, green, exact-SHA auto-deploy path. Manual/destructive resets outside that path remain prohibited without specific approval.
 
 The current execution environment does not expose the parallel `Agent` sub-agent tool referenced by the `code-review` skill. The two required review axes will therefore be executed independently in this session against the same fixed point and reported separately; this platform limitation must not be represented as the literal parallel-subagent implementation.
+
+
+---
+
+## Active Feature — Split Telegram and MAX Mini App origins
+
+### Task
+
+Keep Telegram Mini App on its existing HappyFox origin and prepare a dedicated MAX Mini App origin so the two platform bridges and browser storage scopes cannot interfere. Target MAX hostname: `max.happy-fox.online`. DNS/certificate activation is intentionally deferred until the hostname exists.
+
+### Baseline
+
+- Repository: `Bambale0/foxgen`
+- Base branch: `main`
+- Baseline SHA: `a01bedc79767cbde4ad248cbf0bf95b6d6006a72`
+- Working branch: `fix/split-telegram-max-miniapp-origins`
+
+### Fresh audit
+
+What already exists:
+
+- Telegram Mini App production origin: `https://app.happy-fox.online/mini-app/`.
+- MAX has an independent `MAX_MINI_APP_URL` setting in runtime configuration.
+- MAX `open_app` buttons correctly target the registered MAX bot Mini App rather than opening an arbitrary URL.
+- The dedicated production deploy currently overwrites `MAX_MINI_APP_URL` back to the Telegram app origin on every release.
+- The shared static HTML currently loads both Telegram SDK and MAX Bridge synchronously for every launch.
+- Existing Chromium + iPhone WebKit startup E2E exists for both Telegram and MAX.
+- Generic Mini App HTTPS host installation and strict Nginx Mini App path resolution already exist.
+
+What is partial:
+
+- MAX has a separate config key but production deployment does not preserve a distinct MAX origin.
+- Browser launch detection distinguishes Telegram/MAX after page startup, but both bridges are loaded before that decision.
+- Production publishing only copies the verified bundle to Telegram app and landing webroots.
+
+What is missing:
+
+- Bridge isolation: a Telegram launch must not load MAX Bridge; a MAX launch must not load Telegram SDK.
+- Durable production support for a distinct `MAX_MINI_APP_URL`.
+- Automatic publication/smoke of the MAX static root once a distinct configured MAX origin exists.
+- A prepared MAX-domain deployment profile/documented activation procedure.
+
+### External contract checked
+
+Official MAX documentation confirms:
+
+- Mini Apps are attached to a MAX bot using an HTTPS URL in the MAX partner settings.
+- `open_app` opens the registered Mini App inside MAX.
+- MAX launch data is supplied as `WebAppData` in the launch URL.
+- `openLink` opens an external browser, while `openMaxLink` is for MAX deep links.
+
+Therefore the application origin and bridge selection must not depend on an ordinary browser link when opening the Mini App from MAX.
+
+### Intended outcome and acceptance criteria
+
+1. Telegram remains on its current Mini App URL and continues to open as Telegram WebApp.
+2. MAX can be switched independently to `https://max.happy-fox.online/mini-app/` without changing Telegram.
+3. Telegram launches load only Telegram WebApp SDK; MAX launches load only MAX Bridge.
+4. Browser fallback remains available when neither platform provides signed launch data.
+5. `MAX_MINI_APP_URL` is preserved by production deploy and is never silently forced back to `MINI_APP_URL`.
+6. After MAX origin activation, exact-SHA deploy publishes the same verified static bundle to its Nginx-resolved Mini App root and smoke-checks it.
+7. MAX webhook GET compatibility redirect follows the configured MAX Mini App URL instead of a hardcoded Telegram app URL.
+8. Existing Telegram and MAX startup E2E pass in Chromium and iPhone WebKit.
+9. No runtime secret or mutable business policy is hardcoded.
+10. DNS/TLS activation is not attempted before the user creates the subdomain.
+
+### No-hardcode/configuration decision
+
+The target hostname is documented as the intended HappyFox production topology, but runtime routing remains driven by `MAX_MINI_APP_URL`. The deploy script derives the active MAX origin from that setting and resolves its live Nginx filesystem path instead of assuming a fixed filesystem root.
+
+### Schema/API/UI changes
+
+- Database/schema: none.
+- Public backend API: none.
+- Telegram UI: no visible change.
+- MAX UI: no visible change; its registered Mini App URL becomes independently configurable.
+- Frontend startup: one platform bridge per launch instead of loading both.
+
+### Security/ownership scope
+
+- Telegram signed `initData` and MAX signed `WebAppData` validation remain server-side.
+- Separate origins additionally isolate browser storage by origin.
+- No secrets or full signed payloads are introduced into logs.
+
+### Observability plan
+
+Use existing Mini App bootstrap/browser-auth logs and channel startup E2E. Post-activation smoke must verify public revision and ingress on the MAX origin. A real MAX launch remains the final platform-level signal after the partner-console URL is changed.
+
+### Verification layers
+
+- Unit/domain: N/A.
+- DB/repository: N/A.
+- Authorization: existing Telegram/MAX signed launch validation unchanged.
+- Migrations: N/A.
+- External adapter: MAX open_app/Bridge contract checked against current official docs.
+- API integration: Mini App bootstrap ingress smoke.
+- Telegram: startup E2E Chromium + iPhone WebKit; assert MAX Bridge absent.
+- MAX: startup E2E Chromium + iPhone WebKit; assert Telegram SDK absent.
+- Mini App: build/static export/critical journeys.
+- Instagram: N/A.
+- Deployability: exact-source Docker and dedicated deploy contract tests.
+- Observability: existing bootstrap/fallback telemetry + public revision smoke.
+- Documentation/configurability: MAX URL remains explicit runtime config.
+
+### Implementation steps
+
+1. [x] Audit current Telegram/MAX bridge startup, runtime config, deploy scripts and tests.
+2. [x] Verify current MAX platform launch contract in official documentation.
+3. [x] Create isolated working branch.
+4. [ ] Replace unconditional dual-bridge loading with early launch-data-based single-bridge loading.
+5. [ ] Extend Telegram/MAX E2E to prove the other platform bridge is not loaded.
+6. [ ] Preserve independent `MAX_MINI_APP_URL` in dedicated production deploy.
+7. [ ] Publish/smoke an independently configured MAX origin after activation.
+8. [ ] Make MAX webhook compatibility redirect use configured MAX Mini App URL.
+9. [ ] Add HappyFox MAX-origin deployment profile/docs for `max.happy-fox.online`.
+10. [ ] Run focused tests and full exact-head CI.
+11. [ ] Run Standards + Spec review against current `main`.
+12. [ ] Merge only after green review/CI; canonical deploy must remain non-breaking before DNS activation.
+13. [ ] After DNS is created: provision TLS/Nginx, set MAX partner Mini App URL + runtime `MAX_MINI_APP_URL`, run exact-SHA deploy and live MAX launch smoke.
+
+### Skills/guides applied
+
+- `Bambale0/skills`: diagnosing-bugs, tdd, code-review, resolving-merge-conflicts/implementation workflow.
+- `Bambale0/claw`: production debugging evidence-first guidance.
+- `wondelai/skills`: release verification guidance.
+- `anthropics/skills`: searched for directly applicable deployment/Mini App guidance; no narrower matching skill was identified, so no unrelated skill is forced into the task.
