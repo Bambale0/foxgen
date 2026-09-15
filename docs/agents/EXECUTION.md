@@ -300,7 +300,7 @@ Use existing Mini App bootstrap/browser-auth logs and channel startup E2E. Post-
 8. [x] Make MAX webhook compatibility redirect use configured MAX Mini App URL.
 9. [x] Add HappyFox MAX-origin deployment profile/docs for `max.happy-fox.online`.
 10. [ ] Run focused tests and full exact-head CI.
-11. [ ] Run Standards + Spec review against current `main`.
+11. [x] Run Standards + Spec review against current `main`.
 12. [ ] Merge only after green review/CI; canonical deploy must remain non-breaking before DNS activation.
 13. [ ] After DNS is created: provision TLS/Nginx, set MAX partner Mini App URL + runtime `MAX_MINI_APP_URL`, run exact-SHA deploy and live MAX launch smoke.
 
