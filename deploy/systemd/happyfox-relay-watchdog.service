@@ -1,0 +1,10 @@
+[Unit]
+Description=HappyFox Telegram relay watchdog
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/happyfox-relay-watchdog
+User=root
+Group=root
