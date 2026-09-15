@@ -73,6 +73,16 @@ try {
       const context = await browser.newContext({ ...target.device })
       const page = await context.newPage()
       let bootstrapInitData = ''
+      let maxBridgeRequests = 0
+
+      await page.route('https://st.max.ru/js/max-web-app.js', async (route) => {
+        maxBridgeRequests += 1
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/javascript',
+          body: '// MAX Bridge must not be requested during Telegram startup.\n',
+        })
+      })
 
       await page.route('**/mini-app/api/**', async (route) => {
         const request = route.request()
@@ -128,13 +138,18 @@ try {
 
       const headContract = await page.evaluate(() => {
         const scripts = Array.from(document.head.querySelectorAll('script'))
+        const loader = scripts.find((script) => script.id === 'miniapp-bridge-loader')
         const sdk = scripts.find((script) => script.getAttribute('src') === '/mini-app/telegram-web-app.js')
-        const early = scripts.find((script) => script.id === 'telegram-early-ready')
+        const maxBridge = scripts.find((script) => script.getAttribute('src') === 'https://st.max.ru/js/max-web-app.js')
+        const early = scripts.find((script) => script.id === 'miniapp-early-ready')
         const firstNextIndex = scripts.findIndex((script) =>
           String(script.getAttribute('src') || '').startsWith('/mini-app/_next/static/'),
         )
         return {
+          loaderIndex: loader ? scripts.indexOf(loader) : -1,
           sdkIndex: sdk ? scripts.indexOf(sdk) : -1,
+          maxIndex: maxBridge ? scripts.indexOf(maxBridge) : -1,
+          earlyIndex: early ? scripts.indexOf(early) : -1,
           firstNextIndex,
           sdkAsync: sdk?.async ?? null,
           sdkDefer: sdk?.defer ?? null,
@@ -142,7 +157,11 @@ try {
         }
       })
 
-      assert.ok(headContract.sdkIndex >= 0, `${target.name}: Telegram SDK script missing`)
+      assert.ok(headContract.loaderIndex >= 0, `${target.name}: platform bridge loader missing`)
+      assert.ok(headContract.sdkIndex > headContract.loaderIndex, `${target.name}: Telegram SDK script missing or loaded too early`)
+      assert.equal(headContract.maxIndex, -1, `${target.name}: MAX Bridge must not load in Telegram`)
+      assert.equal(maxBridgeRequests, 0, `${target.name}: Telegram startup requested MAX Bridge`)
+      assert.ok(headContract.earlyIndex > headContract.sdkIndex, `${target.name}: bootstrap must run after Telegram SDK`)
       assert.ok(
         headContract.firstNextIndex < 0 || headContract.sdkIndex < headContract.firstNextIndex,
         `${target.name}: Telegram SDK must execute before Next.js runtime`,
