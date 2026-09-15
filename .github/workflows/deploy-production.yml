@@ -158,6 +158,32 @@ jobs:
             bash scripts/deploy_happyfox_dedicated.sh "$expected_sha"
           REMOTE
 
+      - name: Reconcile channel-specific Mini App hosts
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          printf -v quoted_path '%q' "$DEPLOY_PATH"
+          printf -v quoted_sha '%q' "$EXPECTED_SHA"
+          ssh \
+            -i "$HOME/.ssh/id_ed25519" \
+            -p "$DEPLOY_PORT" \
+            -o BatchMode=yes \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            -o ConnectTimeout=15 \
+            -o ServerAliveInterval=20 \
+            -o ServerAliveCountMax=6 \
+            "$DEPLOY_USER@$DEPLOY_HOST" \
+            "bash -s -- $quoted_path $quoted_sha" <<'REMOTE'
+          set -Eeuo pipefail
+          project_dir="$1"
+          expected_sha="$2"
+          cd "$project_dir"
+          [ "$(git rev-parse HEAD)" = "$expected_sha" ]
+          chmod +x scripts/activate_happyfox_channel_miniapps.sh
+          bash scripts/activate_happyfox_channel_miniapps.sh "$expected_sha"
+          REMOTE
+
       - name: Verify public production revision
         shell: bash
         run: |
@@ -190,7 +216,8 @@ jobs:
             echo '- Source sync: server-side `gh` + exact main SHA verification'
             echo '- Secrets/runtime overlay: server-authoritative; Actions does not overwrite it'
             echo '- API/webhooks: `https://api.happy-fox.online`'
-            echo '- Mini App: `https://app.happy-fox.online/mini-app/`'
+            echo '- Telegram Mini App: `https://app.happy-fox.online/mini-app/`'
+            echo '- MAX Mini App: split is reconciled when `/etc/foxgen-happyfox/max-miniapp.env` exists; otherwise current shared-host mode is preserved.'
             echo '- Landing: `https://happy-fox.online/`'
             echo '- Telegram webhook and MAX subscription are reconciled by the deploy gate.'
           } >> "$GITHUB_STEP_SUMMARY"
