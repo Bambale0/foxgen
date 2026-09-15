@@ -102,7 +102,7 @@ redis
 
 A blue WebApp button replacing Telegram's command menu is a regression: reset `setChatMenuButton` to `type=commands`; do not remove the inline Mini App button.
 
-Relay TLS is operational state: when the `happy-fox.online` certificate renews on the dedicated host, update the `api.happy-fox.online` certificate copy used by the relay and verify it with a forced-IP HTTPS health check before reloading nginx.
+Relay TLS is operational state: the apix relay maintains its own Let's Encrypt certificate for `api.happy-fox.online`. Verify renewal on the relay with a forced-IP HTTPS request to the configured ingress IP before reloading nginx; do not copy private keys between hosts.
 
 ## Instagram status
 
