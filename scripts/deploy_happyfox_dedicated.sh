@@ -87,13 +87,10 @@ values["STATIC_BASE_URL"] = api
 values["MINI_APP_URL"] = f"{app}/mini-app/"
 values["YOOKASSA_RETURN_URL"] = f"{app}/mini-app/"
 values["PERSIST_PROVIDER_RESULTS"] = "1"
-telegram_webhook_url = values.get("TELEGRAM_WEBHOOK_URL", "").strip()
-if not telegram_webhook_url:
-    telegram_webhook_url = f"{api}/webhook"
-parsed_telegram_webhook = urlsplit(telegram_webhook_url)
-if parsed_telegram_webhook.scheme != "https" or not parsed_telegram_webhook.netloc:
-    raise SystemExit("TELEGRAM_WEBHOOK_URL must be an HTTPS URL")
-values["TELEGRAM_WEBHOOK_URL"] = telegram_webhook_url
+# Telegram ingress may be pinned to the apix relay IP, but the public
+# webhook URL/SNI stays canonical to HappyFox. Do not preserve alternate
+# project domains from stale runtime overlays.
+values["TELEGRAM_WEBHOOK_URL"] = f"{api}/webhook"
 if not telegram_relay_ip:
     raise SystemExit("HAPPYFOX_TELEGRAM_RELAY_IP must not be empty")
 try:
