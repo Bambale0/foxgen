@@ -65,9 +65,10 @@ The `gh` auth file and production runtime env files are secrets. Do not print th
 Every deploy canonicalizes the public production topology and safety invariants on the host:
 
 ```text
-landing:  https://happy-fox.online
-Mini App: https://app.happy-fox.online/mini-app/
-API:      https://api.happy-fox.online
+landing:           https://happy-fox.online
+Telegram Mini App: https://app.happy-fox.online/mini-app/
+MAX Mini App:      https://max.happy-fox.online/mini-app/  # after activation
+API:               https://api.happy-fox.online
 DB:       happyfox_cutover
 PERSIST_PROVIDER_RESULTS=1
 ```
