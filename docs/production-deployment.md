@@ -71,6 +71,7 @@ Mini App static revision equals expected SHA
 landing returns 200
 PostgreSQL 17 reachable and pre/post backup verified
 Redis namespace isolated
+happyfox-docker-prune.timer enabled and waiting
 Telegram webhook URL is https://api.happy-fox.online/webhook
 Telegram pending_update_count = 0 and last_error_message is empty
 Telegram native chat menu type = commands
@@ -90,11 +91,32 @@ TELEGRAM_WEBHOOK_IP_ADDRESS=<relay IPv4>
 
 `setWebhook` must use `drop_pending_updates=False`. The relay presents a valid certificate for `api.happy-fox.online`, forwards the request to the dedicated API origin and does not run a second bot worker. Outbound Bot API traffic is carried by `happyfox-telegram-egress.service`.
 
-The relay TLS certificate is copied from the valid `happy-fox.online` certificate on the dedicated host. After certificate renewal, refresh the relay copy and run `nginx -t` before reload; do not let the relay continue with an expired certificate.
+The apix relay owns a separate Let's Encrypt certificate for `api.happy-fox.online`. Telegram still uses the canonical URL/SNI `https://api.happy-fox.online/webhook`; `TELEGRAM_WEBHOOK_IP_ADDRESS` only pins ingress to the relay IPv4. Certificate renewal is handled on the relay host and must be followed by `nginx -t`/reload verification.
 
 After each deploy, the system menu must be restored to native quick commands (`/start`, `/feed`, `/prompts`, `/help`, `/ref`, `/earn`); do not set `MenuButtonWebApp` here.
 
 CI already validates production Docker image/runtime imports before the deploy workflow is allowed to act.
+
+### Docker/containerd retention
+
+The dedicated HappyFox host runs `happyfox-docker-prune.timer` once per day. Its service removes only unused Docker artifacts older than five days (`120h`):
+
+- stopped containers older than the retention window;
+- unused images older than the retention window;
+- build cache older than the retention window.
+
+The cleanup must never call `docker volume prune` and must never pass `--volumes`. PostgreSQL, Redis and MinIO named volumes are persistent production data.
+
+Canonical implementation:
+
+```text
+scripts/happyfox_docker_prune.sh
+deploy/systemd/happyfox-docker-prune.service
+deploy/systemd/happyfox-docker-prune.timer
+```
+
+Production deploy installs and enables these units idempotently. The script logs disk usage before and after cleanup plus Docker disk accounting; inspect it with `journalctl -u happyfox-docker-prune.service`.
+
 
 ## Instagram deployment state
 

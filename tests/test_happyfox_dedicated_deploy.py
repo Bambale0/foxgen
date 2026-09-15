@@ -16,9 +16,8 @@ def test_dedicated_deploy_pins_three_public_origins_and_runtime_db() -> None:
     assert "TELEGRAM_WEBHOOK_URL" in deploy
     assert "TELEGRAM_WEBHOOK_IP_ADDRESS" in deploy
     assert "HAPPYFOX_TELEGRAM_RELAY_IP:-2.27.160.11" in deploy
-    assert 'telegram_webhook_url = values.get("TELEGRAM_WEBHOOK_URL", "").strip()' in deploy
-    assert 'values["TELEGRAM_WEBHOOK_URL"] = telegram_webhook_url' in deploy
-    assert 'values["TELEGRAM_WEBHOOK_URL"] = f"{api}/webhook"' not in deploy
+    assert 'values["TELEGRAM_WEBHOOK_URL"] = f"{api}/webhook"' in deploy
+    assert 'telegram_webhook_url = values.get("TELEGRAM_WEBHOOK_URL", "").strip()' not in deploy
     assert 'values["TELEGRAM_WEBHOOK_IP_ADDRESS"] = telegram_relay_ip' in deploy
     assert 'values["PERSIST_PROVIDER_RESULTS"] = "1"' in deploy
     assert "HAPPYFOX_GITHUB_REPO:-Bambale0/foxgen" in deploy
@@ -32,6 +31,10 @@ def test_dedicated_deploy_pins_three_public_origins_and_runtime_db() -> None:
     assert 'Sitemap: ${LANDING_ORIGIN}/sitemap.xml' in deploy
     assert '<loc>${LANDING_ORIGIN}/</loc>' in deploy
     assert "backup_db.sh" in deploy
+    assert "scripts/happyfox_docker_prune.sh" in deploy
+    assert "happyfox-docker-prune.service" in deploy
+    assert "happyfox-docker-prune.timer" in deploy
+    assert "systemctl enable --now happyfox-docker-prune.timer" in deploy
 
 
 def test_happyfox_runtime_uses_configurable_public_dns() -> None:
