@@ -5,13 +5,17 @@ import './globals.css'
 const miniAppLaunchSnapshotScript = `
 (function () {
   try {
-    window.__BANANO_INITIAL_LAUNCH__ = {
+    var snapshot = {
       hash: window.location.hash || '',
       search: window.location.search || ''
     };
+    window.__BANANO_PRE_MAX_LAUNCH__ = snapshot;
+    window.__BANANO_INITIAL_LAUNCH__ = snapshot;
     if (window.sessionStorage) {
-      window.sessionStorage.setItem('__banano_initial_hash', window.location.hash || '');
-      window.sessionStorage.setItem('__banano_initial_search', window.location.search || '');
+      window.sessionStorage.setItem('__banano_pre_max_hash', snapshot.hash);
+      window.sessionStorage.setItem('__banano_pre_max_search', snapshot.search);
+      window.sessionStorage.setItem('__banano_initial_hash', snapshot.hash);
+      window.sessionStorage.setItem('__banano_initial_search', snapshot.search);
     }
   } catch (e) {}
 })();
@@ -38,7 +42,7 @@ const miniAppBootstrapScript = `
   }
 
   function launchData(name) {
-    var snapshot = window.__BANANO_INITIAL_LAUNCH__ || {};
+    var snapshot = window.__BANANO_PRE_MAX_LAUNCH__ || window.__BANANO_INITIAL_LAUNCH__ || {};
     var values = [
       snapshot.hash || '',
       snapshot.search || '',
