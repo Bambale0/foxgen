@@ -3,29 +3,12 @@ from __future__ import annotations
 import argparse
 import re
 from pathlib import Path
+from urllib.parse import urlsplit
 
 UPSTREAM_BLOCK = """upstream happyfox_backend {
     server 127.0.0.1:1888;
     keepalive 64;
 }
-
-"""
-
-MAX_WEBHOOK_LAUNCH_COMPAT_BLOCK = """    location = /max/webhook {
-        if ($request_method = GET) { return 302 https://app.happy-fox.online/mini-app/; }
-        proxy_pass http://happyfox_backend;
-        proxy_http_version 1.1;
-        proxy_set_header Connection "";
-        proxy_socket_keepalive on;
-        proxy_buffering off;
-        proxy_request_buffering off;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $remote_addr;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_read_timeout 900s;
-        proxy_send_timeout 900s;
-    }
 
 """
 
@@ -78,6 +61,37 @@ LANDING_MINIAPP_COMPAT_BLOCK = """    location /mini-app/api/ {
     }
 
     location /mini-app/ { try_files $uri $uri/ /mini-app/index.html; }
+"""
+
+
+def _normalize_https_origin(value: str) -> str:
+    origin = str(value or "").strip().rstrip("/")
+    parsed = urlsplit(origin)
+    if parsed.scheme != "https" or not parsed.netloc or parsed.path not in {"", "/"}:
+        raise ValueError("MAX app origin must be an HTTPS origin without a path")
+    if parsed.query or parsed.fragment:
+        raise ValueError("MAX app origin must not contain query or fragment")
+    return origin
+
+
+def _max_webhook_launch_compat_block(max_app_origin: str) -> str:
+    origin = _normalize_https_origin(max_app_origin)
+    return f"""    location = /max/webhook {{
+        if ($request_method = GET) {{ return 302 {origin}/mini-app/; }}
+        proxy_pass http://happyfox_backend;
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+        proxy_socket_keepalive on;
+        proxy_buffering off;
+        proxy_request_buffering off;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 900s;
+        proxy_send_timeout 900s;
+    }}
+
 """
 
 
@@ -136,8 +150,7 @@ def _tune_proxy_locations(text: str) -> str:
     return "\n".join(output) + "\n"
 
 
-
-def _add_max_webhook_launch_compat(text: str) -> str:
+def _add_max_webhook_launch_compat(text: str, max_app_origin: str) -> str:
     api_marker = "server_name api.happy-fox.online;"
     if api_marker not in text:
         raise ValueError("HappyFox API server block was not found")
@@ -146,18 +159,25 @@ def _add_max_webhook_launch_compat(text: str) -> str:
     if "\nserver {" not in rest:
         raise ValueError("HappyFox API server block terminator was not found")
     api_section, suffix = rest.split("\nserver {", 1)
-    if (
-        "location = /max/webhook {" in api_section
-        and "return 302 https://app.happy-fox.online/mini-app/" in api_section
-    ):
-        return text
+    target = f"return 302 {_normalize_https_origin(max_app_origin)}/mini-app/;"
+
+    if "location = /max/webhook {" in api_section:
+        api_section = re.sub(
+            r"return 302 https://[^;]+/mini-app/;",
+            target,
+            api_section,
+            count=1,
+        )
+        if target not in api_section:
+            raise ValueError("HappyFox MAX webhook launch redirect could not be updated")
+        return prefix + api_marker + api_section + "\nserver {" + suffix
 
     marker = "    location / {"
     if marker not in api_section:
         raise ValueError("HappyFox API proxy fallback was not found")
     api_section = api_section.replace(
         marker,
-        MAX_WEBHOOK_LAUNCH_COMPAT_BLOCK + marker,
+        _max_webhook_launch_compat_block(max_app_origin) + marker,
         1,
     )
     return prefix + api_marker + api_section + "\nserver {" + suffix
@@ -181,7 +201,6 @@ def _allow_max_root_launch_methods(text: str) -> str:
     if marker not in text:
         raise ValueError("HappyFox app static fallback location was not found")
     return text.replace(marker, MINIAPP_ROOT_BLOCK + marker, 1)
-
 
 
 def _enable_landing_miniapp_compat(text: str) -> str:
@@ -209,11 +228,17 @@ def _enable_landing_miniapp_compat(text: str) -> str:
     return text.replace(marker, replacement, 1)
 
 
-def tune_site(text: str) -> str:
+def tune_site(
+    text: str,
+    *,
+    max_app_origin: str = "https://app.happy-fox.online",
+) -> str:
     if "server_name api.happy-fox.online;" not in text:
         raise ValueError("HappyFox API server block was not found")
     if "server_name app.happy-fox.online;" not in text:
         raise ValueError("HappyFox app server block was not found")
+
+    _normalize_https_origin(max_app_origin)
 
     if "upstream happyfox_backend {" not in text:
         text = UPSTREAM_BLOCK + text
@@ -221,7 +246,7 @@ def tune_site(text: str) -> str:
     text = _enable_http2(text)
     text = _remove_site_ssl_protocols(text)
     text = _tune_proxy_locations(text)
-    text = _add_max_webhook_launch_compat(text)
+    text = _add_max_webhook_launch_compat(text, max_app_origin)
     text = _add_static_cache(text)
     text = _allow_max_root_launch_methods(text)
     text = _enable_landing_miniapp_compat(text)
@@ -232,12 +257,20 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--site", required=True, type=Path)
     parser.add_argument("--certbot-options", required=True, type=Path)
+    parser.add_argument(
+        "--max-app-origin",
+        default="https://app.happy-fox.online",
+        help="HTTPS origin used by MAX launch compatibility redirects",
+    )
     args = parser.parse_args()
 
     site_text = args.site.read_text(encoding="utf-8")
     certbot_text = args.certbot_options.read_text(encoding="utf-8")
 
-    args.site.write_text(tune_site(site_text), encoding="utf-8")
+    args.site.write_text(
+        tune_site(site_text, max_app_origin=args.max_app_origin),
+        encoding="utf-8",
+    )
     args.certbot_options.write_text(
         tune_certbot_options(certbot_text),
         encoding="utf-8",

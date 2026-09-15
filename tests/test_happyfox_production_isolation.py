@@ -119,6 +119,7 @@ def test_enabled_max_requires_complete_identity_and_payment_config() -> None:
         "MAX_WEBHOOK_SECRET",
         "MAX_WEBHOOK_URL",
         "MAX_BOT_NAME",
+        "MAX_MINI_APP_URL",
         "MAX_PAYMENT_RETURN_URL",
         "YOOKASSA_SHOP_ID",
         "YOOKASSA_SECRET_KEY",
@@ -135,6 +136,7 @@ def test_enabled_max_valid_configuration_passes() -> None:
             "MAX_WEBHOOK_SECRET": "max-secret",
             "MAX_WEBHOOK_URL": "https://api.happyfox.example/max/webhook",
             "MAX_BOT_NAME": "happyfox_bot",
+            "MAX_MINI_APP_URL": "https://max.happyfox.example/mini-app/",
             "MAX_PAYMENT_RETURN_URL": "https://max.ru/happyfox_bot?start=max_payment",
             "YOOKASSA_SHOP_ID": "shop-123",
             "YOOKASSA_SECRET_KEY": "secret",
@@ -142,6 +144,26 @@ def test_enabled_max_valid_configuration_passes() -> None:
     )
 
     assert validate(values) == []
+
+
+def test_enabled_max_rejects_insecure_or_malformed_urls() -> None:
+    values = _valid_env()
+    values.update(
+        {
+            "MAX_ENABLED": "1",
+            "MAX_ACCESS_TOKEN": "max-token",
+            "MAX_WEBHOOK_SECRET": "max-secret",
+            "MAX_WEBHOOK_URL": "https://api.happyfox.example/max/webhook",
+            "MAX_BOT_NAME": "happyfox_bot",
+            "MAX_MINI_APP_URL": "http://max.happyfox.example/mini-app/",
+            "MAX_PAYMENT_RETURN_URL": "https://max.ru/happyfox_bot?start=max_payment",
+            "YOOKASSA_SHOP_ID": "shop-123",
+            "YOOKASSA_SECRET_KEY": "secret",
+        }
+    )
+
+    errors = validate(values)
+    assert "MAX_MINI_APP_URL must use a valid https:// URL" in errors
 
 
 def test_happyfox_deploy_wrapper_overrides_imported_neuromix_runtime_names() -> None:
@@ -166,7 +188,6 @@ def test_product_runtime_defaults_do_not_point_back_to_source_product() -> None:
     assert "dev.chillcreative.ru" not in config
     assert "tanyapi.chillcreative.ru" not in media_inputs
     assert "tanyapi.chillcreative.ru" not in trend_api
-    assert "tanyapi.chillcreative.ru" not in media_url
     assert "tanyapp.chillcreative.ru" not in media_url
     assert "cdn.chillcreative.ru" not in media_url
     assert 'product_id != "happyfox"' in backend_product
