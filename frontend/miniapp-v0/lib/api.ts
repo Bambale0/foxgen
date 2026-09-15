@@ -41,6 +41,10 @@ declare global {
       botUsername?: string
       miniAppUrl?: string
     }
+    __BANANO_PRE_MAX_LAUNCH__?: {
+      hash?: string
+      search?: string
+    }
     __BANANO_INITIAL_LAUNCH__?: {
       hash?: string
       search?: string
@@ -121,12 +125,21 @@ function getInitDataFromLocation(): string {
   }
 
   try {
+    const preMax = window.__BANANO_PRE_MAX_LAUNCH__
+    const fromPreMax = parseLaunch(preMax?.hash || '') || parseLaunch(preMax?.search || '')
+    if (fromPreMax) return fromPreMax
+
     const snap = window.__BANANO_INITIAL_LAUNCH__
     const fromSnapshot = parseLaunch(snap?.hash || '') || parseLaunch(snap?.search || '')
     if (fromSnapshot) return fromSnapshot
   } catch {}
 
-  for (const key of ['__banano_initial_hash', '__banano_initial_search']) {
+  for (const key of [
+    '__banano_pre_max_hash',
+    '__banano_pre_max_search',
+    '__banano_initial_hash',
+    '__banano_initial_search',
+  ]) {
     try {
       const fromStorageSnapshot = parseLaunch(window.sessionStorage.getItem(key) || '')
       if (fromStorageSnapshot) return fromStorageSnapshot
