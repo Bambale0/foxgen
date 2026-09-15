@@ -7,6 +7,7 @@ PROJECT_DIR="${PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 EXPECTED_SHA="${1:-$(git -C "$PROJECT_DIR" rev-parse HEAD)}"
 API_ORIGIN="${HAPPYFOX_API_ORIGIN:-https://api.happy-fox.online}"
 APP_ORIGIN="${HAPPYFOX_APP_ORIGIN:-https://app.happy-fox.online}"
+MAX_APP_ORIGIN="${HAPPYFOX_MAX_APP_ORIGIN:-}"
 LANDING_ORIGIN="${HAPPYFOX_LANDING_ORIGIN:-https://happy-fox.online}"
 DATABASE_NAME="${HAPPYFOX_DATABASE_NAME:-happyfox_cutover}"
 TELEGRAM_RELAY_IP="${HAPPYFOX_TELEGRAM_RELAY_IP:-2.27.160.11}"
@@ -56,10 +57,11 @@ bash scripts/install_russian_trusted_ca.sh
 python3 scripts/recover_happyfox_channel_runtime.py "$PROJECT_DIR"
 
 # Dedicated-host topology is intentionally split: all backend/webhook/media
-# traffic uses api.happy-fox.online, while the Telegram/MAX UI lives on the app
-# origin. The production DB name and durable provider-result persistence are
+# traffic uses api.happy-fox.online. Telegram stays on APP_ORIGIN, while MAX
+# may use an independently configured Mini App origin. The production DB name
+# and durable provider-result persistence are
 # server-authoritative so an old CI secret cannot regress production behavior.
-python3 - "$RUNTIME_ENV" "$API_ORIGIN" "$APP_ORIGIN" "$DATABASE_NAME" "$TELEGRAM_RELAY_IP" <<'PY'
+python3 - "$RUNTIME_ENV" "$API_ORIGIN" "$APP_ORIGIN" "$DATABASE_NAME" "$TELEGRAM_RELAY_IP" "$MAX_APP_ORIGIN" <<'PY'
 from pathlib import Path
 import ipaddress
 import os
@@ -71,6 +73,7 @@ api = sys.argv[2].rstrip("/")
 app = sys.argv[3].rstrip("/")
 database_name = sys.argv[4]
 telegram_relay_ip = sys.argv[5].strip()
+max_app_override = sys.argv[6].strip().rstrip("/")
 values: dict[str, str] = {}
 for raw in path.read_text(encoding="utf-8").splitlines():
     line = raw.strip()
@@ -113,9 +116,27 @@ if values.get("MAX_ENABLED", "").lower() in {"1", "true", "yes", "on"}:
     if not max_path.startswith("/"):
         raise SystemExit("MAX_WEBHOOK_PATH must start with /")
     values["MAX_WEBHOOK_URL"] = f"{api}{max_path}"
-    values["MAX_MINI_APP_URL"] = f"{app}/mini-app/"
+
+    if max_app_override:
+        parsed_max_app = urlsplit(max_app_override)
+        if (
+            parsed_max_app.scheme != "https"
+            or not parsed_max_app.hostname
+            or parsed_max_app.username
+            or parsed_max_app.password
+            or parsed_max_app.query
+            or parsed_max_app.fragment
+            or parsed_max_app.path not in {"", "/"}
+        ):
+            raise SystemExit("HAPPYFOX_MAX_APP_ORIGIN must be a public HTTPS origin")
+        values["MAX_MINI_APP_URL"] = f"https://{parsed_max_app.netloc}/mini-app/"
+    else:
+        values["MAX_MINI_APP_URL"] = (
+            values.get("MAX_MINI_APP_URL", "").strip() or f"{app}/mini-app/"
+        )
+
     if not values.get("MAX_PAYMENT_RETURN_URL", "").startswith("https://max.ru/"):
-        values["MAX_PAYMENT_RETURN_URL"] = f"{app}/mini-app/"
+        values["MAX_PAYMENT_RETURN_URL"] = values["MAX_MINI_APP_URL"]
 
 
 def quote(value: str) -> str:
@@ -133,6 +154,27 @@ tmp.replace(path)
 PY
 
 python3 scripts/validate_happyfox_env.py .env .env.happyfox.runtime .env.postgres
+
+MAX_MINI_APP_URL_EFFECTIVE="$(python3 - "$RUNTIME_ENV" <<'PY'
+from pathlib import Path
+import sys
+
+value = ""
+for raw in Path(sys.argv[1]).read_text(encoding="utf-8").splitlines():
+    line = raw.strip()
+    if not line or line.startswith("#") or "=" not in line:
+        continue
+    key, item = line.split("=", 1)
+    if key.strip() != "MAX_MINI_APP_URL":
+        continue
+    item = item.strip()
+    if len(item) >= 2 and item[0] == item[-1] and item[0] in {"'", '"'}:
+        item = item[1:-1]
+    value = item.strip()
+    break
+print(value)
+PY
+)"
 
 # Keep Docker/containerd growth bounded on the dedicated HappyFox host. The
 # cleanup is age-bounded and intentionally never prunes volumes.
@@ -194,18 +236,68 @@ runtime_revision="$(docker inspect -f '{{index .Config.Labels "org.opencontainer
 [[ "$runtime_revision" == "$EXPECTED_SHA" ]]
 
 # Publish the exact static bundle embedded in the verified backend image.
+# Telegram and MAX may use different origins, but both receive the exact same
+# verified frontend artifact. A distinct MAX origin is resolved from the live
+# Nginx config instead of assuming a hardcoded filesystem root.
+max_miniapp_origin=""
+max_miniapp_domain=""
+max_miniapp_root=""
+if [[ -n "$MAX_MINI_APP_URL_EFFECTIVE" ]]; then
+  read -r max_miniapp_origin max_miniapp_domain < <(
+    python3 - "$MAX_MINI_APP_URL_EFFECTIVE" <<'PY'
+import sys
+from urllib.parse import urlsplit
+
+parsed = urlsplit(sys.argv[1].strip())
+if parsed.scheme != "https" or not parsed.hostname:
+    raise SystemExit("MAX_MINI_APP_URL must be HTTPS")
+print(f"https://{parsed.netloc} {parsed.hostname}")
+PY
+  )
+fi
+
+if [[ -n "$max_miniapp_origin" && "$max_miniapp_origin" != "$APP_ORIGIN" && "$max_miniapp_origin" != "$LANDING_ORIGIN" ]]; then
+  nginx_snapshot="$(mktemp)"
+  if ! nginx -T >"$nginx_snapshot" 2>/dev/null; then
+    rm -f "$nginx_snapshot"
+    echo "Could not inspect Nginx before publishing the MAX Mini App" >&2
+    exit 1
+  fi
+  if ! max_miniapp_root="$(
+    python3 scripts/resolve_happyfox_miniapp_nginx_path.py       "$nginx_snapshot" "$max_miniapp_domain"
+  )"; then
+    rm -f "$nginx_snapshot"
+    echo "MAX Mini App origin is configured but its HTTPS Nginx /mini-app/ route is not ready: $max_miniapp_origin" >&2
+    exit 1
+  fi
+  rm -f "$nginx_snapshot"
+fi
+
 for webroot in /var/www/happyfox-app /var/www/happyfox-landing; do
   install -d -m 0755 "$webroot/mini-app"
   find "$webroot/mini-app" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
 done
+if [[ -n "$max_miniapp_root" ]]; then
+  install -d -m 0755 "$max_miniapp_root"
+  find "$max_miniapp_root" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
+fi
+
 cid="$(docker create foxgen-happyfox-bot:local)"
 trap 'docker rm -f "$cid" >/dev/null 2>&1 || true' EXIT
 docker cp "$cid:/app/frontend/miniapp-v0/out/." /var/www/happyfox-app/mini-app/
 docker cp "$cid:/app/frontend/miniapp-v0/out/." /var/www/happyfox-landing/mini-app/
+if [[ -n "$max_miniapp_root" ]]; then
+  docker cp "$cid:/app/frontend/miniapp-v0/out/." "$max_miniapp_root/"
+fi
 docker rm "$cid" >/dev/null
 trap - EXIT
+
 find /var/www/happyfox-app /var/www/happyfox-landing -type d -exec chmod 0755 {} +
 find /var/www/happyfox-app /var/www/happyfox-landing -type f -exec chmod 0644 {} +
+if [[ -n "$max_miniapp_root" ]]; then
+  find "$max_miniapp_root" -type d -exec chmod 0755 {} +
+  find "$max_miniapp_root" -type f -exec chmod 0644 {} +
+fi
 
 # The public landing is served from the domain root, while Next exports metadata
 # routes under /mini-app. Publish canonical crawl artifacts at the actual public
@@ -217,6 +309,9 @@ for seo_file in robots.txt sitemap.xml; do
 done
 
 [[ "$(tr -d '\r\n' </var/www/happyfox-app/mini-app/revision.txt)" == "$EXPECTED_SHA" ]]
+if [[ -n "$max_miniapp_root" ]]; then
+  [[ "$(tr -d '\r\n' <"$max_miniapp_root/revision.txt")" == "$EXPECTED_SHA" ]]
+fi
 
 # Keep the dedicated HappyFox edge deterministic and low-latency:
 # TLS 1.2 only, HTTP/2 for browser multiplexing, persistent local upstream
@@ -233,7 +328,8 @@ cp -a "$nginx_site" "$nginx_site_backup"
 cp -a "$certbot_options" "$certbot_options_backup"
 python3 scripts/tune_happyfox_nginx.py \
   --site "$nginx_site" \
-  --certbot-options "$certbot_options"
+  --certbot-options "$certbot_options" \
+  --max-miniapp-url "${MAX_MINI_APP_URL_EFFECTIVE:-${APP_ORIGIN}/mini-app/}"
 if ! nginx -t; then
   cp -a "$nginx_site_backup" "$nginx_site"
   cp -a "$certbot_options_backup" "$certbot_options"
@@ -260,7 +356,12 @@ grep -Fq "<loc>${LANDING_ORIGIN}/</loc>" <<<"$sitemap_body" || {
   exit 1
 }
 
-for miniapp_origin in "$APP_ORIGIN" "$LANDING_ORIGIN"; do
+miniapp_origins=("$APP_ORIGIN" "$LANDING_ORIGIN")
+if [[ -n "$max_miniapp_origin" && "$max_miniapp_origin" != "$APP_ORIGIN" && "$max_miniapp_origin" != "$LANDING_ORIGIN" ]]; then
+  miniapp_origins+=("$max_miniapp_origin")
+fi
+
+for miniapp_origin in "${miniapp_origins[@]}"; do
   root_options_status="$(curl -sS -o /dev/null -w '%{http_code}' -X OPTIONS --max-time 20 \
     -H 'Origin: https://max.ru' "$miniapp_origin/mini-app/" || true)"
   [[ "$root_options_status" == "204" ]] || {
@@ -310,4 +411,4 @@ docker logs foxgen-happyfox-bot 2>&1 | grep -F "$API_ORIGIN/max/webhook" >/dev/n
 docker exec -e SEND_BACKUP_TO_ADMINS=0 foxgen-happyfox-bot \
   bash /app/scripts/backup_db.sh
 
-echo "[happyfox-dedicated] DEPLOY_OK revision=$EXPECTED_SHA api=$API_ORIGIN app=$APP_ORIGIN landing=$LANDING_ORIGIN db=$DATABASE_NAME"
+echo "[happyfox-dedicated] DEPLOY_OK revision=$EXPECTED_SHA api=$API_ORIGIN app=$APP_ORIGIN max_app=${max_miniapp_origin:-shared-with-app} landing=$LANDING_ORIGIN db=$DATABASE_NAME"
