@@ -1,8 +1,7 @@
-import importlib
-from pathlib import Path
-
-
-_renderer = importlib.import_module("scripts.render_happyfox_miniapp_channel")
+_renderer = __import__(
+    "scripts.render_happyfox_miniapp_channel",
+    fromlist=["render_html", "render_tree"],
+)
 render_html = _renderer.render_html
 render_tree = _renderer.render_tree
 
@@ -56,7 +55,8 @@ def test_renderer_is_repeatable_and_ignores_unrelated_html(tmp_path) -> None:
 
 
 def test_production_deploy_isolates_bridges_only_after_max_origin_split() -> None:
-    deploy = Path("scripts/deploy_happyfox_dedicated.sh").read_text(encoding="utf-8")
+    with open("scripts/deploy_happyfox_dedicated.sh", encoding="utf-8") as handle:
+        deploy = handle.read()
 
     shared = 'if [[ "$MAX_APP_ORIGIN" == "$APP_ORIGIN" ]]; then'
     assert shared in deploy
