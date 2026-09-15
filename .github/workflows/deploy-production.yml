@@ -198,8 +198,9 @@ jobs:
             echo '- Secrets/runtime overlay: server-authoritative; Actions does not overwrite it'
             echo '- API/webhooks: `https://api.happy-fox.online`'
             echo '- Mini App: `https://app.happy-fox.online/mini-app/`'
-            if [ -n '${{ vars.HAPPYFOX_MAX_APP_ORIGIN }}' ]; then
-              echo "- MAX Mini App: `\${{ vars.HAPPYFOX_MAX_APP_ORIGIN }}/mini-app/`"
+            max_app_origin='${{ vars.HAPPYFOX_MAX_APP_ORIGIN }}'
+            if [ -n "$max_app_origin" ]; then
+              echo "- MAX Mini App: `${max_app_origin%/}/mini-app/`"
             else
               echo '- MAX Mini App: uses runtime `MAX_MINI_APP_URL` until dedicated origin activation'
             fi
