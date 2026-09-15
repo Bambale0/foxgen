@@ -1,8 +1,11 @@
 import assert from 'node:assert/strict'
-import { execFileSync, spawn } from 'node:child_process'\nimport { cpSync, mkdirSync, rmSync } from 'node:fs'
+import { execFileSync, spawn } from 'node:child_process'
+import { cpSync, mkdirSync, rmSync } from 'node:fs'
 import { chromium, devices, webkit } from 'playwright'
 
-const baseUrl = 'http://127.0.0.1:4174/mini-app/'\nconst serverDir = '.e2e-max'\nconst miniAppDir = `${serverDir}/mini-app`
+const baseUrl = 'http://127.0.0.1:4174/mini-app/'
+const serverDir = '.e2e-max'
+const miniAppDir = `${serverDir}/mini-app`
 const initData = 'query_id=max-e2e&user=%7B%22id%22%3A515151%2C%22first_name%22%3A%22Max%22%7D&auth_date=1787972400&hash=test'
 
 const bootstrapPayload = {
