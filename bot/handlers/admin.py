@@ -2275,22 +2275,14 @@ def _build_admin_partner_xls(report: dict) -> tuple[bytes, str]:
 
 
 @router.message(Command("admin"))
-async def cmd_admin(message: types.Message, state: FSMContext):
-    """Открывает админ-панель и прерывает незавершённый пользовательский FSM."""
+async def cmd_admin(message: types.Message):
+    """Открывает админ-панель"""
     if not is_admin(message.from_user.id):
         await message.answer(
             "⛔ У вас нет доступа к админ-панели.",
             reply_markup=get_main_menu_button_keyboard(),
         )
         return
-
-    previous_state = await state.get_state()
-    if previous_state is not None:
-        await state.clear()
-    logger.info(
-        "Telegram admin route: command=/admin interrupted_state=%s",
-        previous_state or "none",
-    )
 
     stats = await get_admin_stats()
     subscription_required = await is_channel_subscription_required()
