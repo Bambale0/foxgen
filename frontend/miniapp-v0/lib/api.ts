@@ -67,8 +67,11 @@ export function getMiniAppPlatform(): 'telegram' | 'max' | 'browser' {
   if (explicit === 'max' || explicit === 'telegram') return explicit
 
   const params = getLaunchParams()
-  if (window.WebApp?.initData || params.get('WebAppData')) return 'max'
+  // Telegram and MAX share this static frontend. If both bridges are present,
+  // prefer the launch data that belongs to Telegram before consulting MAX.
+  // This prevents the MAX bridge from stealing a Telegram WebApp session.
   if (window.Telegram?.WebApp?.initData || params.get('tgWebAppData')) return 'telegram'
+  if (window.WebApp?.initData || params.get('WebAppData')) return 'max'
   return 'browser'
 }
 
