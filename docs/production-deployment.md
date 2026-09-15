@@ -91,7 +91,7 @@ TELEGRAM_WEBHOOK_IP_ADDRESS=<relay IPv4>
 
 `setWebhook` must use `drop_pending_updates=False`. The relay presents a valid certificate for `api.happy-fox.online`, forwards the request to the dedicated API origin and does not run a second bot worker. Outbound Bot API traffic is carried by `happyfox-telegram-egress.service`.
 
-The relay TLS certificate is copied from the valid `happy-fox.online` certificate on the dedicated host. After certificate renewal, refresh the relay copy and run `nginx -t` before reload; do not let the relay continue with an expired certificate.
+The apix relay owns a separate Let's Encrypt certificate for `api.happy-fox.online`. Telegram still uses the canonical URL/SNI `https://api.happy-fox.online/webhook`; `TELEGRAM_WEBHOOK_IP_ADDRESS` only pins ingress to the relay IPv4. Certificate renewal is handled on the relay host and must be followed by `nginx -t`/reload verification.
 
 After each deploy, the system menu must be restored to native quick commands (`/start`, `/feed`, `/prompts`, `/help`, `/ref`, `/earn`); do not set `MenuButtonWebApp` here.
 
