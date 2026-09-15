@@ -176,7 +176,11 @@ jobs:
           fi
           curl -fsS --retry 5 --retry-delay 2 --retry-all-errors --max-time 20 \
             https://happy-fox.online/ >/dev/null
-          for miniapp_origin in https://app.happy-fox.online https://happy-fox.online; do
+          miniapp_origins=(https://app.happy-fox.online https://happy-fox.online)
+          if [ -n "$max_app_origin" ]; then
+            miniapp_origins+=("${max_app_origin%/}")
+          fi
+          for miniapp_origin in "${miniapp_origins[@]}"; do
             options_status="$(curl -sS -o /dev/null -w '%{http_code}' -X OPTIONS --max-time 20 \
               -H 'Origin: https://max.ru' "$miniapp_origin/mini-app/" || true)"
             [ "$options_status" = "204" ]
