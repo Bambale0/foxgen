@@ -136,7 +136,6 @@ def _tune_proxy_locations(text: str) -> str:
     return "\n".join(output) + "\n"
 
 
-
 def _add_max_webhook_launch_compat(text: str) -> str:
     api_marker = "server_name api.happy-fox.online;"
     if api_marker not in text:
@@ -146,10 +145,10 @@ def _add_max_webhook_launch_compat(text: str) -> str:
     if "\nserver {" not in rest:
         raise ValueError("HappyFox API server block terminator was not found")
     api_section, suffix = rest.split("\nserver {", 1)
-    if (
-        "location = /max/webhook {" in api_section
-        and "return 302 https://app.happy-fox.online/mini-app/" in api_section
-    ):
+    # A dedicated MAX Mini App host may intentionally change the GET redirect.
+    # Preserve any existing /max/webhook block instead of inserting a duplicate
+    # location or forcing it back to the Telegram app origin on every deploy.
+    if "location = /max/webhook {" in api_section:
         return text
 
     marker = "    location / {"
@@ -181,7 +180,6 @@ def _allow_max_root_launch_methods(text: str) -> str:
     if marker not in text:
         raise ValueError("HappyFox app static fallback location was not found")
     return text.replace(marker, MINIAPP_ROOT_BLOCK + marker, 1)
-
 
 
 def _enable_landing_miniapp_compat(text: str) -> str:
