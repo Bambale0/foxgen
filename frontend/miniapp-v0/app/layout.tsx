@@ -37,23 +37,44 @@ const miniAppBootstrapScript = `
     return true;
   }
 
+  function launchData(name) {
+    var snapshot = window.__BANANO_INITIAL_LAUNCH__ || {};
+    var values = [
+      snapshot.hash || '',
+      snapshot.search || '',
+      window.location.hash || '',
+      window.location.search || ''
+    ];
+    for (var i = 0; i < values.length; i += 1) {
+      try {
+        var raw = String(values[i] || '');
+        var params = new URLSearchParams(raw.charAt(0) === '#' || raw.charAt(0) === '?' ? raw.slice(1) : raw);
+        var value = String(params.get(name) || '').trim();
+        if (value) return value;
+      } catch (e) {}
+    }
+    return '';
+  }
+
   function configureMiniApp() {
     attempts += 1;
 
     var telegramWebApp = window.Telegram && window.Telegram.WebApp;
-    if (telegramWebApp && remember('telegram', telegramWebApp.initData)) {
-      try { if (telegramWebApp.ready) telegramWebApp.ready(); } catch (e) {}
-      try { if (telegramWebApp.expand) telegramWebApp.expand(); } catch (e) {}
-      try { if (telegramWebApp.setHeaderColor) telegramWebApp.setHeaderColor('#050505'); } catch (e) {}
-      try { if (telegramWebApp.setBackgroundColor) telegramWebApp.setBackgroundColor('#050505'); } catch (e) {}
-      try { if (telegramWebApp.setBottomBarColor) telegramWebApp.setBottomBarColor('#080808'); } catch (e) {}
+    var telegramInitData = (telegramWebApp && telegramWebApp.initData) || launchData('tgWebAppData');
+    if (remember('telegram', telegramInitData)) {
+      try { if (telegramWebApp && telegramWebApp.ready) telegramWebApp.ready(); } catch (e) {}
+      try { if (telegramWebApp && telegramWebApp.expand) telegramWebApp.expand(); } catch (e) {}
+      try { if (telegramWebApp && telegramWebApp.setHeaderColor) telegramWebApp.setHeaderColor('#050505'); } catch (e) {}
+      try { if (telegramWebApp && telegramWebApp.setBackgroundColor) telegramWebApp.setBackgroundColor('#050505'); } catch (e) {}
+      try { if (telegramWebApp && telegramWebApp.setBottomBarColor) telegramWebApp.setBottomBarColor('#080808'); } catch (e) {}
       return;
     }
 
     var maxWebApp = window.WebApp;
-    if (maxWebApp && remember('max', maxWebApp.initData)) {
-      try { if (maxWebApp.ready) maxWebApp.ready(); } catch (e) {}
-      try { if (maxWebApp.expand) maxWebApp.expand(); } catch (e) {}
+    var maxInitData = (maxWebApp && maxWebApp.initData) || launchData('WebAppData');
+    if (remember('max', maxInitData)) {
+      try { if (maxWebApp && maxWebApp.ready) maxWebApp.ready(); } catch (e) {}
+      try { if (maxWebApp && maxWebApp.expand) maxWebApp.expand(); } catch (e) {}
       return;
     }
 
