@@ -27,7 +27,8 @@ Provider/payment webhooks ──────┘          ├─ PostgreSQL 17
                                            └─ billing ledgers
 
 Landing:                 https://happy-fox.online/
-Mini App:                https://app.happy-fox.online/mini-app/
+Telegram Mini App:       https://app.happy-fox.online/mini-app/
+MAX Mini App:            https://max.happy-fox.online/mini-app/  # after DNS/TLS activation
 API/webhooks/media:      https://api.happy-fox.online
 Telegram webhook URL:    https://api.happy-fox.online/webhook
 MAX webhook:             https://api.happy-fox.online/max/webhook
