@@ -373,8 +373,8 @@ No mutable business configuration is introduced. The existing #254 infrastructur
 8. [x] Strengthen MAX startup E2E to use MAX-only HTML and reject Telegram SDK.
 9. [x] Add renderer/deploy regression tests.
 10. [x] Update MAX channel documentation.
-11. [ ] Run Standards review against fixed current main and resolve findings.
-12. [ ] Run Spec review against user requirement and resolve findings.
+11. [x] Run Standards review against fixed current main and resolve findings.
+12. [x] Run Spec review against user requirement and resolve findings.
 13. [ ] Run exact-head CI to green.
 14. [ ] Merge PR.
 15. [ ] Verify canonical production deploy and current preactivation shared mode remain healthy.
@@ -386,3 +386,34 @@ No mutable business configuration is introduced. The existing #254 infrastructur
 - `Bambale0/claw`: evidence-first debugger guidance.
 - `wondelai/skills`: release discipline for exact-SHA and staged activation.
 - `anthropics/skills`: searched previously for directly applicable Mini App host/bridge guidance; none selected because no specific matching skill was found.
+
+
+### Code review — Standards axis
+
+Fixed point: `main` at `d70c76da9b34a03f4b4941aab8dfe877fdb0b9d9`.
+
+Findings resolved before final CI:
+
+1. MAX startup E2E initially imported the renderer but still served the legacy `.e2e-server`, so it did not actually exercise the MAX-only bundle. Fixed to render/copy into a dedicated `.e2e-max/mini-app` root.
+2. The first MAX E2E rewrite accidentally dropped the existing guarantee that MAX Bridge loads before Next runtime. The test was restored to a minimal diff and preserves that ordering assertion.
+3. The renderer initially attempted to enforce bridge counts on every exported HTML file. That could fail on unrelated static HTML with no messenger bridge. It now skips non-bridge HTML while remaining strict for every bridge-bearing Mini App document.
+4. Documentation/source-line escaping defects introduced during editing were normalized before CI.
+
+Standards result: **clean; 0 unresolved findings**.
+
+### Code review — Spec axis
+
+Checked against the user's requirement and merged #254:
+
+- Telegram remains on `app.happy-fox.online`.
+- Dedicated MAX origin remains owned by #254; no duplicate DNS/TLS/nginx mechanism exists in this PR.
+- Before activation, `MAX_APP_ORIGIN == APP_ORIGIN` deterministically keeps the shared bundle with both bridges.
+- After activation, the same verified artifact is rendered Telegram-only on the Telegram root and MAX-only on the MAX root.
+- Telegram and MAX native startup paths remain unchanged.
+- No database, API, pricing, payment, provider, or cross-project behavior changes.
+
+Spec result: **clean; 0 unresolved findings**.
+
+### Final pre-CI gate
+
+The next immutable branch head is the merge candidate. Full PR CI must pass on that exact SHA. Do not edit this ledger merely to copy the CI run number after success, because that would create a new untested head.
