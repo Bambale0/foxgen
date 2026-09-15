@@ -119,6 +119,7 @@ def test_enabled_max_requires_complete_identity_and_payment_config() -> None:
         "MAX_WEBHOOK_SECRET",
         "MAX_WEBHOOK_URL",
         "MAX_BOT_NAME",
+        "MAX_MINI_APP_URL",
         "MAX_PAYMENT_RETURN_URL",
         "YOOKASSA_SHOP_ID",
         "YOOKASSA_SECRET_KEY",
@@ -135,6 +136,7 @@ def test_enabled_max_valid_configuration_passes() -> None:
             "MAX_WEBHOOK_SECRET": "max-secret",
             "MAX_WEBHOOK_URL": "https://api.happyfox.example/max/webhook",
             "MAX_BOT_NAME": "happyfox_bot",
+            "MAX_MINI_APP_URL": "https://max.happyfox.example/mini-app/",
             "MAX_PAYMENT_RETURN_URL": "https://max.ru/happyfox_bot?start=max_payment",
             "YOOKASSA_SHOP_ID": "shop-123",
             "YOOKASSA_SECRET_KEY": "secret",
@@ -230,6 +232,7 @@ def test_production_deploy_pins_dedicated_server_topology() -> None:
     assert "/opt/happyfox/repo" in workflow
     assert "https://api.happy-fox.online" in workflow
     assert "https://app.happy-fox.online" in workflow
+    assert "HAPPYFOX_MAX_APP_ORIGIN" in workflow
     assert "https://happy-fox.online" in workflow
     assert "Resolve HappyFox Mini App domain" not in workflow
     assert "DEPLOY_KNOWN_HOSTS" not in workflow
