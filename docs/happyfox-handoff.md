@@ -15,7 +15,8 @@ Legacy FoxGen remains reference-only history under `legacy/foxgen-pre-tanyapi-20
 ```text
 Product ID:        happyfox
 Landing:           https://happy-fox.online/
-Mini App:          https://app.happy-fox.online/mini-app/
+Telegram Mini App: https://app.happy-fox.online/mini-app/
+MAX Mini App:      https://max.happy-fox.online/mini-app/  # after activation
 API/webhooks/media:https://api.happy-fox.online
 Compose project:   foxgen-happyfox
 Container:         foxgen-happyfox-bot
