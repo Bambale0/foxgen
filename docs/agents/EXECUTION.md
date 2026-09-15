@@ -106,8 +106,11 @@ No database or runtime migration. Merge the documentation change through the nor
 7. [x] Review the diff for lost Foxgen constraints and accidental Start-only concepts.
 8. [x] Open PR #250.
 9. [ ] Verify CI for exact PR commit `b1528f90d95382d8035d7e39dd50817099b93441`.
-10. [ ] Complete code/documentation review and merge if all gates are green.
-11. [ ] Record final verification here.
+10. [ ] Run the `Bambale0/skills` `code-review` flow against fixed point `main` on both Standards and Spec axes; resolve findings.
+11. [ ] Re-run full exact-SHA CI after the clarified branch/review/auto-deploy policy update.
+12. [ ] Merge PR #250 after review + CI are green.
+13. [ ] Verify canonical HappyFox auto-deploy, deployed revision, health, and channel reconciliation.
+14. [ ] Record final verification here.
 
 ### Review evidence
 
@@ -132,3 +135,14 @@ Static review after the AGENTS rewrite confirmed:
 ### Follow-ups
 
 None planned beyond keeping this ledger as the repository's execution-history location when `CONTEXT.md` is absent.
+
+
+### User-approved release workflow
+
+The user explicitly clarified the required engineering path:
+
+`branch → reviewer skill → green review/checks → PR merge → canonical auto-deploy`.
+
+Direct changes to `main` are not allowed for ordinary engineering work. The canonical deploy workflow's exact-SHA synchronization, including its existing `git reset --hard "$EXPECTED_SHA"`, is authorized without a separate confirmation when it runs only as part of this reviewed, green, exact-SHA auto-deploy path. Manual/destructive resets outside that path remain prohibited without specific approval.
+
+The current execution environment does not expose the parallel `Agent` sub-agent tool referenced by the `code-review` skill. The two required review axes will therefore be executed independently in this session against the same fixed point and reported separately; this platform limitation must not be represented as the literal parallel-subagent implementation.
