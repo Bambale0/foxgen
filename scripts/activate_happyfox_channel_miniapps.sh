@@ -10,14 +10,12 @@ APP_ROOT="${HAPPYFOX_TELEGRAM_MINIAPP_ROOT:-/var/www/happyfox-app/mini-app}"
 MAX_ROOT_DEFAULT="/var/www/happyfox-max/mini-app"
 RUNTIME_ENV="${HAPPYFOX_RUNTIME_ENV:-$PROJECT_DIR/.env.happyfox.runtime}"
 NGINX_SITE="${HAPPYFOX_NGINX_SITE:-/etc/nginx/sites-available/happyfox.conf}"
+IMAGE="${HAPPYFOX_IMAGE:-foxgen-happyfox-bot:local}"
 
 log() { printf '[happyfox-miniapp-split] %s\n' "$*"; }
 die() { printf '[happyfox-miniapp-split] ERROR: %s\n' "$*" >&2; exit 1; }
 
 [[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]] || die "expected a full 40-character SHA"
-[[ -s "$APP_ROOT/revision.txt" ]] || die "Telegram Mini App release is missing at $APP_ROOT"
-[[ "$(tr -d '\r\n' < "$APP_ROOT/revision.txt")" == "$EXPECTED_SHA" ]] \
-  || die "Telegram Mini App revision does not match $EXPECTED_SHA"
 
 if [[ ! -s "$CONFIG_FILE" ]]; then
   log "split config is absent; keeping transitional shared Mini App host"
@@ -51,15 +49,31 @@ PY
 
 [[ -s "$RUNTIME_ENV" ]] || die "HappyFox runtime env is missing: $RUNTIME_ENV"
 [[ -s "$NGINX_SITE" ]] || die "HappyFox nginx site is missing: $NGINX_SITE"
+docker inspect "$IMAGE" >/dev/null 2>&1 || die "verified HappyFox image is missing: $IMAGE"
+image_revision="$(docker inspect -f '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$IMAGE")"
+[[ "$image_revision" == "$EXPECTED_SHA" ]] || die "image revision mismatch: $image_revision"
 
 work="$(mktemp -d)"
-cleanup() { rm -rf "$work"; }
+cid=""
+cleanup() {
+  [[ -z "$cid" ]] || docker rm -f "$cid" >/dev/null 2>&1 || true
+  rm -rf "$work"
+}
 trap cleanup EXIT
-cp -a "$APP_ROOT/." "$work/generic/"
+mkdir -p "$work/generic"
+cid="$(docker create "$IMAGE")"
+docker cp "$cid:/app/frontend/miniapp-v0/out/." "$work/generic/"
+docker rm "$cid" >/dev/null
+cid=""
+[[ -s "$work/generic/index.html" ]] || die "verified image has no Mini App index.html"
+[[ "$(tr -d '\r\n' < "$work/generic/revision.txt")" == "$EXPECTED_SHA" ]] \
+  || die "verified image Mini App revision mismatch"
 
-install -d -m 0755 "$MAX_MINIAPP_ROOT"
-find "$MAX_MINIAPP_ROOT" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
-cp -a "$work/generic/." "$MAX_MINIAPP_ROOT/"
+for target in "$APP_ROOT" "$MAX_MINIAPP_ROOT"; do
+  install -d -m 0755 "$target"
+  find "$target" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
+  cp -a "$work/generic/." "$target/"
+done
 
 python3 "$PROJECT_DIR/scripts/render_happyfox_miniapp_channel.py" "$APP_ROOT" telegram
 python3 "$PROJECT_DIR/scripts/render_happyfox_miniapp_channel.py" "$MAX_MINIAPP_ROOT" max
@@ -94,11 +108,9 @@ PY
 python3 - "$NGINX_SITE" "$MAX_MINIAPP_ORIGIN" <<'PY'
 from pathlib import Path
 import sys
-from urllib.parse import urlsplit
 
 path = Path(sys.argv[1])
 origin = sys.argv[2].rstrip("/")
-host = urlsplit(origin).hostname
 text = path.read_text(encoding="utf-8")
 old = "return 302 https://app.happy-fox.online/mini-app/;"
 new = f"return 302 {origin}/mini-app/;"
@@ -113,7 +125,7 @@ nginx -t
 systemctl reload nginx
 
 COMPOSE_PROJECT_NAME=foxgen-happyfox \
-  HAPPYFOX_IMAGE=foxgen-happyfox-bot:local \
+  HAPPYFOX_IMAGE="$IMAGE" \
   docker compose -f "$PROJECT_DIR/compose.backend.yml" up -d --no-build bot
 
 for i in $(seq 1 45); do
