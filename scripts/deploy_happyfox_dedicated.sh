@@ -193,29 +193,6 @@ docker cp "$cid:/app/frontend/miniapp-v0/out/." /var/www/happyfox-max/mini-app/
 docker cp "$cid:/app/frontend/miniapp-v0/out/." /var/www/happyfox-landing/mini-app/
 docker rm "$cid" >/dev/null
 trap - EXIT
-
-# Keep one verified frontend artifact, but isolate messenger bridges once MAX
-# has its own public origin. Before activation both channels intentionally keep
-# the shared bundle so the currently registered MAX app cannot regress.
-if [[ "$MAX_APP_ORIGIN" == "$APP_ORIGIN" ]]; then
-  python3 scripts/render_happyfox_miniapp_channel.py /var/www/happyfox-app/mini-app shared
-  python3 scripts/render_happyfox_miniapp_channel.py /var/www/happyfox-max/mini-app shared
-else
-  python3 scripts/render_happyfox_miniapp_channel.py /var/www/happyfox-app/mini-app telegram
-  python3 scripts/render_happyfox_miniapp_channel.py /var/www/happyfox-max/mini-app max
-fi
-
-telegram_index=/var/www/happyfox-app/mini-app/index.html
-max_index=/var/www/happyfox-max/mini-app/index.html
-grep -Fq '/mini-app/telegram-web-app.js' "$telegram_index"
-if [[ "$MAX_APP_ORIGIN" == "$APP_ORIGIN" ]]; then
-  grep -Fq 'https://st.max.ru/js/max-web-app.js' "$telegram_index"
-else
-  ! grep -Fq 'https://st.max.ru/js/max-web-app.js' "$telegram_index"
-  grep -Fq 'https://st.max.ru/js/max-web-app.js' "$max_index"
-  ! grep -Fq '/mini-app/telegram-web-app.js' "$max_index"
-fi
-
 find /var/www/happyfox-app /var/www/happyfox-max /var/www/happyfox-landing -type d -exec chmod 0755 {} +
 find /var/www/happyfox-app /var/www/happyfox-max /var/www/happyfox-landing -type f -exec chmod 0644 {} +
 
