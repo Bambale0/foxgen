@@ -75,7 +75,22 @@ def _enabled(values: dict[str, str], key: str) -> bool:
 
 def _is_https_url(value: str) -> bool:
     parsed = urlsplit(value.strip())
-    return parsed.scheme == "https" and bool(parsed.hostname)
+    return (
+        parsed.scheme == "https"
+        and bool(parsed.hostname)
+        and parsed.username is None
+        and parsed.password is None
+    )
+
+
+def _is_https_mini_app_url(value: str) -> bool:
+    parsed = urlsplit(value.strip())
+    return (
+        _is_https_url(value)
+        and bool(parsed.path)
+        and not parsed.query
+        and not parsed.fragment
+    )
 
 
 def validate(values: dict[str, str]) -> list[str]:
@@ -157,8 +172,8 @@ def validate(values: dict[str, str]) -> list[str]:
         if max_webhook_url and not _is_https_url(max_webhook_url):
             errors.append("MAX_WEBHOOK_URL must use a valid https:// URL")
         max_mini_app_url = values.get("MAX_MINI_APP_URL", "").strip()
-        if max_mini_app_url and not _is_https_url(max_mini_app_url):
-            errors.append("MAX_MINI_APP_URL must use a valid https:// URL")
+        if max_mini_app_url and not _is_https_mini_app_url(max_mini_app_url):
+            errors.append("MAX_MINI_APP_URL must use a valid https:// URL without query or fragment")
         max_payment_return_url = values.get("MAX_PAYMENT_RETURN_URL", "").strip()
         if max_payment_return_url and not _is_https_url(max_payment_return_url):
             errors.append("MAX_PAYMENT_RETURN_URL must use a valid https:// URL")
