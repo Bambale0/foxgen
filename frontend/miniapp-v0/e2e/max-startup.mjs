@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict'
 import { execFileSync, spawn } from 'node:child_process'
-import { cpSync, rmSync } from 'node:fs'
+import { cpSync, mkdirSync, rmSync } from 'node:fs'
 import { chromium, devices, webkit } from 'playwright'
 
 const baseUrl = 'http://127.0.0.1:4174/mini-app/'
 const serverDir = '.e2e-max'
+const miniAppDir = `${serverDir}/mini-app`
 const initData = 'query_id=max-e2e&user=%7B%22id%22%3A515151%2C%22first_name%22%3A%22Max%22%7D&auth_date=1787972400&hash=test'
 
 const bootstrapPayload = {
@@ -47,10 +48,11 @@ async function waitForServer(url, timeoutMs = 20_000) {
 }
 
 rmSync(serverDir, { recursive: true, force: true })
-cpSync('out', serverDir, { recursive: true })
+mkdirSync(serverDir, { recursive: true })
+cpSync('out', miniAppDir, { recursive: true })
 execFileSync(
   'python3',
-  ['../../scripts/render_happyfox_miniapp_channel.py', serverDir, 'max'],
+  ['../../scripts/render_happyfox_miniapp_channel.py', miniAppDir, 'max'],
   { stdio: 'inherit' },
 )
 
