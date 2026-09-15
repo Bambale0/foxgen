@@ -1,0 +1,107 @@
+name: Reconcile HappyFox Mini App channel split
+
+on:
+  workflow_run:
+    workflows:
+      - Deploy HappyFox production
+    types:
+      - completed
+  workflow_dispatch:
+    inputs:
+      commit_sha:
+        description: Full deployed main SHA; leave empty for current main
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: happyfox-miniapp-channel-split
+  cancel-in-progress: false
+
+jobs:
+  reconcile:
+    name: Reconcile Telegram and MAX Mini App hosts
+    if: >-
+      ${{
+        github.event_name == 'workflow_dispatch' ||
+        github.event.workflow_run.conclusion == 'success'
+      }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment:
+      name: production
+
+    env:
+      DEPLOY_HOST: ${{ vars.HAPPYFOX_DEPLOY_HOST || '5.35.124.201' }}
+      DEPLOY_SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
+      DEPLOY_USER: ${{ vars.HAPPYFOX_DEPLOY_USER || 'root' }}
+      DEPLOY_PORT: ${{ vars.HAPPYFOX_DEPLOY_PORT || '22' }}
+      DEPLOY_PATH: ${{ vars.HAPPYFOX_DEPLOY_PATH || '/opt/happyfox/repo' }}
+      EXPECTED_HOST_FINGERPRINT: SHA256:NjLkwjwPwDroguKC0FMTFEjaSJD+vFEfL3EsjEN0pI4
+      EXPECTED_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || inputs.commit_sha || github.sha }}
+
+    steps:
+      - name: Resolve manual main SHA
+        if: github.event_name == 'workflow_dispatch' && inputs.commit_sha == ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          main_sha="$(gh api "repos/${GITHUB_REPOSITORY}/commits/main" --jq .sha)"
+          echo "EXPECTED_SHA=${main_sha}" >> "$GITHUB_ENV"
+
+      - name: Configure pinned SSH
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          : "${DEPLOY_SSH_PRIVATE_KEY:?Missing production SSH key}"
+          [[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]]
+          install -d -m 0700 "$HOME/.ssh"
+          printf '%s\n' "$DEPLOY_SSH_PRIVATE_KEY" | tr -d '\r' > "$HOME/.ssh/id_ed25519"
+          chmod 0600 "$HOME/.ssh/id_ed25519"
+          ssh-keygen -y -f "$HOME/.ssh/id_ed25519" >/dev/null
+          scan="$(ssh-keyscan -p "$DEPLOY_PORT" -t ed25519 -T 10 "$DEPLOY_HOST" 2>/dev/null)"
+          : "${scan:?Could not scan HappyFox SSH host key}"
+          actual_fingerprint="$(printf '%s\n' "$scan" | ssh-keygen -lf - | awk '{print $2}')"
+          [[ "$actual_fingerprint" == "$EXPECTED_HOST_FINGERPRINT" ]]
+          printf '%s\n' "$scan" > "$HOME/.ssh/known_hosts"
+          chmod 0600 "$HOME/.ssh/known_hosts"
+
+      - name: Reconcile channel-specific Mini App hosts
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          printf -v quoted_path '%q' "$DEPLOY_PATH"
+          printf -v quoted_sha '%q' "$EXPECTED_SHA"
+          ssh \
+            -i "$HOME/.ssh/id_ed25519" \
+            -p "$DEPLOY_PORT" \
+            -o BatchMode=yes \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            -o ConnectTimeout=15 \
+            "$DEPLOY_USER@$DEPLOY_HOST" \
+            "bash -s -- $quoted_path $quoted_sha" <<'REMOTE'
+          set -Eeuo pipefail
+          project_dir="$1"
+          expected_sha="$2"
+          cd "$project_dir"
+          [[ "$(git rev-parse HEAD)" == "$expected_sha" ]]
+          chmod +x scripts/activate_happyfox_channel_miniapps.sh
+          bash scripts/activate_happyfox_channel_miniapps.sh "$expected_sha"
+          REMOTE
+
+      - name: Publish reconciliation summary
+        shell: bash
+        run: |
+          {
+            echo '## HappyFox Mini App channel split'
+            echo
+            echo "- Commit: \`${EXPECTED_SHA}\`"
+            echo '- Telegram canonical host: `https://app.happy-fox.online/mini-app/`'
+            echo '- MAX dedicated host: activated only when `/etc/foxgen-happyfox/max-miniapp.env` exists on production.'
+            echo '- Before activation the step is intentionally a no-op, preserving the current shared host.'
+          } >> "$GITHUB_STEP_SUMMARY"
