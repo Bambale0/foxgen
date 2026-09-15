@@ -52,11 +52,14 @@ It must never read or mutate Telegram user balances, Telegram transactions, Tele
 ## Production topology
 
 ```text
-Landing:      https://happy-fox.online/
-Mini App:     https://app.happy-fox.online/mini-app/
-API:          https://api.happy-fox.online
-MAX webhook:  https://api.happy-fox.online/max/webhook
+Landing:           https://happy-fox.online/
+Telegram Mini App: https://app.happy-fox.online/mini-app/
+MAX Mini App:      https://max.happy-fox.online/mini-app/
+API:               https://api.happy-fox.online
+MAX webhook:       https://api.happy-fox.online/max/webhook
 ```
+
+The Telegram and MAX Mini Apps use the same product frontend and shared backend, but they are published on separate launch hosts so each page loads only its native messenger bridge. See `docs/miniapp-channel-hosts.md` for provisioning, transition, verification and rollback.
 
 The dedicated `happyfox` host owns the application/data plane. `apix` is a Telegram transport relay only and is not a MAX or HappyFox application host.
 
@@ -72,12 +75,14 @@ MAX_WEBHOOK_URL=https://api.happy-fox.online/max/webhook
 MAX_WEBHOOK_PATH=/max/webhook
 MAX_API_BASE=https://platform-api2.max.ru
 MAX_BOT_NAME=your_bot_name
-MAX_MINI_APP_URL=https://app.happy-fox.online/mini-app/
+MAX_MINI_APP_URL=https://max.happy-fox.online/mini-app/
 MAX_PAYMENT_RETURN_URL=https://max.ru/your_bot_name?start=max_payment
 MAX_PAYMENT_RECONCILE_SECONDS=30
 ```
 
 `MAX_WEBHOOK_URL` must be HTTPS and its path must match `MAX_WEBHOOK_PATH`.
+
+Before `max.happy-fox.online` has working DNS/TLS, production stays in the transitional shared-host mode. The dedicated split activates only after the server-side `/etc/foxgen-happyfox/max-miniapp.env` file is created by the provisioning script. This prevents a repository deploy from pointing MAX at a hostname that is not ready yet.
 
 Production MAX uses Webhook with:
 
@@ -217,7 +222,10 @@ MAX parity is a release invariant. Before merge/deploy, regression coverage must
 6. prompt analysis uses MAX balance and refunds failures once;
 7. MAX never mutates Telegram balance/FSM tables;
 8. production runtime composes the parity layer;
-9. Mini App URL remains `https://app.happy-fox.online/mini-app/`.
+9. after split activation, MAX Mini App URL is `https://max.happy-fox.online/mini-app/`;
+10. the MAX host loads the MAX Bridge and does not load the Telegram SDK;
+11. the Telegram host loads the Telegram SDK and does not load the MAX Bridge;
+12. both hosts publish the same exact verified HappyFox revision and reach the same shared backend API.
 
 ## Dark-by-default contract
 
