@@ -78,17 +78,21 @@ server {
     assert "https://max.happy-fox.online/mini-app/" in tuned
 
 
-def test_activation_is_noop_until_server_config_exists() -> None:
+def test_activation_without_config_restores_shared_launch_mode() -> None:
     script = Path("scripts/activate_happyfox_channel_miniapps.sh").read_text(encoding="utf-8")
 
     assert 'if [[ ! -s "$CONFIG_FILE" ]]; then' in script
-    assert "keeping transitional shared Mini App host" in script
+    assert "restore_shared_redirect" in script
+    assert "shared Mini App launch mode is active" in script
+    assert 'DEDICATED_MAX_ORIGIN="https://max.happy-fox.online"' in script
+    assert 'SHARED_ORIGIN="https://app.happy-fox.online"' in script
     assert "source \"$CONFIG_FILE\"" not in script
     assert 'APP_ROOT="/var/www/happyfox-app/mini-app"' in script
     assert 'MAX_MINIAPP_ROOT="/var/www/happyfox-max/mini-app"' in script
     assert 'docker cp "$cid:/app/frontend/miniapp-v0/out/." "$work/generic/"' in script
     assert 'render_happyfox_miniapp_channel.py" "$APP_ROOT" telegram' in script
     assert 'render_happyfox_miniapp_channel.py" "$MAX_MINIAPP_ROOT" max' in script
+    assert 'parsed.hostname != "max.happy-fox.online"' in script
 
 
 def test_provisioning_requires_dns_and_creates_server_side_activation_config() -> None:
@@ -111,5 +115,4 @@ def test_canonical_production_deploy_owns_split_reconciliation() -> None:
     verify_index = workflow.index("- name: Verify public production revision")
 
     assert deploy_index < reconcile_index < verify_index
-    assert "keeping transitional shared Mini App host" not in workflow
     assert not Path(".github/workflows/activate-miniapp-channel-split.yml").exists()
