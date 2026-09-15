@@ -61,13 +61,15 @@ def render_tree(root: Path, channel: str) -> int:
     processed = 0
     for path in sorted(root.rglob("*.html")):
         original = path.read_text(encoding="utf-8")
+        if not TELEGRAM_SCRIPT_RE.search(original) and not MAX_SCRIPT_RE.search(original):
+            continue
         rendered = render_html(original, channel)
         if rendered != original:
             path.write_text(rendered, encoding="utf-8")
         processed += 1
 
     if processed == 0:
-        raise ValueError(f"no HTML files were found under {root}")
+        raise ValueError(f"no Mini App bridge HTML files were found under {root}")
     return processed
 
 
