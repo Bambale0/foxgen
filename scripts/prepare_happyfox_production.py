@@ -375,7 +375,9 @@ def build_runtime_values(
             raise RuntimeError("MAX_WEBHOOK_PATH must start with /")
         values["MAX_WEBHOOK_PATH"] = max_webhook_path
         values["MAX_WEBHOOK_URL"] = f"{webhook_host}{max_webhook_path}"
-        values["MAX_MINI_APP_URL"] = mini_app_url
+        values["MAX_MINI_APP_URL"] = (
+            values.get("MAX_MINI_APP_URL", "").strip() or mini_app_url
+        )
 
     admin_ids = current_or_legacy("ADMIN_IDS", "FOXGEN_ADMIN_SUPERUSER_IDS")
     if admin_ids:
