@@ -1,4 +1,10 @@
-from scripts.render_happyfox_miniapp_channel import render_html, render_tree
+import importlib
+from pathlib import Path
+
+
+_renderer = importlib.import_module("scripts.render_happyfox_miniapp_channel")
+render_html = _renderer.render_html
+render_tree = _renderer.render_tree
 
 
 HTML = """<!doctype html>
