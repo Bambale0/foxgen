@@ -90,7 +90,7 @@ After `max.happy-fox.online` resolves to the dedicated HappyFox host:
 
 1. Copy `deploy/happyfox-max-miniapp.env.example` to a root-readable runtime config and set `CERTBOT_EMAIL`.
 2. Provision the HTTPS vhost with `scripts/install_miniapp_frontend_https_host.sh --config <file> --install`. The profile deliberately leaves `BACKEND_SSH_HOST` empty so this provisioning step cannot overwrite Telegram `MINI_APP_URL`.
-3. Set the repository/environment variable `HAPPYFOX_MAX_APP_ORIGIN=https://max.happy-fox.online` for canonical production deploys, or set the protected runtime `MAX_MINI_APP_URL=https://max.happy-fox.online/mini-app/`.
+3. Set the repository/environment variable `HAPPYFOX_MAX_APP_ORIGIN=https://max.happy-fox.online` for canonical production deploys. Until this explicit cutover flag is set, deploy keeps MAX on the already-working Telegram app origin even if stale channel values exist.
 4. In the MAX partner settings, set the bot Mini App URL to `https://max.happy-fox.online/mini-app/`.
 5. Run the normal exact-SHA HappyFox production deploy. It republishes the verified bundle to the MAX Nginx root, rewrites the MAX webhook GET compatibility redirect, and smoke-checks the MAX origin.
 6. Verify a real `open_app` launch inside MAX. Do not replace native `open_app` with an ordinary external URL button.
