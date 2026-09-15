@@ -4,14 +4,14 @@ import { join } from 'node:path'
 const outDir = join(process.cwd(), 'out')
 const localTelegramJs = 'telegram-web-app.js'
 const localTelegramSrc = `/mini-app/${localTelegramJs}`
-const telegramScript = `<script src="${localTelegramSrc}"></script>`
 const maxBridgeSrc = 'https://st.max.ru/js/max-web-app.js'
-const maxBridgeScript = `<script src="${maxBridgeSrc}"></script>`
 const inlineMiniappCss = process.env.MINIAPP_INLINE_CSS === '1'
 const assetVersion =
   process.env.MINIAPP_ASSET_VERSION ||
   new Date().toISOString().replace(/\D/g, '').slice(0, 14)
 
+const bridgeLoaderScriptPattern =
+  /<script\b(?=[^>]*\bid=(["'])miniapp-bridge-loader\1)[^>]*>[\s\S]*?<\/script>/gi
 const telegramEarlyScriptPattern =
   /<script\b(?=[^>]*\bid=(["'])telegram-early-ready\1)[^>]*>[\s\S]*?<\/script>/gi
 const telegramSdkScriptPattern =
@@ -47,7 +47,13 @@ function removeQueuedTelegramScripts(html) {
       return tag
     }
 
-    return tag.includes(localTelegramSrc) || tag.includes(localTelegramJs) || tag.includes('telegram-early-ready') ? '' : tag
+    return tag.includes(localTelegramSrc) ||
+      tag.includes(localTelegramJs) ||
+      tag.includes(maxBridgeSrc) ||
+      tag.includes('miniapp-bridge-loader') ||
+      tag.includes('telegram-early-ready')
+      ? ''
+      : tag
   })
 }
 
@@ -82,30 +88,42 @@ function versionStaticAssets(html) {
   )
 }
 
-function assertTelegramStartupContract(html, file, earlyScript) {
-  const telegramIndex = html.indexOf(telegramScript)
-  if (telegramIndex < 0) {
-    throw new Error(`Telegram SDK script is missing from ${file}`)
+function assertMiniAppStartupContract(html, file, bridgeLoader, earlyScript) {
+  const bridgeIndex = html.indexOf(bridgeLoader)
+  if (bridgeIndex < 0) {
+    throw new Error(`Mini App bridge loader is missing from ${file}`)
+  }
+
+  const earlyIndex = html.indexOf(earlyScript)
+  if (earlyIndex < bridgeIndex) {
+    throw new Error(`Mini App bootstrap must run after the bridge loader in ${file}`)
   }
 
   const firstNextRuntime = html.match(nextRuntimeScriptPattern)
-  if (firstNextRuntime?.index != null && telegramIndex > firstNextRuntime.index) {
-    throw new Error(`Telegram SDK must load before Next.js runtime scripts in ${file}`)
+  if (firstNextRuntime?.index != null && bridgeIndex > firstNextRuntime.index) {
+    throw new Error(`Mini App bridge loader must run before Next.js runtime scripts in ${file}`)
+  }
+  if (firstNextRuntime?.index != null && earlyIndex > firstNextRuntime.index) {
+    throw new Error(`Mini App bootstrap must run before Next.js runtime scripts in ${file}`)
   }
 
-  if (/\bdefer\b/i.test(telegramScript) || /\basync\b/i.test(telegramScript)) {
-    throw new Error('Telegram SDK must load synchronously before application scripts')
+  for (const required of [
+    localTelegramSrc,
+    maxBridgeSrc,
+    'tgWebAppData',
+    'WebAppData',
+    'max.happy-fox.online',
+    'document.write',
+  ]) {
+    if (!bridgeLoader.includes(required)) {
+      throw new Error(`Mini App bridge loader is missing ${required} in ${file}`)
+    }
   }
 
-  const maxIndex = html.indexOf(maxBridgeScript)
-  if (maxIndex < 0) {
-    throw new Error(`MAX Bridge script is missing from ${file}`)
-  }
-  if (firstNextRuntime?.index != null && maxIndex > firstNextRuntime.index) {
-    throw new Error(`MAX Bridge must load before Next.js runtime scripts in ${file}`)
-  }
-  if (/\bdefer\b/i.test(maxBridgeScript) || /\basync\b/i.test(maxBridgeScript)) {
-    throw new Error('MAX Bridge must load synchronously before application scripts')
+  localTelegramScriptPattern.lastIndex = 0
+  maxBridgeScriptPattern.lastIndex = 0
+  if (localTelegramScriptPattern.test(html) || maxBridgeScriptPattern.test(html)) {
+    throw new Error(`Static HTML must not load both messenger bridges directly in ${file}`)
   }
 
   if (/TelegramWebviewProxy|window\.webkit|window\.external\.notify/.test(earlyScript)) {
@@ -129,10 +147,15 @@ let patched = 0
 
 for (const file of htmlFiles(outDir)) {
   const html = readFileSync(file, 'utf8')
+  bridgeLoaderScriptPattern.lastIndex = 0
   telegramEarlyScriptPattern.lastIndex = 0
 
+  const bridgeLoader = html.match(bridgeLoaderScriptPattern)?.[0]
   const earlyScript = html.match(telegramEarlyScriptPattern)?.[0]
 
+  if (!bridgeLoader) {
+    throw new Error(`Cannot find miniapp-bridge-loader script in ${file}`)
+  }
   if (!earlyScript) {
     throw new Error(`Cannot find telegram-early-ready script in ${file}`)
   }
@@ -143,6 +166,7 @@ for (const file of htmlFiles(outDir)) {
       .replace(telegramSdkScriptPattern, '')
       .replace(localTelegramScriptPattern, '')
       .replace(maxBridgeScriptPattern, '')
+      .replace(bridgeLoaderScriptPattern, '')
       .replace(telegramEarlyScriptPattern, ''),
   )
 
@@ -150,14 +174,14 @@ for (const file of htmlFiles(outDir)) {
     throw new Error(`Cannot find <head> in ${file}`)
   }
 
-  const telegramHeadScripts = `${telegramScript}${maxBridgeScript}${earlyScript}`
+  const telegramHeadScripts = `${bridgeLoader}${earlyScript}`
   const charsetMatch = stripped.match(charsetPattern)
   const nextHtmlWithTelegram = charsetMatch
     ? stripped.replace(charsetMatch[0], `${charsetMatch[0]}${telegramHeadScripts}`)
     : stripped.replace('<head>', `<head>${telegramHeadScripts}`)
   const nextHtml = versionStaticAssets(inlineMiniappStyles(nextHtmlWithTelegram))
 
-  assertTelegramStartupContract(nextHtml, file, earlyScript)
+  assertMiniAppStartupContract(nextHtml, file, bridgeLoader, earlyScript)
 
   if (nextHtml !== html) {
     writeFileSync(file, nextHtml)
