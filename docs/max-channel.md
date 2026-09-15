@@ -52,13 +52,24 @@ It must never read or mutate Telegram user balances, Telegram transactions, Tele
 ## Production topology
 
 ```text
-Landing:      https://happy-fox.online/
-Mini App:     https://app.happy-fox.online/mini-app/
-API:          https://api.happy-fox.online
-MAX webhook:  https://api.happy-fox.online/max/webhook
+Landing:            https://happy-fox.online/
+Telegram Mini App:  https://app.happy-fox.online/mini-app/
+MAX Mini App:       https://max.happy-fox.online/mini-app/
+API:                https://api.happy-fox.online
+MAX webhook:        https://api.happy-fox.online/max/webhook
 ```
 
+Telegram and MAX serve the **same verified frontend revision**, but from different public origins. This deliberately isolates Telegram WebApp launch state from MAX Bridge launch state while preserving one source tree and one release artifact.
+
 The dedicated `happyfox` host owns the application/data plane. `apix` is a Telegram transport relay only and is not a MAX or HappyFox application host.
+
+Before `max.happy-fox.online` DNS/TLS is activated, production deploys are backward-compatible and may keep `HAPPYFOX_MAX_APP_ORIGIN=https://app.happy-fox.online`. Once the dedicated hostname is live, production must set:
+
+```text
+HAPPYFOX_MAX_APP_ORIGIN=https://max.happy-fox.online
+```
+
+and the canonical deploy will write `MAX_MINI_APP_URL=https://max.happy-fox.online/mini-app/`.
 
 ## Live activation
 
@@ -72,12 +83,41 @@ MAX_WEBHOOK_URL=https://api.happy-fox.online/max/webhook
 MAX_WEBHOOK_PATH=/max/webhook
 MAX_API_BASE=https://platform-api2.max.ru
 MAX_BOT_NAME=your_bot_name
-MAX_MINI_APP_URL=https://app.happy-fox.online/mini-app/
+MAX_MINI_APP_URL=https://max.happy-fox.online/mini-app/
 MAX_PAYMENT_RETURN_URL=https://max.ru/your_bot_name?start=max_payment
 MAX_PAYMENT_RECONCILE_SECONDS=30
 ```
 
 `MAX_WEBHOOK_URL` must be HTTPS and its path must match `MAX_WEBHOOK_PATH`.
+
+MAX itself also requires the Mini App URL to be registered on the MAX partner platform for the bot. After DNS/TLS activation, set the bot's Mini App URL to:
+
+```text
+https://max.happy-fox.online/mini-app/
+```
+
+The native MAX launch mechanism remains `open_app` / `https://max.ru/<botName>?startapp`; ordinary `link` / `openLink` URLs are external-browser flows and must not replace the native Mini App launch.
+
+### Dedicated hostname activation
+
+After the DNS record exists, run on the HappyFox host from the verified repository checkout:
+
+```bash
+CERTBOT_EMAIL=<ops-email> \
+EXPECTED_REVISION=$(git rev-parse HEAD) \
+bash scripts/activate_happyfox_max_domain.sh --activate
+```
+
+The activation script:
+
+1. refuses to continue until DNS resolves;
+2. requires the already-published `/var/www/happyfox-max/mini-app` bundle;
+3. obtains/reuses a Let's Encrypt certificate through HTTP-01 webroot validation;
+4. installs a dedicated nginx HTTPS vhost;
+5. keeps `/mini-app/api/` on the same local HappyFox backend;
+6. verifies revision, OPTIONS, POST and bootstrap ingress before reporting success.
+
+Only after that activation succeeds should `HAPPYFOX_MAX_APP_ORIGIN` be switched to `https://max.happy-fox.online` and the normal exact-SHA production deploy run.
 
 Production MAX uses Webhook with:
 
@@ -201,6 +241,12 @@ Bot deep links use:
 https://max.ru/<botName>?start=ref_<max_user_id>
 ```
 
+Mini App deep links use the MAX-native form:
+
+```text
+https://max.ru/<botName>?startapp=<payload>
+```
+
 `bot_started.payload` records at most one referral edge per invited MAX user. Self-referrals and referral cycles are rejected. Signup and purchase rewards are MAX-ledger entries with idempotency keys.
 
 Economics remain owned by `data/max_price.json`; UX parity does not mean silently sharing Telegram database state.
@@ -217,7 +263,10 @@ MAX parity is a release invariant. Before merge/deploy, regression coverage must
 6. prompt analysis uses MAX balance and refunds failures once;
 7. MAX never mutates Telegram balance/FSM tables;
 8. production runtime composes the parity layer;
-9. Mini App URL remains `https://app.happy-fox.online/mini-app/`.
+9. Telegram Mini App remains `https://app.happy-fox.online/mini-app/`;
+10. MAX Mini App resolves to the dedicated configured origin after activation;
+11. Telegram Chromium/iPhone WebKit and MAX Chromium/iPhone WebKit startup E2E are green;
+12. both public origins expose the exact deployed revision when the dedicated MAX domain is enabled.
 
 ## Dark-by-default contract
 
