@@ -2400,16 +2400,12 @@ async def miniapp_index(request: web.Request) -> web.Response:
         snapshot_script = (
             '<script id="miniapp-snapshot">'
             '(function(){'
-            '  try{'
-            '    var existing=window.__BANANO_INITIAL_LAUNCH__;'
-            '    if(existing&&(existing.hash||existing.search)){return;}'
-            '  }catch(e){}'
             '  var h=location.href,s=location.search,ha=location.hash;'
             '  window.__BANANO_INITIAL_LAUNCH__={href:h,search:s,hash:ha};'
             '  try{'
-            '    if(!window.sessionStorage.getItem("__banano_initial_href"))window.sessionStorage.setItem("__banano_initial_href",h);'
-            '    if(!window.sessionStorage.getItem("__banano_initial_search"))window.sessionStorage.setItem("__banano_initial_search",s);'
-            '    if(!window.sessionStorage.getItem("__banano_initial_hash"))window.sessionStorage.setItem("__banano_initial_hash",ha);'
+            '    window.sessionStorage.setItem("__banano_initial_href",h);'
+            '    window.sessionStorage.setItem("__banano_initial_search",s);'
+            '    window.sessionStorage.setItem("__banano_initial_hash",ha);'
             '  }catch(e){}'
             '})();'
             '</script>'
@@ -2439,12 +2435,9 @@ async def miniapp_index(request: web.Request) -> web.Response:
             '        href:String((window.location.pathname||"")+(window.location.search||"")),'
             '        search:String(window.location.search||""),'
             '        hash_len:String(window.location.hash||"").length,'
-            '        initial_hash_len:String((window.__BANANO_INITIAL_LAUNCH__&&window.__BANANO_INITIAL_LAUNCH__.hash)||"").length,'
             '        has_tg:!!tg,'
             '        has_webapp:!!wa,'
-            '        init_data_len:wa&&wa.initData?String(wa.initData).length:0,'
-            '        has_max:!!window.WebApp,'
-            '        max_init_data_len:window.WebApp&&window.WebApp.initData?String(window.WebApp.initData).length:0'
+            '        init_data_len:wa&&wa.initData?String(wa.initData).length:0'
             '      },extra||{});'
             '      var body=JSON.stringify(payload);'
             '      if(navigator.sendBeacon){'
@@ -2567,12 +2560,9 @@ async def miniapp_client_log(request: web.Request) -> web.Response:
             "href": str(payload.get("href") or "")[:500],
             "search": str(payload.get("search") or "")[:500],
             "hash_len": int(payload.get("hash_len") or len(str(payload.get("hash") or ""))),
-            "initial_hash_len": int(payload.get("initial_hash_len") or 0),
             "has_tg": bool(payload.get("has_tg")),
             "has_webapp": bool(payload.get("has_webapp")),
             "init_data_len": int(payload.get("init_data_len") or 0),
-            "has_max": bool(payload.get("has_max")),
-            "max_init_data_len": int(payload.get("max_init_data_len") or 0),
             "message": str(payload.get("message") or "")[:500],
             "source": str(payload.get("source") or "")[:200],
             "file_kind": str(payload.get("file_kind") or "")[:80],
