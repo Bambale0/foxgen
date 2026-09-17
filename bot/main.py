@@ -74,6 +74,7 @@ from bot.feed_reference_media import setup_feed_reference_media_routes
 from bot.miniapp import setup_miniapp_routes
 from bot.max_miniapp import install_max_miniapp_middleware
 from bot.keyboards import (
+    _mini_app_url_with_start_param,
     get_main_menu_button_keyboard,
     get_required_subscription_keyboard,
 )
@@ -134,14 +135,23 @@ USER_BOT_COMMAND_SCOPES = (
 )
 USER_BOT_COMMAND_LANGUAGES = (None, "ru")
 
-async def _set_commands_chat_menu_button() -> None:
-    """Keep Telegram's system menu button on quick commands."""
+async def _set_webapp_chat_menu_button() -> None:
+    """Keep Telegram's system menu button on the current HappyFox Mini App."""
+    launch_url = _mini_app_url_with_start_param()
+    if not launch_url:
+        raise RuntimeError("HappyFox Mini App URL is unavailable")
     url = f"https://api.telegram.org/bot{config.BOT_TOKEN}/setChatMenuButton"
     timeout = aiohttp.ClientTimeout(total=15)
     async with aiohttp.ClientSession(timeout=timeout) as session:
         async with session.post(
             url,
-            json={"menu_button": {"type": "commands"}},
+            json={
+                "menu_button": {
+                    "type": "web_app",
+                    "text": "Открыть HappyFox",
+                    "web_app": {"url": launch_url},
+                }
+            },
         ) as response:
             payload = await response.json(content_type=None)
     if not payload.get("ok"):
@@ -2396,8 +2406,8 @@ async def on_startup(bot: Bot, dispatcher: Dispatcher | None = None):
         logger.exception("Failed to clear Telegram bot descriptions")
 
     try:
-        await _set_commands_chat_menu_button()
-        logger.info("Configured Telegram chat menu button for bot commands")
+        await _set_webapp_chat_menu_button()
+        logger.info("Configured Telegram chat menu button for current HappyFox WebApp")
     except Exception:
         logger.exception("Failed to configure Telegram chat menu button")
 

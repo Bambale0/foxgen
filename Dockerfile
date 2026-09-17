@@ -103,9 +103,12 @@ COPY --from=builder /opt/venv /opt/venv
 COPY --chown=app:app . /app
 COPY --from=miniapp-builder --chown=app:app /build/miniapp/out /app/frontend/miniapp-v0/out
 
+# deploy_happyfox_dedicated.sh runs scripts/ensure_telegram_webhook.py first; the image hook below then restores the WebApp menu.
 RUN printf '%s\n' "${VCS_REF}" > /app/frontend/miniapp-v0/out/revision.txt \
     && python scripts/apply_visible_copy_fixes.py \
     && python scripts/apply_happyfox_product_copy.py \
+    && sed -i '/from bot.keyboards import (/a\\    _mini_app_url_with_start_param,' bot/main.py \
+    && printf '\nif __name__ == "__main__":\n    from scripts.reconcile_telegram_webapp_menu import reconcile as _reconcile_webapp_menu\n    asyncio.run(_reconcile_webapp_menu())\n' >> scripts/ensure_telegram_webhook.py \
     && python -m scripts.smoke_happyfox_telegram_seedance25 \
     && PYTHONPYCACHEPREFIX=/tmp/banano-pycache python -m compileall -q \
         bot/keyboards.py \
@@ -113,6 +116,8 @@ RUN printf '%s\n' "${VCS_REF}" > /app/frontend/miniapp-v0/out/revision.txt \
         bot/handlers/image_analyzer.py \
         bot/handlers/prompt_analyzer_v2.py \
         bot/browser_auth.py \
+        bot/main.py \
+        scripts/reconcile_telegram_webapp_menu.py \
         bot/miniapp.py \
         bot/services/trend_preview_service.py \
         bot/trend_api.py \
