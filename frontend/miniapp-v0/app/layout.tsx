@@ -27,6 +27,26 @@ const miniAppBridgeLoaderScript = `
     launch.has('tgWebAppStartParam');
 
   var useMax = maxHost || (hasMaxLaunch && !hasTelegramLaunch);
+
+  try {
+    window.__BANANO_INITIAL_LAUNCH__ = { hash: rawHash, search: rawSearch };
+    if (window.sessionStorage) {
+      window.sessionStorage.setItem('__banano_initial_hash', rawHash);
+      window.sessionStorage.setItem('__banano_initial_search', rawSearch);
+    }
+  } catch (e) {}
+
+  var telegramInitData = useMax ? '' : String(launch.get('tgWebAppData') || '').trim();
+  if (telegramInitData) {
+    try {
+      window.__BANANO_MINIAPP_PLATFORM__ = 'telegram';
+      window.__BANANO_TG_INIT_DATA__ = telegramInitData;
+      if (window.sessionStorage) {
+        window.sessionStorage.setItem('__banano_tg_init_data', telegramInitData);
+      }
+    } catch (e) {}
+  }
+
   var src = useMax
     ? 'https://st.max.ru/js/max-web-app.js'
     : '/mini-app/telegram-web-app.js';
