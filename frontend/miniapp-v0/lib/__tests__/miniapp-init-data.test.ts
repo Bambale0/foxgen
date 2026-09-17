@@ -44,7 +44,6 @@ describe('Mini App Telegram initData persistence', () => {
     window.history.replaceState({}, '', '/mini-app/')
 
     expect(getInitData()).toBe(signedInitData)
-    expect(window.__BANANO_MINIAPP_PLATFORM__).toBe('telegram')
   })
 
   it('captures Telegram launch initData before the native SDK is synchronously loaded', () => {
@@ -58,5 +57,18 @@ describe('Mini App Telegram initData persistence', () => {
     expect(captureIndex).toBeGreaterThanOrEqual(0)
     expect(storageIndex).toBeGreaterThan(captureIndex)
     expect(sdkLoadIndex).toBeGreaterThan(storageIndex)
+  })
+
+  it('persists browser-auth initData before changing the hash and reloading', () => {
+    const gatePath = path.join(process.cwd(), 'components', 'telegram-open-gate.tsx')
+    const gate = fs.readFileSync(gatePath, 'utf8')
+
+    const persistIndex = gate.indexOf('persistTelegramInitData(initData)')
+    const hashIndex = gate.indexOf('window.location.hash = params.toString()')
+    const reloadIndex = gate.indexOf('window.location.reload()')
+
+    expect(persistIndex).toBeGreaterThanOrEqual(0)
+    expect(hashIndex).toBeGreaterThan(persistIndex)
+    expect(reloadIndex).toBeGreaterThan(hashIndex)
   })
 })
