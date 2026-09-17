@@ -1,7 +1,8 @@
 import fs from 'node:fs'
 import path from 'node:path'
 
-import { getInitData, persistTelegramInitData } from '../api'
+import { getInitData } from '../api'
+import { persistTelegramInitData } from '../miniapp-init-data'
 
 describe('Mini App Telegram initData persistence', () => {
   beforeEach(() => {
