@@ -9,6 +9,7 @@ import {
 } from '@/lib/api'
 import { BRAND_NAME } from '@/lib/brand'
 import { useApp } from '@/lib/app-context'
+import { persistTelegramInitData } from '@/lib/miniapp-init-data'
 import { Button } from '@/components/ui/button'
 
 type TelegramLoginUser = {
@@ -28,6 +29,7 @@ declare global {
 }
 
 function setBrowserInitData(initData: string) {
+  persistTelegramInitData(initData)
   const params = new URLSearchParams(window.location.hash.replace(/^#/, ''))
   params.set('tgWebAppData', initData)
   window.location.hash = params.toString()
