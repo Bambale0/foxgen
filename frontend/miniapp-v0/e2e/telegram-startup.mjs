@@ -160,6 +160,58 @@ try {
 
       await context.close()
       console.log(`Telegram startup E2E passed: ${target.name}`)
+
+      const recoveryContext = await browser.newContext({ ...target.device })
+      const recoveryPage = await recoveryContext.newPage()
+      let resolveNativeRelaunch
+      const nativeRelaunch = new Promise((resolve) => {
+        resolveNativeRelaunch = resolve
+      })
+
+      recoveryPage.on('request', (request) => {
+        if (request.url().startsWith('https://t.me/')) {
+          resolveNativeRelaunch?.(request.url())
+        }
+      })
+      await recoveryPage.route('https://t.me/**', async (route) => {
+        await route.abort()
+      })
+      await recoveryPage.route('**/mini-app/api/**', async (route) => {
+        const path = new URL(route.request().url()).pathname
+        if (path.endsWith('/browser-auth/config')) {
+          await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({ ok: true, bot_username: 'test_bot' }),
+          })
+          return
+        }
+        await route.fulfill({
+          status: 401,
+          contentType: 'application/json',
+          body: JSON.stringify({ ok: false, error: 'Missing init_data' }),
+        })
+      })
+
+      await recoveryPage.goto(`${baseUrl}?startapp=ref_MOBILE42`, { waitUntil: 'networkidle' })
+      const recoveredUrl = await Promise.race([
+        nativeRelaunch,
+        new Promise((_, reject) => setTimeout(() => reject(new Error(
+          `${target.name}: direct mobile startapp did not relaunch Telegram natively`,
+        )), 3000)),
+      ])
+      assert.equal(
+        recoveredUrl,
+        'https://t.me/test_bot?startapp=ref_MOBILE42',
+        `${target.name}: direct mobile startapp must preserve its payload`,
+      )
+      assert.equal(
+        await recoveryPage.locator('script[src*="telegram-widget.js"]').count(),
+        0,
+        `${target.name}: Login Widget must not render before native relaunch`,
+      )
+      await recoveryContext.close()
+      console.log(`Telegram direct mobile recovery E2E passed: ${target.name}`)
     } finally {
       await browser.close()
     }
