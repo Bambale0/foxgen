@@ -61,14 +61,16 @@ def test_other_ai_menu_is_a_three_scenario_hub():
     ]
 
 
-def test_telegram_system_menu_opens_quick_commands_not_mini_app():
+def test_telegram_system_menu_opens_native_mini_app_and_keeps_commands():
     main_text = Path("bot/main.py").read_text(encoding="utf-8")
-    menu_block = main_text.split("async def _set_commands_chat_menu_button", 1)[1].split(
+    menu_block = main_text.split("async def _set_miniapp_chat_menu_button", 1)[1].split(
         "async def _complete_reconciled_order", 1
     )[0]
 
-    assert '"type": "commands"' in menu_block
-    assert '"type": "web_app"' not in menu_block
+    assert '"type": "web_app"' in menu_block
+    assert '"web_app": {"url": mini_app_url}' in menu_block
+    assert "mini_app_url = _mini_app_url_with_start_param()" in menu_block
+    assert '{"type": "commands"}' in menu_block
     assert "await bot.set_my_commands(" in main_text
     for command in ("start", "feed", "prompts", "help", "ref", "earn"):
         assert f'BotCommand(command="{command}"' in main_text

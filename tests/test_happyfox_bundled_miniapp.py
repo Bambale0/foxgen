@@ -70,21 +70,23 @@ def test_product_normalizer_versions_telegram_webapp_launch() -> None:
     assert 'query["release"] = release' in normalizer
     assert 'os.getenv("HAPPYFOX_RELEASE", "")' in normalizer
     assert "apply_happyfox_main_menu()" in normalizer
-    assert "COMMANDS_SYSTEM_MENU" in main_menu_patch
-    assert "HappyFox Telegram system menu still opens the Mini App" in main_menu_patch
+    assert "WEBAPP_SYSTEM_MENU" in main_menu_patch
+    assert "LEGACY_COMMANDS_SYSTEM_MENU" in main_menu_patch
+    assert "HappyFox Telegram system menu does not open the Mini App" in main_menu_patch
 
 
-def test_normalized_runtime_versions_webapp_and_keeps_commands_menu() -> None:
+def test_normalized_runtime_versions_webapp_and_uses_native_miniapp_menu() -> None:
     keyboards = Path("bot/keyboards.py").read_text(encoding="utf-8")
     main = Path("bot/main.py").read_text(encoding="utf-8")
-    helper = main.split("async def _set_commands_chat_menu_button() -> None:", 1)[1]
+    helper = main.split("async def _set_miniapp_chat_menu_button() -> None:", 1)[1]
     helper = helper.split("\nasync def ", 1)[0]
 
     assert 'os.getenv("HAPPYFOX_RELEASE", "")' in keyboards
     assert 'query["release"] = release' in keyboards
+    assert '"type": "web_app"' in helper
+    assert '"web_app": {"url": mini_app_url}' in helper
     assert '"type": "commands"' in helper
-    assert '"type": "web_app"' not in helper
-    assert "_mini_app_url_with_start_param" not in helper
+    assert "mini_app_url = _mini_app_url_with_start_param()" in helper
 
 
 def test_production_miniapp_wrapper_publishes_and_verifies_exact_bundled_release() -> None:
