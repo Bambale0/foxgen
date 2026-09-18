@@ -67,6 +67,81 @@ async def test_telegram_webhook_routes_and_credits_once(tmp_path, monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_telegram_referral_inviter_gift_is_awarded_after_first_purchase_once(tmp_path, monkeypatch):
+    monkeypatch.setattr(database, "DATABASE_PATH", str(tmp_path / "referral-gift.db"))
+    await database.init_db()
+    from bot.services import referral_service
+
+    referrer = await database.get_or_create_user(930)
+    referred = await database.get_or_create_user(931)
+    async with db.connect() as connection:
+        await connection.execute(
+            "UPDATE users SET partner_agreed_at=CURRENT_TIMESTAMP WHERE id=?",
+            (referrer.id,),
+        )
+        await connection.commit()
+    before_referrer = await database.get_or_create_user(930)
+
+    async with db.connect() as connection:
+        connection.row_factory = db.Row
+        result = await referral_service.attach_referral_in_transaction(
+            connection,
+            931,
+            referred.id,
+            referrer.referral_code,
+            source="test",
+        )
+        assert result.attached is True
+        await connection.commit()
+
+    after_attach = await database.get_or_create_user(930)
+    assert after_attach.credits == before_referrer.credits
+    assert after_attach.referral_earned == before_referrer.referral_earned
+
+    async with db.connect() as connection:
+        connection.row_factory = db.Row
+        referral = await (await connection.execute(
+            "SELECT bonus_credits FROM referrals WHERE referrer_id=? AND referred_id=?",
+            (referrer.id, referred.id),
+        )).fetchone()
+        assert referral is not None
+        assert int(referral["bonus_credits"] or 0) == 0
+
+    await database.create_transaction(
+        order_id="ref-first-order",
+        user_id=referred.id,
+        credits=25,
+        amount_rub=250,
+        provider="yookassa",
+        payment_id="ref-first-payment",
+    )
+
+    completion = await database.complete_payment_atomic("ref-first-order")
+    assert completion["ok"] is True
+    assert completion["already_completed"] is False
+    assert completion["referral_bonus"]["invite_bonus_credits"] == get_business_rules()["inviter_bonus_credits"]
+
+    after_first_purchase = await database.get_or_create_user(930)
+    assert after_first_purchase.credits == before_referrer.credits + get_business_rules()["inviter_bonus_credits"]
+    assert after_first_purchase.referral_earned == before_referrer.referral_earned + get_business_rules()["inviter_bonus_credits"]
+
+    duplicate = await database.complete_payment_atomic("ref-first-order")
+    assert duplicate["ok"] is True
+    assert duplicate["already_completed"] is True
+    after_duplicate = await database.get_or_create_user(930)
+    assert after_duplicate.credits == after_first_purchase.credits
+    assert after_duplicate.referral_earned == after_first_purchase.referral_earned
+
+    async with db.connect() as connection:
+        connection.row_factory = db.Row
+        referral = await (await connection.execute(
+            "SELECT bonus_credits FROM referrals WHERE referrer_id=? AND referred_id=?",
+            (referrer.id, referred.id),
+        )).fetchone()
+        assert int(referral["bonus_credits"] or 0) == get_business_rules()["inviter_bonus_credits"]
+
+
+@pytest.mark.asyncio
 async def test_max_referral_failure_rolls_back_credit_and_status(tmp_path, monkeypatch):
     monkeypatch.setattr(database, "DATABASE_PATH", str(tmp_path / "max.db"))
     await database.init_db()
@@ -100,11 +175,11 @@ async def test_max_referral_failure_rolls_back_credit_and_status(tmp_path, monke
     )
     with pytest.raises(RuntimeError):
         await service.complete_order(order.order_id)
-    assert await get_max_balance(903) == 0
+    assert await get_max_balance(903) == 5
     assert (await get_max_payment_order(order.order_id)).status == "pending"
     monkeypatch.setattr(service, "_award_purchase_referrals", original)
     assert (await service.complete_order(order.order_id))["ok"]
-    assert await get_max_balance(903) == 25
+    assert await get_max_balance(903) == 30
 
 
 @pytest.mark.asyncio
@@ -250,7 +325,7 @@ async def test_max_promocode_bonus_is_accounted_once(tmp_path, monkeypatch):
     assert order.promo_bonus_credits == 5
     for _ in range(2):
         assert (await service.complete_order(order.order_id))["ok"]
-    assert await get_max_balance(907) == 30
+    assert await get_max_balance(907) == 35
     updated = await database.get_promo_code_by_code(promo.code)
     assert updated.usage_count == 1
     assert updated.total_bonus_credits == 5

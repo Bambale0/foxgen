@@ -55,7 +55,7 @@ async def test_shared_webhook_credits_max_once_and_retries_buyer_notification(
                 json={"event": "payment.succeeded", "object": {"id": "max-payment"}},
             )
             assert r.status == 200
-    assert await get_max_balance(300) == order.credits
+    assert await get_max_balance(300) == order.credits + 5
     await deliver_payment_notifications(app)
     max_client.send_message.assert_awaited_once()
     telegram.send_message.assert_not_awaited()

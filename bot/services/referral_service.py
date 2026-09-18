@@ -19,7 +19,6 @@ from bot.config import config
 # ---------------------------------------------------------------------------
 # Парсинг реферального кода из start_param (deep link)
 # ---------------------------------------------------------------------------
-from bot.business_rules import get_business_rules
 from bot.database import (
     DATABASE_PATH,
     REFERRAL_ANTIFRAUD_BLOCK_CODES,
@@ -765,7 +764,7 @@ async def process_referral_click(
             return await _record_and_commit(result, visitor_user_id)
 
         insert_cursor = await db.execute(
-            "INSERT OR IGNORE INTO referrals (referrer_id, referred_id, bonus_credits) VALUES (?, ?, 3)",
+            "INSERT OR IGNORE INTO referrals (referrer_id, referred_id, bonus_credits) VALUES (?, ?, 0)",
             (referrer_id, visitor_user_id),
         )
         if insert_cursor.rowcount != 1:
@@ -781,11 +780,6 @@ async def process_referral_click(
             )
             return await _record_and_commit(result, visitor_user_id)
 
-        # Начисляем бонус рефереру
-        await db.execute(
-            "UPDATE users SET credits = credits + ?, referral_earned = referral_earned + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-            (get_business_rules()["inviter_bonus_credits"], get_business_rules()["inviter_bonus_credits"], referrer_id),
-        )
 
         result = ReferralResult(
             clicked_code=code,
@@ -1011,7 +1005,7 @@ async def attach_referral_in_transaction(
         return result
 
     insert_cursor = await db.execute(
-        "INSERT OR IGNORE INTO referrals (referrer_id, referred_id, bonus_credits) VALUES (?, ?, 3)",
+        "INSERT OR IGNORE INTO referrals (referrer_id, referred_id, bonus_credits) VALUES (?, ?, 0)",
         (referrer_id, visitor_user_id),
     )
 
@@ -1027,11 +1021,6 @@ async def attach_referral_in_transaction(
         await record_referral_event(result, visitor_telegram_id, visitor_user_id, db=db)
         return result
 
-    # Начисляем бонус рефереру
-    await db.execute(
-        "UPDATE users SET credits = credits + ?, referral_earned = referral_earned + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-        (get_business_rules()["inviter_bonus_credits"], get_business_rules()["inviter_bonus_credits"], referrer_id),
-    )
 
     result = ReferralResult(
         clicked_code=code,

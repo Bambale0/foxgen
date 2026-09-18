@@ -170,7 +170,7 @@ def test_audio_id_enqueue_and_worker_deliver_real_asset_id(tmp_path, monkeypatch
 
     job = asyncio.run(seed())
     assert job.cost == 3
-    assert asyncio.run(get_max_balance(402)) == 17
+    assert asyncio.run(get_max_balance(402)) == 22
 
     async def fake_create_audio(**kwargs):
         assert kwargs["audio_id"] == "achernar"

@@ -276,7 +276,7 @@ def test_motion_control_enqueue_and_worker_are_durable(
 
     job = asyncio.run(seed_user())
     assert job.cost == 40
-    assert asyncio.run(get_max_balance(303)) == 100 - job.cost
+    assert asyncio.run(get_max_balance(303)) == 5 + 100 - job.cost
 
     captured = {}
 

@@ -1174,7 +1174,7 @@ async def _notify_partner_about_new_referral(
     text = (
         "🎉 <b>Новый реферал</b>\n\n"
         f"К вам присоединился: <b>{referred_name}</b>{referred_username_line}\n\n"
-        f"Начислено: <code>{get_business_rules()['inviter_bonus_credits']}</code>🍌 за регистрацию. "
+        "Подарок пригласившему начислим после первой покупки реферала. "
         "Партнёрские начисления с оплат появятся в вашей статистике."
     )
 
@@ -1264,32 +1264,33 @@ def _get_user_menu(user_id: int) -> str:
 
 def _build_main_menu_text(user_credits: int, referral_bonus_text: str = "") -> str:
     bonus_block = f"\n{referral_bonus_text.strip()}\n" if referral_bonus_text else "\n"
+    new_user_bonus = get_business_rules()["new_user_bonus_credits"]
     return (
         f"🏠 <b>{html.escape(product.brand_name)}</b>\n"
-        "Создавайте фото, видео и анимацию по описанию или референсам.\n"
-        "Выберите задачу — дальше покажу только нужные шаги. 👇\n\n"
-        "<b>Что можно сделать</b>\n"
-        "🖼 Создать фото — по описанию или референсу\n"
-        "🎬 Создать видео — по тексту, фото или готовому ролику\n"
-        "🎭 Оживить фото — добавить или перенести движение\n"
-        "🔁 Изменить фото — поменять фон, стиль, одежду или детали\n"
-        "📸 Промпт по фото — разобрать кадр и получить готовый промпт\n"
-        "📱 Лента — посмотреть работы других пользователей\n"
-        "📚 Библиотека промптов — выбрать готовую идею для генерации\n"
-        "🤖 Помощник — подобрать модель, настройки и улучшить промпт\n\n"
-        f"🍌 <b>Баланс:</b> <code>{user_credits}</code> бананов"
+        "Скажите, что хотите получить: изображение, ролик, озвучку или музыку. Можно начать с идеи или готового файла.\n"
+        "Выберите действие ниже — дальше останутся только нужные шаги. 👇\n\n"
+        "<b>Быстрый старт</b>\n"
+        "🖼 Фото — создать с нуля или изменить по референсу\n"
+        "🎬 Видео — сделать по тексту, фото или ролику\n"
+        "🎙 Озвучка — создать голос или говорящего персонажа\n"
+        "🎵 Музыка — создать готовый трек через Suno\n"
+        "🎯 Motion Control — перенести движение на персонажа\n"
+        "✨ Промпты — разобрать референс или подготовить запрос\n"
+        "🔗 Работы — открыть сохранённые ссылки и результаты\n"
+        "🤖 AI-помощник — подобрать модель и собрать промпт\n\n"
+        f"🐾 <b>Баланс:</b> <code>{user_credits}</code> лапок"
         f"{bonus_block}"
-        "🎁 <b>Новым пользователям — 15 бананов в подарок!</b>\n"
+        f"🎁 <b>Новым пользователям — {new_user_bonus:g} лапок в подарок!</b>\n"
         "<i>Просто выбери, что сделать, и нажми кнопку ниже 👇</i>"
     )
 
 
 def _build_balance_text(stats: dict) -> str:
     return (
-        "💎 <b>Баланс и статистика</b>\n\n"
-        f"• Сейчас на балансе: <code>{stats['credits']}</code> бананов\n"
+        "🐾 <b>Баланс HappyFox</b>\n\n"
+        f"• Сейчас на балансе: <code>{stats['credits']}</code> лапок\n"
         f"• Всего запусков: <code>{stats['generations']}</code>\n"
-        f"• Всего потрачено: <code>{stats['total_spent']}</code> бананов\n"
+        f"• Всего потрачено: <code>{stats['total_spent']}</code> лапок\n"
         f"• Вы с нами с: <code>{stats['member_since']}</code>\n"
         f"• Приглашено друзей: <code>{stats.get('referrals_count', 0)}</code>\n"
         f"• Заработано по приглашениям: <code>{stats.get('referral_earned', 0)}</code>"
@@ -1318,7 +1319,7 @@ def _build_motion_control_menu_text(user_credits: int) -> str:
         "1. Загрузите фото\n"
         "2. Добавьте видео с движением\n"
         "3. Получите анимированный результат\n\n"
-        f"🍌 <b>Баланс:</b> <code>{user_credits}</code> бананов\n\n"
+        f"🐾 <b>Баланс:</b> <code>{user_credits}</code> лапок\n\n"
         "<i>Ниже выберите подходящий вариант.</i>"
     )
 
@@ -1326,7 +1327,7 @@ def _build_motion_control_menu_text(user_credits: int) -> str:
 def _build_motion_control_step_text(title: str, cost: int) -> str:
     return (
         f"{title}\n"
-        f"🍌 <b>Стоимость:</b> <code>{cost}</code>\n\n"
+        f"🐾 <b>Стоимость:</b> <code>{cost}</code>\n\n"
         "<b>Шаг 1. Фото персонажа</b>\n"
         "Загрузите фото или картинку, которую нужно оживить.\n\n"
         "Подойдёт:\n"
@@ -1633,12 +1634,12 @@ def _format_ai_admin_user_stats(telegram_id: int, stats: dict) -> str:
 👤 <b>Пользователь</b>
 
 🆔 Telegram ID: <code>{telegram_id}</code>
-💰 Баланс: <code>{stats['credits']}</code> бананов
+💰 Баланс: <code>{stats['credits']}</code> лапок
 📊 Генераций: <code>{stats['generations']}</code>
 💸 Потрачено: <code>{stats['total_spent']}</code>
 📅 Регистрация: <code>{stats['member_since']}</code>
 🤝 Рефералов: <code>{stats['referrals_count']}</code>
-🎁 Заработано по рефке: <code>{stats['referral_earned']}</code> 🍌
+🎁 Заработано по рефке: <code>{stats['referral_earned']}</code> 🐾
 🔗 Рефкод: <code>{stats['referral_code'] or '—'}</code>
 
 Для изменения баланса используйте кнопки ниже.
@@ -1650,13 +1651,13 @@ def _ai_admin_user_keyboard(telegram_id: int) -> types.InlineKeyboardMarkup:
         inline_keyboard=[
             [
                 types.InlineKeyboardButton(
-                    text="➕ Добавить бананы",
+                    text="➕ Добавить лапки",
                     callback_data=f"admin_add_credits_{telegram_id}",
                 )
             ],
             [
                 types.InlineKeyboardButton(
-                    text="➖ Списать бананы",
+                    text="➖ Списать лапки",
                     callback_data=f"admin_deduct_credits_{telegram_id}",
                 )
             ],
@@ -1780,7 +1781,7 @@ async def _answer_admin_ai_assistant_message(
 
     if _ai_admin_contains_any(
         text,
-        ("баланс пользовател", "бананы пользовател", "кредиты пользовател"),
+        ("баланс пользовател", "лапки пользовател", "лапки пользовател"),
     ):
         telegram_id = _ai_admin_extract_telegram_id(text)
         if telegram_id and await _ai_admin_user_exists(telegram_id):
@@ -2036,13 +2037,13 @@ async def _answer_ai_assistant_message(
 
         if response:
             await message.answer(
-                f"🤖 <b>BotAI:</b>{response}",
+                f"🤖 <b>HappyFox:</b>{response}",
                 reply_markup=get_ai_assistant_keyboard(telegram_id=user_id),
                 parse_mode="HTML",
             )
         else:
             await message.answer(
-                "😕 Извини, я временно недоступен. Попробуй ещё раз позже или напиши в поддержку @only_tany",
+                "😕 Извини, я временно недоступен. Попробуй ещё раз позже или открой раздел поддержки.",
                 reply_markup=get_ai_assistant_keyboard(telegram_id=user_id),
                 parse_mode="HTML",
             )
@@ -2050,7 +2051,7 @@ async def _answer_ai_assistant_message(
     except Exception as e:
         logger.exception(f"AI Assistant error: {e}")
         await message.answer(
-            "😕 Что-то пошло не так. Попробуй ещё раз или обратись в поддержку @only_tany",
+            "😕 Что-то пошло не так. Попробуй ещё раз или открой раздел поддержки.",
             reply_markup=get_ai_assistant_keyboard(telegram_id=user_id),
             parse_mode="HTML",
         )
@@ -2221,9 +2222,10 @@ async def _activate_referral_code(
         code,
         getattr(referrer, "telegram_id", None) if referrer else None,
     )
+    new_user_bonus = get_business_rules()["new_user_bonus_credits"]
     return (
         "\n🎁 <b>Реферальный бонус активирован!</b>\n"
-        "Вы получили бонус за регистрацию по приглашению."
+        f"Вы получили {new_user_bonus:g} лапок за регистрацию по приглашению."
     )
 
 
@@ -3292,8 +3294,8 @@ async def show_create_hub(callback: types.CallbackQuery, state: FSMContext):
     user = await get_or_create_user(callback.from_user.id)
     text = (
         "✨ <b>Создать</b>\n"
-        f"🍌 Баланс: <code>{user.credits}</code> бананов\n\n"
-        "Выберите, что хотите получить — дальше покажу только подходящие настройки."
+        f"🐾 Баланс: <code>{user.credits}</code> лапок\n\n"
+        "Что создаём? Выберите результат — дальше бот покажет только нужные шаги и настройки."
     )
     await callback.message.edit_text(
         text, reply_markup=get_create_hub_keyboard(), parse_mode="HTML"
@@ -3308,7 +3310,7 @@ async def show_edit_hub(callback: types.CallbackQuery, state: FSMContext):
     user = await get_or_create_user(callback.from_user.id)
     text = (
         "✏️ <b>Изменить фото</b>\n"
-        f"🍌 Баланс: <code>{user.credits}</code> бананов\n\n"
+        f"🐾 Баланс: <code>{user.credits}</code> лапок\n\n"
         "Загрузите исходное фото и выберите, что изменить: фон, стиль, одежду, детали или настроение."
     )
     await callback.message.edit_text(
@@ -3324,7 +3326,7 @@ async def show_animate_hub(callback: types.CallbackQuery, state: FSMContext):
     user = await get_or_create_user(callback.from_user.id)
     text = (
         "🎬 <b>Оживить</b>\n"
-        f"🍌 Баланс: <code>{user.credits}</code> бананов\n\n"
+        f"🐾 Баланс: <code>{user.credits}</code> лапок\n\n"
         "Выберите способ оживить изображение:\n"
         "• оживить фото\n"
         "• перенести движение\n"
@@ -3831,7 +3833,7 @@ async def cmd_start(message: types.Message, state: FSMContext):
             if transaction.status == "completed":
                 await message.answer(
                     f"✅ <b>Оплата уже обработана!</b>"
-                    f"🍌 Ваш баланс: <code>{user.credits}</code> бананов",
+                    f"🐾 Ваш баланс: <code>{user.credits}</code> лапок",
                     reply_markup=get_main_menu_keyboard(user.credits, message.from_user.id),
                     parse_mode="HTML",
                 )
@@ -3846,9 +3848,9 @@ async def cmd_start(message: types.Message, state: FSMContext):
 
                     await message.answer(
                         f"🎉 <b>Оплата успешно обработана!</b>"
-                        f"🍌 Начислено: <code>{transaction.credits}</code> бананов\n"
+                        f"🐾 Начислено: <code>{transaction.credits}</code> лапок\n"
                         f"💰 Сумма: <code>{transaction.amount_rub}</code> ₽\n"
-                        f"💎 Ваш баланс: <code>{user.credits}</code> бананов",
+                        f"💎 Ваш баланс: <code>{user.credits}</code> лапок",
                         reply_markup=get_main_menu_keyboard(user.credits, message.from_user.id),
                         parse_mode="HTML",
                     )
@@ -3866,7 +3868,7 @@ async def cmd_start(message: types.Message, state: FSMContext):
 
                 await message.answer(
                     "⏳ <b>Оплата в обработке...</b>"
-                    "Пожалуйста, подождите. Кредиты будут начислены в течение нескольких минут.",
+                    "Пожалуйста, подождите. Лапки будут начислены в течение нескольких минут.",
                     reply_markup=get_main_menu_keyboard(user.credits, message.from_user.id),
                     parse_mode="HTML",
                 )
@@ -3938,9 +3940,10 @@ async def cmd_start(message: types.Message, state: FSMContext):
         main_menu_referral_code = referral_code.strip().upper() or None
         # Уведомление реферрера, если привязка уже произошла в get_or_create_user
         if user.referred_by:
+            new_user_bonus = get_business_rules()["new_user_bonus_credits"]
             referral_bonus_text = (
                 "\n🎁 <b>Реферальный бонус активирован!</b>\n"
-                "Вы получили бонус за регистрацию по приглашению."
+                f"Вы получили {new_user_bonus:g} лапок за регистрацию по приглашению."
             )
         else:
             # Fallback — старый путь, если get_or_create_user не смог привязать
@@ -4047,7 +4050,7 @@ async def cmd_help(message: types.Message):
         "• добавляйте стиль, свет, ракурс и настроение\n"
         "• используйте референсы, если важно сохранить человека или стиль\n\n"
         "<b>Поддержка</b>\n"
-        "@only_tany"
+        f"{html.escape(product.support_contact) if product.support_contact else 'через встроенную поддержку'}"
     )
 
     await message.answer(help_text, reply_markup=get_back_keyboard(), parse_mode="HTML")
@@ -4072,7 +4075,7 @@ async def show_help(callback: types.CallbackQuery):
         "• как работает Motion Control\n"
         "• сколько стоит нужный сценарий\n\n"
         "<b>Поддержка</b>\n"
-        "@only_tany"
+        f"{html.escape(product.support_contact) if product.support_contact else 'через встроенную поддержку'}"
     )
 
     try:
@@ -4298,8 +4301,8 @@ async def render_partner_program(target, user_id: int):
         "<b>2 уровень:</b>\n"
         f"Ваш реферал привёл ещё рефералов. За все их покупки вам также начисляется денежное вознаграждение — <code>{rules['level2_percent']:g}%</code>.\n\n"
         "• Вывод доступен после достижения минимальной суммы <code>1000₽</code>\n"
-        "• Каждый, кто перейдёт по вашей реферальной ссылке, получает 🍌 <code>15</code> бананов для тестирования бота\n"
-        f"• За каждого приглашённого вами реферала вам начисляется + 🍌 <code>{rules['inviter_bonus_credits']:g}</code> бананов\n\n"
+        f"• Каждый новый пользователь получает 🐾 <code>{rules['new_user_bonus_credits']:g}</code> лапок для тестирования бота\n"
+        f"• Подарок пригласившему: + 🐾 <code>{rules['inviter_bonus_credits']:g}</code> лапки после первой покупки реферала\n\n"
         "<b>Ваша статистика:</b>\n"
         f"👥 1 уровень: <code>{stats.get('level1_count', stats.get('referrals_count', 0))}</code>\n"
         f"👥 2 уровень: <code>{stats.get('level2_count', 0)}</code>\n"
@@ -4432,7 +4435,7 @@ async def partner_withdraw(callback: types.CallbackQuery, state: FSMContext):
 
 @router.callback_query(F.data == "partner_exchange")
 async def partner_exchange(callback: types.CallbackQuery, state: FSMContext):
-    """Запускает сценарий обмена партнёрского баланса в бананы."""
+    """Запускает сценарий обмена партнёрского баланса в лапки."""
     stats = await get_partner_overview(callback.from_user.id)
     available_amount = await get_partner_available_withdrawal(callback.from_user.id)
     rub_per_credit = _partner_exchange_rate_rub_per_credit()
@@ -4443,10 +4446,10 @@ async def partner_exchange(callback: types.CallbackQuery, state: FSMContext):
 
     if available_amount < rub_per_credit:
         await callback.message.edit_text(
-            "🍌 <b>Обмен в бананы</b>\n\n"
+            "🐾 <b>Обмен в лапки</b>\n\n"
             f"Сейчас доступно: <code>{available_amount:.2f}</code> ₽\n"
-            f"Текущий курс: <code>{rub_per_credit:g}</code> ₽ → <code>1</code> 🍌\n\n"
-            "Пока суммы недостаточно даже для 1 банана.",
+            f"Текущий курс: <code>{rub_per_credit:g}</code> ₽ → <code>1</code> 🐾\n\n"
+            "Пока суммы недостаточно даже для 1 лапки.",
             reply_markup=get_back_keyboard("menu_partner"),
             parse_mode="HTML",
         )
@@ -4461,12 +4464,12 @@ async def partner_exchange(callback: types.CallbackQuery, state: FSMContext):
         partner_exchange_rate=rub_per_credit,
     )
     await callback.message.edit_text(
-        "🍌 <b>Обмен в бананы</b>\n\n"
+        "🐾 <b>Обмен в лапки</b>\n\n"
         f"Доступно для обмена: <code>{available_amount:.2f}</code> ₽\n"
-        f"Курс: <code>{rub_per_credit:g}</code> ₽ → <code>1</code> 🍌\n"
-        f"Максимум сейчас: <code>{max_credits}</code> 🍌 за <code>{max_debit:.2f}</code> ₽\n\n"
+        f"Курс: <code>{rub_per_credit:g}</code> ₽ → <code>1</code> 🐾\n"
+        f"Максимум сейчас: <code>{max_credits}</code> 🐾 за <code>{max_debit:.2f}</code> ₽\n\n"
         "Отправьте сумму в рублях, которую хотите обменять.\n"
-        "Если сумма не кратна курсу, я округлю вниз до целого числа бананов.",
+        "Если сумма не кратна курсу, я округлю вниз до целого числа лапок.",
         reply_markup=get_back_keyboard("menu_partner"),
         parse_mode="HTML",
     )
@@ -4475,7 +4478,7 @@ async def partner_exchange(callback: types.CallbackQuery, state: FSMContext):
 
 @router.message(PaymentStates.waiting_partner_exchange_amount)
 async def partner_exchange_amount(message: types.Message, state: FSMContext):
-    """Обменивает партнёрский баланс в бананы по текущему курсу."""
+    """Обменивает партнёрский баланс в лапки по текущему курсу."""
     raw_amount = (message.text or "").strip().replace(",", ".")
     try:
         requested_amount = round(float(raw_amount), 2)
@@ -4513,7 +4516,7 @@ async def partner_exchange_amount(message: types.Message, state: FSMContext):
     debit_amount = round(credits_to_add * rub_per_credit, 2)
     if credits_to_add < 1:
         await message.answer(
-            f"❌ Минимум для обмена сейчас: <code>{rub_per_credit:g}</code> ₽ за <code>1</code> 🍌.",
+            f"❌ Минимум для обмена сейчас: <code>{rub_per_credit:g}</code> ₽ за <code>1</code> 🐾.",
             reply_markup=get_back_keyboard("menu_partner"),
             parse_mode="HTML",
         )
@@ -4531,7 +4534,7 @@ async def partner_exchange_amount(message: types.Message, state: FSMContext):
             )
         elif reason == "too_small":
             error_text = (
-                f"❌ Минимум для обмена: <code>{rub_per_credit:g}</code> ₽ за <code>1</code> 🍌."
+                f"❌ Минимум для обмена: <code>{rub_per_credit:g}</code> ₽ за <code>1</code> 🐾."
             )
         else:
             error_text = "❌ Не удалось выполнить обмен. Попробуйте ещё раз."
@@ -4552,7 +4555,7 @@ async def partner_exchange_amount(message: types.Message, state: FSMContext):
 
     await message.answer(
         "✅ <b>Обмен выполнен</b>\n\n"
-        f"Начислено: <code>{result['credits_added']}</code> 🍌\n"
+        f"Начислено: <code>{result['credits_added']}</code> 🐾\n"
         f"Списано с партнёрского баланса: <code>{result['debited_rub']:.2f}</code> ₽\n"
         f"Остаток доступно: <code>{result['available_rub_after']:.2f}</code> ₽"
         f"{rounded_down_text}",
@@ -4842,13 +4845,15 @@ async def show_support(callback: types.CallbackQuery):
 
     support_text = (
         "🆘 <b>Поддержка</b>\n\n"
-        "Можно написать прямо сюда — AI-ассистент поможет с:\n"
-        "• генерацией изображений и видео\n"
-        "• выбором модели и настроек\n"
-        "• оплатой и балансом\n"
-        "• любыми непонятными шагами в боте\n\n"
-        "<b>Если нужен человек:</b>\n"
-        "@only_tany"
+        "Опишите проблему одним сообщением. AI-поддержка попробует решить её сразу.\n\n"
+            "<b>С чем поможем</b>\n"
+        "• генерация не запускается или результат не пришёл\n"
+        "• непонятно, какую модель или настройку выбрать\n"
+        "• вопрос по оплате, списанию или балансу\n"
+        "• нужен разбор конкретной ошибки\n\n"
+        "Если нужна ручная проверка, обращение можно передать оператору.\n\n"
+            "<b>Оператор</b>\n"
+        f"{html.escape(product.support_contact) if product.support_contact else 'через встроенную поддержку'}"
     )
 
     await callback.message.edit_text(
@@ -4871,8 +4876,8 @@ async def show_history(callback: types.CallbackQuery):
     history_text = (
         "📋 <b>История</b>\n\n"
         f"• Всего генераций: <code>{stats['generations']}</code>\n"
-        f"• Потрачено бананов: <code>{stats['total_spent']}</code>\n"
-        f"• Текущий баланс: <code>{user.credits}</code>🍌\n"
+        f"• Потрачено лапок: <code>{stats['total_spent']}</code>\n"
+        f"• Текущий баланс: <code>{user.credits}</code>🐾\n"
         f"• Дата регистрации: <code>{stats['member_since']}</code>\n\n"
         "<i>Подробная история запусков появится здесь чуть позже.</i>"
     )
@@ -4907,7 +4912,7 @@ async def start_motion_control_std(callback: types.CallbackQuery, state: FSMCont
 
     if user_credits < cost:
         await callback.answer(
-            "❌ Недостаточно бананов! Пополни баланс.", show_alert=True
+            "❌ Недостаточно лапок! Пополни баланс.", show_alert=True
         )
         return
 
@@ -4939,7 +4944,7 @@ async def start_motion_control_pro(callback: types.CallbackQuery, state: FSMCont
 
     if user_credits < cost:
         await callback.answer(
-            "❌ Недостаточно бананов! Пополни баланс.", show_alert=True
+            "❌ Недостаточно лапок! Пополни баланс.", show_alert=True
         )
         return
 
@@ -5164,7 +5169,7 @@ async def back_to_category(callback: types.CallbackQuery, state: FSMContext):
     await callback.message.edit_text(
         f"📂 <b>{categories[category]['name']}</b>\n"
         f"📝 {categories[category].get('description', '')}"
-        f"🍌 Ваш баланс: <code>{user_credits}</code> бананов"
+        f"🐾 Ваш баланс: <code>{user_credits}</code> лапок"
         f"Выберите пресет:",
         reply_markup=get_category_keyboard(category, presets, user_credits),
         parse_mode="HTML",
@@ -5261,7 +5266,7 @@ async def open_ai_assistant_main(callback: types.CallbackQuery, state: FSMContex
             "• или нажмите «Админ-функции» ниже"
         )
 
-    welcome_ai = f"""🍌 <b>AI-ассистент</b>
+    welcome_ai = f"""🐾 <b>AI-ассистент</b>
 
 Я помогу с моделями, промптами, настройками и сценариями генерации.
 
@@ -5303,7 +5308,7 @@ async def open_ai_assistant_settings(callback: types.CallbackQuery, state: FSMCo
         "available_models": "Banana Pro, Banana 2, Seedream 4.5, Grok Imagine i2i, Kling 3, Grok Imagine, Veo 3.1",
     }
 
-    welcome_ai = """🍌 <b>AI-ассистент по настройкам</b>
+    welcome_ai = """🐾 <b>AI-ассистент по настройкам</b>
 
 Сейчас я могу помочь выбрать подходящую модель и объяснить опции в меню.
 
@@ -5464,7 +5469,7 @@ async def handle_motion_video_upload(message: types.Message, state: FSMContext):
             await db.commit()
         await message.answer(
             f"🚀 <b>Motion Control запущен!</b>"
-            f"💰 <code>{cost}</code>🍌\n"
+            f"💰 <code>{cost}</code>🐾\n"
             f"🤖 <code>{mode.upper()}</code>\n"
             f"🆔 <code>{api_task_id}</code>"
             f"Ожидайте результат (1-5 мин)...",
@@ -5473,7 +5478,7 @@ async def handle_motion_video_upload(message: types.Message, state: FSMContext):
         await state.clear()
     else:
         await add_credits(telegram_id, cost)
-        await message.answer("❌ Ошибка запуска. Бананы возвращены.", parse_mode="HTML")
+        await message.answer("❌ Ошибка запуска. Лапки возвращены.", parse_mode="HTML")
         await state.clear()
 
 
