@@ -1,3 +1,17 @@
+# Active: Mini App native launch recovery for Telegram and MAX
+
+Baseline: main 22a9becf293fb969597a4fcb7ce6d58af894d30b, branch fix/miniapp-native-launch-domains. The previous miniapp recovery stash from fix/miniapp-auto-auth-recovery was applied to a fresh main branch and kept isolated from the payment-release branch.
+
+Fresh audit: production `MAX_MINI_APP_URL` and `MAX_PAYMENT_RETURN_URL` already point to `https://max.happy-fox.online/mini-app/`; public `https://max.happy-fox.online/mini-app/` serves the static app and revision.txt matches current production. Telegram's default chat menu button was still configured as `commands`, so opening from the native system menu could land users in a normal browser/login gate without `tgWebAppData`. The frontend already had Telegram native retry handling in the preserved recovery work, but stale cached MAX launch data was not cleared after backend auth refusal. Product-copy normalizers also needed idempotent support for the new Mini App menu and versioned WebApp URL so CI can normalize safely.
+
+Acceptance: Telegram system menu opens the configured Mini App URL as a native `web_app` while bot commands remain registered. Telegram and MAX native WebViews do not show the browser login widget while launch data is still expected; failed native auth clears cached stale launch data and retries through the platform bridge. MAX keeps the dedicated `max.happy-fox.online` Mini App URL. Production WebApp launch URLs include the immutable release parameter when `HAPPYFOX_RELEASE` is available to break retained WebView documents. CI covers Telegram startup, MAX startup, and native launch recovery on Chromium and iPhone WebKit. No payment ledger, balance, provider, webhook, or tariff behavior is changed.
+
+Verification so far: frontend focused Jest 4 suites/19 tests plus timeout body regression passed; full Mini App Jest passed 19 suites/72 tests; frontend lint passed with 0 errors and 5 pre-existing warnings; production static export build passed. CI-style backend copy with product normalization passed py_compile for changed Python entrypoints, 22 focused HappyFox menu/deploy/bundled-miniapp tests, and full safe regression with 368 passed, 1 skipped, 1 deselected. Browser E2E in Playwright Docker passed Telegram startup, MAX startup, and native launch recovery on Android Chromium and iOS WebKit. Changed-file Ruff and `git diff --check` passed. Review fixes addressed telemetry query leakage, canonical deploy menu reconciliation, legacy normalizer invocation conversion, and stalled bootstrap deadlines. Final two-axis review reports no remaining blockers. Final CI-mode Ruff failure from the product video UI normalizer was fixed by making its generated bottom import Ruff-clean.
+
+Remaining: full PR workflow, exact-head GitHub CI, required review, merge, canonical deploy, then production verification that `getChatMenuButton` returns `web_app`, both Mini App domains expose the deployed revision, and MAX remains on the `max` subdomain.
+
+---
+
 # Active: MAX subscription release guard
 
 Baseline: main aca01a755fd5eedb4b4828b7ea0873d094ef8897, PR259 deployed through canonical workflow35358516055. Real payment terminal replays passed both webhook aliases for Telegram succeeded and MAX canceled, with unchanged balances/outbox. Readiness/revisions/migration3 passed. Postflight found two subscriptions on the verified HappyFox MAX bot: canonical plus a legacy Alena URL. Existing check_max_connectivity only validates JSON shape/commands, allowing a false successful deployment. Legacy binding is removed only from this verified HappyFox bot, exact URL guarded, subscription metadata backed up privately; no other bot/project/data touched.
@@ -443,4 +457,3 @@ Spec result: **clean; 0 unresolved findings**.
 ### Final pre-CI gate
 
 Earlier CI runs were intentionally invalidated by implementation changes. The next branch head is the only merge candidate. Full PR CI must pass on that exact SHA, including backend regression, dependency audit, callback load, Telegram/MAX Chromium+WebKit startup and production Docker verification. Do not edit this ledger merely to copy the successful run number afterward.
-

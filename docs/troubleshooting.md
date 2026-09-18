@@ -40,7 +40,7 @@ Check both directions separately. A healthy `/health` route does not prove Teleg
 2. When `TELEGRAM_WEBHOOK_IP_ADDRESS` is configured, Telegram must report that same fixed ingress IP.
 3. The relay must present a valid certificate for `api.happy-fox.online` and proxy to the dedicated backend.
 4. Outbound Bot API calls from the dedicated host/container must succeed; check `happyfox-telegram-egress.service`.
-5. Confirm the native system menu is `commands`, not `web_app`.
+5. Confirm the native system menu is `web_app` and points to `https://app.happy-fox.online/mini-app/`; quick commands must remain registered separately.
 
 If incoming webhook delivery works but responses time out, diagnose outbound Telegram connectivity. If Bot API calls work but `pending_update_count` grows, diagnose ingress/TLS/relay. Do not start a second bot worker on the relay host.
 

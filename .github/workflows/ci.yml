@@ -182,6 +182,8 @@ jobs:
         run: node e2e/telegram-startup.mjs
       - name: MAX startup on Chromium and iPhone WebKit
         run: node e2e/max-startup.mjs
+      - name: Native launch recovery on Chromium and iPhone WebKit
+        run: node e2e/native-launch-recovery.mjs
 
   docker:
     name: Production Docker image

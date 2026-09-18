@@ -53,6 +53,20 @@ declare global {
 
 const INIT_DATA_STORAGE_KEY = '__banano_tg_init_data'
 const MAX_INIT_DATA_STORAGE_KEY = '__banano_max_init_data'
+const BOOTSTRAP_TIMEOUT_MS = 8000
+
+/**
+ * Raised when the backend rejects the launch credentials (HTTP 401).
+ *
+ * Callers use this to drop cached launch data the server already refused, so a
+ * retry cannot loop on the same rejected signature.
+ */
+export class MiniAppAuthError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'MiniAppAuthError'
+  }
+}
 
 function getWebApp() {
   if (typeof window === 'undefined') {
@@ -77,6 +91,48 @@ function getMaxWebApp() {
   return window.WebApp || null
 }
 
+type NativeMiniAppSignals = Window & {
+  TelegramWebviewProxy?: { postEvent?: unknown }
+  external?: { notify?: unknown }
+  Telegram?: {
+    WebView?: { initParams?: Record<string, string> }
+    WebApp?: { platform?: string; initData?: string }
+  }
+}
+
+/**
+ * Detect a native messenger WebView (Telegram/MAX) instead of a standalone browser tab.
+ *
+ * Native clients inject their bridge and/or carry launch parameters, so a browser
+ * Telegram Login widget cannot authenticate a native launch. Detection is deliberately
+ * conservative: when nothing proves a native client, the caller keeps the existing
+ * browser fallback behavior.
+ */
+export function isNativeMiniAppClient(): boolean {
+  if (typeof window === 'undefined') return false
+
+  if (getMiniAppPlatform() !== 'browser') return true
+
+  const runtimeWindow = window as NativeMiniAppSignals
+
+  if (runtimeWindow.TelegramWebviewProxy) return true
+  if (runtimeWindow.external && runtimeWindow.external.notify) return true
+
+  const initParams = runtimeWindow.Telegram?.WebView?.initParams
+  if (initParams && typeof initParams === 'object') {
+    if (
+      initParams.tgWebAppPlatform ||
+      initParams.tgWebAppVersion ||
+      initParams.tgWebAppData
+    ) {
+      return true
+    }
+  }
+
+  const telegramPlatform = String(runtimeWindow.Telegram?.WebApp?.platform || '').trim()
+  return Boolean(telegramPlatform && telegramPlatform !== 'unknown')
+}
+
 function getLaunchParams(): URLSearchParams {
   if (typeof window === 'undefined') {
     return new URLSearchParams()
@@ -93,11 +149,6 @@ function getLaunchParams(): URLSearchParams {
   }
 
   return hashParams
-}
-
-function getTelegramLaunchValue(name: string): string {
-  const params = getLaunchParams()
-  return String(params.get(name) || '').trim()
 }
 
 function getInitDataFromLocation(): string {
@@ -436,12 +487,20 @@ async function parseJson<T>(response: Response): Promise<T> {
 
   const payload = data as { ok?: boolean; error?: string }
   if (!response.ok || payload.ok === false) {
-    throw new Error(payload.error || 'Не удалось выполнить действие')
+    const message = payload.error || 'Не удалось выполнить действие'
+    if (response.status === 401) {
+      throw new MiniAppAuthError(message)
+    }
+    throw new Error(message)
   }
   return rewriteTemporaryMedia(data) as T
 }
 
-async function postJson<T>(path: string, payload: Record<string, unknown>): Promise<T> {
+async function postJson<T>(
+  path: string,
+  payload: Record<string, unknown>,
+  options: { timeoutMs?: number } = {},
+): Promise<T> {
   const nextPayload: Record<string, unknown> = { ...payload }
   if (!nextPayload.platform) {
     nextPayload.platform = getMiniAppPlatform()
@@ -450,17 +509,29 @@ async function postJson<T>(path: string, payload: Record<string, unknown>): Prom
   if (startParamFallback && !nextPayload.start_param_fallback) {
     nextPayload.start_param_fallback = startParamFallback
   }
-  const response = await fetch(`${getApiBasePath()}/${path.replace(/^\/+/, '')}`, {
-    method: 'POST',
-    headers: {
-      Accept: 'application/json',
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(nextPayload),
-    cache: 'no-store',
-    credentials: 'same-origin',
-  })
-  return parseJson<T>(response)
+  const timeoutMs = options.timeoutMs ?? 0
+  const controller = timeoutMs > 0 && typeof AbortController !== 'undefined'
+    ? new AbortController()
+    : null
+  const timeout = controller
+    ? setTimeout(() => controller.abort(), timeoutMs)
+    : undefined
+  try {
+    const response = await fetch(`${getApiBasePath()}/${path.replace(/^\/+/, '')}`, {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(nextPayload),
+      cache: 'no-store',
+      credentials: 'same-origin',
+      signal: controller?.signal,
+    })
+    return await parseJson<T>(response)
+  } finally {
+    if (timeout !== undefined) clearTimeout(timeout)
+  }
 }
 
 export async function bootstrapApp(): Promise<BootstrapResponse> {
@@ -468,7 +539,11 @@ export async function bootstrapApp(): Promise<BootstrapResponse> {
   if (!initData) {
     throw new Error('Откройте Mini App из Telegram или MAX и попробуйте снова.')
   }
-  return postJson<BootstrapResponse>('bootstrap', { init_data: initData })
+  return postJson<BootstrapResponse>(
+    'bootstrap',
+    { init_data: initData },
+    { timeoutMs: BOOTSTRAP_TIMEOUT_MS },
+  )
 }
 
 export async function createPayment(payload: {
@@ -540,8 +615,8 @@ export function sendMiniAppClientLog(event: string, payload: Record<string, unkn
   try {
     const body = JSON.stringify({
       event,
-      href: `${window.location.pathname || ''}${window.location.search || ''}`,
-      search: window.location.search || '',
+      href: window.location.pathname || '',
+      search: '',
       hash_len: window.location.hash.length,
       has_tg: Boolean(window.Telegram),
       has_webapp: Boolean(window.Telegram?.WebApp),
@@ -737,7 +812,7 @@ export async function uploadFile(
     let data: Awaited<ReturnType<typeof uploadFileWithXhr>>
     try {
       data = await uploadFileWithXhr(formData, uploadLogPayload, startedAt)
-    } catch (error) {
+    } catch {
       data = await uploadFileAsJson(fileKind, normalizedFile, initData, uploadLogPayload, startedAt)
     }
     return {
