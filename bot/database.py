@@ -1264,7 +1264,7 @@ async def get_or_create_user(
                 ),
             )
 
-        # Создаём нового пользователя с бонусными кредитами
+        # Создаём нового пользователя с бонусными лапкими
         # Используем INSERT OR IGNORE для защиты от race condition
         try:
             new_referral_code = await generate_referral_code(db)
@@ -1712,7 +1712,7 @@ async def process_referral(
     signup_bonus: int = 0,
     inviter_bonus: int | None = None,
 ) -> bool:
-    """Закрепляет пользователя за партнёром: пригласившему +3🍌 (новичок уже получил 5 при регистрации)."""
+    """Закрепляет пользователя за партнёром; подарок пригласившему начисляется после первой покупки."""
     if inviter_bonus is None:
         inviter_bonus = get_business_rules()["inviter_bonus_credits"]
     referral_code = (referral_code or "").strip().upper()
@@ -1937,8 +1937,8 @@ async def process_referral(
             )
             return False
         insert_cursor = await db.execute(
-            "INSERT OR IGNORE INTO referrals (referrer_id, referred_id, bonus_credits) VALUES (?, ?, ?)",
-            (referrer["id"], referred["id"], signup_bonus),
+            "INSERT OR IGNORE INTO referrals (referrer_id, referred_id, bonus_credits) VALUES (?, ?, 0)",
+            (referrer["id"], referred["id"]),
         )
         if insert_cursor.rowcount != 1:
             await db.rollback()
@@ -1951,13 +1951,9 @@ async def process_referral(
                 referred["id"],
             )
             return False
-        await db.execute(
-            "UPDATE users SET credits = credits + ?, referral_earned = referral_earned + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-            (inviter_bonus, inviter_bonus, referrer["id"]),
-        )
         await db.commit()
         logger.info(
-            "Referral processed: referred_telegram_id=%s code=%s referrer_id=%s referred_id=%s signup_bonus=%s inviter_bonus=%s",
+            "Referral processed: referred_telegram_id=%s code=%s referrer_id=%s referred_id=%s signup_bonus=%s inviter_bonus_deferred=%s",
             referred_telegram_id,
             referral_code,
             referrer["id"],
@@ -2176,6 +2172,35 @@ async def complete_payment_atomic(
                     "level2_referrer_telegram_id": ref2_telegram_id,
                 }
 
+                inviter_bonus_credits = int(rules.get("inviter_bonus_credits") or 0)
+                if not user_already_paid and inviter_bonus_credits > 0:
+                    await db.execute(
+                        "INSERT OR IGNORE INTO referrals (referrer_id, referred_id, bonus_credits) VALUES (?, ?, 0)",
+                        (ref1_id, txn_row["user_id"]),
+                    )
+                    gift_cursor = await db.execute(
+                        """
+                        UPDATE referrals
+                        SET bonus_credits = ?
+                        WHERE referrer_id = ?
+                          AND referred_id = ?
+                          AND COALESCE(bonus_credits, 0) = 0
+                        """,
+                        (inviter_bonus_credits, ref1_id, txn_row["user_id"]),
+                    )
+                    if gift_cursor.rowcount == 1:
+                        await db.execute(
+                            """
+                            UPDATE users
+                            SET credits = credits + ?,
+                                referral_earned = referral_earned + ?,
+                                updated_at = CURRENT_TIMESTAMP
+                            WHERE id = ?
+                            """,
+                            (inviter_bonus_credits, inviter_bonus_credits, ref1_id),
+                        )
+                        referral_bonus["invite_bonus_credits"] = inviter_bonus_credits
+
             # 5. promo redemption
             promo_bonus: dict[str, Any] = {}
             promo_code_id = int(txn_row["promo_code_id"] or 0) if "promo_code_id" in txn_row.keys() and txn_row["promo_code_id"] else 0
@@ -2222,6 +2247,16 @@ async def complete_payment_atomic(
                     message=buyer_message(transaction.credits, transaction.amount_rub),
                 )
                 from bot.business_rules import referrer_message
+                if int(referral_bonus.get("invite_bonus_credits") or 0) > 0 and referral_bonus.get("referrer_telegram_id"):
+                    await enqueue_payment_notification(
+                        db, channel="telegram", order_id=f"{order_id}:referrer:gift",
+                        recipient_id=int(referral_bonus["referrer_telegram_id"]),
+                        message=(
+                            "🎁 <b>Подарок за реферала</b>\n\n"
+                            f"Ваш реферал сделал первую покупку. Начислено: "
+                            f"<code>{int(referral_bonus['invite_bonus_credits'] or 0)}</code>🐾"
+                        ),
+                    )
                 targets = [
                     (1, referral_bonus.get("referrer_user_id"), referral_bonus.get("referrer_telegram_id"), referral_bonus.get("value", 0)),
                     (2, referral_bonus.get("level2_referrer_user_id"), referral_bonus.get("level2_referrer_telegram_id"), referral_bonus.get("level2_value", 0)),
@@ -3473,7 +3508,7 @@ async def get_partner_available_withdrawal(telegram_id: int) -> float:
 async def exchange_partner_balance_to_credits(
     telegram_id: int, requested_amount_rub: float, rub_per_credit: float
 ) -> dict:
-    """Мгновенно обменивает часть партнёрского баланса на бананы."""
+    """Мгновенно обменивает часть партнёрского баланса на лапки."""
     requested_amount_rub = round(float(requested_amount_rub or 0), 2)
     rub_per_credit = float(rub_per_credit or 0)
     if requested_amount_rub <= 0:
@@ -4452,7 +4487,7 @@ async def get_referral_stats(telegram_id: int) -> dict:
         return {
             "referral_code": user.referral_code or "",
             "referrals_count": row["count"] or 0,
-            # referral_earned хранит именно бонус пригласившему (+3🍌 за каждого)
+            # referral_earned хранит именно бонус пригласившему (+3🐾 за каждого)
             "referral_earned": user.referral_earned or 0,
         }
 
@@ -4703,13 +4738,13 @@ async def record_promo_redemption(transaction: Transaction) -> dict[str, Any]:
 
 
 async def get_user_credits(telegram_id: int) -> Credits:
-    """Получает баланс без потери дробной части кредита."""
+    """Получает баланс без потери дробной части лапки."""
     user = await get_or_create_user(telegram_id)
     return Credits(user.credits)
 
 
 async def add_credits(telegram_id: int, amount: int) -> bool:
-    """Добавляет кредиты пользователю"""
+    """Добавляет лапки пользователю"""
     if amount <= 0:
         logger.warning(f"add_credits: non-positive amount {amount} for user {telegram_id}")
         return False
@@ -4726,7 +4761,7 @@ async def add_credits(telegram_id: int, amount: int) -> bool:
 async def deduct_credits(
     telegram_id: int, amount: int, check_balance: bool = True
 ) -> bool:
-    """Списывает кредиты с проверкой баланса"""
+    """Списывает лапки с проверкой баланса"""
     if amount <= 0:
         logger.warning(f"deduct_credits: non-positive amount {amount} for user {telegram_id}")
         return False
@@ -6889,7 +6924,7 @@ async def get_user_stats(telegram_id: int) -> dict:
         )
         gen_row = await cursor.fetchone()
 
-        # Считаем потраченные кредиты
+        # Считаем потраченные лапки
         cursor = await db.execute(
             "SELECT SUM(cost) as total FROM generation_history WHERE user_id = ?",
             (user.id,),

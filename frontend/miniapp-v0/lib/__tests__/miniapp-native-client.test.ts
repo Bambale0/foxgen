@@ -4,7 +4,7 @@ type MutableWindow = Window & {
   TelegramWebviewProxy?: { postEvent?: () => void }
   Telegram?: {
     WebView?: { initParams?: Record<string, string> }
-    WebApp?: { initData?: string; initDataUnsafe?: { start_param?: string }; platform?: string }
+    WebApp?: { initData?: string; initDataUnsafe?: { start_param?: string }; initParams?: Record<string, string>; platform?: string }
   }
   WebApp?: { initData?: string; initDataUnsafe?: { start_param?: string } }
   __BANANO_INITIAL_LAUNCH__?: { hash?: string; search?: string }
@@ -71,6 +71,28 @@ describe('isNativeMiniAppClient', () => {
       WebView: { initParams: { tgWebAppPlatform: 'ios' } },
     }
 
+    expect(isNativeMiniAppClient()).toBe(true)
+  })
+
+
+  it('recovers Telegram initData from SDK initParams after the URL hash is gone', () => {
+    const runtimeWindow = window as MutableWindow
+    runtimeWindow.Telegram = {
+      ...runtimeWindow.Telegram,
+      WebView: { initParams: { tgWebAppData: 'query_id=sdk&hash=ok', tgWebAppPlatform: 'ios' } },
+    }
+
+    expect(getInitData()).toBe('query_id=sdk&hash=ok')
+    expect(isNativeMiniAppClient()).toBe(true)
+  })
+
+  it('recovers Telegram initData from the SDK sessionStorage cache', () => {
+    window.sessionStorage.setItem(
+      '__telegram__initParams',
+      JSON.stringify({ tgWebAppData: 'query_id=session&hash=ok', tgWebAppPlatform: 'tdesktop' }),
+    )
+
+    expect(getInitData()).toBe('query_id=session&hash=ok')
     expect(isNativeMiniAppClient()).toBe(true)
   })
 
