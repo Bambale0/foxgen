@@ -3,7 +3,7 @@
 import { createContext, useContext, useState, useCallback, useEffect, useRef, type ReactNode } from 'react'
 import type { AppState, BootstrapResponse, FeedDeepLink, FeedItem, PromptItem, PromptPreset, SavedReference, ScenarioType, Task, TaskDetail, UploadedFile, VideoPromptPreset, WorkspacePanel } from './types'
 import { mockAppState, mockImageModels, mockVideoModels } from './mock-data'
-import { MiniAppAuthError, bootstrapApp, fetchFeedItem, fetchPromptDetail, fetchTaskDetail, getInitData, getMiniAppPlatform, getStartParamFallback, hasTelegramInitData, waitForTelegramInitData } from './api'
+import { MiniAppAuthError, bootstrapApp, fetchFeedItem, fetchPromptDetail, fetchTaskDetail, getInitData, getMiniAppPlatform, getStartParamFallback, hasTelegramInitData, isNativeMiniAppClient, waitForTelegramInitData } from './api'
 import { clearMiniAppInitData } from './miniapp-init-data'
 import { reportMiniAppEvent } from './miniapp-telemetry'
 import { parseMiniAppStartParam } from './start-params'
@@ -323,7 +323,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return
     }
 
-    const launchInitDataLength = getInitData().length
+    const launchInitData = getInitData()
+    const launchInitDataLength = launchInitData.length
 
     // A transient launch failure must not strand the user on the sign-in gate:
     // retry the handshake a bounded number of times before locking the app.
@@ -341,7 +342,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
             status: 401,
             init_data_len: launchInitDataLength,
           })
-          clearMiniAppInitData(getMiniAppPlatform() === 'max' ? 'max' : 'telegram')
+          clearMiniAppInitData(getMiniAppPlatform() === 'max' ? 'max' : 'telegram', {
+            preserveLaunchSnapshot: isNativeMiniAppClient(),
+            rejectedInitData: launchInitData,
+          })
           break
         }
         const delay = launchBootstrapDelaysMs[attempt]

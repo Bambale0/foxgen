@@ -71,6 +71,104 @@ describe('clearTelegramInitData', () => {
     expect(getInitData()).toBe('fresh=1&hash=live')
   })
 
+
+  it('preserves early native launch snapshots when auth recovery clears refused cached data', () => {
+    window.__BANANO_INITIAL_LAUNCH__ = {
+      hash: '#tgWebAppData=fresh%3D1%26hash%3Dearly&tgWebAppVersion=8.0',
+      search: '',
+    }
+    window.sessionStorage.setItem(
+      '__banano_initial_hash',
+      '#tgWebAppData=fresh%3D1%26hash%3Dearly&tgWebAppVersion=8.0',
+    )
+    persistTelegramInitData(rejectedInitData)
+
+    clearMiniAppInitData('telegram', { preserveLaunchSnapshot: true })
+
+    expect(window.__BANANO_TG_INIT_DATA__).toBe('')
+    expect(window.__BANANO_INITIAL_LAUNCH__).toEqual({
+      hash: '#tgWebAppData=fresh%3D1%26hash%3Dearly&tgWebAppVersion=8.0',
+      search: '',
+    })
+    expect(window.sessionStorage.getItem('__banano_tg_init_data')).toBeNull()
+    expect(window.sessionStorage.getItem('__banano_initial_hash')).toBe('#tgWebAppData=fresh%3D1%26hash%3Dearly&tgWebAppVersion=8.0')
+    expect(getInitData()).toBe('fresh=1&hash=early')
+  })
+
+  it('removes the rejected native launch snapshot while preserving native recovery mode', () => {
+    window.__BANANO_INITIAL_LAUNCH__ = {
+      hash: '#tgWebAppData=query_id%3Drejected%26user%3D%257B%2522id%2522%253A7%257D%26hash%3Dstale&tgWebAppVersion=8.0',
+      search: '',
+    }
+    window.sessionStorage.setItem(
+      '__banano_initial_hash',
+      '#tgWebAppData=query_id%3Drejected%26user%3D%257B%2522id%2522%253A7%257D%26hash%3Dstale&tgWebAppVersion=8.0',
+    )
+
+    clearMiniAppInitData('telegram', {
+      preserveLaunchSnapshot: true,
+      rejectedInitData,
+    })
+
+    expect(window.__BANANO_INITIAL_LAUNCH__).toBeUndefined()
+    expect(window.sessionStorage.getItem('__banano_initial_hash')).toBeNull()
+    expect(getInitData()).toBe('')
+  })
+
+  it('removes rejected Telegram SDK initParams from sessionStorage', () => {
+    window.sessionStorage.setItem(
+      '__telegram__initParams',
+      JSON.stringify({ tgWebAppData: rejectedInitData, tgWebAppPlatform: 'ios' }),
+    )
+
+    clearMiniAppInitData('telegram', {
+      preserveLaunchSnapshot: true,
+      rejectedInitData,
+    })
+
+    expect(window.sessionStorage.getItem('__telegram__initParams')).toBeNull()
+    expect(getInitData()).toBe('')
+  })
+
+  it('keeps fresh Telegram SDK initParams when clearing a different rejected signature', () => {
+    window.sessionStorage.setItem(
+      '__telegram__initParams',
+      JSON.stringify({ tgWebAppData: 'query_id=fresh&hash=live', tgWebAppPlatform: 'ios' }),
+    )
+
+    clearMiniAppInitData('telegram', {
+      preserveLaunchSnapshot: true,
+      rejectedInitData,
+    })
+
+    expect(window.sessionStorage.getItem('__telegram__initParams')).not.toBeNull()
+    expect(getInitData()).toBe('query_id=fresh&hash=live')
+  })
+
+  it('removes rejected in-memory SDK initParams so fresh bridge initData can be used', () => {
+    const runtimeWindow = window as typeof window & {
+      Telegram: {
+        WebView?: { initParams?: Record<string, string> }
+        WebApp?: { initData?: string; initDataUnsafe?: { start_param?: string } }
+      }
+    }
+    runtimeWindow.Telegram = {
+      WebView: { initParams: { tgWebAppData: rejectedInitData, tgWebAppPlatform: 'ios' } },
+      WebApp: { initData: 'query_id=fresh&hash=bridge', initDataUnsafe: { start_param: '' } },
+    }
+
+    expect(getInitData()).toBe(rejectedInitData)
+
+    clearMiniAppInitData('telegram', {
+      preserveLaunchSnapshot: true,
+      rejectedInitData,
+    })
+
+    expect(runtimeWindow.Telegram.WebView?.initParams?.tgWebAppData).toBeUndefined()
+    expect(runtimeWindow.Telegram.WebView?.initParams?.tgWebAppPlatform).toBe('ios')
+    expect(getInitData()).toBe('query_id=fresh&hash=bridge')
+  })
+
   it('drops refused MAX launch data without replaying the stale signature', () => {
     window.__BANANO_MINIAPP_PLATFORM__ = 'max'
     window.__BANANO_MAX_INIT_DATA__ = rejectedMaxInitData

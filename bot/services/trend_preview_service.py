@@ -5,12 +5,17 @@ import hashlib
 import logging
 import os
 import subprocess
+import uuid
 from pathlib import Path
 
 from bot.config import config
 from bot.services.media_input_utils import resolve_local_upload_path
 
 logger = logging.getLogger(__name__)
+
+_PREVIEW_TASKS: dict[str, asyncio.Task[str | None]] = {}
+_PREVIEW_LOCKS: dict[str, asyncio.Lock] = {}
+_PREVIEW_SEMAPHORE = asyncio.Semaphore(int(os.getenv("TREND_PREVIEW_CONCURRENCY", "2")))
 
 VIDEO_PREVIEW_EXTENSIONS = {".mp4", ".mov", ".m4v", ".webm", ".mkv", ".avi"}
 TREND_PREVIEW_MAX_SECONDS = int(os.getenv("TREND_PREVIEW_MAX_SECONDS", "6"))
@@ -55,7 +60,7 @@ def _preview_public_url(output_path: Path) -> str:
 
 def _run_ffmpeg_preview(source: Path, output_path: Path) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    tmp_path = output_path.with_suffix(".tmp.mp4")
+    tmp_path = output_path.with_name(f"{output_path.stem}.{uuid.uuid4().hex}.tmp.mp4")
     tmp_path.unlink(missing_ok=True)
 
     max_seconds = _safe_int(TREND_PREVIEW_MAX_SECONDS, minimum=1, maximum=15)
@@ -99,6 +104,97 @@ def _run_ffmpeg_preview(source: Path, output_path: Path) -> None:
     tmp_path.replace(output_path)
 
 
+def _preview_paths(preview_url: str | None) -> tuple[Path, Path, str] | None:
+    if not preview_url:
+        return None
+
+    local_path = resolve_local_upload_path(preview_url)
+    if not local_path:
+        return None
+
+    source = Path(local_path)
+    if not source.exists() or not source.is_file() or not _is_video_preview_source(source):
+        return None
+
+    output_path = _preview_output_path(source, preview_url)
+    return source, output_path, _preview_public_url(output_path)
+
+
+def get_cached_lightweight_trend_preview_url(preview_url: str | None) -> str | None:
+    paths = _preview_paths(preview_url)
+    if not paths:
+        return None
+    _source, output_path, public_url = paths
+    if output_path.exists() and output_path.stat().st_size > 0:
+        return public_url
+    return None
+
+
+async def _build_lightweight_trend_preview_url(preview_url: str | None) -> str | None:
+    paths = _preview_paths(preview_url)
+    if not paths:
+        return preview_url
+
+    source, output_path, public_url = paths
+    if output_path.exists() and output_path.stat().st_size > 0:
+        return public_url
+
+    key = str(output_path)
+    lock = _PREVIEW_LOCKS.setdefault(key, asyncio.Lock())
+    async with _PREVIEW_SEMAPHORE:
+        async with lock:
+            if output_path.exists() and output_path.stat().st_size > 0:
+                return public_url
+            try:
+                await asyncio.to_thread(_run_ffmpeg_preview, source, output_path)
+            except Exception:
+                logger.exception(
+                    "Failed to build lightweight trend preview: source=%s preview_url=%s",
+                    source,
+                    preview_url,
+                )
+                for tmp_path in output_path.parent.glob(f"{output_path.stem}.*.tmp.mp4"):
+                    tmp_path.unlink(missing_ok=True)
+                output_path.unlink(missing_ok=True)
+                return preview_url
+
+    if output_path.exists() and output_path.stat().st_size > 0:
+        return public_url
+    return preview_url
+
+
+def schedule_lightweight_trend_preview(preview_url: str | None) -> bool:
+    paths = _preview_paths(preview_url)
+    if not paths:
+        return False
+    _source, output_path, _public_url = paths
+    if output_path.exists() and output_path.stat().st_size > 0:
+        return False
+
+    key = str(output_path)
+    task = _PREVIEW_TASKS.get(key)
+    if task and not task.done():
+        return False
+
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        return False
+
+    task = loop.create_task(_build_lightweight_trend_preview_url(preview_url))
+    _PREVIEW_TASKS[key] = task
+
+    def _forget(done: asyncio.Task[str | None]) -> None:
+        _PREVIEW_TASKS.pop(key, None)
+        try:
+            done.result()
+        except Exception:
+            logger.exception("Background lightweight trend preview failed: preview_url=%s", preview_url)
+
+    task.add_done_callback(_forget)
+    return True
+
+
 async def ensure_lightweight_trend_preview_url(preview_url: str | None) -> str | None:
     """Return a compressed local MP4 preview URL for video trend cards.
 
@@ -106,33 +202,7 @@ async def ensure_lightweight_trend_preview_url(preview_url: str | None) -> str |
     unchanged so externally hosted previews keep working.
     """
 
-    if not preview_url:
-        return preview_url
-
-    local_path = resolve_local_upload_path(preview_url)
-    if not local_path:
-        return preview_url
-
-    source = Path(local_path)
-    if not source.exists() or not source.is_file() or not _is_video_preview_source(source):
-        return preview_url
-
-    output_path = _preview_output_path(source, preview_url)
-    public_url = _preview_public_url(output_path)
-    if output_path.exists() and output_path.stat().st_size > 0:
-        return public_url
-
-    try:
-        await asyncio.to_thread(_run_ffmpeg_preview, source, output_path)
-    except Exception:
-        logger.exception(
-            "Failed to build lightweight trend preview: source=%s preview_url=%s",
-            source,
-            preview_url,
-        )
-        output_path.unlink(missing_ok=True)
-        return preview_url
-
-    if output_path.exists() and output_path.stat().st_size > 0:
-        return public_url
-    return preview_url
+    cached_url = get_cached_lightweight_trend_preview_url(preview_url)
+    if cached_url:
+        return cached_url
+    return await _build_lightweight_trend_preview_url(preview_url)

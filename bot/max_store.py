@@ -10,6 +10,7 @@ from contextlib import asynccontextmanager
 
 from bot import database
 from bot import db as db_backend
+from bot.business_rules import get_business_rules
 
 _SCHEMA_LOCK: asyncio.Lock | None = None
 _SCHEMA_READY: set[str] = set()
@@ -175,6 +176,11 @@ async def ensure_max_user(
     await ensure_max_schema()
     async with db_backend.connect() as db:
         _mapping_rows(db)
+        existing_cursor = await db.execute(
+            "SELECT max_user_id FROM max_users WHERE max_user_id = ?",
+            (int(max_user_id),),
+        )
+        existed = await existing_cursor.fetchone() is not None
         await db.execute(
             """
             INSERT INTO max_users (max_user_id, username, first_name, last_name)
@@ -188,6 +194,32 @@ async def ensure_max_user(
             """,
             (int(max_user_id), str(username or ""), str(first_name or ""), str(last_name or "")),
         )
+        if not existed:
+            new_user_bonus = float(get_business_rules()["new_user_bonus_credits"] or 0)
+            if new_user_bonus > 0:
+                tx_cursor = await db.execute(
+                    """
+                    INSERT OR IGNORE INTO max_transactions (
+                        max_user_id, idempotency_key, type, amount_credits,
+                        status, metadata_json
+                    ) VALUES (?, ?, 'new_user_bonus', ?, 'completed', ?)
+                    """,
+                    (
+                        int(max_user_id),
+                        f"max:new-user:{int(max_user_id)}",
+                        new_user_bonus,
+                        json.dumps({}, ensure_ascii=False, sort_keys=True),
+                    ),
+                )
+                if int(getattr(tx_cursor, "rowcount", 0) or 0) == 1:
+                    await db.execute(
+                        """
+                        UPDATE max_users
+                        SET balance_credits = balance_credits + ?, updated_at = CURRENT_TIMESTAMP
+                        WHERE max_user_id = ?
+                        """,
+                        (new_user_bonus, int(max_user_id)),
+                    )
         await db.commit()
         cursor = await db.execute(
             "SELECT max_user_id, username, first_name, last_name, balance_credits FROM max_users WHERE max_user_id = ?",

@@ -167,7 +167,7 @@ async def register_max_referral(
     *,
     catalog: MaxPresetManager = max_preset_manager,
 ) -> bool:
-    """Persist one MAX-only referral edge and award signup bonuses exactly once."""
+    """Persist one MAX-only referral edge; inviter gift is awarded after first purchase."""
     invited = int(invited_max_user_id)
     referrer = int(referrer_max_user_id)
     if invited <= 0 or referrer <= 0 or invited == referrer:
@@ -200,25 +200,6 @@ async def register_max_referral(
     if not created:
         return False
 
-    partner = _partner_config(catalog)
-    new_bonus = partner["new_user_bonus_credits"]
-    inviter_bonus = partner["inviter_bonus_credits"]
-    if new_bonus > 0:
-        await apply_max_balance_delta(
-            invited,
-            new_bonus,
-            tx_type="referral_signup_new_user",
-            idempotency_key=f"maxref:{invited}:new-user",
-            metadata={"referrer_max_user_id": referrer},
-        )
-    if inviter_bonus > 0:
-        await apply_max_balance_delta(
-            referrer,
-            inviter_bonus,
-            tx_type="referral_signup_inviter",
-            idempotency_key=f"maxref:{invited}:inviter:{referrer}",
-            metadata={"invited_max_user_id": invited},
-        )
     return True
 
 
@@ -236,7 +217,7 @@ async def get_max_referral_stats(max_user_id: int) -> dict[str, float | int]:
             SELECT COALESCE(SUM(amount_credits), 0) AS earned
             FROM max_transactions
             WHERE max_user_id = ?
-              AND type IN ('referral_signup_inviter', 'referral_purchase_l1', 'referral_purchase_l2')
+              AND type IN ('referral_signup_inviter', 'referral_first_purchase_inviter', 'referral_purchase_l1', 'referral_purchase_l2')
             """,
             (int(max_user_id),),
         )
@@ -566,6 +547,55 @@ class MaxYooKassaService:
         level1 = await _get_referrer(order.max_user_id, connection=connection)
         if level1 is None:
             return
+
+        inviter_bonus = float(partner.get("inviter_bonus_credits") or 0)
+        new_gift_key = f"maxref:{order.max_user_id}:first-purchase-inviter:{level1}"
+        legacy_gift_key = f"maxref:{order.max_user_id}:inviter:{level1}"
+        if inviter_bonus > 0:
+            prior_gift_cursor = await connection.execute(
+                """
+                SELECT 1
+                FROM max_transactions
+                WHERE idempotency_key IN (?, ?)
+                LIMIT 1
+                """,
+                (new_gift_key, legacy_gift_key),
+            )
+            prior_order_cursor = await connection.execute(
+                """
+                SELECT 1
+                FROM max_payment_orders
+                WHERE max_user_id = ?
+                  AND status = 'completed'
+                  AND order_id <> ?
+                LIMIT 1
+                """,
+                (int(order.max_user_id), order.order_id),
+            )
+            if await prior_gift_cursor.fetchone() is None and await prior_order_cursor.fetchone() is None:
+                await apply_max_balance_delta(
+                    level1,
+                    inviter_bonus,
+                    tx_type="referral_first_purchase_inviter",
+                    idempotency_key=new_gift_key,
+                    amount_rub=order.amount_rub,
+                    payment_provider="yookassa",
+                    connection=connection,
+                    provider_order_id=order.provider_payment_id,
+                    metadata={
+                        "buyer_max_user_id": order.max_user_id,
+                        "order_id": order.order_id,
+                    },
+                )
+                await enqueue_payment_notification(
+                    connection, channel="max", order_id=f"{order.order_id}:referrer:gift",
+                    recipient_id=level1,
+                    message=(
+                        "🎁 <b>Подарок за реферала</b>\n\n"
+                        f"Ваш реферал сделал первую покупку. Начислено: "
+                        f"<code>{inviter_bonus:g}</code>🐾"
+                    ),
+                )
 
         level1_credits = round(
             order.amount_rub * partner["level1_percent"] / 100.0 / rub_per_credit,

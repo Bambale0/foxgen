@@ -156,6 +156,10 @@ from bot.services.photo_prompt_billing import (
     reserve_photo_prompt_charge,
 )
 from bot.services.preset_manager import preset_manager
+from bot.services.trend_preview_service import (
+    get_cached_lightweight_trend_preview_url,
+    schedule_lightweight_trend_preview,
+)
 from bot.services.reference_storage_service import save_reference_file
 from bot.services.subscription_service import (
     REQUIRED_CHANNEL_USERNAME,
@@ -3112,6 +3116,46 @@ async def miniapp_photo_to_prompt(request: web.Request) -> web.Response:
         return _miniapp_error_response(e, log_message="Mini App photo-to-prompt failed")
 
 
+
+def _is_video_trend_prompt(prompt: dict) -> bool:
+    tags = {
+        str(tag or "").strip().lower()
+        for tag in list(prompt.get("tags") or [])
+        if str(tag or "").strip()
+    }
+    settings = prompt.get("generation_settings")
+    return (
+        "trend" in tags
+        and isinstance(settings, dict)
+        and str(settings.get("kind") or "").strip().lower() == "video"
+    )
+
+
+async def _apply_lightweight_trend_preview(prompt: dict) -> dict:
+    if not isinstance(prompt, dict) or not _is_video_trend_prompt(prompt):
+        return prompt
+    preview_url = str(prompt.get("preview_url") or "").strip()
+    if not preview_url:
+        return prompt
+    lightweight_url = get_cached_lightweight_trend_preview_url(preview_url)
+    if not lightweight_url:
+        schedule_lightweight_trend_preview(preview_url)
+        return prompt
+    if lightweight_url == preview_url:
+        return prompt
+    updated = dict(prompt)
+    updated["preview_url"] = lightweight_url
+    updated["original_preview_url"] = preview_url
+    return updated
+
+
+async def _apply_lightweight_trend_previews(prompts) -> list[dict]:
+    return [
+        await _apply_lightweight_trend_preview(prompt)
+        for prompt in list(prompts or [])
+    ]
+
+
 async def miniapp_prompts(request: web.Request) -> web.Response:
     try:
         body = await _miniapp_payload(request)
@@ -3144,6 +3188,7 @@ async def miniapp_prompts(request: web.Request) -> web.Response:
                 limit=limit,
             )
 
+        prompts = await _apply_lightweight_trend_previews(prompts)
         return web.json_response({"ok": True, "prompts": prompts})
     except Exception as e:
         return _miniapp_error_response(e, log_message="Mini App prompts list failed")
@@ -3162,6 +3207,7 @@ async def miniapp_prompt_detail(request: web.Request) -> web.Response:
             return web.json_response({"ok": False, "error": "Промпт не найден"}, status=404)
         if not (prompt["status"] == "approved" and prompt["is_public"]) and prompt["author_id"] != user.id:
             return web.json_response({"ok": False, "error": "Промпт недоступен"}, status=403)
+        prompt = await _apply_lightweight_trend_preview(prompt)
         return web.json_response({"ok": True, "prompt": prompt})
     except Exception as e:
         return _miniapp_error_response(e, log_message="Mini App prompt detail failed")

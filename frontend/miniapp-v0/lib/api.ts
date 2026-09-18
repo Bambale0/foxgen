@@ -22,6 +22,7 @@ declare global {
       WebApp?: {
         initData?: string
         initDataUnsafe?: { start_param?: string }
+        initParams?: Record<string, string>
         ready?: () => void
         expand?: () => void
         openInvoice?: (url: string, callback?: (status: string) => void) => void
@@ -96,7 +97,7 @@ type NativeMiniAppSignals = Window & {
   external?: { notify?: unknown }
   Telegram?: {
     WebView?: { initParams?: Record<string, string> }
-    WebApp?: { platform?: string; initData?: string }
+    WebApp?: { platform?: string; initData?: string; initParams?: Record<string, string> }
   }
 }
 
@@ -178,6 +179,30 @@ function getInitDataFromLocation(): string {
     try {
       const fromStorageSnapshot = parseLaunch(window.sessionStorage.getItem(key) || '')
       if (fromStorageSnapshot) return fromStorageSnapshot
+    } catch {}
+  }
+
+  const readInitParams = (source: unknown) => {
+    if (!source || typeof source !== 'object') return ''
+    const params = source as Record<string, unknown>
+    return String(params[preferredKey] || params[alternateKey] || '').trim()
+  }
+
+  try {
+    const runtimeWindow = window as NativeMiniAppSignals
+    const fromTelegramWebView = readInitParams(runtimeWindow.Telegram?.WebView?.initParams)
+    if (fromTelegramWebView) return fromTelegramWebView
+    const fromTelegramWebApp = readInitParams(runtimeWindow.Telegram?.WebApp?.initParams)
+    if (fromTelegramWebApp) return fromTelegramWebApp
+  } catch {}
+
+  for (const key of ['__telegram__initParams', 'initParams']) {
+    try {
+      const raw = window.sessionStorage.getItem(key)
+      if (!raw) continue
+      const parsed = JSON.parse(raw) as unknown
+      const fromStorageInitParams = readInitParams(parsed)
+      if (fromStorageInitParams) return fromStorageInitParams
     } catch {}
   }
 

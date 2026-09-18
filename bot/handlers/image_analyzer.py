@@ -1,7 +1,9 @@
 """Photo to prompt handler."""
 
 import asyncio
+import aiohttp
 import html
+import json
 import logging
 from pathlib import Path
 
@@ -512,8 +514,8 @@ async def photo_to_prompt_handler(callback: CallbackQuery, state: FSMContext):
     await state.set_state(ImageAnalyzerStates.waiting_for_photo)
 
     text = (
-        "📸 <b>Промпт по фото</b>\n\n"
-        f"Стоимость анализа фото: <b>{photo_prompt_price_label()}</b>\n\n"
+        "✍️ <b>Промпт по описанию</b>\n\n"
+        f"Стоимость анализа: <b>{photo_prompt_price_label()}</b>\n\n"
         "Отправьте фото, голосовой промпт или сначала голос, а затем фото.\n"
         "GPT-5.5 разберёт фото отдельно, голос отдельно или объединит голос с последующим фото.\n\n"
         "В результате вы получите:\n"

@@ -32,7 +32,7 @@ def test_max_user_balance_history_and_session_are_isolated(tmp_path, monkeypatch
         )
     )
     assert user.max_user_id == 4242
-    assert user.balance_credits == 0
+    assert user.balance_credits == 5
 
     balance = asyncio.run(
         apply_max_balance_delta(
@@ -43,7 +43,7 @@ def test_max_user_balance_history_and_session_are_isolated(tmp_path, monkeypatch
             payment_provider="test",
         )
     )
-    assert balance == 50
+    assert balance == 55
 
     balance = asyncio.run(
         apply_max_balance_delta(
@@ -53,7 +53,7 @@ def test_max_user_balance_history_and_session_are_isolated(tmp_path, monkeypatch
             idempotency_key="generation:one",
         )
     )
-    assert balance == 47.5
+    assert balance == 52.5
 
     asyncio.run(save_max_session(4242, "image:waiting_prompt", {"model": "banana_2"}))
     session = asyncio.run(get_max_session(4242))
@@ -113,16 +113,16 @@ def test_max_ledger_is_idempotent_and_never_goes_negative(tmp_path, monkeypatch)
             idempotency_key="pay:7",
         )
     )
-    assert same == 10
-    assert asyncio.run(get_max_balance(7)) == 10
+    assert same == 15
+    assert asyncio.run(get_max_balance(7)) == 15
 
     with pytest.raises(MaxInsufficientBalanceError):
         asyncio.run(
             apply_max_balance_delta(
                 7,
-                -11,
+                -16,
                 tx_type="generation",
                 idempotency_key="gen:too-expensive",
             )
         )
-    assert asyncio.run(get_max_balance(7)) == 10
+    assert asyncio.run(get_max_balance(7)) == 15

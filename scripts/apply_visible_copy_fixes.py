@@ -42,22 +42,21 @@ OLD_WELCOME_COPY = (
     '        "🎁 <b>Новым пользователям — 15 бананов в подарок!</b>\\n"\n'
 )
 NEW_WELCOME_COPY = (
-    '        f"🎁 <b>Новым пользователям — {PARTNER_NEW_USER_BONUS} '
-    'бананов в подарок!</b>\\n"\n'
+    '        f"🎁 <b>Новым пользователям — {new_user_bonus:g} лапок в подарок!</b>\\n"\n'
 )
 OLD_PARTNER_BONUS_COPY = (
-    '        "• Каждый, кто перейдёт по вашей реферальной ссылке, получает '
-    '🍌 <code>15</code> бананов для тестирования бота\\n"\n'
+    '        "• Каждый, кто перейдёт по вашей реферальной ссылке, получает 🍌 <code>15</code> бананов для тестирования бота\\n"\n'
 )
 NEW_PARTNER_BONUS_COPY = (
-    '        f"• Каждый, кто перейдёт по вашей реферальной ссылке, получает '
-    '🍌 <code>{PARTNER_NEW_USER_BONUS}</code> бананов для тестирования бота\\n"\n'
+    '        f"• Каждый новый пользователь получает 🐾 <code>{rules[\'new_user_bonus_credits\']:g}</code> лапок для тестирования бота\\n"\n'
 )
 
 MINIAPP_PREVIEW_IMPORT_ANCHOR = "from bot.services.preset_manager import preset_manager\n"
 MINIAPP_PREVIEW_IMPORT = (
-    "from bot.services.trend_preview_service import "
-    "ensure_lightweight_trend_preview_url\n"
+    "from bot.services.trend_preview_service import (\n"
+    "    get_cached_lightweight_trend_preview_url,\n"
+    "    schedule_lightweight_trend_preview,\n"
+    ")\n"
 )
 MINIAPP_PREVIEW_HELPERS_ANCHOR = "\n\nasync def miniapp_prompts(request: web.Request) -> web.Response:\n"
 MINIAPP_PREVIEW_HELPERS = '''
@@ -83,8 +82,11 @@ async def _apply_lightweight_trend_preview(prompt: dict) -> dict:
     preview_url = str(prompt.get("preview_url") or "").strip()
     if not preview_url:
         return prompt
-    lightweight_url = await ensure_lightweight_trend_preview_url(preview_url)
-    if not lightweight_url or lightweight_url == preview_url:
+    lightweight_url = get_cached_lightweight_trend_preview_url(preview_url)
+    if not lightweight_url:
+        schedule_lightweight_trend_preview(preview_url)
+        return prompt
+    if lightweight_url == preview_url:
         return prompt
     updated = dict(prompt)
     updated["preview_url"] = lightweight_url
@@ -172,8 +174,16 @@ def normalize_runtime_bonus_copy() -> None:
             1,
         )
 
-    welcome_copy = NEW_WELCOME_COPY.replace("PARTNER_NEW_USER_BONUS", "get_business_rules()['new_user_bonus_credits']") if "from bot.business_rules import get_business_rules" in handler_text else NEW_WELCOME_COPY
-    partner_copy = NEW_PARTNER_BONUS_COPY.replace("PARTNER_NEW_USER_BONUS", "get_business_rules()['new_user_bonus_credits']") if "from bot.business_rules import get_business_rules" in handler_text else NEW_PARTNER_BONUS_COPY
+    welcome_copy = NEW_WELCOME_COPY
+    partner_copy = NEW_PARTNER_BONUS_COPY
+
+    main_menu_anchor = (
+        'def _build_main_menu_text(user_credits: int, referral_bonus_text: str = "") -> str:\n'
+        '    bonus_block = f"\\n{referral_bonus_text.strip()}\\n" if referral_bonus_text else "\\n"\n'
+    )
+    main_menu_with_bonus = main_menu_anchor + '    new_user_bonus = get_business_rules()["new_user_bonus_credits"]\n'
+    if main_menu_anchor in handler_text and main_menu_with_bonus not in handler_text:
+        handler_text = handler_text.replace(main_menu_anchor, main_menu_with_bonus, 1)
 
     if OLD_WELCOME_COPY in handler_text:
         handler_text = handler_text.replace(
@@ -196,6 +206,8 @@ def normalize_runtime_bonus_copy() -> None:
     stale_fragments = (
         "Новым пользователям — 15 бананов",
         "<code>15</code> бананов для тестирования бота",
+        "<code>5</code> лапок для тестирования бота",
+        "за регистрацию. Партнёрские начисления",
     )
     for fragment in stale_fragments:
         if fragment in handler_text:
@@ -245,7 +257,8 @@ def normalize_miniapp_trend_video_previews() -> None:
         )
 
     for required_fragment in (
-        "ensure_lightweight_trend_preview_url",
+        "get_cached_lightweight_trend_preview_url",
+        "schedule_lightweight_trend_preview",
         "_apply_lightweight_trend_previews(prompts)",
         "_apply_lightweight_trend_preview(prompt)",
     ):
