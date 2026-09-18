@@ -42,9 +42,20 @@ def payment_database_url():
         text=True,
     ).strip()
     try:
+        # The image first starts a temporary socket-only server during initdb.
+        # TCP readiness waits for the final server, avoiding its shutdown race.
         for _ in range(60):
             ready = subprocess.run(
-                ["docker", "exec", container, "pg_isready", "-U", "postgres"],
+                [
+                    "docker",
+                    "exec",
+                    container,
+                    "pg_isready",
+                    "-h",
+                    "127.0.0.1",
+                    "-U",
+                    "postgres",
+                ],
                 capture_output=True,
                 check=False,
             )
