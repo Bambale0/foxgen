@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 
 from bot.max_api import MaxClient, MaxSettings
 from bot.max_commands import MAX_QUICK_COMMANDS
@@ -24,6 +25,17 @@ async def check() -> None:
     subscriptions = payload.get("subscriptions")
     if subscriptions is not None and not isinstance(subscriptions, list):
         raise TypeError("MAX subscriptions payload is not a list")
+
+    expected_url = os.getenv("MAX_WEBHOOK_URL", "").strip()
+    if not expected_url:
+        raise RuntimeError("MAX_WEBHOOK_URL is required for the production check")
+    if (
+        not isinstance(subscriptions, list)
+        or len(subscriptions) != 1
+        or not isinstance(subscriptions[0], dict)
+        or subscriptions[0].get("url") != expected_url
+    ):
+        raise RuntimeError("MAX must have exactly one canonical webhook subscription")
 
     commands = bot_info.get("commands")
     if not isinstance(commands, list):
