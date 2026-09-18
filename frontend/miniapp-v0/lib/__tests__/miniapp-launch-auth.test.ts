@@ -22,6 +22,21 @@ describe('Mini App launch auth failures', () => {
     window.__BANANO_MINIAPP_PLATFORM__ = undefined
   })
 
+  it('sends init data in both JSON body and Telegram init-data header', async () => {
+    const initData = getInitData()
+    let capturedInit: RequestInit | undefined
+    global.fetch = jest.fn(async (_url, init) => {
+      capturedInit = init as RequestInit
+      return jsonResponse(200, { ok: true })
+    }) as unknown as typeof fetch
+
+    await bootstrapApp()
+
+    expect(capturedInit).toBeDefined()
+    expect((capturedInit?.headers as Record<string, string>)['X-Telegram-Init-Data']).toBe(initData)
+    expect(JSON.parse(String(capturedInit?.body))).toMatchObject({ init_data: initData })
+  })
+
   it('surfaces a rejected launch as a MiniAppAuthError', async () => {
     global.fetch = jest.fn(async () =>
       jsonResponse(401, { ok: false, error: 'Откройте Mini App заново из Telegram.' }),
