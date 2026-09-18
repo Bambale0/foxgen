@@ -1,3 +1,5 @@
+_MODULE_INITIALIZING = True
+
 import asyncio
 import base64
 import hashlib
@@ -2410,7 +2412,7 @@ async def miniapp_index(request: web.Request) -> web.Response:
             '})();'
             '</script>'
         )
-        debug_script = (
+        _debug_script = (
             '<script id="miniapp-debug-log">'
             'console.log("MINIAPP_DEBUG_URL:", window.location.href);'
             'console.log("MINIAPP_DEBUG_REFERRER:", document.referrer);'
@@ -2955,7 +2957,7 @@ async def miniapp_create_payment(request: web.Request) -> web.Response:
 
             if not result or not result.get("ok"):
                 return web.json_response(
-                    {"ok": False, "error": result or "Failed to create payment"},
+                    {"ok": False, "error": "Не удалось создать платёж. Попробуйте снова."},
                     status=500,
                 )
 
@@ -3003,7 +3005,12 @@ async def miniapp_create_payment(request: web.Request) -> web.Response:
                 {"ok": False, "error": "YooKassa not configured"}, status=500
             )
 
-        result = await yookassa_service.create_payment(
+        from bot.payment_checkout import create_telegram_checkout
+        result = await create_telegram_checkout(
+            user_id=user.id, credits=total_credits,
+            promo_code_id=promo.id if promo and promo_bonus > 0 else None,
+            promo_code=promo.code if promo and promo_bonus > 0 else None,
+            promo_bonus_credits=promo_bonus,
             amount_rub=float(package["price_rub"]),
             order_id=order_id,
             description=description,
@@ -3013,25 +3020,11 @@ async def miniapp_create_payment(request: web.Request) -> web.Response:
 
         if not result or not (result.get("Success") or result.get("PaymentId")):
             return web.json_response(
-                {"ok": False, "error": result or "Failed to create payment"}, status=500
+                {"ok": False, "error": "Не удалось создать платёж. Попробуйте снова."}, status=500
             )
 
         payment_id = result.get("PaymentId")
         payment_url = result.get("PaymentURL")
-
-        # Persist transaction
-        await create_transaction(
-            order_id=order_id,
-            user_id=user.id,
-            payment_id=payment_id,
-            provider="yookassa",
-            credits=total_credits,
-            amount_rub=float(package["price_rub"]),
-            status="pending",
-            promo_code_id=promo.id if promo and promo_bonus > 0 else None,
-            promo_code=promo.code if promo and promo_bonus > 0 else None,
-            promo_bonus_credits=promo_bonus,
-        )
 
         return web.json_response(
             {
@@ -4971,7 +4964,7 @@ async def miniapp_ai_assistant(request: web.Request) -> web.Response:
         user_message = str(body.get("message", "")).strip()
         audio_url = str(body.get("audio_url", "") or "").strip()
         audio_content_type = str(body.get("audio_content_type", "") or "").strip()
-        history = list(body.get("history", []) or [])
+        _history = list(body.get("history", []) or [])
 
         if not user_message and not audio_url:
             return web.json_response(
@@ -5272,3 +5265,8 @@ def setup_miniapp_routes(app: web.Application):
     app.router.add_post(api_v1_root + "/generate/image", miniapp_generate_image)
     app.router.add_route("*", api_v1_root + "/{tail:.*}", miniapp_api_not_found)
     app.router.add_get(miniapp_root + "/{tail:.*}", _miniapp_asset_or_redirect)
+
+
+_MODULE_INITIALIZING = False
+from bot.handlers import initialize_compatibility
+initialize_compatibility()

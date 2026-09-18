@@ -6,6 +6,8 @@ import json
 from dataclasses import dataclass
 from typing import Any
 
+from contextlib import asynccontextmanager
+
 from bot import database
 from bot import db as db_backend
 
@@ -213,6 +215,17 @@ async def get_max_balance(max_user_id: int) -> float:
     return float(user.balance_credits if user is not None else 0)
 
 
+
+
+@asynccontextmanager
+async def _balance_connection(connection):
+    if connection is not None:
+        yield connection
+    else:
+        async with db_backend.connect() as owned:
+            yield owned
+
+
 async def apply_max_balance_delta(
     max_user_id: int,
     amount_credits: float,
@@ -223,13 +236,15 @@ async def apply_max_balance_delta(
     payment_provider: str | None = None,
     provider_order_id: str | None = None,
     metadata: dict[str, Any] | None = None,
+    connection=None,
 ) -> float:
     """Apply one isolated MAX ledger mutation exactly once."""
     if not idempotency_key.strip():
         raise ValueError("idempotency_key is required")
-    await ensure_max_user(max_user_id)
+    if connection is None:
+        await ensure_max_user(max_user_id)
     amount = float(amount_credits)
-    async with db_backend.connect() as db:
+    async with _balance_connection(connection) as db:
         _mapping_rows(db)
         existing = await db.execute(
             "SELECT id FROM max_transactions WHERE idempotency_key = ?",
@@ -273,7 +288,8 @@ async def apply_max_balance_delta(
                 json.dumps(metadata or {}, ensure_ascii=False, sort_keys=True),
             ),
         )
-        await db.commit()
+        if connection is None:
+            await db.commit()
         cursor = await db.execute(
             "SELECT balance_credits FROM max_users WHERE max_user_id = ?",
             (int(max_user_id),),

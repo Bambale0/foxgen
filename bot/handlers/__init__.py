@@ -1,3 +1,27 @@
+import sys
+
+_COMPATIBILITY_INSTALLS = []
+_COMPATIBILITY_INSTALLING = False
+
+
+def _defer_compatibility_install(install):
+    _COMPATIBILITY_INSTALLS.append(install)
+
+
+def initialize_compatibility():
+    global _COMPATIBILITY_INSTALLING
+    miniapp = sys.modules.get("bot.miniapp")
+    if _COMPATIBILITY_INSTALLING or getattr(miniapp, "_MODULE_INITIALIZING", False):
+        return
+    _COMPATIBILITY_INSTALLING = True
+    try:
+        while _COMPATIBILITY_INSTALLS:
+            install = _COMPATIBILITY_INSTALLS.pop(0)
+            install()
+    finally:
+        _COMPATIBILITY_INSTALLING = False
+
+
 """
 Handlers for the Telegram bot.
 """
@@ -36,8 +60,8 @@ from .trend_video_compat import router as trend_video_compat_router
 from .trends_compat import install_trends_compat
 from .trends_compat import router as trends_compat_router
 
-install_publication_scope_postgres_compat()
-install_publication_scope_compat()
+_defer_compatibility_install(lambda: install_publication_scope_postgres_compat())
+_defer_compatibility_install(lambda: install_publication_scope_compat())
 
 from . import admin as admin_module
 from . import common as common_module
@@ -77,7 +101,7 @@ from .support import router as support_router
 from .trend_route_compat import install_trend_route_compat
 from .trend_seedance_25_compat import install_trend_seedance_25_compat
 
-install_suno_menu_compat(common_module, admin_module, keyboards_module)
+_defer_compatibility_install(lambda: install_suno_menu_compat(common_module, admin_module, keyboards_module))
 
 admin_router = Router()
 admin_router.include_router(partner_approval_admin_router)
@@ -85,9 +109,9 @@ admin_router.include_router(admin_user_ban_router)
 admin_router.include_router(suno_admin_router)
 admin_router.include_router(admin_module.router)
 
-install_lava_binding_schema_compat()
-install_lava_payment_safety(payments_module)
-install_lava_invoice_compat(payments_module, lava_checkout_module)
+_defer_compatibility_install(lambda: install_lava_binding_schema_compat())
+_defer_compatibility_install(lambda: install_lava_payment_safety(payments_module))
+_defer_compatibility_install(lambda: install_lava_invoice_compat(payments_module, lava_checkout_module))
 legacy_payments_router = payments_module.router
 lava_checkout_router = lava_checkout_module.router
 legacy_common_router = common_module.router
@@ -96,24 +120,24 @@ prompt_fragment_coalescer = PromptFragmentCoalescingMiddleware()
 generation_module.router.message.middleware(prompt_fragment_coalescer)
 batch_generation_router.message.middleware(prompt_fragment_coalescer)
 
-install_vk_photo_prompt_result_compat()
+_defer_compatibility_install(lambda: install_vk_photo_prompt_result_compat())
 
 image_analyzer_router = Router()
 image_analyzer_router.include_router(prompt_analyzer_v2_router)
 image_analyzer_router.include_router(legacy_image_analyzer_router)
 
-install_seedance_multimodal_runtime_compat()
-install_seedance_25_upload_compat()
-install_seedance_25_fullstack()
-install_seedance_25_chunk_upload()
-install_seedance_25_preview()
-install_seedance_25_video_ref_pricing()
-install_seedance_25_public_release()
-install_seedance_25_client_compat()
-install_seedance_25_telegram_compat()
-install_seedance_25_new_priority()
-install_miniapp_video_continuity_compat()
-install_trend_seedance_25_compat()
+_defer_compatibility_install(lambda: install_seedance_multimodal_runtime_compat())
+_defer_compatibility_install(lambda: install_seedance_25_upload_compat())
+_defer_compatibility_install(lambda: install_seedance_25_fullstack())
+_defer_compatibility_install(lambda: install_seedance_25_chunk_upload())
+_defer_compatibility_install(lambda: install_seedance_25_preview())
+_defer_compatibility_install(lambda: install_seedance_25_video_ref_pricing())
+_defer_compatibility_install(lambda: install_seedance_25_public_release())
+_defer_compatibility_install(lambda: install_seedance_25_client_compat())
+_defer_compatibility_install(lambda: install_seedance_25_telegram_compat())
+_defer_compatibility_install(lambda: install_seedance_25_new_priority())
+_defer_compatibility_install(lambda: install_miniapp_video_continuity_compat())
+_defer_compatibility_install(lambda: install_trend_seedance_25_compat())
 generation_router = Router()
 generation_router.include_router(publication_scope_compat_router)
 generation_router.include_router(seedance_25_telegram_compat_router)
@@ -127,16 +151,16 @@ payments_router.include_router(lava_checkout_router)
 payments_router.include_router(freekassa_payments_router)
 payments_router.include_router(legacy_payments_router)
 
-install_common_publication_scope_compat(common_module)
-install_profile_feed_deeplink_compat(common_module)
-install_trends_compat(common_module, generation_module, admin_module)
-install_text_trend_upload(trends_compat_module)
-install_trend_video_compat(trends_compat_module)
-install_feed_model_filter_compat(common_module)
-install_own_profile_feed_compat()
-install_partner_referral_approval_guard()
-install_miniapp_regression_safety()
-install_trend_route_compat()
+_defer_compatibility_install(lambda: install_common_publication_scope_compat(common_module))
+_defer_compatibility_install(lambda: install_profile_feed_deeplink_compat(common_module))
+_defer_compatibility_install(lambda: install_trends_compat(common_module, generation_module, admin_module))
+_defer_compatibility_install(lambda: install_text_trend_upload(trends_compat_module))
+_defer_compatibility_install(lambda: install_trend_video_compat(trends_compat_module))
+_defer_compatibility_install(lambda: install_feed_model_filter_compat(common_module))
+_defer_compatibility_install(lambda: install_own_profile_feed_compat())
+_defer_compatibility_install(lambda: install_partner_referral_approval_guard())
+_defer_compatibility_install(lambda: install_miniapp_regression_safety())
+_defer_compatibility_install(lambda: install_trend_route_compat())
 common_router = Router()
 common_router.include_router(partner_approval_user_router)
 # These handlers intentionally go first: lyrics/sounds/tools use their own FSM
@@ -180,3 +204,5 @@ __all__ = [
     "trend_video_compat_router",
     "trends_compat_router",
 ]
+
+initialize_compatibility()

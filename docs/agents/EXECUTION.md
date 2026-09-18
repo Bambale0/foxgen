@@ -1,3 +1,31 @@
+# Active: unified YooKassa payment recovery
+
+Baseline main: d74bf7a856ce64e7e06057ca8edcdc28e2932b85. Branch: fix/unified-yookassa-payments.
+
+Fresh audit: existing Telegram atomic completion has a lost-claim bug; MAX has separate orders and polling, no common webhook dispatch. Checkout persists Telegram orders after provider creation. Existing notification code lacks a durable delivery status. Reuse local ledgers, provider adapters, migration registry, admin tariffs and channel clients. Do not merge identities or balances without a proven account link. Payment cabinet URL cannot be read with Basic Auth. Concurrent unrelated auth work is isolated.
+
+Acceptance: one canonical webhook accepts both channels, routes by local provider ID, validates succeeded/identity/amount/currency, credits once, retries transient failures, and delivers to the correct channel through an outbox. Checkout cannot return a usable invoice without a durable local order. MAX credits/referrals/status are atomic. Error contract, frontend deadlines/lint, import wiring and readiness are repaired. Business settings gain validated administrative configuration without silently changing existing balances or payout units.
+
+Public test seams: HTTP webhook and checkout, completion service with ledger/balance assertions, outbox channel delivery, provider contract, migration SQL, browser payment UI. Tests include authorization, foreign metadata, duplicate/concurrent processing, waiting_for_capture, temporary failure and notification retry. PostgreSQL concurrency is tested in an isolated database when available; SQLite compatibility remains covered. Telegram/MAX/Mini App regression and browser E2E required. Instagram inherits Telegram payment fixes; no live messages or paid smoke. Expand-only migrations, old tables retained; rollback preserves outbox/schema. Telemetry records order/channel/result and delivery state, no credentials.
+
+Verification layers: unit/provider/HTTP/ownership/idempotency/migrations/outbox required; backend and frontend regression/build/browser required; external paid/native smoke N/A without sandbox accounts; exact-SHA CI required before merge. No new business constants: use validated existing tariff/control-plane settings. Existing channel wallet isolation remains explicit.
+
+Steps:
+1. Regression and repair lost claims, final-success verification and durable checkout.
+2. Common webhook dispatch and durable payment delivery migration/worker.
+3. Atomic MAX completion and channel business configuration parity.
+4. Frontend contracts/deadline/lint, import and readiness repairs.
+5. Focused/full tests, two-axis review against main, PR and exact-head CI.
+6. Canonical release only after gates, then production revision/telemetry verification.
+
+Progress: preflight recorded before production edits. Skills: local diagnosing-bugs/frontend-ux-audit; primary engineering ask-matt/code-review; claw QA checklist; wondelai release-it; anthropics webapp-testing. Skills repositories updated outside project. Production remains untouched.
+
+Verification (implementation): normalized backend 360 passed, 1 PostgreSQL test skipped without isolated URL, 1 load test deselected; dedicated real PostgreSQL 16 concurrent completions per Telegram/MAX passed. Frontend Jest 15 suites/52 tests passed, lint zero errors with 7 pre-existing source warnings, production build passed. Critical browser flow and Telegram/MAX startup passed Chromium and iPhone WebKit. Two-axis final reviewers report 0 unresolved findings; subsequent containment/referrer-outbox refinements are covered by focused tests. Existing backend CI owns a disposable PostgreSQL container for its concurrency test; no workflow authorization change is required. Historical audit and recovery runbook committed.
+
+External acceptance: merchant cabinet URL/events unavailable to Basic Auth; successful native live payments/messages N/A without test buyer accounts. Production unchanged. PR/exact-head CI pending; do not claim deployed or exhaustive absence of bugs.
+
+---
+
 # Agent execution ledger
 
 ## Active Feature Execution

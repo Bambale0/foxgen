@@ -74,19 +74,15 @@ def _mark_public_feed_cleanup_done() -> None:
 PROMPT_CATEGORIES = {"art", "business", "marketing", "photo", "video", "other"}
 PROMPT_STATUSES = {"pending", "approved", "rejected", "deactivated"}
 
-# Партнёрская программа — единственный источник констант
-PARTNER_LEVEL1_PERCENT: int = 30   # % с покупок рефералов 1-го уровня
-PARTNER_LEVEL2_PERCENT: int = 7    # % с покупок рефералов 2-го уровня
-PARTNER_NEW_USER_BONUS: int = 5    # бананы новому пользователю при регистрации
-PARTNER_INVITER_BONUS: int = 3     # бананы пригласившему за каждую регистрацию
-PROMPT_REPEAT_REWARD_RUB: float = float(os.getenv("PROMPT_REPEAT_REWARD_RUB", "10"))
-PROMO_BONUS_BY_CREDITS: dict[int, int] = {
-    25: 5,
-    50: 10,
-    100: 15,
-    200: 20,
-    500: 50,
-}
+from bot.business_rules import get_business_rules, promo_bonus_map
+
+# Compatibility exports for legacy imports; live calculation uses the policy.
+PARTNER_LEVEL1_PERCENT = get_business_rules()["level1_percent"]
+PARTNER_LEVEL2_PERCENT = get_business_rules()["level2_percent"]
+PARTNER_NEW_USER_BONUS = get_business_rules()["new_user_bonus_credits"]
+PARTNER_INVITER_BONUS = get_business_rules()["inviter_bonus_credits"]
+PROMO_BONUS_BY_CREDITS = promo_bonus_map()
+PROMPT_REPEAT_REWARD_RUB = float(os.getenv("PROMPT_REPEAT_REWARD_RUB", "10"))
 
 
 class Credits(float):
@@ -257,7 +253,7 @@ def get_promo_bonus_for_credits(credits: float | int | str) -> int:
         amount = int(round(float(credits)))
     except (TypeError, ValueError):
         return 0
-    return int(PROMO_BONUS_BY_CREDITS.get(amount, 0))
+    return int(promo_bonus_map().get(amount, 0))
 
 
 def _row_to_promo_code(row: db_backend.Row | None) -> Optional[PromoCode]:
@@ -1312,7 +1308,7 @@ async def get_or_create_user(
             # Это закрывает антифрод-дыру: раньше проверки обходились при INSERT.
             await db.execute(
                 "INSERT INTO users (telegram_id, credits, referral_code, referred_by) VALUES (?, ?, ?, NULL)",
-                (telegram_id, PARTNER_NEW_USER_BONUS, new_referral_code),
+                (telegram_id, get_business_rules()["new_user_bonus_credits"], new_referral_code),
             )
             await db.commit()
             logger.info(
@@ -1600,7 +1596,6 @@ async def update_user_referral_code(telegram_id: int, referral_code: str) -> boo
             (referral_code, telegram_id),
         )
         await db.commit()
-        _BOT_SETTING_CACHE.pop(setting_key, None)
         return True
 
 
@@ -1715,9 +1710,11 @@ async def process_referral(
     referred_telegram_id: int,
     referral_code: str,
     signup_bonus: int = 0,
-    inviter_bonus: int = PARTNER_INVITER_BONUS,
+    inviter_bonus: int | None = None,
 ) -> bool:
     """Закрепляет пользователя за партнёром: пригласившему +3🍌 (новичок уже получил 5 при регистрации)."""
+    if inviter_bonus is None:
+        inviter_bonus = get_business_rules()["inviter_bonus_credits"]
     referral_code = (referral_code or "").strip().upper()
     if not referral_code:
         logger.info(
@@ -1991,13 +1988,17 @@ async def complete_payment_atomic(
     Порядок: pending -> processing -> add_credits -> referral commission ->
              partner_commissions ledger -> promo redemption -> completed.
     """
+    rules = get_business_rules()
     async with db_backend.connect(DATABASE_PATH, timeout=15) as db:
         db.row_factory = db_backend.Row
+        from bot.payment_delivery import ensure_sqlite_outbox
+        await ensure_sqlite_outbox(db)
         await db.execute("BEGIN IMMEDIATE")
         try:
             # 1. SELECT transaction FOR UPDATE (имитация через проверку статуса)
             txn_cursor = await db.execute(
-                "SELECT * FROM transactions WHERE order_id = ?",
+                "SELECT * FROM transactions WHERE order_id = ?"
+                + (" FOR UPDATE" if db_backend.is_postgres() else ""),
                 (order_id,),
             )
             txn_row = await txn_cursor.fetchone()
@@ -2036,11 +2037,8 @@ async def complete_payment_atomic(
                 (order_id,),
             )
             if update_result.rowcount != 1:
-                # Уже был переведён кем-то в processing/completed
-                if txn_row["status"] == "processing":
-                    # Другой процесс уже обрабатывает — выходим
-                    await db.rollback()
-                    return {"ok": False, "reason": "already_processing"}
+                await db.rollback()
+                return {"ok": False, "reason": "claim_lost"}
 
             transaction = Transaction(
                 id=txn_row["id"],
@@ -2090,7 +2088,7 @@ async def complete_payment_atomic(
                 ref1_row = await ref1_cursor.fetchone()
                 ref1_revenue = float(ref1_row["partner_total_revenue_rub"] or 0) if ref1_row else 0.0
                 ref1_tier = get_partner_tier_by_total(ref1_revenue)
-                ref1_percent = get_partner_percent_by_tier(ref1_tier)
+                ref1_percent = rules["level1_percent"]
                 level1_bonus = round(base_value * ref1_percent / 100.0, 2)
 
                 # Начисление ref1
@@ -2133,7 +2131,7 @@ async def complete_payment_atomic(
                         )
                 if ref1_row and ref1_row["referred_by"] and not ref1_is_admin:
                     ref2_id = int(ref1_row["referred_by"])
-                    level2_bonus = round(base_value * PARTNER_LEVEL2_PERCENT / 100.0, 2)
+                    level2_bonus = round(base_value * rules["level2_percent"] / 100.0, 2)
                     ref2_cursor = await db.execute(
                         "SELECT telegram_id, partner_total_revenue_rub, partner_tier FROM users WHERE id = ?",
                         (ref2_id,),
@@ -2158,7 +2156,7 @@ async def complete_payment_atomic(
                             VALUES (?, ?, ?, ?, 2, ?, ?, ?)
                             ON CONFLICT(transaction_id, referrer_id, level) DO NOTHING
                             """,
-                            (txn_row["id"], order_id, ref2_id, txn_row["user_id"], base_value, float(PARTNER_LEVEL2_PERCENT), level2_bonus),
+                            (txn_row["id"], order_id, ref2_id, txn_row["user_id"], base_value, float(rules["level2_percent"]), level2_bonus),
                         )
                     except db_backend.OperationalError:
                         pass
@@ -2173,7 +2171,7 @@ async def complete_payment_atomic(
                     "referrer_user_id": ref1_id,
                     "referrer_telegram_id": int(ref1_row["telegram_id"]) if ref1_row and ref1_row["telegram_id"] else None,
                     "level2_value": ref2_bonus,
-                    "level2_percent": PARTNER_LEVEL2_PERCENT,
+                    "level2_percent": rules["level2_percent"],
                     "level2_referrer_user_id": ref2_id if ref2_bonus > 0 else None,
                     "level2_referrer_telegram_id": ref2_telegram_id,
                 }
@@ -2215,6 +2213,32 @@ async def complete_payment_atomic(
                 (order_id,),
             )
 
+            if transaction.provider == "yookassa":
+                from bot.payment_delivery import enqueue_payment_notification
+                from bot.business_rules import buyer_message
+                await enqueue_payment_notification(
+                    db, channel="telegram", order_id=order_id,
+                    recipient_id=telegram_id,
+                    message=buyer_message(transaction.credits, transaction.amount_rub),
+                )
+                from bot.business_rules import referrer_message
+                targets = [
+                    (1, referral_bonus.get("referrer_user_id"), referral_bonus.get("referrer_telegram_id"), referral_bonus.get("value", 0)),
+                    (2, referral_bonus.get("level2_referrer_user_id"), referral_bonus.get("level2_referrer_telegram_id"), referral_bonus.get("level2_value", 0)),
+                ]
+                for level, referrer_id, recipient, reward in targets:
+                    if not recipient or float(reward) <= 0:
+                        continue
+                    settings = await (await db.execute(
+                        "SELECT referral_purchase_notifications_enabled FROM user_settings WHERE user_id=?",
+                        (referrer_id,),
+                    )).fetchone()
+                    if settings is not None and not settings["referral_purchase_notifications_enabled"]:
+                        continue
+                    await enqueue_payment_notification(
+                        db, channel="telegram", order_id=f"{order_id}:referrer:{level}",
+                        recipient_id=recipient, message=referrer_message(level, float(reward), "₽"),
+                    )
             await db.commit()
 
             transaction.status = "completed"
@@ -2235,14 +2259,18 @@ async def credit_referral_commission(
     telegram_id: int,
     transaction_credits: int,
     transaction_amount_rub: Optional[float] = None,
-    bonus_percent: int = PARTNER_LEVEL1_PERCENT,
-    level2_percent: int = PARTNER_LEVEL2_PERCENT,
+    bonus_percent: int | None = None,
+    level2_percent: int | None = None,
 ) -> dict:
     """Начисляет партнёру 1 уровня и 2 уровня с каждой оплаты.
 
     По актуальным условиям 1 уровень всегда получает фиксированные 30%,
     а 2 уровень — фиксированные 7% без tier-based надбавок.
     """
+    if bonus_percent is None:
+        bonus_percent = get_business_rules()["level1_percent"]
+    if level2_percent is None:
+        level2_percent = get_business_rules()["level2_percent"]
     async with db_backend.connect(DATABASE_PATH) as db:
         db.row_factory = db_backend.Row
         cursor = await db.execute(
@@ -2344,7 +2372,7 @@ async def credit_first_payment_referral_bonus(
     telegram_id: int,
     transaction_credits: int,
     transaction_amount_rub: Optional[float] = None,
-    bonus_percent: int = PARTNER_LEVEL1_PERCENT,
+    bonus_percent: int | None = None,
 ) -> dict:
     return await credit_referral_commission(
         telegram_id, transaction_credits, transaction_amount_rub, bonus_percent
@@ -2363,7 +2391,7 @@ def get_partner_tier_by_total(total_revenue_rub: float) -> str:
 
 def get_partner_percent_by_tier(tier: str) -> int:
     _ = tier
-    return PARTNER_LEVEL1_PERCENT
+    return get_business_rules()["level1_percent"]
 
 
 async def accept_partner_agreement(telegram_id: int) -> bool:
@@ -3266,11 +3294,17 @@ async def get_admin_finance_report(limit: int = 100) -> dict:
                 l2.id AS level2_partner_user_id,
                 l2.telegram_id AS level2_partner_telegram_id,
                 l2.referral_code AS level2_partner_code,
-                l2.partner_tier AS level2_partner_tier
+                l2.partner_tier AS level2_partner_tier,
+                pc1.percent AS recorded_level1_percent,
+                pc1.amount_rub AS recorded_level1_amount,
+                pc2.percent AS recorded_level2_percent,
+                pc2.amount_rub AS recorded_level2_amount
             FROM transactions t
             JOIN users payer ON payer.id = t.user_id
             JOIN users l1 ON l1.id = payer.referred_by
             LEFT JOIN users l2 ON l2.id = l1.referred_by
+            LEFT JOIN partner_commissions pc1 ON pc1.transaction_id=t.id AND pc1.level=1
+            LEFT JOIN partner_commissions pc2 ON pc2.transaction_id=t.id AND pc2.level=2
             WHERE t.status = 'completed'
             ORDER BY datetime(t.created_at) DESC, t.id DESC
             LIMIT ?
@@ -3282,18 +3316,11 @@ async def get_admin_finance_report(limit: int = 100) -> dict:
         total_level1_commission_rub = 0.0
         total_level2_commission_rub = 0.0
         for row in commission_rows:
-            amount_rub = float(row.get("amount_rub") or 0)
-            level1_commission = round(amount_rub * PARTNER_LEVEL1_PERCENT / 100, 2)
-            level2_commission = (
-                round(amount_rub * PARTNER_LEVEL2_PERCENT / 100, 2)
-                if row.get("level2_partner_telegram_id")
-                else 0.0
-            )
-            row["level1_percent"] = PARTNER_LEVEL1_PERCENT
+            level1_commission = float(row.pop("recorded_level1_amount", None) or 0)
+            level2_commission = float(row.pop("recorded_level2_amount", None) or 0)
+            row["level1_percent"] = float(row.pop("recorded_level1_percent", None) or 0)
             row["level1_commission_rub"] = level1_commission
-            row["level2_percent"] = (
-                PARTNER_LEVEL2_PERCENT if row.get("level2_partner_telegram_id") else 0
-            )
+            row["level2_percent"] = float(row.pop("recorded_level2_percent", None) or 0)
             row["level2_commission_rub"] = level2_commission
             partner_commissions.append(row)
             total_level1_commission_rub += level1_commission
@@ -4559,7 +4586,7 @@ async def get_admin_promo_stats(limit: int = 12) -> dict[str, Any]:
             "total_bonus_credits": summary["total_bonus_credits"] or 0,
             "total_amount_rub": round(float(summary["total_amount_rub"] or 0), 2),
             "promocodes": promocodes,
-            "bonus_by_credits": dict(PROMO_BONUS_BY_CREDITS),
+            "bonus_by_credits": promo_bonus_map(),
         }
 
 
@@ -4607,7 +4634,7 @@ async def get_promo_code_details(
         return {
             "promo": dict(promo),
             "redemptions": _sqlite_rows_to_dicts(await cursor.fetchall()),
-            "bonus_by_credits": dict(PROMO_BONUS_BY_CREDITS),
+            "bonus_by_credits": promo_bonus_map(),
         }
 
 
@@ -4883,7 +4910,7 @@ async def update_transaction_status(order_id: str, status: str) -> bool:
     """Обновляет статус транзакции. Возвращает True, если строка была изменена."""
     async with db_backend.connect(DATABASE_PATH) as db:
         cursor = await db.execute(
-            "UPDATE transactions SET status = ? WHERE order_id = ? AND status != ?",
+            "UPDATE transactions SET status = ? WHERE order_id = ? AND status != ? AND status != 'completed'",
             (status, order_id, status),
         )
         await db.commit()

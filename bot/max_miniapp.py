@@ -17,6 +17,8 @@ from dataclasses import dataclass
 from typing import Any
 from urllib.parse import parse_qsl
 
+from aiohttp import web
+
 from bot.max_admin_store import is_max_admin
 from bot.max_catalog import MAX_VIDEO_TYPES, MaxPresetManager, max_preset_manager
 from bot.max_generation import (
@@ -470,7 +472,6 @@ __all__ = [
 
 # --- aiohttp integration ----------------------------------------------------
 
-from aiohttp import web
 
 
 def _json_error(message: str, *, status: int = 400) -> web.Response:
@@ -596,7 +597,7 @@ async def _handle_create_payment(
     if payments is None or not payments.enabled:
         return _json_error("ЮKassa для MAX временно недоступна", status=503)
 
-    order = await payments.create_checkout(identity.user_id, package_id)
+    order = await payments.create_checkout(identity.user_id, package_id, promo_code=str(body.get("promo_code") or "").strip() or None)
     return web.json_response(
         {
             "ok": True,
@@ -605,8 +606,8 @@ async def _handle_create_payment(
             "payment_id": order.provider_payment_id or order.order_id,
             "payment_url": order.checkout_url,
             "credits": order.credits,
-            "promo_bonus_credits": 0,
-            "promo_code": "",
+            "promo_bonus_credits": order.promo_bonus_credits,
+            "promo_code": order.promo_code,
         }
     )
 
