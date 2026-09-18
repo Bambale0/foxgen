@@ -154,3 +154,35 @@ async def test_telegram_request_passes_through_max_middleware() -> None:
 
     assert response.status == 200
     assert payload == {"ok": True, "source": "telegram"}
+
+
+@pytest.mark.asyncio
+async def test_telegram_payload_survives_max_middleware_body_read() -> None:
+    from bot import miniapp
+
+    async def telegram_handler(request: web.Request) -> web.Response:
+        payload = await miniapp._miniapp_payload(request)
+        return web.json_response(
+            {
+                "ok": True,
+                "platform": payload.get("platform"),
+                "init_data": payload.get("init_data"),
+            }
+        )
+
+    app = web.Application(middlewares=[max_miniapp.max_miniapp_middleware])
+    app.router.add_post("/mini-app/api/bootstrap", telegram_handler)
+
+    async with TestClient(TestServer(app)) as client:
+        response = await client.post(
+            "/mini-app/api/bootstrap",
+            json={"platform": "telegram", "init_data": "telegram-data"},
+        )
+        payload = await response.json()
+
+    assert response.status == 200
+    assert payload == {
+        "ok": True,
+        "platform": "telegram",
+        "init_data": "telegram-data",
+    }
