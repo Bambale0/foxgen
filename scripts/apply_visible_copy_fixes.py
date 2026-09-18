@@ -163,7 +163,7 @@ def normalize_runtime_bonus_copy() -> None:
     handler_path = "bot/handlers/common.py"
     handler_text = read_text(handler_path)
 
-    if "    PARTNER_NEW_USER_BONUS,\n" not in handler_text:
+    if "from bot.business_rules import get_business_rules" not in handler_text and "    PARTNER_NEW_USER_BONUS,\n" not in handler_text:
         if DATABASE_IMPORT_ANCHOR not in handler_text:
             raise RuntimeError("Welcome bonus database import anchor was not found")
         handler_text = handler_text.replace(
@@ -172,22 +172,25 @@ def normalize_runtime_bonus_copy() -> None:
             1,
         )
 
+    welcome_copy = NEW_WELCOME_COPY.replace("PARTNER_NEW_USER_BONUS", "get_business_rules()['new_user_bonus_credits']") if "from bot.business_rules import get_business_rules" in handler_text else NEW_WELCOME_COPY
+    partner_copy = NEW_PARTNER_BONUS_COPY.replace("PARTNER_NEW_USER_BONUS", "get_business_rules()['new_user_bonus_credits']") if "from bot.business_rules import get_business_rules" in handler_text else NEW_PARTNER_BONUS_COPY
+
     if OLD_WELCOME_COPY in handler_text:
         handler_text = handler_text.replace(
             OLD_WELCOME_COPY,
-            NEW_WELCOME_COPY,
+            welcome_copy,
             1,
         )
-    elif NEW_WELCOME_COPY not in handler_text:
+    elif welcome_copy not in handler_text:
         raise RuntimeError("Telegram welcome bonus copy was not found")
 
     if OLD_PARTNER_BONUS_COPY in handler_text:
         handler_text = handler_text.replace(
             OLD_PARTNER_BONUS_COPY,
-            NEW_PARTNER_BONUS_COPY,
+            partner_copy,
             1,
         )
-    elif NEW_PARTNER_BONUS_COPY not in handler_text:
+    elif partner_copy not in handler_text:
         raise RuntimeError("Telegram partner cabinet bonus copy was not found")
 
     stale_fragments = (
@@ -273,8 +276,13 @@ def main() -> None:
     normalize_miniapp_trend_video_previews()
 
     database_text = read_text("bot/database.py")
-    if "PARTNER_NEW_USER_BONUS: int = 5" not in database_text:
-        raise RuntimeError("New-user welcome bonus must be 5 bananas")
+    if "PARTNER_NEW_USER_BONUS = get_business_rules()" in database_text:
+        import json
+        policy = json.loads(read_text("bot/business_rules_defaults.json"))
+        if policy["new_user_bonus_credits"] != 5:
+            raise RuntimeError("Default new-user welcome bonus must be 5 paws")
+    elif "PARTNER_NEW_USER_BONUS: int = 5" not in database_text:
+        raise RuntimeError("New-user welcome bonus must be 5 paws")
 
 
 if __name__ == "__main__":

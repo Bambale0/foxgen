@@ -2445,7 +2445,8 @@ async def on_startup(bot: Bot, dispatcher: Dispatcher | None = None):
         # aiogram.Bot does not expose an event loop attribute in some versions.
         # Use asyncio.create_task to schedule background tasks on the running loop.
         asyncio.create_task(_cleanup_loop())
-        asyncio.create_task(_yookassa_reconcile_loop(bot))
+        from bot.payment_readiness import register_payment_worker
+        register_payment_worker("telegram_reconcile", asyncio.create_task(_yookassa_reconcile_loop(bot)))
         asyncio.create_task(_lava_reconcile_loop(bot))
         asyncio.create_task(_memory_dump_loop(bot))
         asyncio.create_task(_db_backup_loop())
@@ -4706,12 +4707,16 @@ def setup_web_server(dp: Dispatcher, bot: Bot) -> web.Application:
             auth = request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
             if auth != HEALTH_SECRET:
                 return web.json_response({"error": "unauthorized"}, status=401)
-        return web.json_response({"status": "ok", "service": "tanya-bot"})
+        from bot.payment_readiness import readiness_report
+        report = await readiness_report()
+        return web.json_response(report, status=200 if report["status"] == "ok" else 503)
 
     app.router.add_get("/health", health_check)
 
     # Internal API for admin panel
+    from bot.payment_delivery import setup_payment_delivery
     setup_internal_api(app, secret=config.INTERNAL_API_SECRET, version="1.0.0")
+    setup_payment_delivery(app)
     setup_internal_admin_routes(app)
 
     return app

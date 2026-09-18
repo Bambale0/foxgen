@@ -102,6 +102,15 @@ async def _prompt_feed_compatibility_columns(
         await _execute_schema_ddl(connection, statement)
 
 
+async def _payment_notification_outbox(connection):
+    from bot.payment_delivery import OUTBOX_DDL
+    from bot.payment_checkout import CHECKOUT_DDL, PROMO_DDL
+
+    await _execute_schema_ddl(connection, OUTBOX_DDL)
+    await _execute_schema_ddl(connection, CHECKOUT_DDL)
+    await _execute_schema_ddl(connection, PROMO_DDL)
+
+
 MIGRATIONS: tuple[Migration, ...] = (
     Migration(
         version=1,
@@ -113,6 +122,7 @@ MIGRATIONS: tuple[Migration, ...] = (
         name="prompt feed compatibility columns",
         apply=_prompt_feed_compatibility_columns,
     ),
+    Migration(version=3, name="durable payment buyer notifications", apply=_payment_notification_outbox),
 )
 
 

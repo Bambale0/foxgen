@@ -256,7 +256,8 @@ class MaxChannelService:
             invite = "Ссылка станет доступна после настройки MAX_BOT_NAME."
         else:
             invite = f"https://max.ru/{self.bot_name}?start=ref_{user_id}"
-        partner = self.catalog.get_price_config().get("partner_program", {}) or {}
+        from bot.business_rules import get_business_rules
+        partner = get_business_rules()
         l1 = _format_cost(float(partner.get("level1_percent") or 0))
         l2 = _format_cost(float(partner.get("level2_percent") or 0))
         await self._respond(

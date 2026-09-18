@@ -1,0 +1,14 @@
+{
+  "level1_percent": 30,
+  "level2_percent": 7,
+  "new_user_bonus_credits": 5,
+  "inviter_bonus_credits": 3,
+  "rub_per_credit": 10,
+  "promo_bonus_by_credits": {"25":5,"50":10,"100":15,"200":20,"500":50},
+  "notification_max_attempts": 20,
+  "notification_retry_base_seconds": 5,
+  "notification_retry_max_seconds": 3600,
+  "notification_poll_seconds": 5,
+  "buyer_notification_template": "✅ <b>Оплата подтверждена</b>\n\nНачислено: <b>{credits} 🐾</b>\nСумма: <b>{amount_rub} ₽</b>",
+  "referrer_notification_template": "🛒 <b>Покупка реферала {level} уровня</b>\nВаше начисление: <b>{reward} {unit}</b>"
+}
