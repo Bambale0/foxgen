@@ -2629,6 +2629,32 @@ async def handle_telegram_webhook(
         _TELEGRAM_WEBHOOK_TASKS.add(task)
         task.add_done_callback(_TELEGRAM_WEBHOOK_TASKS.discard)
 
+        async def _send_timed_out_direct_reply(method: TelegramMethod[Any]) -> None:
+            try:
+                await bot(method)
+                logger.info(
+                    "Telegram webhook direct reply sent after timeout: method=%s update_id=%s",
+                    method.__api_method__,
+                    update.update_id,
+                )
+            except Exception:
+                logger.exception(
+                    "Failed to send Telegram direct reply after timeout: update_id=%s",
+                    update.update_id,
+                )
+
+        def _send_timed_out_result(done: asyncio.Task[Any]) -> None:
+            if done.cancelled():
+                return
+            try:
+                result = done.result()
+            except Exception:
+                return
+            if isinstance(result, TelegramMethod):
+                send_task = asyncio.create_task(_send_timed_out_direct_reply(result))
+                _TELEGRAM_WEBHOOK_TASKS.add(send_task)
+                send_task.add_done_callback(_TELEGRAM_WEBHOOK_TASKS.discard)
+
         if direct_reply_candidate:
             try:
                 result = await asyncio.wait_for(
@@ -2636,6 +2662,7 @@ async def handle_telegram_webhook(
                     timeout=0.1,
                 )
             except TimeoutError:
+                task.add_done_callback(_send_timed_out_result)
                 result = None
 
             if isinstance(result, TelegramMethod):
