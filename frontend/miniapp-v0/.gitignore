@@ -15,3 +15,6 @@ node_modules
 .next/
 out/
 .DS_Store
+
+# Generated browser export
+.e2e-server/

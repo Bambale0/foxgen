@@ -7,6 +7,7 @@ export default tseslint.config(
   {
     ignores: [
       '.next/**',
+      '.e2e-server/**',
       'out/**',
       'node_modules/**',
       '__tests__/**',

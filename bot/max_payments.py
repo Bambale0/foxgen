@@ -13,7 +13,7 @@ from bot import database
 from bot import db as db_backend
 from bot.config import config
 from bot.max_catalog import MaxPresetManager, max_preset_manager
-from bot.max_store import apply_max_balance_delta, ensure_max_schema, ensure_max_user
+from bot.max_store import _balance_connection, apply_max_balance_delta, ensure_max_schema, ensure_max_user
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +32,8 @@ class MaxPaymentOrder:
     provider_payment_id: str | None
     checkout_url: str | None
     status: str
+    promo_code: str = ""
+    promo_bonus_credits: int = 0
 
 
 def _schema_lock() -> asyncio.Lock:
@@ -138,26 +140,18 @@ def _to_order(row: Any | None) -> MaxPaymentOrder | None:
 
 
 def _partner_config(catalog: MaxPresetManager) -> dict[str, float]:
-    raw = catalog.get_price_config().get("partner_program", {})
-    if not isinstance(raw, dict):
-        raw = {}
-    return {
-        "level1_percent": float(raw.get("level1_percent") or 0),
-        "level2_percent": float(raw.get("level2_percent") or 0),
-        "new_user_bonus_credits": float(raw.get("new_user_bonus_credits") or 0),
-        "inviter_bonus_credits": float(raw.get("inviter_bonus_credits") or 0),
-        "rub_per_credit": float(
-            (catalog.get_price_config().get("partner_exchange", {}) or {}).get(
-                "rub_per_credit", 10
-            )
-            or 10
-        ),
-    }
+    from bot.business_rules import get_business_rules
+    rules = get_business_rules()
+    return {key: float(rules[key]) for key in (
+        "level1_percent", "level2_percent", "new_user_bonus_credits",
+        "inviter_bonus_credits", "rub_per_credit",
+    )}
 
 
-async def _get_referrer(max_user_id: int) -> int | None:
-    await ensure_max_payment_schema()
-    async with db_backend.connect() as db:
+async def _get_referrer(max_user_id: int, *, connection=None) -> int | None:
+    if connection is None:
+        await ensure_max_payment_schema()
+    async with _balance_connection(connection) as db:
         _mapping_rows(db)
         cursor = await db.execute(
             "SELECT referrer_max_user_id FROM max_referrals WHERE invited_max_user_id = ?",
@@ -316,7 +310,7 @@ async def _set_payment_status(order_id: str, status: str) -> None:
             f"""
             UPDATE max_payment_orders
             SET status = ?, updated_at = CURRENT_TIMESTAMP{completed}
-            WHERE order_id = ?
+            WHERE order_id = ? AND status <> 'completed'
             """,
             (status, order_id),
         )
@@ -327,12 +321,16 @@ async def _pending_orders(limit: int = 50) -> list[MaxPaymentOrder]:
     await ensure_max_payment_schema()
     safe_limit = min(max(int(limit), 1), 200)
     async with db_backend.connect() as db:
+        from bot.payment_checkout import CHECKOUT_DDL
+        if not db_backend.is_postgres():
+            await db.execute(CHECKOUT_DDL)
         _mapping_rows(db)
         cursor = await db.execute(
             """
-            SELECT * FROM max_payment_orders
-            WHERE status = 'pending'
-            ORDER BY created_at ASC
+            SELECT o.* FROM max_payment_orders o
+            LEFT JOIN payment_checkout_intents p ON p.channel='max' AND p.order_id=o.order_id
+            WHERE o.status IN ('created', 'pending')
+            ORDER BY COALESCE(p.next_attempt_at,0), o.created_at ASC
             LIMIT ?
             """,
             (safe_limit,),
@@ -346,7 +344,7 @@ def _normalize_amount(value: Any) -> str:
         amount = Decimal(str(value)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
     except (InvalidOperation, TypeError, ValueError) as exc:
         raise ValueError("Invalid YooKassa payment amount") from exc
-    if amount <= 0:
+    if not amount.is_finite() or amount <= 0:
         raise ValueError("YooKassa payment amount must be positive")
     return format(amount, ".2f")
 
@@ -453,11 +451,16 @@ class MaxYooKassaService:
                 return dict(package)
         raise ValueError(f"Unknown MAX payment package: {package_id}")
 
-    async def create_checkout(self, max_user_id: int, package_id: str) -> MaxPaymentOrder:
+    async def create_checkout(self, max_user_id: int, package_id: str, *, promo_code: str | None = None) -> MaxPaymentOrder:
         if not self.enabled:
             raise RuntimeError("MAX YooKassa is not configured")
         package = self._package(package_id)
-        credits = float(package["credits"]) + float(package.get("bonus_credits") or 0)
+        from bot.database import get_promo_code_by_code, get_promo_bonus_for_credits
+        promo = await get_promo_code_by_code(promo_code, active_only=True) if promo_code else None
+        if promo_code and promo is None:
+            raise ValueError("Промокод не найден или выключен")
+        promo_bonus = get_promo_bonus_for_credits(package["credits"]) if promo else 0
+        credits = float(package["credits"]) + float(package.get("bonus_credits") or 0) + promo_bonus
         amount_rub = float(package["price_rub"])
         order_id = f"max_{uuid.uuid4().hex}"
         order = MaxPaymentOrder(
@@ -473,10 +476,8 @@ class MaxYooKassaService:
         )
         await _insert_payment_order(order)
 
-        payment = await self._request(
-            "POST",
-            "payments",
-            json_payload={
+        from bot.payment_checkout import save_checkout_intent
+        payload = {
                 "amount": {"value": _normalize_amount(amount_rub), "currency": "RUB"},
                 "capture": True,
                 "confirmation": {"type": "redirect", "return_url": self.return_url},
@@ -486,8 +487,13 @@ class MaxYooKassaService:
                     "product": "happyfox-max",
                     "channel": "max",
                     "max_user_id": str(max_user_id),
+                    **({"promo_code_id": str(promo.id), "promo_code": promo.code,
+                        "promo_bonus_credits": str(promo_bonus)} if promo and promo_bonus else {}),
                 },
-            },
+            }
+        await save_checkout_intent("max", order_id, payload)
+        payment = await self._request(
+            "POST", "payments", json_payload=payload,
             idempotence_key=_idempotence_key(order_id),
         )
         payment_id = str((payment or {}).get("id") or "").strip()
@@ -496,8 +502,7 @@ class MaxYooKassaService:
             confirmation.get("confirmation_url") or confirmation.get("url") or ""
         ).strip()
         if not payment_id or not checkout_url.startswith("https://"):
-            await _set_payment_status(order_id, "failed")
-            raise RuntimeError("YooKassa did not return MAX checkout data")
+            raise RuntimeError("ЮKassa пока не ответила. Заказ сохранён, проверка продолжится автоматически.")
 
         await _set_payment_provider_data(
             order_id,
@@ -507,10 +512,14 @@ class MaxYooKassaService:
         persisted = await get_max_payment_order(order_id)
         if persisted is None:
             raise RuntimeError("MAX payment order disappeared after checkout creation")
-        return persisted
+        from dataclasses import replace
+        return replace(persisted, promo_code=promo.code if promo else "", promo_bonus_credits=promo_bonus)
 
     async def get_remote_payment(self, payment_id: str) -> dict[str, Any] | None:
-        return await self._request("GET", f"payments/{str(payment_id).strip()}")
+        payment = await self._request("GET", f"payments/{str(payment_id).strip()}")
+        if payment and str(payment.get("id") or "") == str(payment_id).strip():
+            return payment
+        return None
 
     @staticmethod
     def _verification_state(
@@ -520,7 +529,7 @@ class MaxYooKassaService:
         status = str(payment.get("status") or "").strip().lower()
         if status in {"canceled", "cancelled", "failed", "rejected"}:
             return "failed", None
-        paid = bool(payment.get("paid")) or status == "succeeded"
+        paid = status == "succeeded" and payment.get("paid") is True
         if not paid:
             return "pending", None
 
@@ -547,12 +556,14 @@ class MaxYooKassaService:
             return "invalid", "max_user_mismatch"
         return "paid", None
 
-    async def _award_purchase_referrals(self, order: MaxPaymentOrder) -> None:
+    async def _award_purchase_referrals(self, order: MaxPaymentOrder, *, connection=None) -> None:
+        from bot.payment_delivery import enqueue_payment_notification
+        from bot.business_rules import referrer_message
         partner = _partner_config(self.catalog)
         rub_per_credit = partner["rub_per_credit"]
         if rub_per_credit <= 0:
             return
-        level1 = await _get_referrer(order.max_user_id)
+        level1 = await _get_referrer(order.max_user_id, connection=connection)
         if level1 is None:
             return
 
@@ -568,6 +579,7 @@ class MaxYooKassaService:
                 idempotency_key=f"maxrefpay:{order.order_id}:l1:{level1}",
                 amount_rub=order.amount_rub,
                 payment_provider="yookassa",
+                connection=connection,
                 provider_order_id=order.provider_payment_id,
                 metadata={
                     "buyer_max_user_id": order.max_user_id,
@@ -575,7 +587,12 @@ class MaxYooKassaService:
                 },
             )
 
-        level2 = await _get_referrer(level1)
+            await enqueue_payment_notification(
+                connection, channel="max", order_id=f"{order.order_id}:referrer:1",
+                recipient_id=level1, message=referrer_message(1, level1_credits, "🐾"),
+            )
+
+        level2 = await _get_referrer(level1, connection=connection)
         if level2 is None:
             return
         level2_credits = round(
@@ -590,12 +607,44 @@ class MaxYooKassaService:
                 idempotency_key=f"maxrefpay:{order.order_id}:l2:{level2}",
                 amount_rub=order.amount_rub,
                 payment_provider="yookassa",
+                connection=connection,
                 provider_order_id=order.provider_payment_id,
                 metadata={
                     "buyer_max_user_id": order.max_user_id,
                     "order_id": order.order_id,
                 },
             )
+            await enqueue_payment_notification(
+                connection, channel="max", order_id=f"{order.order_id}:referrer:2",
+                recipient_id=level2, message=referrer_message(2, level2_credits, "🐾"),
+            )
+
+    async def bind_remote_order(self, payment_id):
+        """Recover a lost creation response using provider-confirmed metadata."""
+        from dataclasses import replace
+        payment = await self.get_remote_payment(payment_id)
+        if not payment:
+            return None
+        metadata = payment.get("metadata") or {}
+        if not isinstance(metadata, dict) or metadata.get("channel") != "max":
+            return None
+        order = await get_max_payment_order(str(metadata.get("order_id") or ""))
+        if not order or order.provider_payment_id:
+            return order if order and order.provider_payment_id == payment_id else None
+        candidate = replace(order, provider_payment_id=payment_id)
+        state, reason = self._verification_state(candidate, payment)
+        if state != "paid":
+            return None
+        async with db_backend.connect() as connection:
+            await connection.execute(
+                "UPDATE max_payment_orders SET provider_payment_id=?, status='pending' "
+                "WHERE order_id=? AND status='created' "
+                "AND (provider_payment_id IS NULL OR provider_payment_id='')",
+                (payment_id, order.order_id),
+            )
+            await connection.commit()
+        fresh = await get_max_payment_order(order.order_id)
+        return fresh if fresh and fresh.provider_payment_id == payment_id else None
 
     async def complete_order(self, order_id: str) -> dict[str, Any]:
         order = await get_max_payment_order(order_id)
@@ -611,7 +660,20 @@ class MaxYooKassaService:
         if order.status == "failed":
             return {"ok": False, "status": "failed", "order": order}
         if not order.provider_payment_id:
-            return {"ok": False, "status": "provider_pending", "order": order}
+            from bot.payment_checkout import get_checkout_intent
+            payload = await get_checkout_intent("max", order.order_id)
+            if payload:
+                recovered = await self._request(
+                    "POST", "payments", json_payload=payload,
+                    idempotence_key=_idempotence_key(order.order_id),
+                )
+                payment_id = str((recovered or {}).get("id") or "")
+                checkout_url = str(((recovered or {}).get("confirmation") or {}).get("confirmation_url") or "")
+                if payment_id and checkout_url.startswith("https://"):
+                    await _set_payment_provider_data(order.order_id, payment_id=payment_id, checkout_url=checkout_url)
+                    order = await get_max_payment_order(order.order_id) or order
+            if not order.provider_payment_id:
+                return {"ok": False, "status": "provider_pending", "order": order}
 
         payment = await self.get_remote_payment(order.provider_payment_id)
         if not payment:
@@ -635,31 +697,62 @@ class MaxYooKassaService:
                 "order": order,
             }
 
-        balance = await apply_max_balance_delta(
-            order.max_user_id,
-            order.credits,
-            tx_type="topup",
-            idempotency_key=f"maxpay:{order.order_id}:credit",
-            amount_rub=order.amount_rub,
-            payment_provider="yookassa",
-            provider_order_id=order.provider_payment_id,
-            metadata={"order_id": order.order_id, "package_id": order.package_id},
+        from bot.payment_delivery import (
+            enqueue_payment_notification, ensure_sqlite_outbox,
         )
-        await self._award_purchase_referrals(order)
-        await _set_payment_status(order.order_id, "completed")
+        from bot.business_rules import buyer_message
+        async with db_backend.connect() as connection:
+            connection.row_factory = db_backend.Row
+            await ensure_sqlite_outbox(connection)
+            await connection.execute("BEGIN IMMEDIATE")
+            fresh = await (await connection.execute(
+                "SELECT * FROM max_payment_orders WHERE order_id=?"
+                + (" FOR UPDATE" if db_backend.is_postgres() else ""),
+                (order.order_id,),
+            )).fetchone()
+            current = _to_order(fresh)
+            if current is None or current.status == "failed":
+                await connection.rollback()
+                return {"ok": False, "status": "failed"}
+            if current.status == "completed":
+                await connection.rollback()
+                return {"ok": True, "status": "completed", "already_completed": True, "order": current}
+            balance = await apply_max_balance_delta(
+                order.max_user_id, order.credits, tx_type="topup",
+                idempotency_key=f"maxpay:{order.order_id}:credit",
+                amount_rub=order.amount_rub, payment_provider="yookassa",
+                provider_order_id=order.provider_payment_id,
+                metadata={"order_id": order.order_id, "package_id": order.package_id},
+                connection=connection,
+            )
+            await self._award_purchase_referrals(order, connection=connection)
+            from bot.payment_checkout import redeem_max_checkout_promo
+            await redeem_max_checkout_promo(connection, order)
+            await connection.execute(
+                "UPDATE max_payment_orders SET status='completed', "
+                "completed_at=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP WHERE order_id=?",
+                (order.order_id,),
+            )
+            await enqueue_payment_notification(
+                connection, channel="max", order_id=order.order_id,
+                recipient_id=order.max_user_id,
+                message=buyer_message(order.credits, order.amount_rub),
+            )
+            await connection.commit()
         completed = await get_max_payment_order(order.order_id) or order
-        return {
-            "ok": True,
-            "status": "completed",
-            "already_completed": False,
-            "balance": balance,
-            "order": completed,
-        }
+        return {"ok": True, "status": "completed", "already_completed": False,
+                "balance": balance, "order": completed}
 
     async def reconcile_pending(self, limit: int = 50) -> list[dict[str, Any]]:
         results: list[dict[str, Any]] = []
         for order in await _pending_orders(limit):
-            result = await self.complete_order(order.order_id)
+            from bot.payment_checkout import record_reconciliation_attempt
+            await record_reconciliation_attempt("max", order.order_id)
+            try:
+                result = await self.complete_order(order.order_id)
+            except Exception:
+                logger.exception("MAX payment reconciliation order failed: order_id=%s", order.order_id)
+                continue
             if result.get("status") == "completed" and not result.get(
                 "already_completed"
             ):

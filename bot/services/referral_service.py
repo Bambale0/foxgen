@@ -7,8 +7,7 @@
 
 import logging
 import html
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from dataclasses import dataclass
 from typing import Any, Optional
 
 import aiohttp
@@ -20,6 +19,18 @@ from bot.config import config
 # ---------------------------------------------------------------------------
 # Парсинг реферального кода из start_param (deep link)
 # ---------------------------------------------------------------------------
+from bot.business_rules import get_business_rules
+from bot.database import (
+    DATABASE_PATH,
+    REFERRAL_ANTIFRAUD_BLOCK_CODES,
+    REFERRAL_ANTIFRAUD_BLOCK_REFERRER_IDS,
+    REFERRAL_ANTIFRAUD_BURST_MAX,
+    REFERRAL_ANTIFRAUD_BURST_WINDOW_SECONDS,
+    REFERRAL_ANTIFRAUD_MAX_PER_HOUR,
+    REFERRAL_ANTIFRAUD_MAX_PER_DAY,
+)
+
+
 def referral_code_from_start_param(start_param: Any) -> str:
     """Извлекает реферальный код из start_param Telegram Mini App.
 
@@ -55,17 +66,6 @@ def referral_code_from_start_param(start_param: Any) -> str:
             return referral_code.strip().upper() if sep else ""
 
     return ""
-from bot.database import (
-    DATABASE_PATH,
-    PARTNER_INVITER_BONUS,
-    REFERRAL_ANTIFRAUD_BLOCK_CODES,
-    REFERRAL_ANTIFRAUD_BLOCK_REFERRER_IDS,
-    REFERRAL_ANTIFRAUD_BURST_MAX,
-    REFERRAL_ANTIFRAUD_BURST_WINDOW_SECONDS,
-    REFERRAL_ANTIFRAUD_MAX_PER_HOUR,
-    REFERRAL_ANTIFRAUD_MAX_PER_DAY,
-)
-
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -784,7 +784,7 @@ async def process_referral_click(
         # Начисляем бонус рефереру
         await db.execute(
             "UPDATE users SET credits = credits + ?, referral_earned = referral_earned + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-            (PARTNER_INVITER_BONUS, PARTNER_INVITER_BONUS, referrer_id),
+            (get_business_rules()["inviter_bonus_credits"], get_business_rules()["inviter_bonus_credits"], referrer_id),
         )
 
         result = ReferralResult(
@@ -1030,7 +1030,7 @@ async def attach_referral_in_transaction(
     # Начисляем бонус рефереру
     await db.execute(
         "UPDATE users SET credits = credits + ?, referral_earned = referral_earned + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-        (PARTNER_INVITER_BONUS, PARTNER_INVITER_BONUS, referrer_id),
+        (get_business_rules()["inviter_bonus_credits"], get_business_rules()["inviter_bonus_credits"], referrer_id),
     )
 
     result = ReferralResult(

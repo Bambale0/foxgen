@@ -13,13 +13,11 @@ from aiohttp import web
 
 from bot import db as db_backend
 from bot.config import config
+from bot.business_rules import promo_bonus_map
 from bot.database import (
-    PROMO_BONUS_BY_CREDITS,
-    add_credits,
     complete_payment_atomic,
     create_miniapp_notification,
     create_transaction,
-    credit_first_payment_referral_bonus,
     get_promo_bonus_for_credits,
     get_promo_code_by_code,
     get_or_create_user,
@@ -27,7 +25,6 @@ from bot.database import (
     get_transaction_by_order,
     get_user_settings,
     normalize_promo_code,
-    record_promo_redemption,
     update_transaction_payment_id,
     update_transaction_status,
 )
@@ -201,7 +198,7 @@ async def _notify_referrers_about_purchase(
 def _build_promo_rules_text() -> str:
     return "\n".join(
         f"• {credits}🍌 → +<code>{bonus}</code>🍌"
-        for credits, bonus in PROMO_BONUS_BY_CREDITS.items()
+        for credits, bonus in promo_bonus_map().items()
     )
 
 
@@ -586,9 +583,8 @@ async def _complete_transaction(order_id: str, bot: Bot | None = None) -> dict[s
     transaction = result.get("transaction")
     telegram_id = result.get("telegram_id")
     referral_bonus = result.get("referral_bonus") or {}
-    promo_bonus = result.get("promo_bonus") or {}
 
-    if transaction and telegram_id:
+    if transaction and telegram_id and transaction.provider != "yookassa":
         await _notify_referrers_about_purchase(
             bot,
             buyer_telegram_id=telegram_id,
@@ -834,6 +830,7 @@ async def initiate_payment(callback: types.CallbackQuery, state: FSMContext):
     promo_bonus = _promo_bonus_for_package(promo, package)
     total_credits = total_package_credits(package, promo_bonus)
     description = f"Покупка {total_credits} бананов ({package['name']})"
+    user = await get_or_create_user(callback.from_user.id)
 
     if provider == TELEGRAM_STARS_PROVIDER:
         stars_amount = package_stars_amount(package)
@@ -940,7 +937,12 @@ async def initiate_payment(callback: types.CallbackQuery, state: FSMContext):
                 )
                 return
 
-            result = await yookassa_service.create_payment(
+            from bot.payment_checkout import create_telegram_checkout
+            result = await create_telegram_checkout(
+                user_id=user.id, credits=total_credits,
+                promo_code_id=promo.id if promo and promo_bonus > 0 else None,
+                promo_code=promo.code if promo and promo_bonus > 0 else None,
+                promo_bonus_credits=promo_bonus,
                 amount_rub=float(package["price_rub"]),
                 order_id=order_id,
                 description=description,
@@ -1007,19 +1009,19 @@ async def initiate_payment(callback: types.CallbackQuery, state: FSMContext):
         )
         return
 
-    user = await get_or_create_user(callback.from_user.id)
-    await create_transaction(
-        order_id=order_id,
-        user_id=user.id,
-        payment_id=contract_id or str(invoice_id),
-        provider=provider,
-        credits=total_credits,
-        amount_rub=float(package["price_rub"]),
-        status="pending",
-        promo_code_id=promo.id if promo and promo_bonus > 0 else None,
-        promo_code=promo.code if promo and promo_bonus > 0 else None,
-        promo_bonus_credits=promo_bonus,
-    )
+    if provider != "yookassa":
+        await create_transaction(
+            order_id=order_id,
+            user_id=user.id,
+            payment_id=contract_id or str(invoice_id),
+            provider=provider,
+            credits=total_credits,
+            amount_rub=float(package["price_rub"]),
+            status="pending",
+            promo_code_id=promo.id if promo and promo_bonus > 0 else None,
+            promo_code=promo.code if promo and promo_bonus > 0 else None,
+            promo_bonus_credits=promo_bonus,
+        )
 
     bonus_text = ""
     if package_bonus > 0:
@@ -1509,161 +1511,5 @@ async def handle_lava_webhook(request: web.Request):
 
 
 async def handle_yookassa_webhook(request: web.Request):
-    """Webhook updates from YooKassa."""
-    try:
-        raw_body = await request.read()
-        if not raw_body:
-            return web.Response(status=200)
-
-        # Validate webhook signature if configured
-        try:
-            secret = config.YOOKASSA_WEBHOOK_SECRET
-            if secret:
-                import base64
-                import hashlib
-                import hmac
-
-                verified = False
-                # Common header names YooKassa might send
-                candidate_headers = [
-                    request.headers.get("X-Webhook-Signature"),
-                    request.headers.get("X-Checkout-Signature"),
-                    request.headers.get("X-Signature"),
-                ]
-                # Compute HMAC-SHA256
-                digest = hmac.new(secret.encode(), raw_body, hashlib.sha256)
-                hex_expected = digest.hexdigest()
-                b64_expected = base64.b64encode(digest.digest()).decode()
-
-                for hdr in candidate_headers:
-                    if not hdr:
-                        continue
-                    if hmac.compare_digest(hdr, hex_expected) or hmac.compare_digest(
-                        hdr, b64_expected
-                    ):
-                        verified = True
-                        break
-
-                if not verified:
-                    logger.warning(
-                        "Rejected YooKassa webhook: invalid signature header_names=%s",
-                        [
-                            k
-                            for k in request.headers.keys()
-                            if "yookassa" in k.lower() or "signature" in k.lower()
-                        ],
-                    )
-                    return web.Response(status=200)
-        except Exception:
-            logger.exception("Error while validating YooKassa webhook signature")
-            return web.Response(status=200)
-
-        try:
-            data = json.loads(raw_body.decode("utf-8"))
-        except Exception:
-            logger.warning("YooKassa webhook received invalid JSON")
-            return web.Response(status=200)
-
-        # Try to extract payment id from common YooKassa payload shapes
-        payment_id = None
-        obj = data.get("object") or {}
-        if isinstance(obj, dict):
-            payment_id = obj.get("id") or _extract_first(obj, ["id", "payment_id"])
-
-        # Fallback: sometimes payload wraps payment under 'payment'
-        if not payment_id:
-            payment_id = _extract_first(data, ["payment_id", "id"])  # recursive search
-
-        if not payment_id:
-            logger.warning("YooKassa webhook: no payment id found in payload")
-            return web.Response(status=200)
-
-        # Fetch payment details from YooKassa SDK
-        payment = await yookassa_service.get_payment(payment_id)
-        if not payment:
-            return web.Response(status=200)
-
-        # Try to resolve order_id from metadata, else lookup by payment_id in DB
-        order_id = yookassa_service.extract_order_id(
-            payment.get("Raw")
-            if isinstance(payment.get("Raw"), dict)
-            else payment.get("Raw", {})
-        )
-        if not order_id:
-            # DB lookup by payment_id
-
-            async with db_backend.connect() as db_conn:
-                db_conn.row_factory = db_backend.Row
-                cursor = await db_conn.execute(
-                    "SELECT order_id FROM transactions WHERE payment_id = ? AND provider = ? LIMIT 1",
-                    (payment_id, "yookassa"),
-                )
-                row = await cursor.fetchone()
-                if row:
-                    order_id = row["order_id"]
-
-        if not order_id:
-            logger.warning(
-                "YooKassa webhook: cannot resolve order_id for payment %s", payment_id
-            )
-            return web.Response(status=200)
-
-        transaction = await get_transaction_by_order(order_id)
-        if not transaction:
-            return web.Response(status=200)
-
-        telegram_id = await get_telegram_id_by_user_id(transaction.user_id)
-        if not telegram_id:
-            logger.warning(
-                "Cannot resolve telegram_id for user_id=%s", transaction.user_id
-            )
-            return web.Response(status=200)
-
-        paid = bool(payment.get("paid")) or (payment.get("status") or "").lower() in (
-            "succeeded",
-            "paid",
-            "captured",
-        )
-
-        if not paid:
-            return web.Response(status=200)
-
-        # Атомарное завершение — защита от двойного начисления при повторных вебхуках
-        completion = await _complete_transaction(order_id, bot=request.app.get("bot"))
-        if completion.get("already_completed"):
-            logger.info("YooKassa webhook: order %s already processed, skipping", order_id)
-            return web.Response(status=200)
-        if not completion.get("ok"):
-            logger.error("YooKassa webhook: failed to complete order %s reason=%s", order_id, completion.get("reason"))
-            return web.Response(status=200)
-
-        transaction = completion["transaction"]
-        referral_bonus = completion.get("referral_bonus") or {}
-        promo_bonus = completion.get("promo_bonus") or {}
-
-        bonus_text = _build_promo_bonus_text(promo_bonus) + _build_bonus_text(
-            referral_bonus
-        )
-
-        try:
-            await _notify_user(
-                request.app["bot"],
-                telegram_id,
-                "✅ <b>Оплата успешно обработана</b>\n"
-                f"• Начислено: <code>{transaction.credits}</code> бананов\n"
-                f"• Сумма: <code>{transaction.amount_rub}</code> ₽{bonus_text}",
-                parse_mode="HTML",
-            )
-        except TelegramBadRequest as e:
-            if _is_ignored_telegram_error(e):
-                logger.warning(
-                    "Skipping YooKassa notification for user %s: %s", telegram_id, e
-                )
-            else:
-                logger.error("Failed to notify user %s: %s", telegram_id, e)
-
-        return web.Response(status=200)
-
-    except Exception as e:
-        logger.exception("Error processing YooKassa webhook: %s", e)
-        return web.Response(status=200)
+    from bot.yookassa_webhook import handle_webhook
+    return await handle_webhook(request)

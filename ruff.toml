@@ -1,9 +1,16 @@
+# Explicit pre-0.16 Ruff defaults keep the established gate stable across upgrades.
+# Runtime compatibility modules deliberately install patches between imports.
+[lint]
+select = ["E4", "E7", "E9", "F"]
+
 # Seedance 2.5 and channel/provider adapters are isolated compatibility layers
 # around existing Mini App / Telegram / MAX / webhook seams. Keep exceptions
 # local to those adapters; changed-file linting remains strict everywhere else.
 
 [lint.per-file-ignores]
-"bot/handlers/__init__.py" = ["I001"]
+"bot/handlers/__init__.py" = ["I001", "E402"]
+"bot/database.py" = ["E402"]
+"bot/miniapp.py" = ["E402"]
 "bot/services/partner_approval_service.py" = ["SIM117"]
 "bot/handlers/seedance_25_fullstack.py" = [
   "BLE001",

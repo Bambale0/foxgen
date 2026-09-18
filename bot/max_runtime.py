@@ -141,24 +141,7 @@ async def _max_payment_reconcile_loop(
 ) -> None:
     while not stop_event.is_set():
         try:
-            completed = await payments.reconcile_pending(limit=50)
-            for item in completed:
-                order = item.get("order")
-                if order is None:
-                    continue
-                balance = float(item.get("balance") or 0)
-                try:
-                    await client.send_message(
-                        int(order.max_user_id),
-                        "✅ <b>Оплата MAX подтверждена</b>\n\n"
-                        f"Начислено: <b>{order.credits:g} 🐾</b>\n"
-                        f"Баланс: <b>{balance:g} 🐾</b>",
-                    )
-                except Exception:
-                    logger.exception(
-                        "Failed to send MAX payment notification: order=%s",
-                        order.order_id,
-                    )
+            await payments.reconcile_pending(limit=50)
         except Exception:
             logger.exception("MAX payment reconciliation tick failed")
         try:
@@ -204,14 +187,15 @@ def setup_max_runtime(app: web.Application) -> None:
         await _ensure_max_subscription(client, webhook_url=runtime.webhook_url)
         await _ensure_max_quick_commands(client)
         stop_event = asyncio.Event()
-        reconcile_task = asyncio.create_task(
+        from bot.payment_readiness import register_payment_worker
+        reconcile_task = register_payment_worker("max_reconcile", asyncio.create_task(
             _max_payment_reconcile_loop(
                 payments=payments,
                 client=client,
                 interval_seconds=runtime.payment_reconcile_seconds,
                 stop_event=stop_event,
             )
-        )
+        ))
         try:
             yield
         finally:
