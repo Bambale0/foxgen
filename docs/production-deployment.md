@@ -75,7 +75,7 @@ happyfox-docker-prune.timer enabled and waiting
 Telegram webhook URL is https://api.happy-fox.online/webhook
 Telegram pending_update_count = 0 and last_error_message is empty
 Telegram native chat menu type = commands
-MAX has only the current api.happy-fox.online subscription
+MAX has exactly one subscription, matching MAX_WEBHOOK_URL (api.happy-fox.online)
 MAX native quick commands are /start, /feed, /prompts, /help, /ref, /earn
 YooKassa/provider webhook routes are live
 ```
@@ -227,3 +227,15 @@ channel-specific smoke result
 - `instagram-channel.md`
 - `development-deployment.md`
 - `../QA_AUDIT_CHECKLIST.md`
+
+### MAX subscription verification
+
+`scripts/check_max_connectivity.py` requires exactly one configured canonical
+subscription, as well as the native quick-command contract. An extra historical
+endpoint fails deployment verification: two listeners on the same HappyFox bot
+can process the same update independently. The check never deletes subscriptions.
+Before changing a binding, verify the native bot identity, preserve subscription
+metadata outside Git, and target only the identified obsolete HappyFox binding.
+Subscription secrets are not returned by MAX; restoration needs the receiving
+service's original secret and a POST subscription request. Never clean bindings
+on another bot or rotate credentials as an automatic remedy.
