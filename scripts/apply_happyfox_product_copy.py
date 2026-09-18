@@ -108,6 +108,14 @@ def _patch_telegram_launch() -> None:
     new_query_anchor = """    query = dict(parse_qsl(parts.query, keep_blank_values=True))
     release = str(os.getenv("HAPPYFOX_RELEASE", "")).strip()
     if release and release.lower() not in {"unknown", "local"}:
+        # Telegram and MAX WebViews can retain an older document for the same
+        # launch URL. Pin production WebApp launches to the image revision.
+        query["release"] = release
+    if code:
+"""
+    legacy_query_anchor = """    query = dict(parse_qsl(parts.query, keep_blank_values=True))
+    release = str(os.getenv("HAPPYFOX_RELEASE", "")).strip()
+    if release and release.lower() not in {"unknown", "local"}:
         # Telegram WebViews can retain an older document for the same launch URL.
         # Pin every production WebApp launch to the immutable image revision.
         query["release"] = release
@@ -115,15 +123,15 @@ def _patch_telegram_launch() -> None:
 """
     if old_query_anchor in keyboards:
         keyboards = keyboards.replace(old_query_anchor, new_query_anchor, 1)
+    elif legacy_query_anchor in keyboards:
+        keyboards = keyboards.replace(legacy_query_anchor, new_query_anchor, 1)
     elif new_query_anchor not in keyboards:
         raise RuntimeError("HappyFox versioned WebApp URL anchor was not found")
     KEYBOARDS_PATH.write_text(keyboards, encoding="utf-8")
 
     # Telegram system-menu ownership belongs to apply_happyfox_main_menu().
-    # Do not temporarily replace native quick commands with a WebApp button here.
-    main_text = MAIN_PATH.read_text(encoding="utf-8")
-    main_text = main_text.replace("    _mini_app_url_with_start_param,\n", "", 1)
-    MAIN_PATH.write_text(main_text, encoding="utf-8")
+    # It uses _mini_app_url_with_start_param() so native menu launches get the
+    # same immutable release query as inline WebApp buttons.
 
 
 def _patch_miniapp() -> None:

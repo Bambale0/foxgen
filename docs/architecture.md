@@ -61,7 +61,7 @@ MAX identities are native MAX `user_id` values. MAX administrators are database-
 
 ## 4. Telegram surface
 
-Telegram is the full-featured surface. Its native system menu is reserved for quick commands, while the Mini App is opened from explicit inline `WebAppInfo` buttons. Deployment must reconcile the menu back to `type=commands` and must never replace it with `MenuButtonWebApp`.
+Telegram is the full-featured surface. Its native system menu opens the Mini App through `MenuButtonWebApp`, and quick commands remain registered in the bot command list. Deployment must reconcile the default menu to the versioned Telegram Mini App URL.
 
 The canonical Telegram Mini App public URL is `https://app.happy-fox.online/mini-app/`. MAX-specific origin changes must not rewrite this URL.
 

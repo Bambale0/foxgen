@@ -3,7 +3,9 @@
 import { createContext, useContext, useState, useCallback, useEffect, useRef, type ReactNode } from 'react'
 import type { AppState, BootstrapResponse, FeedDeepLink, FeedItem, PromptItem, PromptPreset, SavedReference, ScenarioType, Task, TaskDetail, UploadedFile, VideoPromptPreset, WorkspacePanel } from './types'
 import { mockAppState, mockImageModels, mockVideoModels } from './mock-data'
-import { bootstrapApp, fetchFeedItem, fetchPromptDetail, fetchTaskDetail, getInitData, getStartParamFallback, hasTelegramInitData, waitForTelegramInitData } from './api'
+import { MiniAppAuthError, bootstrapApp, fetchFeedItem, fetchPromptDetail, fetchTaskDetail, getInitData, getMiniAppPlatform, getStartParamFallback, hasTelegramInitData, waitForTelegramInitData } from './api'
+import { clearMiniAppInitData } from './miniapp-init-data'
+import { reportMiniAppEvent } from './miniapp-telemetry'
 import { parseMiniAppStartParam } from './start-params'
 import { isVideoTrendItem, resolveTrendSettings } from './trend-settings'
 
@@ -46,6 +48,7 @@ const imageModelDefaults = new Map(mockImageModels.map((model) => [model.id, mod
 const videoModelDefaults = new Map(mockVideoModels.map((model) => [model.id, model]))
 const telegramLockedMessage = 'Откройте Mini App через Telegram. В обычном браузере генерации и история не запускаются.'
 const videoScenarios = new Set<ScenarioType>(['text', 'imgtxt', 'video', 'avatar', 'audio', 'character'])
+const launchBootstrapDelaysMs = [1200, 3000]
 
 function normalizeVideoScenario(value?: string | null): ScenarioType {
   return videoScenarios.has(value as ScenarioType) ? (value as ScenarioType) : 'text'
@@ -315,15 +318,43 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setState(prev => ({ ...prev, isLoading: true, error: null }))
     const hasInitData = hasTelegramInitData() || await waitForTelegramInitData(5000)
     if (!hasInitData) {
+      reportMiniAppEvent('launch-locked', { init_data_len: 0 })
       applyLockedState('Не получены данные входа. Закройте окно и откройте Mini App заново из Telegram или MAX.')
       return
     }
-    try {
-      const data = await bootstrapApp()
-      applyBootstrap(data)
-    } catch {
-      applyBootstrapErrorState('Не удалось обновить данные прямо сейчас. Показываю только подтверждённые данные без демо-подстановок.')
+
+    const launchInitDataLength = getInitData().length
+
+    // A transient launch failure must not strand the user on the sign-in gate:
+    // retry the handshake a bounded number of times before locking the app.
+    for (let attempt = 0; attempt <= launchBootstrapDelaysMs.length; attempt += 1) {
+      try {
+        const data = await bootstrapApp()
+        applyBootstrap(data)
+        reportMiniAppEvent('launch-live', { init_data_len: launchInitDataLength })
+        return
+      } catch (error) {
+        if (error instanceof MiniAppAuthError) {
+          // The backend refused this launch: drop the cached copy so the next
+          // attempt cannot replay the same rejected signature.
+          reportMiniAppEvent('launch-auth-rejected', {
+            status: 401,
+            init_data_len: launchInitDataLength,
+          })
+          clearMiniAppInitData(getMiniAppPlatform() === 'max' ? 'max' : 'telegram')
+          break
+        }
+        const delay = launchBootstrapDelaysMs[attempt]
+        if (delay === undefined) break
+        reportMiniAppEvent('launch-retry', { init_data_len: launchInitDataLength })
+        await new Promise<void>((resolve) => {
+          window.setTimeout(resolve, delay)
+        })
+      }
     }
+
+    reportMiniAppEvent('launch-locked', { init_data_len: launchInitDataLength })
+    applyBootstrapErrorState('Не удалось обновить данные прямо сейчас. Показываю только подтверждённые данные без демо-подстановок.')
   }, [applyBootstrap, applyBootstrapErrorState, applyLockedState])
 
   const applyFeedRemix = useCallback((item: FeedItem) => {
