@@ -27,6 +27,24 @@ class _Dispatcher:
         return self.result
 
 
+class _SlowDispatcher(_Dispatcher):
+    async def feed_update(self, bot, update, **kwargs):
+        self.calls.append((bot, update, kwargs))
+        await asyncio.sleep(0.2)
+        return self.result
+
+
+class _CallableBot:
+    default = DefaultBotProperties()
+
+    def __init__(self) -> None:
+        self.calls = []
+
+    async def __call__(self, method):
+        self.calls.append(method)
+        return True
+
+
 def _plain_start_update() -> dict:
     return {
         "update_id": 123,
@@ -78,6 +96,34 @@ def test_deep_link_start_stays_background(monkeypatch) -> None:
 
     assert response.status == 200
     assert response.text == "OK"
+
+
+def test_plain_start_timeout_sends_deferred_reply(monkeypatch) -> None:
+    from bot.main import handle_telegram_webhook
+
+    monkeypatch.setattr(config, "WEBHOOK_SECRET_TOKEN", "")
+    monkeypatch.setattr(config, "INTERNAL_API_SECRET", "")
+
+    method = SendMessage(chat_id=42, text="late-ok")
+    dispatcher = _SlowDispatcher(method)
+    bot = _CallableBot()
+
+    async def scenario():
+        response = await handle_telegram_webhook(
+            _Request(_plain_start_update()),
+            bot,
+            dispatcher,
+        )
+
+        assert response.status == 200
+        assert response.text == "OK"
+        assert dispatcher.calls[0][2]["webhook_reply_enabled"] is True
+
+        await asyncio.sleep(0.25)
+
+        assert bot.calls == [method]
+
+    asyncio.run(scenario())
 
 
 def test_dispatcher_propagates_direct_reply_context(monkeypatch) -> None:
