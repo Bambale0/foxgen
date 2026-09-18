@@ -1,3 +1,11 @@
+# Active: MAX subscription release guard
+
+Baseline: main aca01a755fd5eedb4b4828b7ea0873d094ef8897, PR259 deployed through canonical workflow35358516055. Real payment terminal replays passed both webhook aliases for Telegram succeeded and MAX canceled, with unchanged balances/outbox. Readiness/revisions/migration3 passed. Postflight found two subscriptions on the verified HappyFox MAX bot: canonical plus a legacy Alena URL. Existing check_max_connectivity only validates JSON shape/commands, allowing a false successful deployment. Legacy binding is removed only from this verified HappyFox bot, exact URL guarded, subscription metadata backed up privately; no other bot/project/data touched.
+
+Acceptance: deploy verifier requires exactly one subscription matching configured MAX_WEBHOOK_URL; rejects missing/malformed/foreign/duplicate entries; checks remain read-only and never delete arbitrary subscriptions. Reuse existing connectivity CLI and canonical deploy call. TDD through public check() with mocked native API; changed-file Ruff/compile; exact-head CI, two-axis review, reviewed PR merge and canonical deploy. No DB migration/new policy/config/credentials. Telegram/Mini App/Instagram behavior unchanged; compatibility covered by full CI. Skills retained: primary ask-matt/TDD/code-review, claw QA, wondelai release-it, anthropics webapp-testing. Native payment buyers/cabinet remain external pending. Telegram's last_error is historical504 from2026-09-17T22:39:25Z, preceding this release; pending0 and direct/relay auth gates401 are healthy. Do not erase diagnostic history or claim a fresh native update/payment without evidence.
+
+---
+
 # Active: unified YooKassa payment recovery
 
 Baseline main: d74bf7a856ce64e7e06057ca8edcdc28e2932b85. Branch: fix/unified-yookassa-payments.
