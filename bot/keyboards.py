@@ -4,7 +4,7 @@ import os
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from aiogram import types
-from aiogram.types import CopyTextButton, InlineKeyboardButton, WebAppInfo
+from aiogram.types import InlineKeyboardButton, WebAppInfo
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from bot.config import config
@@ -25,6 +25,11 @@ def _mini_app_url_with_start_param(start_param: str | None = None, referral_code
     param = str(start_param or "").strip()
     parts = urlsplit(base_url)
     query = dict(parse_qsl(parts.query, keep_blank_values=True))
+    release = str(os.getenv("HAPPYFOX_RELEASE", "")).strip()
+    if release and release.lower() not in {"unknown", "local"}:
+        # Telegram and MAX WebViews can retain an older document for the same
+        # launch URL. Pin production WebApp launches to the image revision.
+        query["release"] = release
     if code:
         query["ref"] = code
     if param:
@@ -604,7 +609,6 @@ def get_create_video_keyboard(
         builder.button(text=f"{'✅ ' if current_orientation == 'video' else ''}🎬 Video orient", callback_data="v_orientation_video")
 
     pricing_quality = _video_pricing_quality(current_model, current_veo_resolution, current_omni_resolution, current_mode, current_grok_resolution)
-    total_cost = preset_manager.get_video_cost_with_quality(current_model, current_duration, pricing_quality)
     per_second_cost = preset_manager.get_video_cost_per_second(current_model, current_duration, pricing_quality)
     builder.button(text=f"Цена: {per_second_cost}🍌/с", callback_data="ignore")
     builder.button(text="🏠 Главное меню", callback_data="back_main")
@@ -736,9 +740,12 @@ def get_create_image_keyboard(
     if len(ratio_buttons) <= 3:
         builder.row(*ratio_buttons)
     elif len(ratio_buttons) <= 5:
-        builder.row(*ratio_buttons[:3]); builder.row(*ratio_buttons[3:])
+        builder.row(*ratio_buttons[:3])
+        builder.row(*ratio_buttons[3:])
     else:
-        builder.row(*ratio_buttons[:3]); builder.row(*ratio_buttons[3:6]); builder.row(*ratio_buttons[6:])
+        builder.row(*ratio_buttons[:3])
+        builder.row(*ratio_buttons[3:6])
+        builder.row(*ratio_buttons[6:])
     if current_service in {"banana_pro", "banana_2", "nanobanana", "nano_banana_pro", "nano-banana-pro"}:
         q = str(img_quality or "2K").upper()
         builder.row(
@@ -750,7 +757,8 @@ def get_create_image_keyboard(
     for count in [1, 2, 4, 6]:
         marker = "◉" if current_count == count else "○"
         count_buttons.append(InlineKeyboardButton(text=f"{marker} {count}x", callback_data=f"img_count_{count}"))
-    builder.row(*count_buttons[:2]); builder.row(*count_buttons[2:])
+    builder.row(*count_buttons[:2])
+    builder.row(*count_buttons[2:])
     if current_service in {"seedream_edit", "seedream_5_pro"}:
         basic_marker = "◉" if img_quality == "basic" else "○"
         high_marker = "◉" if img_quality == "high" else "○"

@@ -13,7 +13,7 @@ from pathlib import Path
 KEYBOARDS_PATH = Path("bot/keyboards.py")
 GENERATION_PATH = Path("bot/handlers/generation.py")
 
-VIDEO_UI_IMPORT_AND_WRAP = '''\n\n# HappyFox product UI: v7_kate-style dynamic video controls on one screen.\nfrom bot.happyfox_video_ui import happyfox_dynamic_video_keyboard\n\nget_create_video_keyboard = happyfox_dynamic_video_keyboard(get_create_video_keyboard)\n'''
+VIDEO_UI_IMPORT_AND_WRAP = '''\n\n# HappyFox product UI: v7_kate-style dynamic video controls on one screen.\nfrom bot.happyfox_video_ui import happyfox_dynamic_video_keyboard  # noqa: E402\n\nget_create_video_keyboard = happyfox_dynamic_video_keyboard(get_create_video_keyboard)\n'''
 
 OLD_CREATE_VIDEO_ENTRY = '''@router.callback_query(F.data == "create_video_new")\nasync def show_create_video_menu(callback: types.CallbackQuery, state: FSMContext):\n    """Пошаговый вход в видео: модель -> настройки/медиа/промпт."""\n    await _init_default_video_state(state)\n    await state.update_data(video_flow_step="select_model")\n    await _show_video_model_selection_screen(callback, state)\n    await callback.answer()\n'''
 

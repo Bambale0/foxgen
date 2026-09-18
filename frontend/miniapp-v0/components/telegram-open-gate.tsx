@@ -1,11 +1,12 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { ExternalLink, LoaderCircle, Send, Sparkles } from 'lucide-react'
+import { ExternalLink, LoaderCircle, RefreshCw, Send, Sparkles } from 'lucide-react'
 import {
   getApiBasePath,
   getRuntimeBotUsername,
   getStartParamFallback,
+  isNativeMiniAppClient,
 } from '@/lib/api'
 import { BRAND_NAME } from '@/lib/brand'
 import { useApp } from '@/lib/app-context'
@@ -35,15 +36,47 @@ function setBrowserInitData(initData: string) {
   window.location.hash = params.toString()
 }
 
+// Inside a native messenger WebView the launch handshake must recover on its own;
+// a browser Telegram Login widget cannot authenticate a native launch.
+const nativeClientRetryDelaysMs = [2000, 5000]
+
+type MiniAppClientKind = 'unknown' | 'native' | 'browser'
+
 export function TelegramOpenGate() {
-  const { state } = useApp()
+  const { state, refreshTasks } = useApp()
   const widgetRef = useRef<HTMLDivElement | null>(null)
   const [botUsername, setBotUsername] = useState('')
   const [telegramUrl, setTelegramUrl] = useState('')
   const [loginStatus, setLoginStatus] = useState<'idle' | 'loading' | 'error'>('idle')
   const [widgetReady, setWidgetReady] = useState(false)
+  const [clientKind, setClientKind] = useState<MiniAppClientKind>('unknown')
+  const [autoRetryCount, setAutoRetryCount] = useState(0)
 
   const isConnecting = state.isLoading
+  const isNativeClient = clientKind === 'native'
+  const autoRetryDelay = isNativeClient
+    ? nativeClientRetryDelaysMs[autoRetryCount]
+    : undefined
+  const isAutoRetrying = autoRetryDelay !== undefined
+
+  const retryNow = () => {
+    setAutoRetryCount(0)
+    void refreshTasks()
+  }
+
+  useEffect(() => {
+    setClientKind(isNativeMiniAppClient() ? 'native' : 'browser')
+  }, [])
+
+  useEffect(() => {
+    if (autoRetryDelay === undefined || isConnecting) return
+
+    const timer = window.setTimeout(() => {
+      setAutoRetryCount((count) => count + 1)
+      void refreshTasks()
+    }, autoRetryDelay)
+    return () => window.clearTimeout(timer)
+  }, [autoRetryDelay, isConnecting, refreshTasks])
 
   useEffect(() => {
     let cancelled = false
@@ -90,7 +123,7 @@ export function TelegramOpenGate() {
   }, [botUsername])
 
   useEffect(() => {
-    if (isConnecting || !botUsername || !widgetRef.current) return
+    if (clientKind !== 'browser' || isConnecting || !botUsername || !widgetRef.current) return
 
     const container = widgetRef.current
     container.replaceChildren()
@@ -140,7 +173,7 @@ export function TelegramOpenGate() {
       delete window.onBananoTelegramAuth
       container.replaceChildren()
     }
-  }, [botUsername, isConnecting])
+  }, [botUsername, clientKind, isConnecting])
 
   return (
     <main className="relative flex min-h-svh items-center justify-center overflow-hidden px-5 py-10">
@@ -184,27 +217,25 @@ export function TelegramOpenGate() {
           ) : (
             <>
               <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-                Войдите через Telegram, чтобы сохранить баланс, историю и результаты в одном аккаунте.
+                {isNativeClient
+                  ? 'Не удалось получить данные входа. Запрашивать вход вручную не нужно — откройте HappyFox заново из Telegram.'
+                  : 'Войдите через Telegram, чтобы сохранить баланс, историю и результаты в одном аккаунте.'}
               </p>
 
-              <div className="mt-6 flex min-h-12 w-full items-center justify-center">
-                {loginStatus === 'loading' ? (
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <LoaderCircle className="h-4 w-4 animate-spin text-gold" />
-                    Входим…
-                  </div>
-                ) : (
-                  <div ref={widgetRef} className="flex min-h-10 items-center justify-center" />
-                )}
-              </div>
-
-              {!widgetReady && loginStatus === 'idle' ? (
-                <div className="mt-3 h-10 w-48 animate-pulse rounded-xl bg-white/[0.05]" />
-              ) : null}
-
-              {loginStatus === 'error' ? (
-                <div className="mt-5 w-full space-y-3">
-                  <p className="text-xs text-muted-foreground">Не удалось войти через браузер. Откройте HappyFox прямо в Telegram.</p>
+              {isNativeClient ? (
+                <div className="mt-6 w-full space-y-3">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="h-11 w-full rounded-xl"
+                    onClick={retryNow}
+                  >
+                    <RefreshCw className={isAutoRetrying ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} />
+                    Попробовать снова
+                  </Button>
+                  {isAutoRetrying ? (
+                    <p className="text-[11px] text-muted-foreground">Подключаемся автоматически…</p>
+                  ) : null}
                   {telegramUrl ? (
                     <Button asChild variant="secondary" className="h-11 w-full rounded-xl">
                       <a href={telegramUrl} target="_blank" rel="noreferrer">
@@ -214,7 +245,38 @@ export function TelegramOpenGate() {
                     </Button>
                   ) : null}
                 </div>
-              ) : null}
+              ) : (
+                <>
+                  <div className="mt-6 flex min-h-12 w-full items-center justify-center">
+                    {loginStatus === 'loading' ? (
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <LoaderCircle className="h-4 w-4 animate-spin text-gold" />
+                        Входим…
+                      </div>
+                    ) : (
+                      <div ref={widgetRef} className="flex min-h-10 items-center justify-center" />
+                    )}
+                  </div>
+
+                  {!widgetReady && loginStatus === 'idle' ? (
+                    <div className="mt-3 h-10 w-48 animate-pulse rounded-xl bg-white/[0.05]" />
+                  ) : null}
+
+                  {loginStatus === 'error' ? (
+                    <div className="mt-5 w-full space-y-3">
+                      <p className="text-xs text-muted-foreground">Не удалось войти через браузер. Откройте HappyFox прямо в Telegram.</p>
+                      {telegramUrl ? (
+                        <Button asChild variant="secondary" className="h-11 w-full rounded-xl">
+                          <a href={telegramUrl} target="_blank" rel="noreferrer">
+                            <ExternalLink className="h-4 w-4" />
+                            Открыть {BRAND_NAME} в Telegram
+                          </a>
+                        </Button>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </>
+              )}
             </>
           )}
         </div>
