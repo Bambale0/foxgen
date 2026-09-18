@@ -25,7 +25,7 @@ def normalize_amount(value: Any) -> str:
         )
     except (InvalidOperation, TypeError, ValueError) as exc:
         raise ValueError("Invalid YooKassa payment amount") from exc
-    if amount <= 0:
+    if not amount.is_finite() or amount <= 0:
         raise ValueError("YooKassa payment amount must be positive")
     return format(amount, ".2f")
 
@@ -209,21 +209,22 @@ class YooKassaService:
     ) -> db_backend.Row | None:
         async with db_backend.connect() as connection:
             connection.row_factory = db_backend.Row
+            cursor = await connection.execute(
+                "SELECT order_id, payment_id, provider, amount_rub, status "
+                "FROM transactions WHERE provider='yookassa' AND payment_id = ? LIMIT 1",
+                (payment_id,),
+            )
+            row = await cursor.fetchone()
+            if row:
+                return row
             if order_id:
                 cursor = await connection.execute(
                     "SELECT order_id, payment_id, provider, amount_rub, status "
                     "FROM transactions WHERE order_id = ? LIMIT 1",
                     (order_id,),
                 )
-                row = await cursor.fetchone()
-                if row:
-                    return row
-            cursor = await connection.execute(
-                "SELECT order_id, payment_id, provider, amount_rub, status "
-                "FROM transactions WHERE payment_id = ? LIMIT 1",
-                (payment_id,),
-            )
-            return await cursor.fetchone()
+                return await cursor.fetchone()
+            return None
 
     async def _verify_success_against_local_ledger(
         self,
@@ -245,10 +246,11 @@ class YooKassaService:
         if order_id and str(row["order_id"]) != order_id:
             return False, "order_id_mismatch"
 
-        remote_amount = normalize_amount(
-            (payment.get("amount") or {}).get("value")
-        )
-        local_amount = normalize_amount(row["amount_rub"])
+        try:
+            remote_amount = normalize_amount((payment.get("amount") or {}).get("value"))
+            local_amount = normalize_amount(row["amount_rub"])
+        except (ValueError, AttributeError):
+            return False, "invalid_amount"
         if remote_amount != local_amount:
             return False, "amount_mismatch"
         if str((payment.get("amount") or {}).get("currency") or "").upper() != "RUB":
@@ -262,9 +264,11 @@ class YooKassaService:
         payment = await self._request("GET", f"payments/{lookup_id}")
         if not payment:
             return None
+        if str(payment.get("id") or "") != lookup_id:
+            return None
 
         status = str(payment.get("status") or "").lower()
-        paid = bool(payment.get("paid")) or status in FINAL_SUCCESS_STATUSES
+        paid = status in FINAL_SUCCESS_STATUSES and payment.get("paid") is True
         verification_error: str | None = None
         if paid:
             verified, verification_error = await self._verify_success_against_local_ledger(
@@ -299,11 +303,15 @@ class YooKassaService:
             return []
 
         async with db_backend.connect() as connection:
+            from bot.payment_checkout import CHECKOUT_DDL
+            if not db_backend.is_postgres():
+                await connection.execute(CHECKOUT_DDL)
             connection.row_factory = db_backend.Row
             cursor = await connection.execute(
-                "SELECT order_id, payment_id FROM transactions "
-                "WHERE provider = 'yookassa' AND status = 'pending' "
-                "ORDER BY created_at ASC LIMIT ?",
+                "SELECT t.order_id, t.payment_id FROM transactions t "
+                "LEFT JOIN payment_checkout_intents p ON p.channel='telegram' AND p.order_id=t.order_id "
+                "WHERE t.provider = 'yookassa' AND t.status = 'pending' "
+                "ORDER BY COALESCE(p.next_attempt_at,0), t.created_at ASC LIMIT ?",
                 (int(limit),),
             )
             rows = await cursor.fetchall()
@@ -311,40 +319,57 @@ class YooKassaService:
         results: list[dict[str, Any]] = []
         for row in rows:
             order_id = str(row["order_id"])
+            from bot.payment_checkout import record_reconciliation_attempt
+            await record_reconciliation_attempt("telegram", order_id)
             payment_id = str(row["payment_id"] or "")
             item: dict[str, Any] = {
                 "order_id": order_id,
                 "payment_id": payment_id,
             }
             if not payment_id:
-                item["action"] = "missing_payment_id"
+                from bot.payment_checkout import recover_telegram_checkout
+                try:
+                    recovered = await recover_telegram_checkout(order_id)
+                except Exception:
+                    logger.exception("YooKassa checkout recovery failed: order_id=%s", order_id)
+                    item["action"] = "recovery_error"
+                    results.append(item)
+                    continue
+                payment_id = str((recovered or {}).get("PaymentId") or "")
+                if not payment_id:
+                    item["action"] = "missing_payment_id"
+                    results.append(item)
+                    continue
+
+            try:
+                payment = await self.get_payment(payment_id)
+                if not payment:
+                    item["action"] = "not_found"
+                    results.append(item)
+                    continue
+
+                item["status"] = payment.get("status")
+                if payment.get("paid"):
+                    completion = await complete_order(order_id) if complete_order else None
+                    item["action"] = (
+                        "already_completed"
+                        if completion and completion.get("already_completed")
+                        else "completed"
+                        if completion and completion.get("ok")
+                        else "completion_failed"
+                    )
+                elif payment.get("failed"):
+                    from bot.database import update_transaction_status
+
+                    await update_transaction_status(order_id, "failed")
+                    item["action"] = "failed"
+                else:
+                    item["action"] = "still_pending"
                 results.append(item)
-                continue
-
-            payment = await self.get_payment(payment_id)
-            if not payment:
-                item["action"] = "not_found"
+            except Exception:
+                logger.exception("YooKassa reconciliation failed: order_id=%s", order_id)
+                item["action"] = "reconciliation_error"
                 results.append(item)
-                continue
-
-            item["status"] = payment.get("status")
-            if payment.get("paid"):
-                completion = await complete_order(order_id) if complete_order else None
-                item["action"] = (
-                    "already_completed"
-                    if completion and completion.get("already_completed")
-                    else "completed"
-                    if completion and completion.get("ok")
-                    else "completion_failed"
-                )
-            elif payment.get("failed"):
-                from bot.database import update_transaction_status
-
-                await update_transaction_status(order_id, "failed")
-                item["action"] = "failed"
-            else:
-                item["action"] = "still_pending"
-            results.append(item)
         return results
 
 

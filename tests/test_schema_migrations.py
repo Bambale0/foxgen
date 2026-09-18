@@ -124,6 +124,7 @@ def test_prompt_feed_schema_repair_is_registered_as_migration_v2() -> None:
     assert [(migration.version, migration.name) for migration in schema_migrations.MIGRATIONS] == [
         (1, "unique payment provider identity"),
         (2, "prompt feed compatibility columns"),
+        (3, "durable payment buyer notifications"),
     ]
 
 

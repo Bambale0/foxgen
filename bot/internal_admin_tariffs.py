@@ -33,6 +33,7 @@ _TARIFF_KEYS = (
     "batch_pricing",
     "partner_exchange",
     "service_prices",
+    "business_rules",
 )
 _PUBLISH_LOCK: asyncio.Lock | None = None
 _BASELINE_LOCK: asyncio.Lock | None = None
@@ -79,6 +80,8 @@ def _read_price_config() -> dict[str, Any]:
         payload = json.load(handle)
     if not isinstance(payload, dict):
         raise CommandValidationError("price.json root must be an object")
+    from bot.business_rules import DEFAULT_RULES
+    payload.setdefault("business_rules", DEFAULT_RULES)
     return payload
 
 
@@ -94,6 +97,11 @@ def _require_number(value: Any, *, field: str, positive: bool = False) -> float:
 
 
 def _validate_tariff_config(config: dict[str, Any]) -> None:
+    from bot.business_rules import DEFAULT_RULES, validate_business_rules
+    try:
+        validate_business_rules(config.get("business_rules", DEFAULT_RULES))
+    except ValueError as exc:
+        raise CommandValidationError(str(exc)) from exc
     currency = config.get("currency")
     if not isinstance(currency, str) or not 2 <= len(currency.strip()) <= 8:
         raise CommandValidationError("currency must be a short string")

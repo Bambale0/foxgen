@@ -1,3 +1,4 @@
+import json
 import logging
 import asyncio
 import html
@@ -5,7 +6,6 @@ import time
 import mimetypes
 import re
 import uuid
-from datetime import datetime
 from math import floor
 from urllib.parse import urlparse
 
@@ -20,8 +20,9 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 
 from bot.database import (
+    REFERRAL_ANTIFRAUD_MAX_PER_HOUR,
+    REFERRAL_ANTIFRAUD_MAX_PER_DAY,
     DATABASE_PATH,
-    PARTNER_INVITER_BONUS,
     REFERRAL_ANTIFRAUD_BLOCK_CODES,
     REFERRAL_ANTIFRAUD_BLOCK_REFERRER_IDS,
     accept_partner_agreement,
@@ -37,7 +38,6 @@ from bot.database import (
     get_partner_overview,
     get_popular_prompts,
     get_prompt_by_id,
-    get_referral_stats,
     get_partner_withdrawal_request,
     get_profile_generation_card,
     get_task_by_id,
@@ -58,6 +58,7 @@ from bot.database import (
     use_prompt,
 )
 from bot.config import config
+from bot.business_rules import get_business_rules
 from bot.product import product
 from bot.miniapp_links import (
     feed_bot_link as build_feed_bot_link,
@@ -82,7 +83,6 @@ from bot.keyboards import (
     get_partner_consent_keyboard,
     get_partner_program_keyboard,
     get_required_subscription_keyboard,
-    get_referral_keyboard,
 )
 from bot.services.preset_manager import preset_manager
 from bot.services.subscription_service import (
@@ -91,7 +91,7 @@ from bot.services.subscription_service import (
     check_required_channel_subscription,
     should_block_for_subscription,
 )
-from bot.states import AdminStates, GenerationStates, PaymentStates
+from bot.states import GenerationStates, PaymentStates
 
 logger = logging.getLogger(__name__)
 router = Router()
@@ -1144,7 +1144,7 @@ async def _notify_partner_about_new_referral(
     # но он блокировал уведомления для реальных сценариев.
     if referred_id:
         try:
-            db_user = await get_or_create_user(referred_id)
+            await get_or_create_user(referred_id)
         except Exception:
             logger.debug(
                 "Failed to check user for referral notify: user_id=%s",
@@ -1174,7 +1174,7 @@ async def _notify_partner_about_new_referral(
     text = (
         "🎉 <b>Новый реферал</b>\n\n"
         f"К вам присоединился: <b>{referred_name}</b>{referred_username_line}\n\n"
-        f"Начислено: <code>{PARTNER_INVITER_BONUS}</code>🍌 за регистрацию. "
+        f"Начислено: <code>{get_business_rules()['inviter_bonus_credits']}</code>🍌 за регистрацию. "
         "Партнёрские начисления с оплат появятся в вашей статистике."
     )
 
@@ -4284,21 +4284,22 @@ async def render_partner_program(target, user_id: int):
     else:
         links_text = "Ссылка появится после активации.\n\n"
 
+    rules = get_business_rules()
     text = (
         "💼 <b>Партнёрам</b>\n\n"
         "Это практическое руководство по участию в партнёрской программе.\n"
         f"{links_text}"
-        "<b>1 уровень</b> — ваш личный процент: <code>30%</code> от всех покупок ваших рефералов.\n"
-        "<b>2 уровень</b> — <code>7%</code> от покупок рефералов ваших рефералов.\n\n"
+        f"<b>1 уровень</b> — ваш личный процент: <code>{rules['level1_percent']:g}%</code> от всех покупок ваших рефералов.\n"
+        f"<b>2 уровень</b> — <code>{rules['level2_percent']:g}%</code> от покупок рефералов ваших рефералов.\n\n"
         "<b>Как это работает:</b>\n"
         "• Пользователь переходит по вашей ссылке\n"
         "• Регистрируется и закрепляется за вами навсегда\n"
         "• После оплат рефералов начисляется денежное вознаграждение\n\n"
         "<b>2 уровень:</b>\n"
-        "Ваш реферал привёл ещё рефералов. За все их покупки вам также начисляется денежное вознаграждение — <code>7%</code>.\n\n"
+        f"Ваш реферал привёл ещё рефералов. За все их покупки вам также начисляется денежное вознаграждение — <code>{rules['level2_percent']:g}%</code>.\n\n"
         "• Вывод доступен после достижения минимальной суммы <code>1000₽</code>\n"
         "• Каждый, кто перейдёт по вашей реферальной ссылке, получает 🍌 <code>15</code> бананов для тестирования бота\n"
-        "• За каждого приглашённого вами реферала вам начисляется + 🍌 <code>3</code> бананов\n\n"
+        f"• За каждого приглашённого вами реферала вам начисляется + 🍌 <code>{rules['inviter_bonus_credits']:g}</code> бананов\n\n"
         "<b>Ваша статистика:</b>\n"
         f"👥 1 уровень: <code>{stats.get('level1_count', stats.get('referrals_count', 0))}</code>\n"
         f"👥 2 уровень: <code>{stats.get('level2_count', 0)}</code>\n"
@@ -5244,7 +5245,7 @@ async def open_ai_assistant_main(callback: types.CallbackQuery, state: FSMContex
     user = await get_or_create_user(callback.from_user.id)
 
     # Формируем контекст для ИИ
-    context = {
+    _context = {
         "user_credits": user.credits,
         "menu_location": "главное меню",
         "available_models": "Banana Pro, Banana 2, Seedream 4.5, Grok Imagine i2i, Kling 3, Grok Imagine, Veo 3.1, Motion Control",
@@ -5294,7 +5295,7 @@ async def open_ai_assistant_settings(callback: types.CallbackQuery, state: FSMCo
     db_settings = await get_user_settings(callback.from_user.id)
 
     # Формируем контекст для ИИ
-    context = {
+    _context = {
         "menu_location": "меню настройки",
         "preferred_model": db_settings["preferred_model"],
         "preferred_video_model": db_settings["preferred_video_model"],
@@ -5347,11 +5348,10 @@ async def open_ai_admin_assistant_help(callback: types.CallbackQuery, state: FSM
 async def handle_motion_character_upload(message: types.Message, state: FSMContext):
     """Загрузка фото персонажа для motion control"""
     import os
-    import uuid
 
     from bot.config import config
 
-    data = await state.get_data()
+    await state.get_data()
     photo = message.photo[-1]
     file = await message.bot.get_file(photo.file_id)
     image_bytes = await message.bot.download_file(file.file_path)
@@ -5379,7 +5379,6 @@ async def handle_motion_character_upload(message: types.Message, state: FSMConte
 async def handle_motion_video_upload(message: types.Message, state: FSMContext):
     """Загрузка видео движения для motion control"""
     import os
-    import uuid
 
     from bot.config import config
     from bot.database import (
