@@ -337,7 +337,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       } catch (error) {
         if (error instanceof MiniAppAuthError) {
           // The backend refused this launch: drop the cached copy so the next
-          // attempt cannot replay the same rejected signature.
+          // automatic attempt cannot replay the same rejected signature forever.
           reportMiniAppEvent('launch-auth-rejected', {
             status: 401,
             init_data_len: launchInitDataLength,
@@ -346,7 +346,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
             preserveLaunchSnapshot: isNativeMiniAppClient(),
             rejectedInitData: launchInitData,
           })
-          break
+          reportMiniAppEvent('launch-locked', { init_data_len: launchInitDataLength })
+          applyBootstrapErrorState('Не удалось получить данные входа. Откройте Mini App заново из Telegram или MAX.')
+          return
         }
         const delay = launchBootstrapDelaysMs[attempt]
         if (delay === undefined) break
