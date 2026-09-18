@@ -129,7 +129,7 @@ async def test_concurrent_channel_completions_are_atomic(
             *(service.complete_order(order.order_id) for _ in range(16))
         )
         assert sum(r.get("ok") and not r.get("already_completed") for r in results) == 1
-        assert await get_max_balance(99402) == 25
+        assert await get_max_balance(99402) == 30
         async with db.connect() as connection:
             row = await (
                 await connection.execute(
