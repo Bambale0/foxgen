@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { ExternalLink, LoaderCircle, RefreshCw, Send, Sparkles } from 'lucide-react'
 import {
   getApiBasePath,
+  getMiniAppPlatform,
   getRuntimeBotUsername,
   getStartParamFallback,
   isNativeMiniAppClient,
@@ -36,9 +37,45 @@ function setBrowserInitData(initData: string) {
   window.location.hash = params.toString()
 }
 
+function openNativeMiniAppUrl(url: string) {
+  const target = String(url || '').trim()
+  if (!target) return
+
+  if (getMiniAppPlatform() === 'max') {
+    const maxWebApp = window.WebApp as
+      | { openLink?: (url: string) => void; openMaxLink?: (url: string) => void }
+      | undefined
+    if (typeof maxWebApp?.openMaxLink === 'function') {
+      maxWebApp.openMaxLink(target)
+      return
+    }
+    if (typeof maxWebApp?.openLink === 'function') {
+      maxWebApp.openLink(target)
+      return
+    }
+    window.location.assign(target)
+    return
+  }
+
+  const telegramWebApp = window.Telegram?.WebApp as
+    | { openTelegramLink?: (url: string) => void }
+    | undefined
+  if (typeof telegramWebApp?.openTelegramLink === 'function') {
+    telegramWebApp.openTelegramLink(target)
+    return
+  }
+
+  window.location.assign(target)
+}
+
 // Inside a native messenger WebView the launch handshake must recover on its own;
 // a browser Telegram Login widget cannot authenticate a native launch.
 const nativeClientRetryDelaysMs = [2000, 5000]
+
+function isLaunchCredentialError(error: string | null | undefined) {
+  const value = String(error || '').toLowerCase()
+  return value.includes('данные входа') || value.includes('mini app из telegram') || value.includes('mini app из max')
+}
 
 type MiniAppClientKind = 'unknown' | 'native' | 'browser'
 
@@ -54,10 +91,13 @@ export function TelegramOpenGate() {
 
   const isConnecting = state.isLoading
   const isNativeClient = clientKind === 'native'
-  const autoRetryDelay = isNativeClient
+  const autoRetryDelay = isNativeClient && !isLaunchCredentialError(state.error)
     ? nativeClientRetryDelaysMs[autoRetryCount]
     : undefined
   const isAutoRetrying = autoRetryDelay !== undefined
+  const reopenLabel = getMiniAppPlatform() === 'max'
+    ? `Открыть ${BRAND_NAME} в MAX`
+    : `Открыть ${BRAND_NAME} в Telegram`
 
   const retryNow = () => {
     setAutoRetryCount(0)
@@ -113,8 +153,15 @@ export function TelegramOpenGate() {
   }, [])
 
   useEffect(() => {
-    if (!botUsername) return
     const startParam = getStartParamFallback()
+    if (getMiniAppPlatform() === 'max') {
+      const url = new URL('/mini-app/', window.location.origin)
+      if (startParam) url.searchParams.set('startapp', startParam)
+      setTelegramUrl(url.toString())
+      return
+    }
+
+    if (!botUsername) return
     setTelegramUrl(
       startParam
         ? `https://t.me/${botUsername}?startapp=${encodeURIComponent(startParam)}`
@@ -237,11 +284,14 @@ export function TelegramOpenGate() {
                     <p className="text-[11px] text-muted-foreground">Подключаемся автоматически…</p>
                   ) : null}
                   {telegramUrl ? (
-                    <Button asChild variant="secondary" className="h-11 w-full rounded-xl">
-                      <a href={telegramUrl} target="_blank" rel="noreferrer">
-                        <ExternalLink className="h-4 w-4" />
-                        Открыть {BRAND_NAME} в Telegram
-                      </a>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      className="h-11 w-full rounded-xl"
+                      onClick={() => openNativeMiniAppUrl(telegramUrl)}
+                    >
+                      <ExternalLink className="h-4 w-4" />
+                      {reopenLabel}
                     </Button>
                   ) : null}
                 </div>

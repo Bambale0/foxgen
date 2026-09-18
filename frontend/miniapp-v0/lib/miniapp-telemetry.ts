@@ -28,14 +28,14 @@ export function reportMiniAppEvent(
   if (typeof window === 'undefined') return
 
   try {
-    const runtimeWindow = window as Window & { Telegram?: unknown; WebApp?: unknown }
+    const runtimeWindow = window as Window & { Telegram?: { WebApp?: unknown }; WebApp?: unknown }
     const payload = {
       event,
       source: getMiniAppPlatform(),
       href: window.location.pathname,
       hash_len: String(window.location.hash || '').length,
       has_tg: Boolean(runtimeWindow.Telegram),
-      has_webapp: Boolean(runtimeWindow.WebApp),
+      has_webapp: Boolean(runtimeWindow.Telegram?.WebApp || runtimeWindow.WebApp),
       init_data_len: extra.init_data_len ?? 0,
       status: extra.status ?? 0,
     }
