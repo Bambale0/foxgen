@@ -444,3 +444,64 @@ Spec result: **clean; 0 unresolved findings**.
 
 Earlier CI runs were intentionally invalidated by implementation changes. The next branch head is the only merge candidate. Full PR CI must pass on that exact SHA, including backend regression, dependency audit, callback load, Telegram/MAX Chromium+WebKit startup and production Docker verification. Do not edit this ledger merely to copy the successful run number afterward.
 
+
+---
+
+## Active Bugfix — Telegram mobile native entry recovery
+
+### Task
+
+When a phone opens a legacy/direct HappyFox URL such as `https://app.happy-fox.online/mini-app/?startapp=...` without Telegram `tgWebAppData`, do not leave the user on the browser-login gate. Upgrade the mobile entry to the canonical native Telegram Mini App deep link so Telegram supplies signed init data and authentication remains automatic.
+
+### Baseline
+
+- Repository: `Bambale0/foxgen`
+- Base branch: `main`
+- Baseline SHA: `4d6421c1aaad0e47734a665e2925d6d94157061b`
+- Working branch: `fix/telegram-mobile-native-entry`
+- Production SHA observed before the fix: `4d6421c1aaad0e47734a665e2925d6d94157061b`
+
+### Fresh audit / production evidence
+
+Already exists: correct native Telegram startup through `WebAppInfo`/`t.me?...startapp`, server-side signed init-data validation, Android/iPhone native startup E2E, browser Login Widget fallback, and safe client-log telemetry.
+
+Partial/problematic: direct mobile URLs carrying `?startapp=...` have no recovery to native Telegram and therefore fall into browser auth. Existing E2E covers a proper `tgWebAppData` hash but not this production URL shape.
+
+Production evidence on 2026-09-17: repeated Android/iPhone requests reached `app.happy-fox.online/mini-app/?startapp=ref_AZLRXW6L` and then `/mini-app/api/browser-auth/config`; one missing-init-data bootstrap returned 401. The reported UI is the `TelegramOpenGate` browser fallback.
+
+### Ranked hypotheses
+
+1. Direct mobile `app.*?startapp=...` entry lacks Telegram launch parameters and falls into browser auth; production evidence supports this.
+2. Stale cached init data may independently cause later auth failures and should be evaluated separately.
+3. SDK timing is lower probability because the failing requests contain no native launch data.
+4. Backend signature mismatch is lower probability because the observed failure is missing, not invalid, init data.
+
+### Acceptance criteria
+
+1. Proper Telegram native launches remain unchanged and bootstrap automatically.
+2. Mobile direct `app.*?startapp=<payload>` without native Telegram launch data navigates to `https://t.me/<runtime-bot>?startapp=<payload>` before Login Widget display.
+3. Ordinary desktop browser keeps browser-login fallback.
+4. MAX behavior remains unchanged.
+5. Server-side signed init-data validation remains unchanged.
+6. Native relaunch emits safe telemetry without init data/referral payload.
+7. Android Chromium + iPhone WebKit regression covers direct-mobile recovery.
+8. Exact-head CI/review/merge/canonical deploy and production verification pass.
+
+### No-hardcode / scope
+
+No mutable business configuration, schema, migration, backend auth contract, MAX logic, APIX or other-project change. Bot username comes from existing runtime config. Instagram is N/A for Telegram launch recovery.
+
+### Test/observability plan
+
+Browser E2E is the primary seam. Add a direct mobile `?startapp=` case with no `tgWebAppData`, assert a native `t.me` navigation and no Login Widget before it. Preserve existing Telegram native and MAX startup E2E. Emit a bounded relaunch client event and verify post-deploy logs.
+
+### Implementation progress
+
+1. [x] Read AGENTS, architecture and mandatory debugging/TDD/release/webapp-testing guidance.
+2. [x] Establish production evidence and failing URL shape.
+3. [x] Create branch from exact main.
+4. [ ] Add red browser regression and observe failure.
+5. [ ] Implement narrow native-entry recovery + safe telemetry.
+6. [ ] Run focused/full applicable tests and Telegram/MAX E2E.
+7. [ ] Run Standards + Spec review and resolve findings.
+8. [ ] Require exact-head CI green, merge and verify canonical deploy/production telemetry.
