@@ -497,3 +497,22 @@ Update after review: closed the trend preview P2 introduced by the visible-copy 
 
 Final verification evidence before PR: full Mini App Jest passed 19 suites / 79 tests. Mini App lint and production build passed; lint still reports the same 5 pre-existing React hook warnings. Focused backend regressions for MAX/Telegram referral and non-blocking trend preview passed 8 tests. Ruff passed on the changed Python delta. Final CI-like backend check in a temporary worktree with `apply_visible_copy_fixes.py` and `apply_happyfox_product_copy.py` passed: 373 passed, 1 skipped, 1 deselected. `git diff --check` passed. Spec review reported no blockers after the P2 fixes; Standards re-review is pending final acknowledgement.
 Standards re-review reported no blockers for the two previous P2 findings. Note: trend preview task dedupe/locking is process-local; multi-process deployments would need shared coordination if that path is scaled horizontally.
+
+
+## 2026-09-18 — Telegram Mini App bootstrap body lost after MAX middleware
+
+Task: fix the production Telegram Mini App auth failure still visible after PR #264.
+
+Baseline: main 4bac0c11a0306f9ac5d7bf6ad9b7790be2a017ea, branch fix/telegram-miniapp-body-after-max-middleware.
+
+Fresh production evidence before code: canonical production deploy for 4bac0c11a0306f9ac5d7bf6ad9b7790be2a017ea is green and the Telegram menu opens the release-pinned URL. At 2026-09-18 19:21:08 UTC the affected Android Telegram 12.10.3 native WebView opened release 4bac0c11a0306f9ac5d7bf6ad9b7790be2a017ea; client telemetry reported native Telegram bridge present, hash_len=1482 and init_data_len=603, but POST /mini-app/api/bootstrap returned 401 and the backend logged `Mini App bootstrap failed: Missing init_data`. This proves Telegram supplied signed launch data and the frontend recovered it, while the backend handler received an empty payload.
+
+Root cause: `max_miniapp_middleware` parses every JSON POST under `/mini-app/api/` before deciding whether it is a MAX request. Telegram requests then fall through to the Telegram handler after their request stream has already been consumed. `bot.miniapp._miniapp_payload` incorrectly gates its cached JSON re-read behind `request.can_read_body`; after the middleware read, that flag can be false even though aiohttp keeps the request bytes available for subsequent `request.json()` calls. The helper therefore builds a payload without `init_data`, causing the observed 401.
+
+Scope: make `_miniapp_payload` read JSON from aiohttp's cached body regardless of `can_read_body`; add regression coverage for Telegram bootstrap passing through MAX middleware with init_data intact. No auth weakening, no client-side identity trust, no payment/provider/tariff/database changes, no MAX behavior change.
+
+Skills/guidance: repository AGENTS/deployment docs; existing incident record; anthropics webapp-testing reconnaissance-first guidance. Required Bambale0/skills, Bambale0/claw and wondelai skill sources were searched for task-specific debugging guidance; repository evidence-first diagnosing-bugs flow remains primary.
+
+Acceptance: Telegram JSON body survives MAX middleware fall-through; backend receives non-empty `init_data`; MAX interception still works; focused/full tests and exact-head CI green; merge only after review; canonical deploy exact main SHA; production logs no longer show `Missing init_data` for a native Telegram launch with non-zero init_data_len.
+
+Progress: [x] evidence captured, [x] root cause isolated, [x] branch created, [ ] regression test, [ ] smallest code fix, [ ] focused/full verification, [ ] review, [ ] merge/deploy, [ ] production verification.
