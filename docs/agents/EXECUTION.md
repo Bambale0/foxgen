@@ -22,7 +22,7 @@ Progress: preflight recorded before production edits. Skills: local diagnosing-b
 
 Verification (implementation): normalized backend 360 passed, 1 PostgreSQL test skipped without isolated URL, 1 load test deselected; dedicated real PostgreSQL 16 concurrent completions per Telegram/MAX passed. Frontend Jest 15 suites/52 tests passed, lint zero errors with 7 pre-existing source warnings, production build passed. Critical browser flow and Telegram/MAX startup passed Chromium and iPhone WebKit. Two-axis final reviewers report 0 unresolved findings; subsequent containment/referrer-outbox refinements are covered by focused tests. Existing backend CI owns a disposable PostgreSQL container for its concurrency test; no workflow authorization change is required. Historical audit and recovery runbook committed.
 
-External acceptance: merchant cabinet URL/events unavailable to Basic Auth; successful native live payments/messages N/A without test buyer accounts. Production unchanged. PR/exact-head CI pending; do not claim deployed or exhaustive absence of bugs.
+External acceptance: merchant cabinet URL/events unavailable to Basic Auth; successful native live payments/messages N/A without test buyer accounts. Production unchanged. PR [#259](https://github.com/Bambale0/foxgen/pull/259) created. Exact local CI-mode normalized regression: 361 passed, 1 load deselected, including disposable PostgreSQL. Exact code-head two-axis review: 0 unresolved findings. Initial GitHub regression found a test-fixture startup race: socket-only initdb server was mistaken for final PostgreSQL readiness. Fixture now requires TCP readiness; no production runtime change. Exact updated-head CI pending; do not claim deployed or exhaustive absence of bugs.
 
 ---
 
