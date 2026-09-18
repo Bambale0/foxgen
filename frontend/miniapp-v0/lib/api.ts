@@ -541,13 +541,19 @@ async function postJson<T>(
   const timeout = controller
     ? setTimeout(() => controller.abort(), timeoutMs)
     : undefined
+  const headers: Record<string, string> = {
+    Accept: 'application/json',
+    'Content-Type': 'application/json',
+  }
+  const headerInitData = typeof nextPayload.init_data === 'string' ? nextPayload.init_data.trim() : ''
+  if (headerInitData) {
+    headers['X-Telegram-Init-Data'] = headerInitData
+  }
+
   try {
     const response = await fetch(`${getApiBasePath()}/${path.replace(/^\/+/, '')}`, {
       method: 'POST',
-      headers: {
-        Accept: 'application/json',
-        'Content-Type': 'application/json',
-      },
+      headers,
       body: JSON.stringify(nextPayload),
       cache: 'no-store',
       credentials: 'same-origin',
