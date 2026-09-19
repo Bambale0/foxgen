@@ -104,6 +104,15 @@ A blue WebApp button replacing Telegram's command menu is a regression: reset `s
 
 Relay TLS is operational state: the apix relay maintains its own Let's Encrypt certificate for `api.happy-fox.online`. Verify renewal on the relay with a forced-IP HTTPS request to the configured ingress IP before reloading nginx; do not copy private keys between hosts.
 
+The relay watchdog must remain enabled:
+
+```bash
+systemctl status happyfox-relay-watchdog.timer
+journalctl -u happyfox-relay-watchdog.service --since "1 hour ago"
+```
+
+Its healthy probe is HTTP `401` from `POST https://api.happy-fox.online/webhook` without Telegram's secret header. A `502` with `upstream SSL certificate verify error` means nginx is using stale or invalid upstream TLS trust. Run `nginx -t`, reload the relay nginx, and confirm Telegram-origin `POST /webhook` requests return `200`.
+
 ## Instagram status
 
 Instagram code may be deployed but inactive.

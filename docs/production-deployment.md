@@ -95,6 +95,8 @@ The apix relay owns a separate Let's Encrypt certificate for `api.happy-fox.onli
 
 After each deploy, the system menu must be reconciled to the native Mini App launcher (`MenuButtonWebApp`) using the versioned `MINI_APP_URL`. Bot commands (`/start`, `/feed`, `/prompts`, `/help`, `/ref`, `/earn`) must remain registered separately.
 
+The apix host also runs `happyfox-relay-watchdog.timer` every 15 minutes. It performs a forced-IP POST to the canonical HappyFox webhook without a secret; healthy behavior is HTTP 401 from the dedicated HappyFox application. If the probe returns 502 or another unexpected status, the watchdog validates nginx configuration, reloads nginx, and probes again. This specifically recovers stale in-memory upstream TLS trust after relay certificate/trust updates without exposing Telegram credentials.
+
 CI already validates production Docker image/runtime imports before the deploy workflow is allowed to act.
 
 ### Docker/containerd retention
