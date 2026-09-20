@@ -207,3 +207,19 @@ def test_webhook_ack_log_contains_mode_and_release(caplog, monkeypatch) -> None:
     text = "\n".join(record.getMessage() for record in caplog.records)
     assert "telegram_webhook_ack update_id=77 mode=background" in text
     assert "release=deadbeef" in text
+
+
+def test_update_middleware_records_last_observed_update(monkeypatch) -> None:
+    monkeypatch.setattr(telemetry, "_LAST_TELEGRAM_UPDATE_AT", None)
+    monkeypatch.setattr(telemetry.time, "monotonic", lambda: 100.0)
+
+    async def handler(_event, _data):
+        return None
+
+    async def scenario():
+        middleware = telemetry.TelegramUpdateTelemetryMiddleware()
+        await middleware(handler, _update(), {})
+
+    asyncio.run(scenario())
+
+    assert telemetry.telegram_last_update_age_seconds(now=125.0) == 25.0
