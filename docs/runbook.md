@@ -92,15 +92,17 @@ redis
 ## Telegram incident triage
 
 1. Confirm production deploy SHA and `foxgen-happyfox-bot` health on the dedicated host.
-2. Call `getWebhookInfo`: expected URL is `https://api.happy-fox.online/webhook`, `pending_update_count=0`, `last_error_message` empty.
-3. Confirm `happyfox-telegram-egress.service` is active and `api.telegram.org:443` is reachable from the runtime.
-4. Confirm the relay TLS endpoint accepts `api.happy-fox.online` on the configured fixed Telegram ingress IP.
-5. Confirm Telegram native menu type is `commands` and the quick-command list is registered.
-6. Distinguish expected Mini App auth failure without valid `initData` from backend outage.
-7. Check PostgreSQL/Redis and provider/payment-specific logs.
-8. Reproduce with a safe test user before changing production state.
+2. Run the canonical read-only registration gate: `docker exec foxgen-happyfox-bot python /app/scripts/ensure_telegram_webhook.py --check-only`. It must verify the canonical URL, fixed ingress IP when configured, the dispatcher's complete `allowed_updates`, and an empty pending queue.
+3. If the check reports registration drift, run the normal reconciliation once: `docker exec foxgen-happyfox-bot python /app/scripts/ensure_telegram_webhook.py`, then repeat `--check-only`. Reconciliation preserves pending updates.
+4. Inspect `getWebhookInfo`/guard telemetry. A historical `last_error_message` is diagnostic context; a fresh delivery error, growing pending queue, URL/IP mismatch, or missing `callback_query` / `pre_checkout_query` requires investigation.
+5. Confirm `happyfox-telegram-egress.service` is active and `api.telegram.org:443` is reachable from the runtime.
+6. Confirm the relay TLS endpoint accepts `api.happy-fox.online` on the configured fixed Telegram ingress IP.
+7. Confirm Telegram native menu type is `web_app` and points to the HappyFox Mini App. Quick commands remain registered separately through `setMyCommands`.
+8. Distinguish expected Mini App auth failure without valid `initData` from backend outage.
+9. Check PostgreSQL/Redis and provider/payment-specific logs.
+10. Reproduce `/start`, one callback button and the payment pre-checkout seam with a safe test user before changing production state.
 
-A blue WebApp button replacing Telegram's command menu is a regression: reset `setChatMenuButton` to `type=commands`; do not remove the inline Mini App button.
+Useful guard events are `telegram_webhook_drift`, `telegram_webhook_reconcile`, `telegram_webhook_silence`, and `telegram_webhook_guard_failed`. The guard alerts admins only when the incident state changes, so a persistent fault does not create a notification storm.
 
 Relay TLS is operational state: the apix relay maintains its own Let's Encrypt certificate for `api.happy-fox.online`. Verify renewal on the relay with a forced-IP HTTPS request to the configured ingress IP before reloading nginx; do not copy private keys between hosts.
 
