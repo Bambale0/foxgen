@@ -37,6 +37,7 @@ SLOW_BOT_API_MS = max(
 _MAX_ROUTE_CHARS = 160
 _MAX_METHOD_SAMPLES = 12
 RELEASE = str(os.getenv("HAPPYFOX_RELEASE", "unknown")).strip() or "unknown"
+_LAST_TELEGRAM_UPDATE_AT: float | None = None
 
 
 @dataclass
@@ -77,6 +78,14 @@ _CURRENT_TELEGRAM_CONTEXT: ContextVar[TelegramTelemetryContext | None] = Context
 def current_telegram_context() -> TelegramTelemetryContext | None:
     """Return the current update telemetry context, if called inside one."""
     return _CURRENT_TELEGRAM_CONTEXT.get()
+
+
+def telegram_last_update_age_seconds(*, now: float | None = None) -> float | None:
+    """Return monotonic age of the last observed Telegram update."""
+    if _LAST_TELEGRAM_UPDATE_AT is None:
+        return None
+    current = time.monotonic() if now is None else float(now)
+    return max(0.0, current - _LAST_TELEGRAM_UPDATE_AT)
 
 
 def record_telegram_stage(name: str, duration_ms: float) -> None:
@@ -173,6 +182,9 @@ class TelegramUpdateTelemetryMiddleware(BaseMiddleware):
     ) -> Any:
         if not isinstance(event, Update):
             return await handler(event, data)
+
+        global _LAST_TELEGRAM_UPDATE_AT
+        _LAST_TELEGRAM_UPDATE_AT = time.monotonic()
 
         event_type, route, user_id, chat_id = describe_update(event)
         context = TelegramTelemetryContext(
