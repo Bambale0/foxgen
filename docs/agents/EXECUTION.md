@@ -1,3 +1,29 @@
+# Active: fix/telegram-rich-message-prompts — rich_message prompts were silently dropped
+
+Baseline: main 196f0f4c8e51e03651db2fbe3ee97049001488e9, branch fix/telegram-rich-message-prompts.
+
+Incident (2026-09-19/20, admin user_id=962098909): prompts sent as Telegram formatted text arrived as `Message.rich_message` without `text`/`caption`/`entities`; telemetry showed `route=message:rich_message handler=-`, no reply, no generation task (last task for the user was 2026-08-28). Control case confirmed the seam: plain text from another admin produced a task. Separate incident the same day: the Telegram webhook was hijacked to a third-party domain and restored via `scripts/ensure_telegram_webhook.py` (runtime only, no code change).
+
+Audit: no `rich_message` handling existed anywhere in `bot/`, `tests/`, `scripts/` (0 grep matches). All prompt/menu text handlers are `F.text` based, including the `common.py` fallback. aiogram 3.31 exposes `RichMessage`/`RichBlock*` types with a strict schema; there is no built-in plain-text conversion.
+
+Intended outcome: formatted-text prompts reach the existing `F.text` handlers with no per-handler edits; media-only rich messages are logged instead of silently dropped; extraction failures never crash the update.
+
+Design decisions: single update-level outer middleware normalizes `Message.text` in place (`object.__setattr__`, verified to flip `content_type` to `TEXT`); raw `rich_message` preserved for forensics; telemetry middleware stays first so the raw content type remains visible; block kinds are read from the aiogram `RichBlockType` enum so a Bot API rename fails tests loudly; no new env/config keys, no hardcode.
+
+Observability: `telegram_rich_message_normalized` (info, chars/blocks/update_id/release), `telegram_rich_message_without_text` (warning), `telegram_rich_message_normalization_failed` (error, update continues untouched).
+
+Test seams: `tests/test_telegram_rich_message.py` (11 tests: reported admin payload, nested rich-text leaves, containers — list/table/details/blockquote/divider/thinking, media-only, caption, passthrough for non-rich and non-message updates, failure isolation, registration order in `bot/main.py`).
+
+Parity: Telegram-only defect (Bot API `rich_message`); MAX uses its own contract, Mini App unaffected; Instagram N/A.
+
+Steps: 1) branch from verified main ✓; 2) failing behavior tests against the reported payload ✓; 3) extractor + middleware ✓; 4) register in `bot/main.py` after telemetry, before routers ✓; 5) focused tests + Ruff + compile ✓; 6) docs (troubleshooting #25) ✓; 7) full local regression suite (running); 8) commit, run `code-review` skill against main, open PR, wait for exact-head CI.
+
+Verification so far: focused suite 11 passed; adjacent regressions (`test_telegram_telemetry.py`, `test_admin_command_priority.py`, `test_callback_ack.py`) 13 passed; `ruff check` clean; compile clean; `git diff --check` pending with commit.
+
+Remaining: full suite result, standards/spec review axes, PR, exact-head CI, post-merge deploy verification (revision, health, real rich-message smoke).
+
+---
+
 # Active: Mini App native launch recovery for Telegram and MAX
 
 Update 2026-09-18 follow-up: user retest on Telegram Desktop still showed the auth gate on the deployed 4bac0c11 release. Fresh logs prove the new Mini App document loads with Telegram.WebApp present and tgWebAppData length 603, but /mini-app/api/bootstrap reaches backend as Missing init_data. Backend already accepts X-Telegram-Init-Data as a fallback transport in _miniapp_payload, so this follow-up sends signed init_data in both the existing JSON body and that header. Auth remains backend-verified; no billing/referral/provider/config behavior changes. Verification so far: focused Mini App auth/gate Jest passed 4 suites / 32 tests; full Mini App Jest passed 19 suites / 84 tests; Mini App lint passed with 0 errors and the same 5 pre-existing hook warnings; production static export build passed; git diff --check passed.
