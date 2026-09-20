@@ -1,46 +1,58 @@
 # Active: Telegram webhook drift self-heal and silence detection
 
-Baseline: main `196f0f4c8e51e03651db2fbe3ee97049001488e9`. Branch: `fix/telegram-webhook-self-heal`.
+Baseline: main `196f0f4c8e51e03651db2fbe3ee97049001488e9`. Branch: `fix/telegram-webhook-self-heal`. Draft PR: #267.
 
-Fresh audit (2026-09-20): production incident evidence shows Telegram webhook registration can be changed by another runtime sharing the bot token while the HappyFox process and ingress watchdog remain healthy. Current startup already registers `allowed_updates=dispatcher.resolve_used_update_types()` and preserves pending updates, but `scripts/ensure_telegram_webhook.py` does not set `allowed_updates`; the canonical deploy runs that script but has no independent live-registration gate. `scripts/set_webhook.py` is already absent on current main, so the remaining footgun work is a regression guard rather than deletion. Existing Telegram telemetry correlates updates and Bot API calls but does not expose "pending updates with no incoming update" silence. Runbook still incorrectly says the native system menu must be `commands`, while code/tests/docs use `web_app`.
+Fresh audit (2026-09-20): production incident evidence shows Telegram webhook registration can be changed by another runtime sharing the bot token while the HappyFox process and ingress watchdog remain healthy. Current startup already registered `allowed_updates=dispatcher.resolve_used_update_types()` and preserved pending updates, but canonical `scripts/ensure_telegram_webhook.py` did not set/verify `allowed_updates` and deploy had no independent live-registration gate. The first audit checked the planned path `scripts/set_webhook.py` and found it absent; the later two-axis repository review correctly found a different root-level `set_webhook.py` that still used `drop_pending_updates=True` for both set/delete. That legacy footgun is now deleted and the regression scan covers root Python utilities plus `bot/` and `scripts/`. Existing Telegram telemetry correlated updates and Bot API calls but did not expose queued-update silence. Runbook also incorrectly said the native system menu must be `commands`, while code/tests/production docs use `web_app`.
 
-Intended outcome:
-- a background Telegram webhook guard detects URL/IP/allowed-update drift, re-registers with `drop_pending_updates=False`, and alerts admins once per state transition;
-- the same guard detects `pending_update_count > 0` plus prolonged absence of observed Telegram updates and alerts without destructive queue changes;
-- canonical reconciliation explicitly restores the dispatcher's real `allowed_updates`;
-- deployment independently checks the live registration after reconciliation and fails on URL/IP/allowed-update/pending drift;
-- historical Telegram `last_error_message` remains diagnostic context and does not by itself cause an infinite self-heal loop;
-- docs and incident playbook match the actual `web_app` menu contract;
-- no bot token is rotated and no relay container is stopped in this branch.
+Implemented outcome:
+- background Telegram guard compares live URL, fixed ingress IP, and dispatcher-derived `allowed_updates`; deterministic drift is repaired with `drop_pending_updates=False`;
+- admins are alerted only when the incident signature changes; guard logs drift/reconcile/silence/failure without secrets;
+- pending queue + lack of observed updates longer than the configured threshold raises silence telemetry/alert, with startup grace before the first observed update;
+- guard task is owned and cancelled before shutdown so it cannot race normal webhook deletion/session close;
+- canonical reconciliation sets and verifies the actual dispatcher's `allowed_updates`; `--check-only` independently verifies URL/IP/allowed-updates/pending queue without mutation;
+- deploy runs repair followed by read-only live-registration gate before MAX verification;
+- historical Telegram `last_error_message` remains diagnostic context and does not by itself trigger a rewrite loop; the deploy script only treats a new error from the current reconciliation window as failing evidence;
+- root-level destructive legacy webhook manager is removed and regression tests forbid `drop_pending_updates=True` in runtime/root webhook utilities;
+- environment/runbook/troubleshooting/production docs now agree on `web_app`, guard settings, allowed-update drift, and the incident recovery path;
+- no bot token was rotated and no relay container was stopped.
 
-Configuration/no-hardcode decision: guard enablement, cadence, and silence threshold are technical runtime settings exposed through env and documented in `.env.happyfox.example` / `docs/environment.md`. Expected URL/IP/secret continue to come from the existing canonical config. Expected update types come from the actual configured aiogram dispatcher, not a second hand-maintained business list.
+Configuration/no-hardcode decision: guard enablement, cadence, and silence threshold are runtime settings exposed via `TELEGRAM_WEBHOOK_GUARD_ENABLED`, `TELEGRAM_WEBHOOK_GUARD_SECONDS`, and `TELEGRAM_WEBHOOK_SILENCE_SECONDS`, documented in `.env.happyfox.example` / `docs/environment.md`. Expected URL/IP/secret continue to use canonical config. Expected update types are resolved from the configured aiogram dispatcher, not a duplicated business list.
 
 Verification layers:
-- unit: guard drift/silence/state-transition behavior and Telegram telemetry last-update age;
-- external adapter contract: fake aiogram Bot verifies `set_webhook(... drop_pending_updates=False, allowed_updates=...)`;
-- Telegram behavior: reconciliation/deploy contract tests plus post-deploy `getWebhookInfo`;
-- MAX/Mini App: infrastructure-only compatibility via existing CI/deploy smokes; no behavior change;
+- unit: drift URL/IP/update-type detection, non-destructive repair, healthy no-op, historical-error no-op, startup grace, queued-update silence, alert de-duplication, telemetry last-update age;
+- external adapter contract: fake aiogram Bot asserts `set_webhook(... drop_pending_updates=False, allowed_updates=...)`;
+- deploy contract: static regression requires repair + `--check-only` and forbids destructive queue dropping;
+- Telegram behavior: post-deploy live `--check-only` / `getWebhookInfo` still required;
+- MAX/Mini App: infrastructure-only change; existing full CI/deploy MAX and Mini App smokes are the compatibility gate;
 - Instagram: N/A, no shared generation/billing/identity behavior changed;
-- DB/migrations/authorization: N/A, no schema or ownership changes;
-- observability: structured drift/silence/recovery logs plus admin alerts;
-- documentation: environment/runbook/troubleshooting and this live ledger.
+- DB/migrations/authorization: N/A, no schema, ownership, or financial state changed;
+- observability: structured drift/silence/recovery logs plus admin alert transition state;
+- documentation: environment/runbook/troubleshooting/production deployment + this ledger.
 
-Implementation steps:
-1. [x] Read current AGENTS.md, relevant deploy/reconciliation/telemetry/tests/docs, and production incident plan.
-2. [x] Review mandatory guidance: Bambale0/skills diagnosing-bugs + code-review, Bambale0/claw repository discipline, wondelai release-it; anthropics webapp-testing reviewed but N/A for this backend transport fix.
-3. [x] Record this fresh audit before production-code edits.
-4. [ ] Add guard + focused regression tests.
-5. [ ] Make ensure/deploy reconciliation restore and verify real allowed updates.
-6. [ ] Add silence telemetry and state-change alerting tests.
-7. [ ] Update environment/runbook/troubleshooting.
-8. [ ] Run focused checks and broader applicable backend regression.
-9. [ ] Two-axis review against fixed point main: Standards + Spec; resolve material findings.
-10. [ ] Exact-head GitHub CI green.
-11. [ ] Merge reviewed PR and allow canonical auto-deploy.
-12. [ ] Verify deployed SHA, live getWebhookInfo, Telegram telemetry, MAX connectivity and Mini App smoke.
+Test/evidence status:
+- sandbox clean checkout attempt failed before tests because the execution container could not resolve `github.com`; no local pass is claimed;
+- an isolated copy/fetch attempt under `/tmp` on the production host timed out through SentinelX; production checkout was not modified;
+- draft PR #267 was opened specifically to obtain repository-native CI evidence. CI run #1395 was queued for head `0aa22c98263178aaccb23a944e38feef40eb33b1`; because this ledger update creates a newer head, exact-head CI must be taken from the run triggered after this commit, not from #1395.
+
+Two-axis review against fixed point main:
+- Standards hard finding — resolved: root `set_webhook.py` still destroyed pending updates; deleted, and regression coverage expanded to root utilities.
+- Standards lifecycle finding — resolved: background guard originally had no retained task/cancellation path; task is now retained and cancelled before shutdown.
+- Standards observability finding — resolved: no-update history could have produced an immediate silence alert at process start; runtime now uses guard uptime as startup grace until the first update is observed.
+- Standards judgement call: update normalization exists in both runtime guard and reconciliation script. The duplication is small and keeps the standalone deployment script independent of runtime guard internals; no material correctness risk found.
+- Spec: all non-destructive P0/P1/P2 implementation items from the incident plan are covered. Token rotation and relay-runtime shutdown remain intentionally excluded because the project safety contract requires explicit confirmation for secret rotation / production process removal.
+- Official Telegram Bot API verification confirms why explicit `allowed_updates` matters: when omitted from `setWebhook`, Telegram keeps the previous setting; `drop_pending_updates=True` discards queued updates. The implementation therefore always supplies the dispatcher list and preserves the queue.
+
+Remaining gates:
+1. [x] Read AGENTS.md, relevant code/docs, incident plan, and mandatory skill sources.
+2. [x] Record audit before production-code edits.
+3. [x] Implement guard, silence telemetry, reconciliation/live gate, destructive-footgun removal, tests and docs.
+4. [x] Apply two-axis Standards + Spec review and resolve material findings.
+5. [ ] Exact final-head CI green.
+6. [ ] Mark PR ready and merge only after exact-head CI.
+7. [ ] Allow canonical auto-deploy and verify deployed SHA, Telegram live registration/telemetry, MAX connectivity and Mini App smoke.
 
 Safety/open operations:
-- BotFather token rotation is intentionally not executed: secret rotation requires explicit confirmation.
+- BotFather token rotation is intentionally not executed: secret rotation requires explicit confirmation and a rollback/verification window.
 - APIX/relay duplicate runtime shutdown is intentionally not executed: stopping/removing containers is a separate high-risk production operation requiring explicit confirmation and rollback planning.
 
 ---
