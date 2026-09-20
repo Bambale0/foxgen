@@ -124,10 +124,13 @@ def test_no_runtime_webhook_registration_drops_pending_updates() -> None:
     )
 
     offenders: list[str] = []
+    runtime_paths = list(Path(".").glob("*.py"))
     for root in (Path("bot"), Path("scripts")):
-        for path in root.rglob("*.py"):
-            text = path.read_text(encoding="utf-8")
-            if any(pattern.search(text) for pattern in dangerous_patterns):
-                offenders.append(str(path))
+        runtime_paths.extend(root.rglob("*.py"))
+
+    for path in runtime_paths:
+        text = path.read_text(encoding="utf-8")
+        if any(pattern.search(text) for pattern in dangerous_patterns):
+            offenders.append(str(path))
 
     assert offenders == []
