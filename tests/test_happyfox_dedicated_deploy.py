@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 
 
@@ -13,6 +14,7 @@ def test_dedicated_deploy_pins_three_public_origins_and_runtime_db() -> None:
     assert "check_max_connectivity" in deploy
     assert "chown -R 10001:10001" in deploy
     assert "ensure_telegram_webhook.py" in deploy
+    assert "ensure_telegram_webhook.py --check-only" in deploy
     assert "TELEGRAM_WEBHOOK_URL" in deploy
     assert "TELEGRAM_WEBHOOK_IP_ADDRESS" in deploy
     assert "HAPPYFOX_TELEGRAM_RELAY_IP:-2.27.160.11" in deploy
@@ -81,6 +83,9 @@ def test_telegram_webhook_reconciliation_preserves_pending_updates() -> None:
     assert "TELEGRAM_WEBHOOK_IP_ADDRESS" in script
     assert "secret_token" in script
     assert "ip_address" in script
+    assert "allowed_updates" in script
+    assert "setup_dispatcher" in script
+    assert "--check-only" in script
 
 
 def test_russian_trusted_ca_is_installed_without_tls_bypass() -> None:
@@ -110,3 +115,19 @@ def test_max_connectivity_smoke_uses_authenticated_client_and_system_tls() -> No
     assert "max_api_ok=1" in script
     assert "ssl=False" not in script
     assert "CERT_NONE" not in script
+
+
+def test_no_runtime_webhook_registration_drops_pending_updates() -> None:
+    dangerous_patterns = (
+        re.compile(r"drop_pending_updates\s*=\s*True"),
+        re.compile(r"[\"']drop_pending_updates[\"']\s*:\s*True"),
+    )
+
+    offenders: list[str] = []
+    for root in (Path("bot"), Path("scripts")):
+        for path in root.rglob("*.py"):
+            text = path.read_text(encoding="utf-8")
+            if any(pattern.search(text) for pattern in dangerous_patterns):
+                offenders.append(str(path))
+
+    assert offenders == []
