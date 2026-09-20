@@ -1,3 +1,50 @@
+# Active: Telegram webhook drift self-heal and silence detection
+
+Baseline: main `196f0f4c8e51e03651db2fbe3ee97049001488e9`. Branch: `fix/telegram-webhook-self-heal`.
+
+Fresh audit (2026-09-20): production incident evidence shows Telegram webhook registration can be changed by another runtime sharing the bot token while the HappyFox process and ingress watchdog remain healthy. Current startup already registers `allowed_updates=dispatcher.resolve_used_update_types()` and preserves pending updates, but `scripts/ensure_telegram_webhook.py` does not set `allowed_updates`; the canonical deploy runs that script but has no independent live-registration gate. `scripts/set_webhook.py` is already absent on current main, so the remaining footgun work is a regression guard rather than deletion. Existing Telegram telemetry correlates updates and Bot API calls but does not expose "pending updates with no incoming update" silence. Runbook still incorrectly says the native system menu must be `commands`, while code/tests/docs use `web_app`.
+
+Intended outcome:
+- a background Telegram webhook guard detects URL/IP/allowed-update drift, re-registers with `drop_pending_updates=False`, and alerts admins once per state transition;
+- the same guard detects `pending_update_count > 0` plus prolonged absence of observed Telegram updates and alerts without destructive queue changes;
+- canonical reconciliation explicitly restores the dispatcher's real `allowed_updates`;
+- deployment independently checks the live registration after reconciliation and fails on URL/IP/allowed-update/pending drift;
+- historical Telegram `last_error_message` remains diagnostic context and does not by itself cause an infinite self-heal loop;
+- docs and incident playbook match the actual `web_app` menu contract;
+- no bot token is rotated and no relay container is stopped in this branch.
+
+Configuration/no-hardcode decision: guard enablement, cadence, and silence threshold are technical runtime settings exposed through env and documented in `.env.happyfox.example` / `docs/environment.md`. Expected URL/IP/secret continue to come from the existing canonical config. Expected update types come from the actual configured aiogram dispatcher, not a second hand-maintained business list.
+
+Verification layers:
+- unit: guard drift/silence/state-transition behavior and Telegram telemetry last-update age;
+- external adapter contract: fake aiogram Bot verifies `set_webhook(... drop_pending_updates=False, allowed_updates=...)`;
+- Telegram behavior: reconciliation/deploy contract tests plus post-deploy `getWebhookInfo`;
+- MAX/Mini App: infrastructure-only compatibility via existing CI/deploy smokes; no behavior change;
+- Instagram: N/A, no shared generation/billing/identity behavior changed;
+- DB/migrations/authorization: N/A, no schema or ownership changes;
+- observability: structured drift/silence/recovery logs plus admin alerts;
+- documentation: environment/runbook/troubleshooting and this live ledger.
+
+Implementation steps:
+1. [x] Read current AGENTS.md, relevant deploy/reconciliation/telemetry/tests/docs, and production incident plan.
+2. [x] Review mandatory guidance: Bambale0/skills diagnosing-bugs + code-review, Bambale0/claw repository discipline, wondelai release-it; anthropics webapp-testing reviewed but N/A for this backend transport fix.
+3. [x] Record this fresh audit before production-code edits.
+4. [ ] Add guard + focused regression tests.
+5. [ ] Make ensure/deploy reconciliation restore and verify real allowed updates.
+6. [ ] Add silence telemetry and state-change alerting tests.
+7. [ ] Update environment/runbook/troubleshooting.
+8. [ ] Run focused checks and broader applicable backend regression.
+9. [ ] Two-axis review against fixed point main: Standards + Spec; resolve material findings.
+10. [ ] Exact-head GitHub CI green.
+11. [ ] Merge reviewed PR and allow canonical auto-deploy.
+12. [ ] Verify deployed SHA, live getWebhookInfo, Telegram telemetry, MAX connectivity and Mini App smoke.
+
+Safety/open operations:
+- BotFather token rotation is intentionally not executed: secret rotation requires explicit confirmation.
+- APIX/relay duplicate runtime shutdown is intentionally not executed: stopping/removing containers is a separate high-risk production operation requiring explicit confirmation and rollback planning.
+
+---
+
 # Active: Mini App native launch recovery for Telegram and MAX
 
 Update 2026-09-18 follow-up: user retest on Telegram Desktop still showed the auth gate on the deployed 4bac0c11 release. Fresh logs prove the new Mini App document loads with Telegram.WebApp present and tgWebAppData length 603, but /mini-app/api/bootstrap reaches backend as Missing init_data. Backend already accepts X-Telegram-Init-Data as a fallback transport in _miniapp_payload, so this follow-up sends signed init_data in both the existing JSON body and that header. Auth remains backend-verified; no billing/referral/provider/config behavior changes. Verification so far: focused Mini App auth/gate Jest passed 4 suites / 32 tests; full Mini App Jest passed 19 suites / 84 tests; Mini App lint passed with 0 errors and the same 5 pre-existing hook warnings; production static export build passed; git diff --check passed.
