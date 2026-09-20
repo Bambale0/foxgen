@@ -89,7 +89,9 @@ from bot.services.telegram_telemetry import (
     install_telegram_bot_api_telemetry,
     log_telegram_webhook_ack,
     record_telegram_stage,
+    telegram_last_update_age_seconds,
 )
+from bot.services.telegram_webhook_guard import webhook_guard_loop
 from bot.services.preset_manager import preset_manager
 from bot.services.redis_service import redis_service
 from bot.services.subscription_service import (
@@ -2434,6 +2436,37 @@ async def on_startup(bot: Bot, dispatcher: Dispatcher | None = None):
             logger.info(f"Webhook set to {config.webhook_url}")
         except Exception:
             logger.exception("Failed to set webhook on startup")
+
+    if (
+        (config.WEBHOOK_HOST or config.TELEGRAM_WEBHOOK_URL)
+        and config.TELEGRAM_WEBHOOK_GUARD_ENABLED
+    ):
+        if dispatcher is None:
+            logger.warning("Telegram webhook guard skipped: dispatcher is unavailable")
+        else:
+            try:
+                allowed_updates = dispatcher.resolve_used_update_types()
+                asyncio.create_task(
+                    webhook_guard_loop(
+                        bot,
+                        interval=config.TELEGRAM_WEBHOOK_GUARD_SECONDS,
+                        expected_url=config.webhook_url,
+                        expected_ip=config.TELEGRAM_WEBHOOK_IP_ADDRESS,
+                        secret=config.telegram_webhook_secret,
+                        expected_allowed_updates=allowed_updates,
+                        admin_ids=config.admin_ids,
+                        silence_seconds=config.TELEGRAM_WEBHOOK_SILENCE_SECONDS,
+                        last_update_age=telegram_last_update_age_seconds,
+                    )
+                )
+                logger.info(
+                    "Telegram webhook guard started: interval=%ss silence=%ss updates=%s",
+                    config.TELEGRAM_WEBHOOK_GUARD_SECONDS,
+                    config.TELEGRAM_WEBHOOK_SILENCE_SECONDS,
+                    ",".join(allowed_updates),
+                )
+            except Exception:
+                logger.exception("Failed to start Telegram webhook guard")
 
     # Загружаем пресеты
     preset_manager.load_all()
