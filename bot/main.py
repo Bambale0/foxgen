@@ -119,6 +119,7 @@ MEMORY_DUMP_INTERVAL_SECONDS = 3 * 3600
 DB_BACKUP_INTERVAL_SECONDS = 3 * 3600
 DB_BACKUP_TIMEOUT_SECONDS = 30 * 60
 _TELEGRAM_WEBHOOK_TASKS: set[asyncio.Task] = set()
+_TELEGRAM_WEBHOOK_GUARD_TASK: asyncio.Task | None = None
 TELEGRAM_WEBHOOK_CONCURRENCY_LIMIT = 8
 _TELEGRAM_WEBHOOK_SEMAPHORE = asyncio.Semaphore(TELEGRAM_WEBHOOK_CONCURRENCY_LIMIT)
 _NEXUS_POLL_IN_FLIGHT: set[str] = set()
@@ -2364,6 +2365,8 @@ async def _cleanup_loop():
 
 async def on_startup(bot: Bot, dispatcher: Dispatcher | None = None):
     """Действия при старте бота"""
+    global _TELEGRAM_WEBHOOK_GUARD_TASK
+
     logger.info("Bot starting...")
 
     # Bot identity is immutable for the lifetime of this process. Cache and
@@ -2446,7 +2449,7 @@ async def on_startup(bot: Bot, dispatcher: Dispatcher | None = None):
         else:
             try:
                 allowed_updates = dispatcher.resolve_used_update_types()
-                asyncio.create_task(
+                _TELEGRAM_WEBHOOK_GUARD_TASK = asyncio.create_task(
                     webhook_guard_loop(
                         bot,
                         interval=config.TELEGRAM_WEBHOOK_GUARD_SECONDS,
@@ -2457,7 +2460,8 @@ async def on_startup(bot: Bot, dispatcher: Dispatcher | None = None):
                         admin_ids=config.admin_ids,
                         silence_seconds=config.TELEGRAM_WEBHOOK_SILENCE_SECONDS,
                         last_update_age=telegram_last_update_age_seconds,
-                    )
+                    ),
+                    name="telegram-webhook-guard",
                 )
                 logger.info(
                     "Telegram webhook guard started: interval=%ss silence=%ss updates=%s",
@@ -2505,7 +2509,17 @@ async def on_startup(bot: Bot, dispatcher: Dispatcher | None = None):
 
 async def on_shutdown(bot: Bot):
     """Действия при остановке"""
+    global _TELEGRAM_WEBHOOK_GUARD_TASK
+
     logger.info("Bot shutting down...")
+    if _TELEGRAM_WEBHOOK_GUARD_TASK is not None:
+        _TELEGRAM_WEBHOOK_GUARD_TASK.cancel()
+        try:
+            await _TELEGRAM_WEBHOOK_GUARD_TASK
+        except asyncio.CancelledError:
+            pass
+        finally:
+            _TELEGRAM_WEBHOOK_GUARD_TASK = None
     try:
         from bot.services.cryptobot_service import cryptobot_service
 
