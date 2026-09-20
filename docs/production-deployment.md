@@ -73,7 +73,9 @@ PostgreSQL 17 reachable and pre/post backup verified
 Redis namespace isolated
 happyfox-docker-prune.timer enabled and waiting
 Telegram webhook URL is https://api.happy-fox.online/webhook
-Telegram pending_update_count = 0 and last_error_message is empty
+Telegram fixed ingress IP matches TELEGRAM_WEBHOOK_IP_ADDRESS when configured
+Telegram allowed_updates matches the active dispatcher; callback_query/pre_checkout_query are not silently narrowed away
+Telegram pending_update_count = 0 and there is no fresh delivery error
 Telegram native chat menu type = web_app and URL starts with https://app.happy-fox.online/mini-app/
 MAX has exactly one subscription, matching MAX_WEBHOOK_URL (api.happy-fox.online)
 MAX native quick commands are /start, /feed, /prompts, /help, /ref, /earn
@@ -90,6 +92,8 @@ TELEGRAM_WEBHOOK_IP_ADDRESS=<relay IPv4>
 ```
 
 `setWebhook` must use `drop_pending_updates=False`. The relay presents a valid certificate for `api.happy-fox.online`, forwards the request to the dedicated API origin and does not run a second bot worker. Outbound Bot API traffic is carried by `happyfox-telegram-egress.service`.
+
+The deploy first reconciles Telegram with `scripts/ensure_telegram_webhook.py`, then immediately runs the same script with `--check-only`. The second call is read-only and fails deployment if URL, fixed IP, dispatcher-derived `allowed_updates`, or the pending queue is wrong. Runtime drift is also checked by the in-process webhook guard; historical Telegram delivery errors are logged for diagnosis rather than treated as a reason to rewrite an otherwise-correct registration.
 
 The apix relay owns a separate Let's Encrypt certificate for `api.happy-fox.online`. Telegram still uses the canonical URL/SNI `https://api.happy-fox.online/webhook`; `TELEGRAM_WEBHOOK_IP_ADDRESS` only pins ingress to the relay IPv4. Certificate renewal is handled on the relay host and must be followed by `nginx -t`/reload verification.
 
