@@ -298,6 +298,7 @@ kie_status="$(curl -sS -o /dev/null -w '%{http_code}' -X POST --max-time 20 \
 [[ "$kie_status" =~ ^(400|401|403)$ ]]
 
 docker exec foxgen-happyfox-bot python /app/scripts/ensure_telegram_webhook.py
+docker exec foxgen-happyfox-bot python /app/scripts/ensure_telegram_webhook.py --check-only
 docker exec foxgen-happyfox-bot python -m scripts.check_max_connectivity
 docker logs foxgen-happyfox-bot 2>&1 | grep -F "$API_ORIGIN/max/webhook" >/dev/null
 
