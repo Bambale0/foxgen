@@ -32,12 +32,13 @@ Verification layers:
 Test/evidence status:
 - sandbox clean checkout attempt failed before tests because the execution container could not resolve `github.com`; no local pass is claimed;
 - an isolated copy/fetch attempt under `/tmp` on the production host timed out through SentinelX; production checkout was not modified;
-- draft PR #267 was opened specifically to obtain repository-native CI evidence. CI run #1395 was queued for head `0aa22c98263178aaccb23a944e38feef40eb33b1`; because this ledger update creates a newer head, exact-head CI must be taken from the run triggered after this commit, not from #1395.
+- draft PR #267 was opened specifically to obtain repository-native CI evidence. CI run #1395 was queued for head `0aa22c98263178aaccb23a944e38feef40eb33b1`; subsequent review fixes and this ledger update moved the branch again, so #1395 is historical evidence only. Exact-head CI must be taken from the workflow triggered by the final ledger commit.
 
 Two-axis review against fixed point main:
 - Standards hard finding — resolved: root `set_webhook.py` still destroyed pending updates; deleted, and regression coverage expanded to root utilities.
 - Standards lifecycle finding — resolved: background guard originally had no retained task/cancellation path; task is now retained and cancelled before shutdown.
 - Standards observability finding — resolved: no-update history could have produced an immediate silence alert at process start; runtime now uses guard uptime as startup grace until the first update is observed.
+- Standards failure-path finding — resolved: an exception from Telegram during guard inspection/reconciliation originally produced only a log. The loop now emits a de-duplicated admin alert for repeated guard failures, and incident identity distinguishes unresolved drift from repaired drift so a later successful recovery can be surfaced.
 - Standards judgement call: update normalization exists in both runtime guard and reconciliation script. The duplication is small and keeps the standalone deployment script independent of runtime guard internals; no material correctness risk found.
 - Spec: all non-destructive P0/P1/P2 implementation items from the incident plan are covered. Token rotation and relay-runtime shutdown remain intentionally excluded because the project safety contract requires explicit confirmation for secret rotation / production process removal.
 - Official Telegram Bot API verification confirms why explicit `allowed_updates` matters: when omitted from `setWebhook`, Telegram keeps the previous setting; `drop_pending_updates=True` discards queued updates. The implementation therefore always supplies the dispatcher list and preserves the queue.
