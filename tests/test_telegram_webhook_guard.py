@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-from types import SimpleNamespace
-
 import asyncio
+from types import SimpleNamespace
 
 import pytest
 
@@ -129,6 +128,25 @@ async def test_historical_error_alone_does_not_trigger_re_registration() -> None
     )
 
     assert check.drift_reasons == ()
+    assert check.silence_detected is False
+    assert bot.set_calls == []
+
+
+@pytest.mark.asyncio
+async def test_pending_queue_without_update_history_uses_startup_grace() -> None:
+    expected_updates = ["message", "callback_query", "pre_checkout_query"]
+    bot = _FakeBot([_info(allowed=expected_updates, pending=1)])
+
+    check = await inspect_and_reconcile_telegram_webhook(
+        bot,
+        expected_url="https://api.happy-fox.online/webhook",
+        expected_ip="2.27.160.11",
+        secret="secret",
+        expected_allowed_updates=expected_updates,
+        silence_seconds=300,
+        last_update_age_seconds=None,
+    )
+
     assert check.silence_detected is False
     assert bot.set_calls == []
 
