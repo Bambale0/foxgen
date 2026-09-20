@@ -36,13 +36,22 @@ Distinguish expected auth rejection from timeout/5xx/network failure.
 
 Check both directions separately. A healthy `/health` route does not prove Telegram connectivity.
 
-1. `getWebhookInfo` must show `https://api.happy-fox.online/webhook`, zero pending updates and no recent delivery error.
-2. When `TELEGRAM_WEBHOOK_IP_ADDRESS` is configured, Telegram must report that same fixed ingress IP.
-3. The relay must present a valid certificate for `api.happy-fox.online` and proxy to the dedicated backend.
-4. Outbound Bot API calls from the dedicated host/container must succeed; check `happyfox-telegram-egress.service`.
-5. Confirm the native system menu is `web_app` and points to `https://app.happy-fox.online/mini-app/`; quick commands must remain registered separately.
+The September 20 incident signature is registration drift: the live Telegram webhook URL/IP or `allowed_updates` no longer matches HappyFox. In particular, a registration narrowed to message/channel-post updates can make `/start` appear partly alive while callback buttons and `pre_checkout_query` never reach the application.
+
+1. Run `docker exec foxgen-happyfox-bot python /app/scripts/ensure_telegram_webhook.py --check-only`. It verifies URL, fixed IP when configured, the actual dispatcher's `allowed_updates`, and `pending_update_count=0` without mutating Telegram state.
+2. If drift is reported, run `docker exec foxgen-happyfox-bot python /app/scripts/ensure_telegram_webhook.py` once, then repeat `--check-only`. The repair uses `drop_pending_updates=False`.
+3. `allowed_updates` must match the configured aiogram dispatcher. For current payment/button flows that includes `callback_query` and `pre_checkout_query` when those handlers are active.
+4. When `TELEGRAM_WEBHOOK_IP_ADDRESS` is configured, Telegram must report that same fixed ingress IP.
+5. A historical `last_error_message` (for example an older relay 5xx) is useful evidence but is not, by itself, registration drift. A fresh error or a growing pending queue is actionable.
+6. Inspect structured logs for `telegram_webhook_drift`, `telegram_webhook_reconcile`, `telegram_webhook_silence`, and normal `telegram_update` events.
+7. The relay must present a valid certificate for `api.happy-fox.online` and proxy to the dedicated backend.
+8. Outbound Bot API calls from the dedicated host/container must succeed; check `happyfox-telegram-egress.service`.
+9. Confirm the native system menu is `web_app` and points to `https://app.happy-fox.online/mini-app/`; quick commands must remain registered separately.
+10. Smoke a safe `/start`, callback button, and payment pre-checkout path.
 
 If incoming webhook delivery works but responses time out, diagnose outbound Telegram connectivity. If Bot API calls work but `pending_update_count` grows, diagnose ingress/TLS/relay. Do not start a second bot worker on the relay host.
+
+If drift keeps returning after HappyFox repairs it, treat that as evidence that another process still has authority over the same Telegram bot token. Do not start a webhook "ping-pong": identify the competing runtime and rotate/isolate the token only under explicit production change control.
 
 ## 5. Instagram webhook route is missing/404
 
