@@ -24,6 +24,9 @@ WEBHOOK_HOST=https://api.happy-fox.online
 WEBHOOK_PATH=/webhook
 TELEGRAM_WEBHOOK_URL=https://api.happy-fox.online/webhook
 TELEGRAM_WEBHOOK_IP_ADDRESS=
+TELEGRAM_WEBHOOK_GUARD_ENABLED=1
+TELEGRAM_WEBHOOK_GUARD_SECONDS=60
+TELEGRAM_WEBHOOK_SILENCE_SECONDS=300
 WEBHOOK_BIND_HOST=127.0.0.1
 WEBHOOK_PORT=1888
 MINI_APP_URL=https://app.happy-fox.online/mini-app/
@@ -54,6 +57,8 @@ Use `.env.happyfox.example` as the actual template.
 `ADMIN_IDS` is a comma-separated allow-list for admin functionality.
 
 `TELEGRAM_WEBHOOK_URL` optionally overrides only the Telegram callback URL without changing provider/payment `WEBHOOK_HOST`. `TELEGRAM_WEBHOOK_IP_ADDRESS` maps to Telegram Bot API `setWebhook(ip_address=...)` and is used only when Telegram must enter through a fixed relay IP. Keep it empty in ordinary deployments.
+
+`TELEGRAM_WEBHOOK_GUARD_ENABLED` enables the in-process registration guard. The guard compares Telegram's live webhook URL, fixed ingress IP and `allowed_updates` with the active HappyFox dispatcher, repairs deterministic drift with `drop_pending_updates=False`, and alerts `ADMIN_IDS` once when the incident state changes. `TELEGRAM_WEBHOOK_GUARD_SECONDS` controls the check cadence; `TELEGRAM_WEBHOOK_SILENCE_SECONDS` controls when a non-empty Telegram queue plus absence of observed HappyFox updates becomes a silence alert. Historical `last_error_message` is logged as diagnostic context but does not by itself rewrite the webhook.
 
 The native Telegram system menu is a `web_app` Mini App launcher. Quick commands remain registered separately through the bot command list.
 
