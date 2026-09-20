@@ -269,3 +269,28 @@ state/status
 expected vs actual
 minimal sanitized logs
 ```
+
+
+## 25. Prompt sent as formatted text gets no reply (rich_message)
+
+Telegram clients can deliver formatted content (for example, text pasted from a
+web page) as `Message.rich_message` without `text`, `caption` or `entities`.
+Prompt handlers are `F.text` based, so an unnormalized rich message matches no
+handler: the bot stays silent, no generation task is created, and telemetry
+shows `route=message:rich_message handler=-`.
+
+The normalization middleware (`bot/services/telegram_rich_message.py`)
+extracts plain text from the rich blocks and writes it into `Message.text`
+before routing. Verify after a restart:
+
+1. Send a formatted prompt; telemetry must show
+   `telegram_rich_message_normalized update_id=...` and the prompt handler must
+   fire (`Added new generation task`).
+2. A rich message that carries no text (media-only) logs
+   `telegram_rich_message_without_text`; that is expected, not a delivery bug.
+3. If neither log line appears for a rich message, check that
+   `RichMessageNormalizerMiddleware` is registered as an update-level outer
+   middleware after `TelegramUpdateTelemetryMiddleware` in `bot/main.py`.
+4. Extraction failures must never drop the update silently: they log
+   `telegram_rich_message_normalization_failed` and the update is left
+   untouched rather than crashing the handler chain.

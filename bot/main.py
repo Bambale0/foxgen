@@ -83,6 +83,7 @@ from bot.services.callback_ack import (
     EarlyCallbackAckMiddleware,
     install_early_callback_ack_session_middleware,
 )
+from bot.services.telegram_rich_message import RichMessageNormalizerMiddleware
 from bot.services.telegram_telemetry import (
     TelegramResolvedHandlerTelemetryMiddleware,
     TelegramUpdateTelemetryMiddleware,
@@ -2540,6 +2541,12 @@ def setup_dispatcher() -> Dispatcher:
     for observer_name, observer in dp.observers.items():
         if observer_name not in {"update", "error"}:
             observer.middleware(resolved_handler_telemetry)
+
+    # Telegram clients can deliver formatted content as a rich_message without
+    # text/caption/entities. Normalize it before routing so the existing F.text
+    # prompt handlers keep matching instead of silently dropping the update.
+    # Telemetry is registered first so the raw content type stays visible.
+    dp.update.outer_middleware(RichMessageNormalizerMiddleware())
 
     # Регистрируем глобальный обработчик ошибок
     dp.errors.register(errors_handler)
