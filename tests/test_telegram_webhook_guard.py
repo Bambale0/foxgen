@@ -171,6 +171,68 @@ async def test_pending_queue_plus_update_silence_alerts_without_mutating_registr
     assert bot.set_calls == []
 
 
+def test_incident_key_distinguishes_unresolved_from_repaired_drift() -> None:
+    unresolved = guard.WebhookGuardCheck(
+        drift_reasons=("url",),
+        remaining_drift_reasons=("url",),
+        pending_update_count=0,
+        silence_detected=False,
+        repaired=False,
+        last_error_message="",
+    )
+    repaired = guard.WebhookGuardCheck(
+        drift_reasons=("url",),
+        remaining_drift_reasons=(),
+        pending_update_count=0,
+        silence_detected=False,
+        repaired=True,
+        last_error_message="",
+    )
+
+    assert unresolved.incident_key == "drift:url:unresolved"
+    assert repaired.incident_key == "drift:url:repaired"
+
+
+@pytest.mark.asyncio
+async def test_guard_alerts_once_for_repeated_failures(monkeypatch) -> None:
+    alerts: list[str] = []
+    sleeps = 0
+
+    async def failing_inspect(*args, **kwargs):
+        raise RuntimeError("telegram unavailable")
+
+    async def fake_notify(_bot, _admin_ids, text):
+        alerts.append(text)
+
+    async def fake_sleep(_interval):
+        nonlocal sleeps
+        sleeps += 1
+        if sleeps >= 2:
+            raise asyncio.CancelledError
+
+    monkeypatch.setattr(
+        guard, "inspect_and_reconcile_telegram_webhook", failing_inspect
+    )
+    monkeypatch.setattr(guard, "_notify_admins", fake_notify)
+    monkeypatch.setattr(guard.asyncio, "sleep", fake_sleep)
+
+    with pytest.raises(asyncio.CancelledError):
+        await guard.webhook_guard_loop(
+            object(),
+            interval=1,
+            expected_url="https://api.happy-fox.online/webhook",
+            expected_ip="2.27.160.11",
+            secret="secret",
+            expected_allowed_updates=["message"],
+            admin_ids=[1],
+            silence_seconds=300,
+            last_update_age=lambda: 1.0,
+        )
+
+    assert len(alerts) == 1
+    assert "telegram_webhook_guard_failed" in alerts[0]
+
+
 @pytest.mark.asyncio
 async def test_guard_alerts_once_for_unchanged_incident(monkeypatch) -> None:
     check = guard.WebhookGuardCheck(
