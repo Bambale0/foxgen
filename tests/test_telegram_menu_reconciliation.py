@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
+from types import SimpleNamespace
 from pathlib import Path
 
 import pytest
@@ -75,3 +76,54 @@ def test_reconciliation_script_imports_when_executed_outside_repo(tmp_path):
     )
 
     assert completed.returncode == 0, completed.stderr
+
+
+class _WebhookSession:
+    def __init__(self) -> None:
+        self.closed = False
+
+    async def close(self) -> None:
+        self.closed = True
+
+
+class _WebhookBot:
+    def __init__(self, info) -> None:
+        self.info = info
+        self.set_calls = []
+        self.session = _WebhookSession()
+
+    async def get_webhook_info(self):
+        return self.info
+
+    async def set_webhook(self, **kwargs):
+        self.set_calls.append(kwargs)
+
+
+@pytest.mark.asyncio
+async def test_check_only_verifies_allowed_updates_without_mutating(monkeypatch):
+    expected_updates = ["message", "callback_query", "pre_checkout_query"]
+    info = SimpleNamespace(
+        url="https://api.happy-fox.online/webhook",
+        ip_address="2.27.160.11",
+        allowed_updates=expected_updates,
+        pending_update_count=0,
+        last_error_message=None,
+        last_error_date=None,
+    )
+    bot = _WebhookBot(info)
+
+    async def resolve_updates():
+        return expected_updates
+
+    monkeypatch.setattr(target, "Bot", lambda token: bot)
+    monkeypatch.setattr(target, "_resolve_allowed_updates", resolve_updates)
+    monkeypatch.setenv("BOT_TOKEN", "test-token")
+    monkeypatch.setenv(
+        "TELEGRAM_WEBHOOK_URL", "https://api.happy-fox.online/webhook"
+    )
+    monkeypatch.setenv("TELEGRAM_WEBHOOK_IP_ADDRESS", "2.27.160.11")
+
+    await target.ensure(repair=False, require_empty_queue=True)
+
+    assert bot.set_calls == []
+    assert bot.session.closed is True
