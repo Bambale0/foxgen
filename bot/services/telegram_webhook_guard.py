@@ -27,7 +27,10 @@ class WebhookGuardCheck:
     def incident_key(self) -> str | None:
         parts: list[str] = []
         if self.drift_reasons:
-            parts.append("drift:" + ",".join(self.drift_reasons))
+            drift_state = "repaired" if self.repaired else "unresolved"
+            parts.append(
+                "drift:" + ",".join(self.drift_reasons) + ":" + drift_state
+            )
         if self.silence_detected:
             parts.append("silence")
         return "|".join(parts) or None
@@ -237,7 +240,16 @@ async def webhook_guard_loop(
             last_alert_key = incident_key
         except asyncio.CancelledError:
             raise
-        except Exception:
+        except Exception as exc:
             logger.exception("telegram_webhook_guard_failed")
+            failure_key = f"guard_error:{type(exc).__name__}"
+            if failure_key != last_alert_key:
+                await _notify_admins(
+                    bot,
+                    admin_ids,
+                    "⚠️ HappyFox Telegram: проверка/восстановление webhook "
+                    "завершилась ошибкой; см. telegram_webhook_guard_failed в логах",
+                )
+            last_alert_key = failure_key
 
         await asyncio.sleep(interval)
