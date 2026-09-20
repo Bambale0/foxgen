@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 import asyncio
 import hashlib
 import hmac
@@ -67,6 +68,29 @@ def _mini_app_url_with_release() -> str:
     return urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(query), parts.fragment))
 
 
+def _normalise_allowed_updates(values) -> tuple[str, ...]:
+    if not values:
+        return ()
+    result: set[str] = set()
+    for value in values:
+        raw = getattr(value, "value", value)
+        text = str(raw or "").strip()
+        if text:
+            result.add(text)
+    return tuple(sorted(result))
+
+
+async def _resolve_allowed_updates() -> list[str]:
+    """Resolve the exact update types from the production dispatcher wiring."""
+    from bot.main import setup_dispatcher
+
+    dispatcher = setup_dispatcher()
+    try:
+        return list(dispatcher.resolve_used_update_types())
+    finally:
+        await dispatcher.storage.close()
+
+
 async def _telegram_user_ids() -> list[int]:
     """Return known Telegram private-chat ids from the HappyFox user table."""
     async with db_backend.connect() as db:
@@ -117,7 +141,11 @@ async def _reconcile_miniapp_menu(bot: Bot) -> dict[str, int]:
     return {"checked": checked, "reset": reset, "skipped": skipped}
 
 
-async def ensure() -> None:
+async def ensure(
+    *,
+    repair: bool = True,
+    require_empty_queue: bool = False,
+) -> None:
     token = str(os.getenv("BOT_TOKEN", "")).strip()
     if not token:
         raise RuntimeError("BOT_TOKEN is required")
@@ -125,19 +153,22 @@ async def ensure() -> None:
     target = _webhook_url()
     secret = _webhook_secret()
     fixed_ip = str(os.getenv("TELEGRAM_WEBHOOK_IP_ADDRESS", "")).strip()
+    allowed_updates = await _resolve_allowed_updates()
     started_at = int(time.time())
     bot = Bot(token=token)
     menu_result: dict[str, int] | None = None
     try:
-        kwargs: dict[str, object] = {
-            "url": target,
-            "drop_pending_updates": False,
-        }
-        if secret:
-            kwargs["secret_token"] = secret
-        if fixed_ip:
-            kwargs["ip_address"] = fixed_ip
-        await bot.set_webhook(**kwargs)
+        if repair:
+            kwargs: dict[str, object] = {
+                "url": target,
+                "drop_pending_updates": False,
+                "allowed_updates": allowed_updates,
+            }
+            if secret:
+                kwargs["secret_token"] = secret
+            if fixed_ip:
+                kwargs["ip_address"] = fixed_ip
+            await bot.set_webhook(**kwargs)
 
         info = await bot.get_webhook_info()
         if str(info.url or "").rstrip("/") != target.rstrip("/"):
@@ -148,17 +179,38 @@ async def ensure() -> None:
             raise RuntimeError(
                 f"Telegram webhook IP mismatch: expected={fixed_ip} actual={info.ip_address or ''}"
             )
+
+        actual_updates = _normalise_allowed_updates(info.allowed_updates)
+        expected_updates = _normalise_allowed_updates(allowed_updates)
+        if actual_updates != expected_updates:
+            raise RuntimeError(
+                "Telegram allowed_updates mismatch: "
+                f"expected={','.join(expected_updates)} "
+                f"actual={','.join(actual_updates)}"
+            )
+
+        pending = int(info.pending_update_count or 0)
+        if require_empty_queue and pending != 0:
+            raise RuntimeError(
+                f"Telegram webhook queue is not empty: pending_update_count={pending}"
+            )
+
         error_date = int(info.last_error_date.timestamp()) if info.last_error_date else 0
         if info.last_error_message and error_date >= started_at:
             raise RuntimeError(f"Telegram webhook reports new error: {info.last_error_message}")
 
-        # Telegram can retain stale per-chat menu overrides even after the
-        # default button is updated. Reconcile both levels.
-        menu_result = await _reconcile_miniapp_menu(bot)
+        if repair:
+            # Telegram can retain stale per-chat menu overrides even after the
+            # default button is updated. Reconcile both levels.
+            menu_result = await _reconcile_miniapp_menu(bot)
     finally:
         await bot.session.close()
 
-    print(f"telegram_webhook_ok={target}")
+    mode = "repair" if repair else "check"
+    print(
+        f"telegram_webhook_{mode}_ok={target} "
+        f"allowed_updates={','.join(_normalise_allowed_updates(allowed_updates))}"
+    )
     if menu_result is not None:
         print(
             "telegram_miniapp_menu_ok="
@@ -168,5 +220,23 @@ async def ensure() -> None:
         )
 
 
+def _parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Reconcile or verify the HappyFox Telegram webhook registration."
+    )
+    parser.add_argument(
+        "--check-only",
+        action="store_true",
+        help="Verify live registration without mutating Telegram state.",
+    )
+    return parser.parse_args()
+
+
 if __name__ == "__main__":
-    asyncio.run(ensure())
+    args = _parse_args()
+    asyncio.run(
+        ensure(
+            repair=not args.check_only,
+            require_empty_queue=args.check_only,
+        )
+    )
