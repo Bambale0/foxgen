@@ -2,8 +2,11 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+import asyncio
+
 import pytest
 
+from bot.services import telegram_webhook_guard as guard
 from bot.services.telegram_webhook_guard import (
     inspect_and_reconcile_telegram_webhook,
     webhook_drift_reasons,
@@ -148,3 +151,54 @@ async def test_pending_queue_plus_update_silence_alerts_without_mutating_registr
     assert check.silence_detected is True
     assert check.incident_key == "silence"
     assert bot.set_calls == []
+
+
+@pytest.mark.asyncio
+async def test_guard_alerts_once_for_unchanged_incident(monkeypatch) -> None:
+    check = guard.WebhookGuardCheck(
+        drift_reasons=("url",),
+        remaining_drift_reasons=(),
+        pending_update_count=0,
+        silence_detected=False,
+        repaired=True,
+        last_error_message="",
+    )
+    inspect_calls = 0
+    alerts: list[str] = []
+    sleeps = 0
+
+    async def fake_inspect(*args, **kwargs):
+        nonlocal inspect_calls
+        inspect_calls += 1
+        return check
+
+    async def fake_notify(_bot, _admin_ids, text):
+        alerts.append(text)
+
+    async def fake_sleep(_interval):
+        nonlocal sleeps
+        sleeps += 1
+        if sleeps >= 2:
+            raise asyncio.CancelledError
+
+    monkeypatch.setattr(
+        guard, "inspect_and_reconcile_telegram_webhook", fake_inspect
+    )
+    monkeypatch.setattr(guard, "_notify_admins", fake_notify)
+    monkeypatch.setattr(guard.asyncio, "sleep", fake_sleep)
+
+    with pytest.raises(asyncio.CancelledError):
+        await guard.webhook_guard_loop(
+            object(),
+            interval=1,
+            expected_url="https://api.happy-fox.online/webhook",
+            expected_ip="2.27.160.11",
+            secret="secret",
+            expected_allowed_updates=["message"],
+            admin_ids=[1],
+            silence_seconds=300,
+            last_update_age=lambda: 1.0,
+        )
+
+    assert inspect_calls == 2
+    assert len(alerts) == 1
