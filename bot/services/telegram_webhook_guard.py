@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Any
@@ -104,10 +105,8 @@ async def inspect_and_reconcile_telegram_webhook(
     pending = int(getattr(info, "pending_update_count", 0) or 0)
     silence_detected = bool(
         pending > 0
-        and (
-            last_update_age_seconds is None
-            or last_update_age_seconds >= float(silence_seconds)
-        )
+        and last_update_age_seconds is not None
+        and last_update_age_seconds >= float(silence_seconds)
     )
     last_error = str(getattr(info, "last_error_message", "") or "")
 
@@ -198,8 +197,12 @@ async def webhook_guard_loop(
         raise ValueError("Telegram webhook silence threshold must be positive")
 
     last_alert_key: str | None = None
+    guard_started_at = time.monotonic()
     while True:
         try:
+            observed_age = last_update_age()
+            if observed_age is None:
+                observed_age = max(0.0, time.monotonic() - guard_started_at)
             check = await inspect_and_reconcile_telegram_webhook(
                 bot,
                 expected_url=expected_url,
@@ -207,7 +210,7 @@ async def webhook_guard_loop(
                 secret=secret,
                 expected_allowed_updates=expected_allowed_updates,
                 silence_seconds=silence_seconds,
-                last_update_age_seconds=last_update_age(),
+                last_update_age_seconds=observed_age,
             )
             incident_key = check.incident_key
             if incident_key and incident_key != last_alert_key:
