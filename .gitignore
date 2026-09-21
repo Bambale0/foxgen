@@ -99,10 +99,12 @@ ObsidianCodexVault/
 
 # Vibe governance artifacts
 outputs/runtime/
-# Vibe artifacts
-outputs/
-docs/requirements/
-docs/plans/
+# Env backups (must never be committed)
+*.env.*.bak.*
+*.env.*.bak
+*.env.*.backup
+*.env.*.old
+*.env.*.bak.*.*
 
 # Claw tools (cloned from https://github.com/Bambale0/claw)
 claw/
