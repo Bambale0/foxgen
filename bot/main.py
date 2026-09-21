@@ -2430,7 +2430,12 @@ async def on_startup(bot: Bot, dispatcher: Dispatcher | None = None):
             if config.TELEGRAM_WEBHOOK_IP_ADDRESS:
                 webhook_kwargs["ip_address"] = config.TELEGRAM_WEBHOOK_IP_ADDRESS
             if dispatcher is not None:
-                webhook_kwargs["allowed_updates"] = dispatcher.resolve_used_update_types()
+                # Always include callback_query and inline_query explicitly
+                # because they may not be registered before this call.
+                resolved = dispatcher.resolve_used_update_types()
+                explicit = {"message", "edited_message", "channel_post",
+                           "edited_channel_post", "callback_query", "inline_query"}
+                webhook_kwargs["allowed_updates"] = list(explicit | set(resolved))
             await bot.set_webhook(config.webhook_url, **webhook_kwargs)
             logger.info(f"Webhook set to {config.webhook_url}")
         except Exception:
