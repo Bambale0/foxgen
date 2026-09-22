@@ -13,6 +13,12 @@ services:
     restart: unless-stopped
     stop_grace_period: 30s
 
+    # RU-провайдер блокирует часть IP Telegram API по DPI.
+    # Пиним рабочий адрес DC, на котором TLS/API подтверждён (2026-09-21).
+    # Если перестанет отвечать — проверить: nc -zv 149.154.167.220 443
+    extra_hosts:
+      - "api.telegram.org:149.154.167.220"
+
     env_file:
       - path: .env
         required: true
@@ -71,6 +77,11 @@ services:
     container_name: ${SUPPORT_CONTAINER_NAME:-foxgen-happyfox-support}
     restart: unless-stopped
     stop_grace_period: 30s
+
+    # См. комментарий к боту выше: пининг рабочего IP Telegram API.
+    extra_hosts:
+      - "api.telegram.org:149.154.167.220"
+
     command:
       - python
       - -m
