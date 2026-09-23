@@ -1,3 +1,29 @@
+# Active: fix/telegram-egress-input-accept — bot silent because the firewall dropped the tunnel port
+
+Baseline: main 03cc15b7b96b34d9b512500ba458c57815957cb0 (production image release c9c95d24), branch fix/telegram-egress-input-accept.
+
+Incident (2026-09-23, reported as "bot is silent"): `/health` was 200, `getWebhookInfo` reported `https://api.happy-fox.online/webhook` with `pending_update_count=0`, no `last_error_message` and the pinned relay IP, and `happyfox-telegram-egress.service` was `active`. Yet Bot API replies failed: `logs/bot.log` showed `telegram_bot_api method=sendDocument|answerCallbackQuery|editMessageText outcome=error error_type=TelegramNetworkError` ("Request timeout error", 60s), while `getWebhookInfo`/`getMe` from the container hung on TCP connect.
+
+Audit: host `iptables -S INPUT` has policy `DROP` with no rule for the tunnel port; `nat/PREROUTING` DNAT (`172.18.0.0/16 → 149.154.160.0/20:443 ⇒ 172.18.0.1:18443`) and `nat/OUTPUT` REDIRECT existed, so DNAT'ed packets were dropped in the `INPUT` filter chain. The Sep-06 unit applied only NAT rules, and the INPUT policy/rules changed later without any repository record; SentinelX `allowed_commands` has iptables commented out, so the origin of the `DROP` policy is unverified. `docs/` described the tunnel service as the egress owner and "tunnel active" as the health criterion, which is exactly the blind spot.
+
+Intended outcome: outbound Bot API calls work from the runtime; the required rule set is owned by one idempotent script; a missing rule cannot look healthy again (tunnel start, 5-minute guard timer, and deploy gates all fail loudly).
+
+Design decisions: single owner `scripts/happyfox_telegram_egress_nat.sh {up|down|status}`; all operational values overridable via `HAPPYFOX_TELEGRAM_EGRESS_*` and read from `/etc/default/happyfox-telegram-egress` written by the deploy from the live network; no hardcoded subnet/gateway in the unit; `status` exits non-zero on any missing rule; `scripts/check_telegram_egress.py` performs a bounded `getMe` so a timeout becomes a deploy failure instead of a silent outage; no second worker on the relay.
+
+Observability: `telegram_egress_nat stage=up|down|status … outcome=… missing=N` in journald, `telegram_egress_ok=1 method=getMe bot_id=… duration_ms=…` from the deploy check, plus the existing `telegram_bot_api` telemetry that surfaced the timeouts.
+
+Test seams: `tests/test_happyfox_telegram_egress.py` (15 tests) runs the NAT script against a stub iptables — rule set contents, multi-subnet, `status` failure when only the INPUT accept is missing (the incident shape), idempotent `up`, `down` cleanup, configurable values, unit wiring, guard units/timer, deploy wiring/order, compile.
+
+Parity: infrastructure/transport-only. Telegram is the affected channel; MAX outbound verified reachable from the bot container (`https://botapi.max.ru/me` → 401 auth-required response = working round trip); Mini App unaffected; Instagram `N/A` (no Telegram-relay dependency in the changed path).
+
+Steps: 1) reproduce from logs + firewall state ✓; 2) restore egress on the host (INPUT ACCEPT) and confirm `getMe`/`getWebhookInfo` from the container ✓; 3) canonical NAT/firewall script ✓; 4) unit + guard units/timer ✓; 5) bounded egress check + deploy gates ✓; 6) tests ✓; 7) docs (troubleshooting 26, runbook step 3, production-deployment runtime validation + canonical implementation) ✓; 8) focused + adjacent regression, Ruff, compile, `git diff --check`; 9) commit, `code-review` against main, PR, exact-head CI; 10) post-deploy revision/health/egress verification and real user retest.
+
+Verification so far: host `happyfox-telegram-egress-nat status` → `rules=complete` (exit 0); `up` idempotent (`outcome=present`, single rule per chain); guard timer active with 5-minute cadence; container `curl https://api.telegram.org/` → 302 and `getMe` → 200 through the tunnel — before the fix the same calls hung; `getWebhookInfo` reports the correct URL, zero pending updates, empty `last_error_message`; focused suite 15 passed.
+
+Remaining: adjacent/full regression suite result, two-axis review, PR, exact-head CI, canonical deploy of the reviewed SHA, post-deploy verification, and a real Telegram user reply.
+
+---
+
 # Active: fix/telegram-rich-message-prompts — rich_message prompts were silently dropped
 
 Baseline: main 196f0f4c8e51e03651db2fbe3ee97049001488e9, branch fix/telegram-rich-message-prompts.

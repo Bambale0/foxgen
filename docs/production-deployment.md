@@ -72,6 +72,8 @@ landing returns 200
 PostgreSQL 17 reachable and pre/post backup verified
 Redis namespace isolated
 happyfox-docker-prune.timer enabled and waiting
+happyfox-telegram-egress-nat status reports rules=complete
+happyfox-telegram-egress-guard.timer enabled and waiting
 Telegram webhook URL is https://api.happy-fox.online/webhook
 Telegram pending_update_count = 0 and last_error_message is empty
 Telegram native chat menu type = web_app and URL starts with https://app.happy-fox.online/mini-app/
@@ -89,7 +91,33 @@ TELEGRAM_WEBHOOK_URL=https://api.happy-fox.online/webhook
 TELEGRAM_WEBHOOK_IP_ADDRESS=<relay IPv4>
 ```
 
-`setWebhook` must use `drop_pending_updates=False`. The relay presents a valid certificate for `api.happy-fox.online`, forwards the request to the dedicated API origin and does not run a second bot worker. Outbound Bot API traffic is carried by `happyfox-telegram-egress.service`.
+`setWebhook` must use `drop_pending_updates=False`. The relay presents a valid certificate for `api.happy-fox.online`, forwards the request to the dedicated API origin and does not run a second bot worker. Outbound Bot API traffic is carried by `happyfox-telegram-egress.service`, an SSH tunnel from the dedicated host to the relay. Because the host firewall INPUT policy is `DROP`, the tunnel port is not reachable by Docker containers unless it is accepted explicitly. The canonical rule owner is:
+
+```text
+scripts/happyfox_telegram_egress_nat.sh
+deploy/systemd/happyfox-telegram-egress.service
+```
+
+`happyfox-telegram-egress-nat {up|down|status}` owns the whole rule set idempotently: the `filter/INPUT` ACCEPT for the tunnel port from every container subnet, the `nat/PREROUTING` DNAT for the Telegram API ranges, and the `nat/OUTPUT` redirect used by host-local calls. The unit runs it on every start/stop, so a Docker restart, firewall reload or a partially applied rule set cannot leave the tunnel listening while egress silently times out.
+
+Operational values are environment overrides, not source edits:
+
+```dotenv
+HAPPYFOX_TELEGRAM_EGRESS_RELAY=2.27.160.11
+HAPPYFOX_TELEGRAM_EGRESS_PORT=18443
+HAPPYFOX_TELEGRAM_EGRESS_GATEWAY=172.18.0.1
+HAPPYFOX_TELEGRAM_EGRESS_CONTAINER_SUBNETS=172.18.0.0/16
+```
+
+Production overrides live in `/etc/default/happyfox-telegram-egress`. The deploy gate reinstalls the script/unit, re-applies the rules, verifies them with `status`, and fails when the tunnel is not active or the rule set is incomplete.
+
+After deploy, verify outbound Bot API egress through the runtime itself:
+
+```bash
+docker exec foxgen-happyfox-bot python -m scripts.check_telegram_egress
+```
+
+The command must print `telegram_egress_ok=1` with a bounded `getMe` duration.
 
 The apix relay owns a separate Let's Encrypt certificate for `api.happy-fox.online`. Telegram still uses the canonical URL/SNI `https://api.happy-fox.online/webhook`; `TELEGRAM_WEBHOOK_IP_ADDRESS` only pins ingress to the relay IPv4. Certificate renewal is handled on the relay host and must be followed by `nginx -t`/reload verification.
 
@@ -116,6 +144,32 @@ deploy/systemd/happyfox-docker-prune.timer
 ```
 
 Production deploy installs and enables these units idempotently. The script logs disk usage before and after cleanup plus Docker disk accounting; inspect it with `journalctl -u happyfox-docker-prune.service`.
+
+### Telegram egress firewall rules
+
+Outbound Bot API traffic leaves the bot container to the Docker gateway and is
+DNAT'ed to the SSH tunnel port on the host itself. Because the host `INPUT` chain
+policy is `DROP`, the tunnel port needs an explicit `INPUT` ACCEPT for the
+container subnet, next to the `PREROUTING` DNAT and the `OUTPUT` REDIRECT for
+host-local calls.
+
+Canonical implementation:
+
+```text
+scripts/happyfox_telegram_egress_nat.sh
+deploy/systemd/happyfox-telegram-egress.service
+deploy/systemd/happyfox-telegram-egress-guard.service
+deploy/systemd/happyfox-telegram-egress-guard.timer
+scripts/check_telegram_egress.py
+```
+
+Operational values are read from `/etc/default/happyfox-telegram-egress`, which
+the deploy writes from the live `foxgen_backend` network and the configured relay
+IP, so a network or relay change never requires a source edit. The tunnel service
+applies the rule set before starting, the guard timer re-applies it every five
+minutes, and the deploy fails unless
+`/usr/local/sbin/happyfox-telegram-egress-nat status` reports `rules=complete`
+and `python -m scripts.check_telegram_egress` succeeds inside the bot container.
 
 
 ## Instagram deployment state

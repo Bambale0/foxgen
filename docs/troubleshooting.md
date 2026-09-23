@@ -44,6 +44,29 @@ Check both directions separately. A healthy `/health` route does not prove Teleg
 
 If incoming webhook delivery works but responses time out, diagnose outbound Telegram connectivity. If Bot API calls work but `pending_update_count` grows, diagnose ingress/TLS/relay. Do not start a second bot worker on the relay host.
 
+### 4.1 Tunnel is active but every Bot API call times out
+
+Symptom: incoming webhook delivery works, the bot receives updates, no reply arrives, and the log shows `TelegramNetworkError: HTTP Client says - Request timeout error` with ~60 s durations. `systemctl status happyfox-telegram-egress.service` may still report `active (running)`, because the SSH listener can stay healthy while the host firewall drops traffic to the tunnel port.
+
+Cause: the HappyFox host firewall INPUT policy is `DROP`. The DNAT'ed egress reaches `172.18.0.1:<tunnel port>` instead of `api.telegram.org:443`, so the tunnel port needs its own `filter/INPUT` ACCEPT for the container subnets. Without it the container-side SYN is dropped and the client only sees a timeout.
+
+Diagnose:
+
+```bash
+iptables -S INPUT | head -3
+/usr/local/sbin/happyfox-telegram-egress-nat status
+docker exec foxgen-happyfox-bot python -m scripts.check_telegram_egress
+```
+
+`status` reports `stage=status outcome=incomplete missing=<n>` when a rule is absent. Restore the canonical rule set instead of editing production source:
+
+```bash
+/usr/local/sbin/happyfox-telegram-egress-nat up
+/usr/local/sbin/happyfox-telegram-egress-nat status
+```
+
+`happyfox-telegram-egress.service` re-applies the whole rule set on every start, so a partial rule set is a deploy/unit defect, not a one-off manual fix.
+
 ## 5. Instagram webhook route is missing/404
 
 First check:
@@ -294,3 +317,62 @@ before routing. Verify after a restart:
 4. Extraction failures must never drop the update silently: they log
    `telegram_rich_message_normalization_failed` and the update is left
    untouched rather than crashing the handler chain.
+
+
+## 26. Bot is silent although health, webhook and the egress tunnel look healthy
+
+Incident 2026-09-23: replies stopped while `/health` was 200, `getWebhookInfo`
+reported the correct URL, zero pending updates and no delivery error, and
+`happyfox-telegram-egress.service` was active. Telemetry showed
+`telegram_bot_api method=... outcome=error error_type=TelegramNetworkError`
+("Request timeout error") for `sendDocument`, `answerCallbackQuery` and
+`editMessageText`.
+
+Root cause: the host INPUT chain policy is `DROP`. Outbound Bot API calls leave
+the container to the Docker gateway and are DNAT'ed to the SSH tunnel port
+(`HAPPYFOX_TELEGRAM_EGRESS_PORT`, default 18443) on the host itself. The DNAT
+happens in `PREROUTING`, but the packet still passes the `INPUT` filter chain,
+where no rule accepted the tunnel port for the container subnet. Effect: SYN to
+the tunnel port was dropped, the TCP connect hung until the Bot API timeout, and
+the tunnel process itself kept listening and looked healthy.
+
+Diagnose (read-only):
+
+```bash
+iptables -S INPUT | head            # INPUT policy must be DROP in production
+iptables -t nat -S PREROUTING | grep 18443
+iptables -t nat -S OUTPUT | grep 18443
+/usr/local/sbin/happyfox-telegram-egress-nat status   # exit 0 only when complete
+docker exec foxgen-happyfox-bot \
+  python -m scripts.check_telegram_egress             # bounded getMe, fails loudly
+```
+
+Converge:
+
+```bash
+/usr/local/sbin/happyfox-telegram-egress-nat up
+```
+
+Do not work around this by starting a second bot worker on the relay, changing
+`TELEGRAM_WEBHOOK_IP_ADDRESS`, or removing Telegram from `allowed_updates`.
+
+Guardrails shipped with this fix:
+
+- `scripts/happyfox_telegram_egress_nat.sh` is the single owner of the rule set:
+  `INPUT` ACCEPT for every container subnet, `PREROUTING` DNAT for
+  `149.154.160.0/20:443`, and `OUTPUT` REDIRECT for host-local calls. Values are
+  overridable (`HAPPYFOX_TELEGRAM_EGRESS_*`), so nothing needs a source edit;
+- `happyfox-telegram-egress.service` runs the script as `ExecStartPre`, so every
+  start, restart and reboot re-applies the rule set;
+- `happyfox-telegram-egress-guard.timer` re-applies it every five minutes, which
+  recovers automatically when an unrelated host firewall change drops it again;
+- the production deploy writes `/etc/default/happyfox-telegram-egress` from the
+  live `foxgen_backend` network, restarts the tunnel, then requires
+  `happyfox-telegram-egress-nat status` and
+  `python -m scripts.check_telegram_egress` to succeed, so a silent-outage
+  revision fails the deploy instead of looking green.
+
+If the bot is still silent after `status` reports `rules=complete`, the failure is
+elsewhere: re-check ingress (`getWebhookInfo`), container telemetry
+(`telegram_update`, `telegram_bot_api`), and the handler route before touching
+the firewall again.
