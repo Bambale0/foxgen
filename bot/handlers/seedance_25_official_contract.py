@@ -188,9 +188,9 @@ async def official_show_screen(target, state: FSMContext, *, edit: bool = True) 
         media_hint = "Медиа не нужно — достаточно описать будущий ролик."
 
     billing = (
-        f"💰 Цена: <code>{quote:g}</code>🍌 · для администратора без списания."
+        f"💰 Цена: <code>{quote:g}</code>🐾 · для администратора без списания."
         if is_admin
-        else f"💰 Цена: <code>{quote:g}</code>🍌."
+        else f"💰 Цена: <code>{quote:g}</code>🐾."
     )
     ratio_text = (
         "по исходному фото"

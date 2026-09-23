@@ -188,7 +188,7 @@ async def handle_freekassa_success_return(request: web.Request) -> web.Response:
     return web.Response(
         text=_payment_return_page(
             title="Оплата принята",
-            message="Вернитесь в бота. Бананы начислятся автоматически после подтверждения KASSA.",
+            message="Вернитесь в бота. Лапки начислятся автоматически после подтверждения KASSA.",
         ),
         content_type="text/html",
     )
@@ -286,7 +286,7 @@ def _amount_matches(actual: Any, expected: Any) -> bool:
 async def _render_completed_payment(message, transaction, bonus_text: str = "") -> None:
     await message.edit_text(
         "✅ <b>Оплата подтверждена</b>\n"
-        f"• Начислено: <code>{transaction.credits}</code> бананов\n"
+        f"• Начислено: <code>{transaction.credits}</code> лапок\n"
         f"• Сумма: <code>{transaction.amount_rub}</code> ₽{bonus_text}",
         reply_markup=get_main_menu_keyboard(),
         parse_mode="HTML",
@@ -325,18 +325,18 @@ async def choose_payment_method_freekassa(
     total_credits = total_package_credits(package, promo_bonus)
     bonus_lines: list[str] = []
     if package_bonus > 0:
-        bonus_lines.append(f"Бонус пакета: <code>{package_bonus}</code>🍌")
+        bonus_lines.append(f"Бонус пакета: <code>{package_bonus}</code>🐾")
     if promo_bonus > 0 and promo:
         bonus_lines.append(
             f"Промокод <code>{html.escape(promo.code)}</code>: "
-            f"+<code>{promo_bonus}</code>🍌"
+            f"+<code>{promo_bonus}</code>🐾"
         )
     bonus_text = ("\n" + "\n".join(bonus_lines)) if bonus_lines else ""
 
     await callback.message.edit_text(
         "💳 <b>Выберите способ оплаты</b>\n\n"
         f"Пакет: <b>{html.escape(str(package['name']))}</b>\n"
-        f"Бананы: <code>{total_credits}</code>🍌\n"
+        f"Лапки: <code>{total_credits}</code>🐾\n"
         f"Сумма: <code>{package['price_rub']}</code>₽ / "
         f"<code>{package_stars_amount(package)}</code>⭐{bonus_text}",
         reply_markup=_provider_keyboard(
@@ -437,20 +437,20 @@ async def initiate_freekassa_payment(
 
     bonus_text = ""
     if package_bonus > 0:
-        bonus_text += f"\n• Бонус пакета: <code>{package_bonus}</code> бананов"
+        bonus_text += f"\n• Бонус пакета: <code>{package_bonus}</code> лапок"
     if promo and promo_bonus > 0:
         bonus_text += (
             f"\n• Промокод <code>{html.escape(promo.code)}</code>: "
-            f"+<code>{promo_bonus}</code> бананов"
+            f"+<code>{promo_bonus}</code> лапок"
         )
 
     await callback.message.edit_text(
         "💳 <b>Оплата через KASSA</b>\n"
         f"• Способ: <code>{payment_method_label}</code>\n"
         f"• Пакет: <code>{html.escape(str(package['name']))}</code>\n"
-        f"• Бананов: <code>{total_credits}</code>{bonus_text}\n"
+        f"• Лапок: <code>{total_credits}</code>{bonus_text}\n"
         f"• Сумма: <code>{package['price_rub']}</code> ₽\n\n"
-        "Нажмите кнопку ниже. После оплаты бананы начислятся автоматически.",
+        "Нажмите кнопку ниже. После оплаты лапки начислятся автоматически.",
         reply_markup=_confirmation_keyboard(payment_url, order_id),
         parse_mode="HTML",
     )
@@ -610,7 +610,7 @@ async def handle_freekassa_webhook(request: web.Request) -> web.Response:
                 bot,
                 telegram_id,
                 "✅ <b>Оплата KASSA успешно обработана</b>\n"
-                f"• Начислено: <code>{transaction.credits}</code> бананов\n"
+                f"• Начислено: <code>{transaction.credits}</code> лапок\n"
                 f"• Сумма: <code>{transaction.amount_rub}</code> ₽{bonus_text}",
                 parse_mode="HTML",
             )
@@ -629,7 +629,7 @@ async def handle_freekassa_webhook(request: web.Request) -> web.Response:
     try:
         await create_miniapp_notification(
             transaction.user_id,
-            f"✅ Оплата KASSA обработана — {transaction.credits} бананов "
+            f"✅ Оплата KASSA обработана — {transaction.credits} лапок "
             f"за {transaction.amount_rub} ₽",
         )
     except Exception:

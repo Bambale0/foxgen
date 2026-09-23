@@ -22,8 +22,8 @@ class PhotoPromptInsufficientBalance(ValueError):
         self.cost_credits = round(float(cost_credits), 4)
         self.price_rub = round(float(price_rub), 2)
         super().__init__(
-            f"Недостаточно бананов. Стоимость: {self.price_rub:g} ₽ "
-            f"({self.cost_credits:g} 🍌), баланс: {self.balance:g} 🍌."
+            f"Недостаточно лапок. Стоимость: {self.price_rub:g} ₽ "
+            f"({self.cost_credits:g} 🐾), баланс: {self.balance:g} 🐾."
         )
 
 
@@ -42,7 +42,7 @@ def _format_price_number(value: float) -> str:
 def photo_prompt_price_label() -> str:
     return (
         f"{_format_price_number(photo_prompt_price_rub())} ₽ "
-        f"({_format_price_number(photo_prompt_cost_credits())} 🍌)"
+        f"({_format_price_number(photo_prompt_cost_credits())} 🐾)"
     )
 
 

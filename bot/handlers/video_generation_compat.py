@@ -179,10 +179,10 @@ async def repeat_advanced_video_result(callback: types.CallbackQuery, state: FSM
     is_admin = config.is_admin(callback.from_user.id)
     if unit_cost > 0 and not is_admin:
         if not await check_can_afford(callback.from_user.id, unit_cost):
-            await callback.answer("Недостаточно бананов для повтора.", show_alert=True)
+            await callback.answer("Недостаточно лапок для повтора.", show_alert=True)
             return
         if not await deduct_credits(callback.from_user.id, unit_cost):
-            await callback.answer("Не удалось списать бананы.", show_alert=True)
+            await callback.answer("Не удалось списать лапки.", show_alert=True)
             return
 
     await state.clear()
@@ -212,7 +212,7 @@ async def repeat_advanced_video_result(callback: types.CallbackQuery, state: FSM
             await add_credits(callback.from_user.id, unit_cost)
         try:
             await callback.answer(
-                "Не удалось повторить видео. Бананы возвращены.",
+                "Не удалось повторить видео. Лапки возвращены.",
                 show_alert=True,
             )
         except TelegramBadRequest:

@@ -60,18 +60,18 @@ async def suno_menu_keyboard() -> InlineKeyboardMarkup:
     voice = await get_suno_price("telegram", "voice_validate")
     return _kb(
         [
-            [InlineKeyboardButton(text=f"🎵 Создать трек · {_fmt(generate)}🍌", callback_data="suno:generate")],
+            [InlineKeyboardButton(text=f"🎵 Создать трек · {_fmt(generate)}🐾", callback_data="suno:generate")],
             [
-                InlineKeyboardButton(text=f"✍️ Текст песни · {_fmt(lyrics)}🍌", callback_data="suno:lyrics"),
-                InlineKeyboardButton(text=f"🎛 Cover · {_fmt(cover)}🍌", callback_data="suno:op:upload_cover"),
+                InlineKeyboardButton(text=f"✍️ Текст песни · {_fmt(lyrics)}🐾", callback_data="suno:lyrics"),
+                InlineKeyboardButton(text=f"🎛 Cover · {_fmt(cover)}🐾", callback_data="suno:op:upload_cover"),
             ],
             [
                 InlineKeyboardButton(text="➕ Продолжить / загрузить", callback_data="suno:uploads"),
-                InlineKeyboardButton(text=f"🎚 Стемы · {_fmt(stems)}🍌", callback_data="suno:tools"),
+                InlineKeyboardButton(text=f"🎚 Стемы · {_fmt(stems)}🐾", callback_data="suno:tools"),
             ],
             [
-                InlineKeyboardButton(text=f"🌊 Sounds · {_fmt(sounds)}🍌", callback_data="suno:sounds"),
-                InlineKeyboardButton(text=f"🎙 Suno Voice · {_fmt(voice)}🍌", callback_data="suno:voice"),
+                InlineKeyboardButton(text=f"🌊 Sounds · {_fmt(sounds)}🐾", callback_data="suno:sounds"),
+                InlineKeyboardButton(text=f"🎙 Suno Voice · {_fmt(voice)}🐾", callback_data="suno:voice"),
             ],
             [InlineKeyboardButton(text="🕘 Мои Suno-задачи", callback_data="suno:history")],
             [InlineKeyboardButton(text="🏠 Главное меню", callback_data="back_main")],
@@ -86,7 +86,7 @@ async def _model_keyboard(prefix: str) -> InlineKeyboardMarkup:
         rows.append(
             [
                 InlineKeyboardButton(
-                    text=f"{_MODEL_LABELS.get(model, model)} · {_fmt(price)}🍌",
+                    text=f"{_MODEL_LABELS.get(model, model)} · {_fmt(price)}🐾",
                     callback_data=f"suno:model:{prefix}:{model}",
                 )
             ]
@@ -207,7 +207,7 @@ async def _enqueue_and_reply(message: types.Message, state: FSMContext, operatio
         )
     except ValueError as exc:
         if "insufficient_balance" in str(exc):
-            await message.answer("🍌 Баланса не хватает для этой Suno-задачи. Пополните баланс и повторите запуск.")
+            await message.answer("🐾 Баланса не хватает для этой Suno-задачи. Пополните баланс и повторите запуск.")
         else:
             await message.answer(f"Не удалось запустить Suno: {html.escape(str(exc)[:300])}", parse_mode="HTML")
         return
@@ -215,7 +215,7 @@ async def _enqueue_and_reply(message: types.Message, state: FSMContext, operatio
     await message.answer(
         "🚀 <b>Suno уже работает</b>\n\n"
         f"Задача: <code>{job.id[:12]}</code>\n"
-        f"Списано: <b>{_fmt(job.cost)}🍌</b>\n\n"
+        f"Списано: <b>{_fmt(job.cost)}🐾</b>\n\n"
         "Результат придёт сюда автоматически. Можно сразу запускать следующую задачу.",
         reply_markup=await suno_menu_keyboard(),
         parse_mode="HTML",
@@ -480,10 +480,10 @@ async def suno_voice_validate(callback: types.CallbackQuery) -> None:
         job = await enqueue_suno_job("telegram", callback.from_user.id, operation="voice_validate", request_data={})
     except ValueError:
         if callback.message:
-            await callback.message.answer("🍌 Баланса не хватает для Suno Voice.")
+            await callback.message.answer("🐾 Баланса не хватает для Suno Voice.")
         return
     if callback.message:
-        await callback.message.answer(f"🎙 Проверочная фраза создаётся. Списано {_fmt(job.cost)}🍌.")
+        await callback.message.answer(f"🎙 Проверочная фраза создаётся. Списано {_fmt(job.cost)}🐾.")
 
 
 @router.callback_query(F.data == "suno:voice_generate")
@@ -551,7 +551,7 @@ async def suno_from_result(callback: types.CallbackQuery, state: FSMContext) -> 
         return
     await callback.answer("Запущено")
     if callback.message:
-        await callback.message.answer(f"🚀 {SUNO_OPERATION_LABELS.get(operation, operation)} запущено · {_fmt(job.cost)}🍌")
+        await callback.message.answer(f"🚀 {SUNO_OPERATION_LABELS.get(operation, operation)} запущено · {_fmt(job.cost)}🐾")
 
 
 @router.message(SunoStates.waiting_persona)
@@ -590,7 +590,7 @@ async def suno_history(callback: types.CallbackQuery) -> None:
         for job in jobs:
             lines.append(
                 f"• {html.escape(SUNO_OPERATION_LABELS.get(job.operation, job.operation))} · "
-                f"<code>{job.status}</code> · {_fmt(job.cost)}🍌 · <code>{job.id[:10]}</code>"
+                f"<code>{job.status}</code> · {_fmt(job.cost)}🐾 · <code>{job.id[:10]}</code>"
             )
         text = "\n".join(lines)
     await callback.message.edit_text(text, reply_markup=await suno_menu_keyboard(), parse_mode="HTML")

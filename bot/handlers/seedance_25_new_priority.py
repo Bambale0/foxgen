@@ -26,7 +26,7 @@ MODEL_LABEL = "🔥🆕 NEW · Seedance 2.5"
 def _priority_button_text(current_model: str) -> str:
     check = "✅ " if current_model == MODEL_KEY else ""
     per_second = preset_manager.get_video_cost_per_second(MODEL_KEY, 5, "720p")
-    return f"{check}{MODEL_LABEL} • {per_second}🍌/с"
+    return f"{check}{MODEL_LABEL} • {per_second}🐾/с"
 
 
 def _priority_model_meta() -> dict[str, Any]:

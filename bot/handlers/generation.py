@@ -1445,10 +1445,10 @@ async def _start_image_generation_task(
 
 @router.callback_query(F.data == "create_video_new")
 async def show_create_video_menu(callback: types.CallbackQuery, state: FSMContext):
-    """Пошаговый вход в видео: модель -> настройки/медиа/промпт."""
+    """Открывает единый динамический экран создания видео HappyFox."""
     await _init_default_video_state(state)
-    await state.update_data(video_flow_step="select_model")
-    await _show_video_model_selection_screen(callback, state)
+    await state.update_data(video_flow_step="configure")
+    await _show_video_creation_screen(callback, state)
     await callback.answer()
 
 
@@ -1463,7 +1463,7 @@ async def show_create_image_menu(callback: types.CallbackQuery, state: FSMContex
     # Показываем экран загрузки референсов (ШАГ 1)
     text = (
         "🖼 <b>Создание фото</b>\n"
-        f"🍌 Баланс: <code>{user_credits}</code> бананов\n\n"
+        f"🐾 Баланс: <code>{user_credits}</code> лапок\n\n"
         "<b>Шаг 1. Референсы</b>\n"
         "Этот шаг можно пропустить.\n"
         "Фото-референсы помогают, если важно:\n"
@@ -1520,7 +1520,7 @@ async def select_model_wan_27(callback: types.CallbackQuery, state: FSMContext):
 
     text = (
         "🧪 <b>Wan 2.7 Pro — тест</b>\n"
-        f"🍌 Баланс: <code>{user_credits}</code> бананов\n\n"
+        f"🐾 Баланс: <code>{user_credits}</code> лапок\n\n"
         "<b>Шаг 1. Референсы</b>\n"
         "Загрузите фото, если хотите проверить редактирование или генерацию по исходнику.\n"
         "Можно загрузить до 9 фото.\n\n"
@@ -2207,7 +2207,7 @@ def _repeat_image_text(data: dict, task_id: str) -> str:
         f"• Модель: <code>{get_image_model_label(img_service)}</code>\n"
         f"• Формат: <code>{img_ratio.replace(':', '∶')}</code>\n"
         f"• Референсы: {ref_note}\n"
-        f"• Стоимость: <code>{unit_cost}</code>🍌\n"
+        f"• Стоимость: <code>{unit_cost}</code>🐾\n"
         f"{changes_hint}"
         "\n<b>Prompt</b>\n"
         + (
@@ -2499,10 +2499,10 @@ async def run_repeat_image_generation(callback: types.CallbackQuery, state: FSMC
     if unit_cost > 0 and not is_admin:
         can_afford = await check_can_afford(callback.from_user.id, unit_cost)
         if not can_afford:
-            await callback.answer("Недостаточно бананов для повтора.", show_alert=True)
+            await callback.answer("Недостаточно лапок для повтора.", show_alert=True)
             return
         if not await deduct_credits(callback.from_user.id, unit_cost):
-            await callback.answer("Не удалось списать бананы.", show_alert=True)
+            await callback.answer("Не удалось списать лапки.", show_alert=True)
             return
 
     callback_url = config.kie_notification_url if config.WEBHOOK_HOST else None
@@ -2569,7 +2569,7 @@ async def run_repeat_image_generation(callback: types.CallbackQuery, state: FSMC
                 f"• Модель: <code>{model_label}</code>\n"
                 f"• ID: <code>{public_task_id}</code>\n"
                 f"{provider_id_line}"
-                f"• Списано: <code>{unit_cost}</code>🍌 {'(админ бесплатно)' if is_admin else ''}\n\n"
+                f"• Списано: <code>{unit_cost}</code>🐾 {'(админ бесплатно)' if is_admin else ''}\n\n"
                 "Результат придёт в этот чат.",
                 parse_mode="HTML",
             )
@@ -2589,7 +2589,7 @@ async def run_repeat_image_generation(callback: types.CallbackQuery, state: FSMC
                     "✅ <b>Повтор готов</b>\n"
                     f"• Модель: <code>{model_label}</code>\n"
                     f"• ID: <code>{launch_result['task_id']}</code>\n"
-                    f"• Списано: <code>{unit_cost}</code>🍌 {'(админ бесплатно)' if is_admin else ''}"
+                    f"• Списано: <code>{unit_cost}</code>🐾 {'(админ бесплатно)' if is_admin else ''}"
                 ),
                 parse_mode="HTML",
                 reply_markup=get_image_result_keyboard(
@@ -2613,7 +2613,7 @@ async def run_repeat_image_generation(callback: types.CallbackQuery, state: FSMC
             if unit_cost > 0 and not is_admin:
                 await add_credits(callback.from_user.id, unit_cost)
             await callback.message.answer(
-                "❌ Не получилось повторить генерацию. Бананы за попытку уже возвращены."
+                "❌ Не получилось повторить генерацию. Лапки за попытку уже возвращены."
             )
 
         await state.clear()
@@ -2678,10 +2678,10 @@ async def quick_repeat_image_result(callback: types.CallbackQuery, state: FSMCon
     if unit_cost > 0 and not is_admin:
         can_afford = await check_can_afford(callback.from_user.id, unit_cost)
         if not can_afford:
-            await callback.answer("Недостаточно бананов для повтора.", show_alert=True)
+            await callback.answer("Недостаточно лапок для повтора.", show_alert=True)
             return
         if not await deduct_credits(callback.from_user.id, unit_cost):
-            await callback.answer("Не удалось списать бананы.", show_alert=True)
+            await callback.answer("Не удалось списать лапки.", show_alert=True)
             return
 
     callback_url = config.kie_notification_url if config.WEBHOOK_HOST else None
@@ -2749,7 +2749,7 @@ async def quick_repeat_image_result(callback: types.CallbackQuery, state: FSMCon
                 f"• Модель: <code>{model_label}</code>\n"
                 f"• ID: <code>{public_task_id}</code>\n"
                 f"{provider_id_line}"
-                f"• Списано: <code>{unit_cost}</code>🍌 {'(админ бесплатно)' if is_admin else ''}\n\n"
+                f"• Списано: <code>{unit_cost}</code>🐾 {'(админ бесплатно)' if is_admin else ''}\n\n"
                 "Результат придёт в этот чат.",
                 parse_mode="HTML",
             )
@@ -2769,7 +2769,7 @@ async def quick_repeat_image_result(callback: types.CallbackQuery, state: FSMCon
                     "✅ <b>Повтор готов</b>\n"
                     f"• Модель: <code>{model_label}</code>\n"
                     f"• ID: <code>{launch_result['task_id']}</code>\n"
-                    f"• Списано: <code>{unit_cost}</code>🍌 {'(админ бесплатно)' if is_admin else ''}"
+                    f"• Списано: <code>{unit_cost}</code>🐾 {'(админ бесплатно)' if is_admin else ''}"
                 ),
                 parse_mode="HTML",
                 reply_markup=get_image_result_keyboard(
@@ -2793,7 +2793,7 @@ async def quick_repeat_image_result(callback: types.CallbackQuery, state: FSMCon
             if unit_cost > 0 and not is_admin:
                 await add_credits(callback.from_user.id, unit_cost)
             await callback.message.answer(
-                "❌ Не получилось повторить генерацию. Бананы за попытку уже возвращены."
+                "❌ Не получилось повторить генерацию. Лапки за попытку уже возвращены."
             )
 
         try:
@@ -2857,10 +2857,10 @@ async def quick_repeat_video_result(callback: types.CallbackQuery, state: FSMCon
     if unit_cost > 0 and not is_admin:
         can_afford = await check_can_afford(callback.from_user.id, unit_cost)
         if not can_afford:
-            await callback.answer("Недостаточно бананов для повтора.", show_alert=True)
+            await callback.answer("Недостаточно лапок для повтора.", show_alert=True)
             return
         if not await deduct_credits(callback.from_user.id, unit_cost):
-            await callback.answer("Не удалось списать бананы.", show_alert=True)
+            await callback.answer("Не удалось списать лапки.", show_alert=True)
             return
 
     model_label = get_video_model_label(v_model)
@@ -3066,7 +3066,7 @@ async def show_edit_reference_upload(callback: types.CallbackQuery, state: FSMCo
     )
     await callback.message.edit_text(
         f"{title}\n"
-        f"🍌 Баланс: <code>{user_credits}</code> бананов\n\n"
+        f"🐾 Баланс: <code>{user_credits}</code> лапок\n\n"
         f"{hint}\n\n"
         f"<i>Можно загрузить до {_get_max_image_references('seedream_edit')} фото.</i>",
         reply_markup=get_reference_images_upload_keyboard(0, _get_max_image_references("seedream_edit"), "new"),
@@ -3091,7 +3091,7 @@ async def show_grok_i2i_upload(callback: types.CallbackQuery, state: FSMContext)
     )
     await callback.message.edit_text(
         "🧠 <b>Grok Imagine i2i</b>\n"
-        f"🍌 Баланс: <code>{user_credits}</code> бананов\n\n"
+        f"🐾 Баланс: <code>{user_credits}</code> лапок\n\n"
         "Загрузите фото для изменения.\n"
         "Потом нажмите <b>Продолжить</b> и напишите, что нужно поменять.",
         reply_markup=get_reference_images_upload_keyboard(0, _get_max_image_references("grok_imagine_i2i"), "new"),
@@ -3144,7 +3144,7 @@ async def show_quick_video_reference(callback: types.CallbackQuery, state: FSMCo
     )
     text = (
         "🎞 <b>Видео-референс</b>\n"
-        f"🍌 Баланс: <code>{user_credits}</code>\n\n"
+        f"🐾 Баланс: <code>{user_credits}</code>\n\n"
         f"Загрузите до {max_video_refs} коротких видео, если хотите передать движение, стиль камеры "
         "или атмосферу.\nЭтот режим работает через Seedance 2.0."
     )
@@ -3280,7 +3280,7 @@ async def _open_image_model_from_main(
         user_credits = await get_user_credits(callback.from_user.id)
         await callback.message.edit_text(
             "🧠 <b>Grok Imagine</b>\n"
-            f"🍌 Баланс: <code>{user_credits}</code> бананов\n\n"
+            f"🐾 Баланс: <code>{user_credits}</code> лапок\n\n"
             "Сначала загрузите фото для редактирования, затем нажмите "
             "<b>Продолжить</b> и опишите изменение.",
             reply_markup=get_reference_images_upload_keyboard(0, 9, "new"),
@@ -3318,7 +3318,7 @@ async def _open_video_model_from_main(
         max_video_refs = get_max_video_references(model)
         text = (
             "🎞 <b>Видео-референс</b>\n"
-            f"🍌 Баланс: <code>{user_credits}</code>\n\n"
+            f"🐾 Баланс: <code>{user_credits}</code>\n\n"
             f"Загрузите до {max_video_refs} коротких видео, чтобы передать движение, стиль камеры "
             "или атмосферу. Можно пропустить и продолжить без референсов."
         )
@@ -3565,7 +3565,7 @@ async def _show_video_creation_screen(
 
     text = (
         f"🎬 <b>Создание видео</b>\n"
-        f"<b>Шаг 3. Настройки и промпт</b>\n"
+        f"<b>Тип, модель и настройки — на одном экране</b>\n"
         f"{ref_text}"
         f"⚙️ <b>Текущие настройки:</b>\n" + "\n".join(settings_lines) + "\n"
         f"{media_status}"
@@ -3858,7 +3858,7 @@ def _build_image_creation_text(data: dict) -> str:
         f"• Модель: <code>{get_image_model_label(current_service)}</code>",
         f"• Формат: <code>{ratio_label}</code>",
         f"• Количество: <code>{current_count}</code>",
-        f"• Стоимость: <code>{unit_cost}🍌 × {current_count} = {total_cost}🍌</code>",
+        f"• Стоимость: <code>{unit_cost}🐾 × {current_count} = {total_cost}🐾</code>",
     ]
     if reference_images:
         info_lines.append(f"• Референсы: <code>{len(reference_images)}</code>")
@@ -3910,7 +3910,7 @@ async def _show_image_model_selection_screen(
     max_refs = _get_max_image_references(current_service)
     text = (
         "🖼 <b>Создание фото</b>\n"
-        f"🍌 Баланс: <code>{user_credits}</code> бананов\n\n"
+        f"🐾 Баланс: <code>{user_credits}</code> лапок\n\n"
         "<b>Шаг 1. Выберите модель</b>\n"
         "Сначала выберите модель.\n"
         "После этого бот покажет следующий шаг: референсы или настройки."
@@ -3953,7 +3953,7 @@ async def _show_image_references_screen(
     max_refs = _get_max_image_references(current_service)
     text = (
         "🖼 <b>Создание фото</b>\n"
-        f"🍌 Баланс: <code>{user_credits}</code> бананов\n\n"
+        f"🐾 Баланс: <code>{user_credits}</code> лапок\n\n"
         "<b>Шаг 2. Референсы</b>\n"
         f"Выбрана модель: <code>{get_image_model_label(current_service)}</code>\n\n"
         + (
@@ -4097,7 +4097,7 @@ async def _show_video_model_selection_screen(
     user_credits = await get_user_credits(user_id) if user_id else 0
     text = (
         "🎬 <b>Создание видео</b>\n"
-        f"🍌 Баланс: <code>{user_credits}</code> бананов\n\n"
+        f"🐾 Баланс: <code>{user_credits}</code> лапок\n\n"
         "<b>Шаг 1. Выберите модель</b>\n"
         "Сначала выберите модель видео.\n"
         "После этого бот покажет следующий шаг именно для неё."
@@ -4140,7 +4140,7 @@ async def _show_gemini_omni_mode_screen(
 
     text = (
         "🔷 <b>Gemini Omni</b>\n"
-        f"🍌 Баланс: <code>{user_credits}</code> бананов\n\n"
+        f"🐾 Баланс: <code>{user_credits}</code> лапок\n\n"
         "<b>Что умеет</b>\n"
         "• <b>Video</b> — генерирует видео из текста, стартового изображения, фото-референсов, одного видео-рефа, Audio ID и Character ID.\n"
         "  Длительность: <code>4/6/8/10</code> сек, формат: <code>16:9</code> или <code>9:16</code>, качество: <code>720p/1080p/4k</code>, seed опционален.\n"
@@ -4152,8 +4152,8 @@ async def _show_gemini_omni_mode_screen(
         "2. Если нужен постоянный герой — сделайте <b>Character ID</b> и при желании привяжите к нему Audio ID.\n"
         "3. Затем откройте <b>Video</b> и добавьте нужные ID вместе с промптом и референсами.\n\n"
         "<b>Подсказка</b>: ID можно скопировать из результата и вставить в настройки Gemini Omni Video.\n\n"
-        f"<b>Стоимость</b>: Video от <code>{video_cost_6}</code>🍌 за 6 сек, "
-        f"Audio ID <code>{audio_cost}</code>🍌, Character ID <code>{character_cost}</code>🍌."
+        f"<b>Стоимость</b>: Video от <code>{video_cost_6}</code>🐾 за 6 сек, "
+        f"Audio ID <code>{audio_cost}</code>🐾, Character ID <code>{character_cost}</code>🐾."
     )
 
     builder = InlineKeyboardBuilder()
@@ -4324,7 +4324,7 @@ async def _show_video_media_screen(
 
     text = (
         "🎬 <b>Создание видео</b>\n"
-        f"🍌 Баланс: <code>{user_credits}</code> бананов\n\n"
+        f"🐾 Баланс: <code>{user_credits}</code> лапок\n\n"
         f"{body}"
     )
     text = _fit_telegram_text(text)
@@ -4779,58 +4779,75 @@ async def handle_ref_confirm_new(callback: types.CallbackQuery, state: FSMContex
 # Обработчики для меню создания видео
 @router.callback_query(F.data == "v_type_text")
 async def handle_v_type_text(callback: types.CallbackQuery, state: FSMContext):
-    """Выбор типа генерации: текст"""
+    """Переключает единый видео-экран в text-to-video."""
+    from bot.happyfox_video_ui import compatible_video_model
+
     data = await state.get_data()
-    current_model = data.get("v_model", "v26_pro")
-
-    if current_model in _GROK_VIDEO_MODELS:
-        await state.update_data(v_type="imgtxt")
-        await _show_video_media_screen(callback, state)
-        await callback.answer("Grok Imagine работает через стартовое фото")
-        return
-
-    updates = {"v_type": "text"}
+    previous_model = data.get("v_model", "v3_std")
+    current_model = compatible_video_model("text", previous_model)
+    updates = {
+        "v_type": "text",
+        "v_model": current_model,
+        "video_flow_step": "configure",
+    }
     if current_model.startswith("veo3"):
         updates["veo_generation_type"] = "TEXT_2_VIDEO"
     await state.update_data(**updates)
-    await _show_video_media_screen(callback, state)
-    await callback.answer()
-    await state.set_state(GenerationStates.waiting_for_input)
+    await _normalize_video_duration_state(state)
+    await _show_video_creation_screen(callback, state)
+    if current_model != previous_model:
+        await callback.answer(f"Выбрана совместимая модель: {get_video_model_label(current_model)}")
+    else:
+        await callback.answer()
+    await state.set_state(GenerationStates.waiting_for_video_prompt)
 
 
 @router.callback_query(F.data == "v_type_imgtxt")
 async def handle_v_type_imgtxt(callback: types.CallbackQuery, state: FSMContext):
-    """Выбор типа генерации: фото+текст."""
-    data = await state.get_data()
-    current_model = data.get("v_model", "v26_pro")
+    """Переключает единый видео-экран в image-to-video."""
+    from bot.happyfox_video_ui import compatible_video_model
 
-    updates = {"v_type": "imgtxt"}
+    data = await state.get_data()
+    previous_model = data.get("v_model", "v3_std")
+    current_model = compatible_video_model("imgtxt", previous_model)
+    updates = {
+        "v_type": "imgtxt",
+        "v_model": current_model,
+        "video_flow_step": "configure",
+    }
     if current_model.startswith("veo3"):
         updates["veo_generation_type"] = "FIRST_AND_LAST_FRAMES_2_VIDEO"
     await state.update_data(**updates)
-    await _show_video_media_screen(callback, state)
-    await callback.answer()
+    await _normalize_video_duration_state(state)
+    await _show_video_creation_screen(callback, state)
+    if current_model != previous_model:
+        await callback.answer(f"Выбрана совместимая модель: {get_video_model_label(current_model)}")
+    else:
+        await callback.answer("Можно отправить стартовое фото")
     await state.set_state(GenerationStates.waiting_for_video_prompt)
 
 
 @router.callback_query(F.data == "v_type_video")
 async def handle_v_type_video(callback: types.CallbackQuery, state: FSMContext):
-    """Выбор типа генерации: видео+текст."""
+    """Переключает единый видео-экран в video-to-video/reference mode."""
+    from bot.happyfox_video_ui import compatible_video_model
+
     data = await state.get_data()
-    current_model = data.get("v_model")
-    if current_model in _GROK_VIDEO_MODELS:
-        await state.update_data(v_type="imgtxt")
-        await _show_video_media_screen(callback, state)
-        await callback.answer("Grok Imagine принимает фото, а не видео-референс")
-        return
-    selected_model = choose_video_reference_model(current_model)
-    updates = {"v_type": "video", "v_duration": 5, "v_model": selected_model}
-    await state.update_data(**updates)
-    await _show_video_media_screen(callback, state)
-    if selected_model != current_model:
-        await callback.answer("Для видео-референсов выбрана Seedance 2.0")
+    previous_model = data.get("v_model", "")
+    selected_model = compatible_video_model("video", previous_model)
+    await state.update_data(
+        v_type="video",
+        v_duration=5,
+        v_model=selected_model,
+        video_flow_step="configure",
+    )
+    await _normalize_video_duration_state(state)
+    await _show_video_creation_screen(callback, state)
+    if selected_model != previous_model:
+        await callback.answer(f"Выбрана совместимая модель: {get_video_model_label(selected_model)}")
     else:
         await callback.answer("Загрузите видео-референсы")
+    await state.set_state(GenerationStates.uploading_reference_videos)
 
 
 @router.callback_query(F.data == "vid_ref_continue_new")
@@ -5602,14 +5619,14 @@ async def start_image_generation(callback: types.CallbackQuery, state: FSMContex
         model_name = "🚀 Z-Image Turbo LoRA"
         model_cost = str(preset_manager.get_generation_cost("z_image_turbo"))
     else:  # banana_2 / fallback banana family
-        model_name = "🍌 Nano Banana 2"
+        model_name = "✨ Nano Banana 2"
         model_cost = str(preset_manager.get_generation_cost("banana_2"))
 
     # Шаг 1: Загрузка референсов
     await callback.message.edit_text(
         f"🖼 <b>Генерация фото</b>"
-        f"🍌 Ваш баланс: <code>{user_credits}</code> бананов\n"
-        f"🤖 Модель: {model_name} ({model_cost}🍌)"
+        f"🐾 Ваш баланс: <code>{user_credits}</code> лапок\n"
+        f"🤖 Модель: {model_name} ({model_cost}🐾)"
         f"<b>Шаг 1: Референсы (опционально)</b>"
         f"Загрузите изображения для:\n"
         f"• Точного сходства с объектом\n"
@@ -5643,8 +5660,8 @@ async def start_image_editing(callback: types.CallbackQuery, state: FSMContext):
 
     await callback.message.edit_text(
         f"✏️ <b>Редактирование фото</b>"
-        f"🍌 Ваш баланс: <code>{user_credits}</code> бананов\n"
-        f"🤖 Модель: 💎 Banano Pro ({edit_cost}🍌, 4K, сохранение лиц)"
+        f"🐾 Ваш баланс: <code>{user_credits}</code> лапок\n"
+        f"🤖 Модель: 💎 Banano Pro ({edit_cost}🐾, 4K, сохранение лиц)"
         f"<b>Как редактировать:</b>\n"
         f"1. Загрузите <b>главное фото</b> для редактирования\n"
         f"2. Добавьте до <b>4 фото лица</b> для сохранения (опционально)\n"
@@ -5690,8 +5707,8 @@ async def start_video_generation(callback: types.CallbackQuery, state: FSMContex
 
     await callback.message.edit_text(
         f"🎬 <b>Генерация видео</b>"
-        f"🍌 Ваш баланс: <code>{user_credits}</code> бананов\n"
-        f"🤖 Модель: {model_name} ({model_cost}🍌)"
+        f"🐾 Ваш баланс: <code>{user_credits}</code> лапок\n"
+        f"🤖 Модель: {model_name} ({model_cost}🐾)"
         f"<b>Опции видео:</b>\n"
         f"   ⏱ Длительность: <code>{video_options.get('duration', 5)} сек</code>\n"
         f"   📐 Формат: <code>{video_options.get('aspect_ratio', '16:9')}</code>\n"
@@ -5790,8 +5807,8 @@ async def start_video_editing(callback: types.CallbackQuery, state: FSMContext):
 
     await callback.message.edit_text(
         f"✂️ <b>Видео-эффекты</b>"
-        f"🍌 Ваш баланс: <code>{user_credits}</code> бананов\n"
-        f"🤖 Модель: {model_name} ({model_cost}🍌)"
+        f"🐾 Ваш баланс: <code>{user_credits}</code> лапок\n"
+        f"🤖 Модель: {model_name} ({model_cost}🐾)"
         f"<b>Преобразование видео</b>\n"
         f"Выберите, что хотите загрузить:"
         f"🎬 <b>Видео</b> - преобразование видео\n"
@@ -5836,8 +5853,8 @@ async def start_image_to_video(callback: types.CallbackQuery, state: FSMContext)
 
     await callback.message.edit_text(
         f"🖼 <b>Фото в видео</b>"
-        f"🍌 Ваш баланс: <code>{user_credits}</code> бананов\n"
-        f"🤖 Модель: {model_name} ({model_cost}🍌)"
+        f"🐾 Ваш баланс: <code>{user_credits}</code> лапок\n"
+        f"🤖 Модель: {model_name} ({model_cost}🐾)"
         f"<b>Image to Video</b>\n"
         f"Загрузите изображение,\n"
         f"которое хотите превратить в видео.\n"
@@ -5912,7 +5929,7 @@ async def handle_video_edit_change_type(
 
     await callback.message.edit_text(
         f"✂️ <b>Видео-эффекты</b>"
-        f"🍌 Ваш баланс: <code>{user_credits}</code> бананов"
+        f"🐾 Ваш баланс: <code>{user_credits}</code> лапок"
         f"<b>Преобразование видео</b>\n"
         f"Выберите, что хотите загрузить:"
         f"🎬 <b>Видео</b> - преобразование видео\n"
@@ -6208,7 +6225,7 @@ async def show_preset_details(
     desc_line = f"— {preset.description}\n" if preset.description else ""
     text = (
         f"📋 <b>{preset.name}</b>\n"
-        f"💰 Стоимость: <code>{preset.cost}🍌</code>\n"
+        f"💰 Стоимость: <code>{preset.cost}🐾</code>\n"
         f"{desc_line}\n"
         f"Выберите действие:\n"
     )
@@ -6462,7 +6479,7 @@ async def use_default_values(callback: types.CallbackQuery, state: FSMContext):
     await callback.message.edit_text(
         f"▶️ <b>Подтвердите генерацию</b>"
         f"Пресет: <b>{preset.name}</b>\n"
-        f"Стоимость: <code>{preset.cost}</code>🍌"
+        f"Стоимость: <code>{preset.cost}</code>🐾"
         f"<b>Промпт:</b>\n"
         f"<code>{final_prompt[:300]}{'...' if len(final_prompt) > 300 else ''}</code>"
         f"{format_generation_options(generation_options)}",
@@ -7165,7 +7182,7 @@ async def run_no_preset_video_from_callback(
                 "🚀 <b>Повторное видео запущено</b>\n"
                 f"• Модель: <code>{model_label}</code>\n"
                 f"• ID: <code>{result['task_id']}</code>\n"
-                f"• Списано: <code>{cost}</code>🍌 {'(админ бесплатно)' if is_admin else ''}\n\n"
+                f"• Списано: <code>{cost}</code>🐾 {'(админ бесплатно)' if is_admin else ''}\n\n"
                 "Результат придёт в этот чат.",
                 parse_mode="HTML",
             )
@@ -7181,7 +7198,7 @@ async def run_no_preset_video_from_callback(
                     caption=(
                         "✅ <b>Повтор готов</b>\n"
                         f"• Модель: <code>{get_video_model_label(v_model)}</code>\n"
-                        f"• Списано: <code>{cost}</code>🍌 {'(админ бесплатно)' if is_admin else ''}"
+                        f"• Списано: <code>{cost}</code>🐾 {'(админ бесплатно)' if is_admin else ''}"
                     ),
                     parse_mode="HTML",
                     reply_markup=get_video_result_keyboard(
@@ -7206,7 +7223,7 @@ async def run_no_preset_video_from_callback(
             if not is_admin:
                 await add_credits(callback.from_user.id, cost)
             await callback.message.answer(
-                f"❌ Не получилось повторить видео. Бананы за попытку уже возвращены."
+                f"❌ Не получилось повторить видео. Лапки за попытку уже возвращены."
                 + (f"\nПричина: <code>{html.escape(error_info[:300])}</code>" if error_info else ""),
                 parse_mode="HTML",
             )
@@ -7215,7 +7232,7 @@ async def run_no_preset_video_from_callback(
         if not is_admin:
             await add_credits(callback.from_user.id, cost)
         await callback.message.answer(
-            "❌ Не получилось повторить видео. Бананы за попытку уже возвращены."
+            "❌ Не получилось повторить видео. Лапки за попытку уже возвращены."
         )
     
     await state.clear()
@@ -7349,7 +7366,7 @@ async def run_no_preset_video_from_message(
     else:
         if not await check_can_afford(message.from_user.id, cost):
             await message.answer(
-                f"❌ Недостаточно бананов!\nНужно: <code>{cost}</code>🍌\nПополните баланс.",
+                f"❌ Недостаточно лапок!\nНужно: <code>{cost}</code>🐾\nПополните баланс.",
                 reply_markup=get_main_menu_keyboard(
                     await get_user_credits(message.from_user.id)
                 ),
@@ -7364,7 +7381,7 @@ async def run_no_preset_video_from_message(
     processing_msg = await message.answer(
         f"🎬 <b>Видео генерируется...</b>"
         f"{run_summary}\n"
-        f"💰 Стоимость: <code>{cost}</code>🍌"
+        f"💰 Стоимость: <code>{cost}</code>🐾"
         f"<i>Ожидайте 1-5 минут</i>",
         parse_mode="HTML",
     )
@@ -7673,7 +7690,7 @@ async def run_no_preset_video_from_message(
                 f"✅ <b>{result_title}</b>\n"
                 f"• Модель: <code>{get_video_model_label(v_model)}</code>\n"
                 f"• ID: <code>{asset_id}</code>\n"
-                f"💰 <code>{cost}</code>🍌 {'списано' if not is_admin else '(админ бесплатно)'}\n\n"
+                f"💰 <code>{cost}</code>🐾 {'списано' if not is_admin else '(админ бесплатно)'}\n\n"
                 "Этот ID можно использовать в Gemini Omni Video.",
                 parse_mode="HTML",
                 reply_markup=get_gemini_omni_result_keyboard(),
@@ -7749,7 +7766,7 @@ async def run_no_preset_video_from_message(
                 f"✅ <b>{queued_title}!</b>"
                 f"🆔 <code>{result['task_id']}</code>\n"
                 f"{run_summary}\n"
-                f"💰 <code>{cost}</code>🍌 {'списано' if not is_admin else '(админ бесплатно)'}"
+                f"💰 <code>{cost}</code>🐾 {'списано' if not is_admin else '(админ бесплатно)'}"
                 f"⏳ Результат через 1-5 мин в этом чате.",
                 parse_mode="HTML",
             )
@@ -7767,7 +7784,7 @@ async def run_no_preset_video_from_message(
                 else ""
             )
             await message.answer(
-                "❌ Не получилось создать задачу. Бананы за попытку уже возвращены."
+                "❌ Не получилось создать задачу. Лапки за попытку уже возвращены."
                 f"{details}",
                 parse_mode="HTML",
             )
@@ -7776,7 +7793,7 @@ async def run_no_preset_video_from_message(
         if not is_admin:
             await add_credits(message.from_user.id, cost)
         await message.answer(
-            "❌ Не получилось завершить запуск генерации. Бананы за попытку уже возвращены."
+            "❌ Не получилось завершить запуск генерации. Лапки за попытку уже возвращены."
         )
 
     await state.clear()
@@ -7878,7 +7895,7 @@ def get_motion_control_model_keyboard(current_model: str = "motion_control_v26")
         ps_720 = _motion_quality_per_second(model_key, "720p")
         ps_1080 = _motion_quality_per_second(model_key, "1080p")
         builder.button(
-            text=f"{check}{label} • {ps_720}-{ps_1080}🍌/с",
+            text=f"{check}{label} • {ps_720}-{ps_1080}🐾/с",
             callback_data=f"motion_model_{model_key}",
         )
     builder.button(text="🏠 Главное меню", callback_data="back_main")
@@ -7909,7 +7926,7 @@ async def open_motion_control_menu(callback: types.CallbackQuery, state: FSMCont
     )
     text = (
         "🎯 <b>Motion Control</b>\n"
-        f"🍌 Баланс: <code>{user_credits}</code> бананов\n\n"
+        f"🐾 Баланс: <code>{user_credits}</code> лапок\n\n"
         "Выберите версию Kling. На кнопках указана только цена за 1 секунду."
     )
     await callback.message.edit_text(
@@ -7927,11 +7944,11 @@ def get_motion_quality_keyboard(model: str, current_mode: str = "1080p"):
     ps_720 = _motion_quality_per_second(model, "720p")
     ps_1080 = _motion_quality_per_second(model, "1080p")
     builder.button(
-        text=f"{check_720}📱 720p • {ps_720}🍌/с",
+        text=f"{check_720}📱 720p • {ps_720}🐾/с",
         callback_data=f"motion_quality_{model}_720p",
     )
     builder.button(
-        text=f"{check_1080}🖥 1080p • {ps_1080}🍌/с",
+        text=f"{check_1080}🖥 1080p • {ps_1080}🐾/с",
         callback_data=f"motion_quality_{model}_1080p",
     )
     builder.button(text="◀️ Назад", callback_data="motion_control")
@@ -7966,8 +7983,8 @@ async def select_motion_control_model(callback: types.CallbackQuery, state: FSMC
     ps_1080 = _motion_quality_per_second(model, "1080p")
     text = (
         f"🎯 <b>{label}</b>\n"
-        f"🍌 Баланс: <code>{user_credits}</code> бананов\n"
-        f"💰 Стоимость: <code>{ps_720}</code>-<code>{ps_1080}</code>🍌/с "
+        f"🐾 Баланс: <code>{user_credits}</code> лапок\n"
+        f"💰 Стоимость: <code>{ps_720}</code>-<code>{ps_1080}</code>🐾/с "
         f"(зависит от качества)\n\n"
         "Выберите качество:"
     )
@@ -8001,8 +8018,8 @@ async def select_motion_control_quality(
     ps_quality = _motion_quality_per_second(model, quality)
     text = (
         f"🎯 <b>{label}</b>\n"
-        f"🍌 Баланс: <code>{user_credits}</code> бананов\n"
-        f"💰 Стоимость: <code>{ps_quality}</code>🍌/с "
+        f"🐾 Баланс: <code>{user_credits}</code> лапок\n"
+        f"💰 Стоимость: <code>{ps_quality}</code>🐾/с "
         f"(списывается по длине вашего видео)\n"
         f"⚙️ Режим: <b>{mode_label}</b>\n\n"
         "Шаг 1. Отправьте <b>фото персонажа</b>, которого нужно оживить."
@@ -8073,7 +8090,7 @@ async def motion_control_reference_video_upload(
     await state.set_state(GenerationStates.waiting_for_video_prompt)
     await message.answer(
         f"✅ Видео движения загружено ({v_duration} сек).\n"
-        f"💰 Стоимость: <code>{detected_cost}</code>🍌\n\n"
+        f"💰 Стоимость: <code>{detected_cost}</code>🐾\n\n"
         "Шаг 3. Отправьте короткое описание результата.\n"
         "Например: <i>сохранить лицо, плавное движение, кинематографичный свет</i>.",
         parse_mode="HTML",
@@ -8357,7 +8374,7 @@ async def handle_image_prompt_text(message: types.Message, state: FSMContext):
 
     if user.credits < total_cost:
         await message.answer(
-            f"❌ Недостаточно бананов! Нужно: <code>{total_cost}</code>🍌",
+            f"❌ Недостаточно лапок! Нужно: <code>{total_cost}</code>🐾",
             reply_markup=get_main_menu_keyboard(user.credits, message.from_user.id),
             parse_mode="HTML",
         )
@@ -8455,7 +8472,7 @@ async def handle_image_prompt_text(message: types.Message, state: FSMContext):
                         f"• Вариант: <code>{index + 1}/{img_count}</code>\n"
                         f"• Модель: <code>{model_label}</code>\n"
                         f"• ID: <code>{launch_result['task_id']}</code>\n"
-                        f"• Списано: <code>{unit_cost}</code>🍌\n"
+                        f"• Списано: <code>{unit_cost}</code>🐾\n"
                         "• Отправлено без сжатия"
                     ),
                     parse_mode="HTML",
@@ -8491,7 +8508,7 @@ async def handle_image_prompt_text(message: types.Message, state: FSMContext):
                 f"• Модель: <code>{model_label}</code>\n"
                 f"• Формат: <code>{ratio_label}</code>\n"
                 f"• Запущено задач: <code>{len(started_task_ids)}</code>\n"
-                f"• Списано: <code>{unit_cost * len(started_task_ids) + unit_cost * immediate_success_count}</code>🍌\n\n"
+                f"• Списано: <code>{unit_cost * len(started_task_ids) + unit_cost * immediate_success_count}</code>🐾\n\n"
                 f"{ids_preview}\n\n"
                 "Обычно результат приходит в течение 1-3 минут.",
                 parse_mode="HTML",
@@ -8501,14 +8518,14 @@ async def handle_image_prompt_text(message: types.Message, state: FSMContext):
         if refunded_count:
             await message.answer(
                 "Часть вариантов не удалось запустить.\n"
-                f"Возвращено: <code>{refunded_count * unit_cost}</code>🍌",
+                f"Возвращено: <code>{refunded_count * unit_cost}</code>🐾",
                 parse_mode="HTML",
             )
 
         if not started_task_ids and not immediate_success_count:
             await message.answer(
                 "Не получилось запустить генерацию.\n"
-                "Бананы за эту попытку уже вернулись на баланс."
+                "Лапки за эту попытку уже вернулись на баланс."
             )
 
     except Exception as e:
@@ -9095,7 +9112,7 @@ async def handle_veo_extend_prompt(message: types.Message, state: FSMContext):
 
     if not await check_can_afford(message.from_user.id, cost):
         await message.answer(
-            f"❌ Недостаточно бананов для продления. Нужно: <code>{cost}</code>🍌",
+            f"❌ Недостаточно лапок для продления. Нужно: <code>{cost}</code>🐾",
             parse_mode="HTML",
         )
         return
@@ -9113,7 +9130,7 @@ async def handle_veo_extend_prompt(message: types.Message, state: FSMContext):
     if not result or "task_id" not in result:
         await add_credits(message.from_user.id, cost)
         await message.answer(
-            "❌ Не получилось запустить продление. Бананы за попытку уже возвращены."
+            "❌ Не получилось запустить продление. Лапки за попытку уже возвращены."
         )
         await state.clear()
         return
@@ -9130,7 +9147,7 @@ async def handle_veo_extend_prompt(message: types.Message, state: FSMContext):
         cost=cost,
     )
     await message.answer(
-        f"✅ Продление Veo запущено!\n🆔 <code>{result['task_id']}</code>\n💰 <code>{cost}</code>🍌",
+        f"✅ Продление Veo запущено!\n🆔 <code>{result['task_id']}</code>\n💰 <code>{cost}</code>🐾",
         parse_mode="HTML",
     )
     await state.clear()

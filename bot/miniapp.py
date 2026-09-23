@@ -21,6 +21,7 @@ from aiohttp import web
 
 from bot import db as db_backend
 from bot.config import config
+from bot.product import product
 
 FILE_KIND_MAP: dict[str, dict[str, Any]] = {}
 
@@ -1372,7 +1373,7 @@ async def _deliver_miniapp_direct_image_result(
         f"• ID: <code>{html.escape(task_id)}</code>"
     )
     if unit_cost:
-        caption += f"\n• Стоимость: <code>{html.escape(str(unit_cost))}🍌</code>"
+        caption += f"\n• Стоимость: <code>{html.escape(str(unit_cost))}🐾</code>"
     if img_ratio:
         caption += f"\n• Формат: <code>{html.escape(str(img_ratio).replace(':', '∶'))}</code>"
     caption += "\n\n🎯 Промпт скрыт" if prompt_hidden else "\n\nСоздано через Mini App"
@@ -1431,7 +1432,7 @@ async def _notify_miniapp_image_task_queued(
     if task_id and task_id != public_task_id:
         text += f"\n• ID провайдера: <code>{html.escape(task_id)}</code>"
     if unit_cost:
-        text += f"\n• Стоимость: <code>{html.escape(str(unit_cost))}🍌</code>"
+        text += f"\n• Стоимость: <code>{html.escape(str(unit_cost))}🐾</code>"
     if img_ratio:
         text += f"\n• Формат: <code>{html.escape(str(img_ratio).replace(':', '∶'))}</code>"
     text += "\n\nКогда файл будет готов, я пришлю его сюда."
@@ -2069,9 +2070,8 @@ async def _send_create_hub(app: web.Application, telegram_id: int):
     user = await get_or_create_user(telegram_id)
     text = (
         "✨ <b>Создать</b>\n"
-        f"🍌 Баланс: <code>{user.credits}</code> бананов\n\n"
-        "Выберите, что хотите получить. Можно использовать готовый сценарий "
-        "или открыть пошаговый режим."
+        f"🐾 Баланс: <code>{user.credits}</code> лапок\n\n"
+        "Выберите результат — дальше останутся только подходящие настройки и шаги."
     )
     await app["bot"].send_message(
         telegram_id,
@@ -2085,7 +2085,7 @@ async def _send_edit_hub(app: web.Application, telegram_id: int):
     user = await get_or_create_user(telegram_id)
     text = (
         "✏️ <b>Изменить фото</b>\n"
-        f"🍌 Баланс: <code>{user.credits}</code> бананов\n\n"
+        f"🐾 Баланс: <code>{user.credits}</code> лапок\n\n"
         "Здесь можно поменять стиль, фон, одежду, детали или настроение кадра.\n"
         "Сначала выберите сценарий ниже."
     )
@@ -2101,7 +2101,7 @@ async def _send_animate_hub(app: web.Application, telegram_id: int):
     user = await get_or_create_user(telegram_id)
     text = (
         "🎬 <b>Оживить</b>\n"
-        f"🍌 Баланс: <code>{user.credits}</code> бананов\n\n"
+        f"🐾 Баланс: <code>{user.credits}</code> лапок\n\n"
         "Выберите, как хотите сделать видео:\n"
         "• оживить фото\n"
         "• перенести движение\n"
@@ -2119,8 +2119,8 @@ async def _send_more_menu(app: web.Application, telegram_id: int):
     user = await get_or_create_user(telegram_id)
     text = (
         "⋯ <b>Ещё</b>\n"
-        f"🍌 Баланс: <code>{user.credits}</code> бананов\n\n"
-        "Здесь находятся баланс, история, помощь, поддержка и партнёрская программа."
+        f"🐾 Баланс: <code>{user.credits}</code> лапок\n\n"
+        "Здесь собраны баланс, история, поддержка и партнёрская программа."
     )
     await app["bot"].send_message(
         telegram_id,
@@ -2168,7 +2168,7 @@ async def _send_photo_prompt(app: web.Application, telegram_id: int):
     user = await get_or_create_user(telegram_id)
     text = (
         "📸 <b>Анализ фото -> Промпт</b>\n"
-        f"🍌 Баланс: <code>{user.credits}</code> бананов\n\n"
+        f"🐾 Баланс: <code>{user.credits}</code> лапок\n\n"
         "<b>Что делает этот режим</b>\n"
         "Отправьте фото, и бот соберёт по нему аккуратный промпт для дальнейшей генерации.\n\n"
         "Обычно хорошо распознаются:\n"
@@ -2199,10 +2199,9 @@ async def _send_balance(app: web.Application, telegram_id: int):
 async def _send_topup(app: web.Application, telegram_id: int):
     packages = preset_manager.get_packages()
     text = (
-        "🍌 <b>Пополнение баланса</b>\n\n"
-        "Оплата выполняется через CryptoBot.\n"
-        "Выберите пакет бананов ниже.\n\n"
-        "<i>Чем больше пакет, тем выгоднее цена за банан.</i>"
+        "🐾 <b>Пополнение баланса</b>\n\n"
+        "Выберите пакет лапок и способ оплаты. Итоговую сумму увидите до подтверждения.\n\n"
+        "<i>Большие пакеты дают более выгодную стоимость одной лапки.</i>"
     )
     await app["bot"].send_message(
         telegram_id,
@@ -2221,7 +2220,7 @@ async def _send_support(app: web.Application, telegram_id: int):
         "• оплатой и балансом\n"
         "• любыми непонятными шагами в боте\n\n"
         "<b>Если нужен человек:</b>\n"
-        "@only_tany"
+        f"{html.escape(product.support_contact) if product.support_contact else 'через встроенную поддержку'}"
     )
     await app["bot"].send_message(
         telegram_id,
@@ -2236,7 +2235,7 @@ async def _send_ai_assistant(app: web.Application, telegram_id: int):
     await state.clear()
     await state.set_state(AIAssistantStates.waiting_for_message)
     await state.update_data(ai_mode="main_menu")
-    text = """🍌 <b>AI-ассистент</b>
+    text = """🐾 <b>AI-ассистент</b>
 
 Я помогу с моделями, промптами, настройками и сценариями генерации.
 
@@ -2263,8 +2262,8 @@ async def _send_history(app: web.Application, telegram_id: int):
     text = (
         "📋 <b>История</b>\n\n"
         f"• Всего генераций: <code>{stats['generations']}</code>\n"
-        f"• Потрачено бананов: <code>{stats['total_spent']}</code>\n"
-        f"• Текущий баланс: <code>{user.credits}</code>🍌\n"
+        f"• Потрачено лапок: <code>{stats['total_spent']}</code>\n"
+        f"• Текущий баланс: <code>{user.credits}</code>🐾\n"
         f"• Дата регистрации: <code>{stats['member_since']}</code>\n\n"
         "<i>Подробная история запусков появится здесь чуть позже.</i>"
     )
@@ -2292,12 +2291,12 @@ async def _send_batch_edit(app: web.Application, telegram_id: int):
     user_credits = (await get_or_create_user(telegram_id)).credits
     text = (
         "🎨 <b>Редактирование по референсам</b>\n"
-        f"🍌 Ваш баланс: <code>{user_credits}</code> бананов\n\n"
+        f"🐾 Ваш баланс: <code>{user_credits}</code> лапок\n\n"
         "1. Загрузите <b>главное фото</b> для редактирования\n"
         "2. Добавьте до <b>14 референсов</b>\n"
         "3. Введите промпт\n"
         "4. Получите результат с учётом исходников\n\n"
-        "💰 Стоимость: <b>4🍌</b>\n"
+        "💰 Стоимость: <b>4🐾</b>\n"
         "<i>📸 Отправьте главное фото для редактирования.</i>"
     )
     await app["bot"].send_message(
@@ -2871,7 +2870,7 @@ async def miniapp_create_payment(request: web.Request) -> web.Response:
             get_promo_bonus_for_credits(package["credits"]) if promo else 0
         )
         total_credits = total_package_credits(package, promo_bonus)
-        description = f"Покупка {total_credits} бананов ({package['name']})"
+        description = f"Покупка {total_credits} лапок ({package['name']})"
 
         if provider == TELEGRAM_STARS_PROVIDER:
             if not config.TELEGRAM_STARS_ENABLED:
@@ -2900,13 +2899,13 @@ async def miniapp_create_payment(request: web.Request) -> web.Response:
 
             try:
                 payment_url = await request.app["bot"].create_invoice_link(
-                    title=f"{package['name']} · {total_credits}🍌",
+                    title=f"{package['name']} · {total_credits}🐾",
                     description=description,
                     payload=invoice_payload,
                     currency=TELEGRAM_STARS_CURRENCY,
                     prices=[
                         LabeledPrice(
-                            label=f"{total_credits} бананов",
+                            label=f"{total_credits} лапок",
                             amount=stars_amount,
                         )
                     ],
@@ -3929,7 +3928,7 @@ async def miniapp_feed_remix(request: web.Request) -> web.Response:
         is_admin = config.is_admin(telegram_id)
         if not is_admin and not await check_can_afford(telegram_id, unit_cost):
             return web.json_response(
-                {"ok": False, "error": f"Недостаточно бананов. Нужно {unit_cost}🍌", "credits": user.credits},
+                {"ok": False, "error": f"Недостаточно лапок. Нужно {unit_cost}🐾", "credits": user.credits},
                 status=400,
             )
         if not is_admin:
@@ -3956,7 +3955,7 @@ async def miniapp_feed_remix(request: web.Request) -> web.Response:
             if not is_admin:
                 await add_credits(telegram_id, unit_cost)
             return web.json_response(
-                {"ok": False, "error": "Не удалось запустить remix. Бананы уже возвращены."},
+                {"ok": False, "error": "Не удалось запустить remix. Лапки уже возвращены."},
                 status=500,
             )
 
@@ -4145,7 +4144,7 @@ async def miniapp_generate_image(request: web.Request) -> web.Response:
             return web.json_response(
                 {
                     "ok": False,
-                    "error": f"Недостаточно бананов. Нужно {unit_cost}🍌",
+                    "error": f"Недостаточно лапок. Нужно {unit_cost}🐾",
                     "credits": user.credits,
                 },
                 status=400,
@@ -4178,7 +4177,7 @@ async def miniapp_generate_image(request: web.Request) -> web.Response:
             return web.json_response(
                 {
                     "ok": False,
-                    "error": "Не удалось запустить генерацию. Бананы уже возвращены.",
+                    "error": "Не удалось запустить генерацию. Лапки уже возвращены.",
                 },
                 status=500,
             )
@@ -4564,7 +4563,7 @@ async def miniapp_generate_video(request: web.Request) -> web.Response:
             return web.json_response(
                 {
                     "ok": False,
-                    "error": f"Недостаточно бананов. Нужно {cost}🍌",
+                    "error": f"Недостаточно лапок. Нужно {cost}🐾",
                     "credits": user.credits,
                 },
                 status=400,
@@ -4713,7 +4712,7 @@ async def miniapp_generate_motion(request: web.Request) -> web.Response:
             return web.json_response(
                 {
                     "ok": False,
-                    "error": f"Недостаточно бананов. Нужно {cost}🍌",
+                    "error": f"Недостаточно лапок. Нужно {cost}🐾",
                     "credits": user.credits,
                 },
                 status=400,

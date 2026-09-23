@@ -361,7 +361,7 @@ async def _notify_completed_payment(
                 bot,
                 telegram_id,
                 "✅ <b>Оплата успешно обработана</b>\n"
-                f"• Начислено: <code>{transaction.credits}</code> бананов\n"
+                f"• Начислено: <code>{transaction.credits}</code> лапок\n"
                 f"• Сумма: <code>{transaction.amount_rub}</code> ₽{bonus_text}",
                 parse_mode="HTML",
             )
@@ -375,7 +375,7 @@ async def _notify_completed_payment(
     try:
         await create_miniapp_notification(
             transaction.user_id,
-            f"✅ Оплата Lava обработана — {transaction.credits} бананов "
+            f"✅ Оплата Lava обработана — {transaction.credits} лапок "
             f"за {transaction.amount_rub} ₽",
         )
     except Exception:

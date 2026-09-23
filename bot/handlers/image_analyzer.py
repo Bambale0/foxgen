@@ -553,7 +553,7 @@ async def video_to_prompt_handler(callback: CallbackQuery, state: FSMContext):
     max_seconds = config.VIDEO_PROMPT_MAX_DURATION_SECONDS
     text = (
         "🎞 <b>Промпт по видео</b>\n\n"
-        f"Стоимость: <code>{_video_prompt_cost()}</code> 🍌\n\n"
+        f"Стоимость: <code>{_video_prompt_cost()}</code> 🐾\n\n"
         "Отправьте короткое видео как обычное видео или файлом.\n"
         "GPT-5.5 получит сам видеофайл и соберёт подробный prompt для генерации похожего ролика.\n\n"
         "В результате вы получите:\n"

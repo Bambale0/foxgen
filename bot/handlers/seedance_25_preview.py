@@ -249,7 +249,7 @@ async def _show_seedance_25_screen(target, state: FSMContext, *, edit: bool = Tr
         f"{media_hint}\n\n"
         "🎥 <b>Dynamic Camera</b>: отдельного API-поля в опубликованной схеме нет; "
         "движение камеры и lock объектива задавайте в промпте.\n\n"
-        f"💰 Текущая цена из админ-прайса: <code>{quote}</code>🍌{auto_note}.\n"
+        f"💰 Текущая цена из админ-прайса: <code>{quote}</code>🐾{auto_note}.\n"
         "Администратору списание не производится.\n\n"
         "После настройки просто отправьте промпт (до 5000 символов)."
     )
@@ -284,7 +284,7 @@ def install_seedance_25_preview() -> None:
         user_credits = await generation_module.get_user_credits(user_id) if user_id else 0
         text = (
             "🎬 <b>Создание видео</b>\n"
-            f"🍌 Баланс: <code>{user_credits}</code> бананов\n\n"
+            f"🐾 Баланс: <code>{user_credits}</code> лапок\n\n"
             "<b>Шаг 1. Выберите модель</b>\n"
             "Сначала выберите модель видео.\n"
             "После этого бот покажет следующий шаг именно для неё."
@@ -381,7 +381,7 @@ async def _run_seedance_25_message(message: types.Message, state: FSMContext, pr
     quote = _price_quote(data)
     processing = await message.answer(
         "🧪 <b>Seedance 2.5 — admin preview</b>\n"
-        f"Сценарий: <code>{scenario}</code> · цена по прайсу: <code>{quote}</code>🍌\n"
+        f"Сценарий: <code>{scenario}</code> · цена по прайсу: <code>{quote}</code>🐾\n"
         "Задача отправляется в Kie.ai…",
         parse_mode="HTML",
     )
@@ -446,7 +446,7 @@ async def _run_seedance_25_message(message: types.Message, state: FSMContext, pr
             f"🆔 <code>{result['task_id']}</code>\n"
             f"⏱ <code>{_duration_label(duration)}</code> · 📐 <code>{ratio}</code> · "
             f"🖥 <code>{resolution}</code>\n"
-            f"💰 Прайс: <code>{quote}</code>🍌, администратору бесплатно.\n\n"
+            f"💰 Прайс: <code>{quote}</code>🐾, администратору бесплатно.\n\n"
             "Результат придёт через общий Kie webhook.",
             parse_mode="HTML",
         )

@@ -119,7 +119,7 @@ def _clean_keyboard_new_markers(original):
 def _seedance_public_button_text(current_model: str) -> str:
     check = "✅ " if current_model == MODEL_KEY else ""
     per_second = preset_manager.get_video_cost_per_second(MODEL_KEY, 5, "720p")
-    return f"{check}🆕 Seedance 2.5 NEW • {per_second}🍌/с"
+    return f"{check}🆕 Seedance 2.5 NEW • {per_second}🐾/с"
 
 
 def _public_model_meta() -> dict[str, Any]:
@@ -169,9 +169,9 @@ async def _public_show_screen(target, state: FSMContext, *, edit: bool = True) -
         media_hint = "Медиа не требуется — отправьте текстовый промпт."
 
     billing_line = (
-        f"💰 Цена: <code>{quote}</code>🍌. Для администратора списание отключено."
+        f"💰 Цена: <code>{quote}</code>🐾. Для администратора списание отключено."
         if is_admin
-        else f"💰 Цена: <code>{quote}</code>🍌 — будет списана при запуске."
+        else f"💰 Цена: <code>{quote}</code>🐾 — будет списана при запуске."
     )
     auto_note = (
         "\n⚠️ Auto сейчас доступен только администратору: для пользователей выберите 4–30с."
@@ -319,7 +319,7 @@ async def _public_message_launch(message: types.Message, state: FSMContext, prom
     if not is_admin and not await generation_module.check_can_afford(message.from_user.id, quote):
         credits = await generation_module.get_user_credits(message.from_user.id)
         await message.answer(
-            f"❌ Недостаточно бананов. Нужно <b>{quote:g}🍌</b>, на балансе <b>{credits:g}🍌</b>.",
+            f"❌ Недостаточно лапок. Нужно <b>{quote:g}🐾</b>, на балансе <b>{credits:g}🐾</b>.",
             parse_mode="HTML",
         )
         return
@@ -327,7 +327,7 @@ async def _public_message_launch(message: types.Message, state: FSMContext, prom
     charged = False
     processing = await message.answer(
         "🆕 <b>Seedance 2.5 · NEW</b>\n"
-        f"Цена: <code>{quote:g}</code>🍌 · отправляю задачу в Kie.ai…",
+        f"Цена: <code>{quote:g}</code>🐾 · отправляю задачу в Kie.ai…",
         parse_mode="HTML",
     )
     try:
@@ -344,7 +344,7 @@ async def _public_message_launch(message: types.Message, state: FSMContext, prom
             await processing.delete()
             await message.answer(
                 f"❌ Seedance 2.5 не запустилась: <code>{str(error)[:500]}</code>"
-                + ("\n🍌 Списание возвращено." if not is_admin else ""),
+                + ("\n🐾 Списание возвращено." if not is_admin else ""),
                 parse_mode="HTML",
             )
             return
@@ -365,7 +365,7 @@ async def _public_message_launch(message: types.Message, state: FSMContext, prom
             request_data=_request_data(payload, is_admin=is_admin, quote=quote, source="telegram"),
         )
         await processing.delete()
-        billing = "администратору бесплатно" if is_admin else f"списано {quote:g}🍌"
+        billing = "администратору бесплатно" if is_admin else f"списано {quote:g}🐾"
         await message.answer(
             "✅ <b>Seedance 2.5 запущена</b>\n"
             f"🆔 <code>{task_id}</code>\n"
@@ -388,7 +388,7 @@ async def _public_message_launch(message: types.Message, state: FSMContext, prom
             pass
         await message.answer(
             f"❌ Seedance 2.5: <code>{str(exc)[:500]}</code>"
-            + ("\n🍌 Если списание успело пройти, оно возвращено." if not is_admin else ""),
+            + ("\n🐾 Если списание успело пройти, оно возвращено." if not is_admin else ""),
             parse_mode="HTML",
         )
     finally:
@@ -456,7 +456,7 @@ async def _public_miniapp_generate(request: web.Request, body: dict[str, Any]) -
     if not is_admin and not await miniapp_module.check_can_afford(telegram_id, quote):
         fresh = await miniapp_module.get_or_create_user(telegram_id)
         return web.json_response(
-            {"ok": False, "error": f"Недостаточно бананов. Нужно {quote:g}🍌", "credits": fresh.credits},
+            {"ok": False, "error": f"Недостаточно лапок. Нужно {quote:g}🐾", "credits": fresh.credits},
             status=400,
         )
 
@@ -582,7 +582,7 @@ async def _public_send_results(
     scenario = str(request_data.get("seedance25_scenario") or "text")
     admin_free = bool(request_data.get("admin_free"))
     cost = float(request_data.get("charged_cost") or 0)
-    billing = "без списания для администратора" if admin_free else f"списано {cost:g}🍌"
+    billing = "без списания для администратора" if admin_free else f"списано {cost:g}🐾"
     caption = (
         "✅ <b>Seedance 2.5 готово</b>\n"
         f"• ID: <code>{task_id}</code>\n"

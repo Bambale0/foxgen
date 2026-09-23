@@ -4,6 +4,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional
 
+from bot.config import config
+from bot.product import product
+
 CANONICAL_IMAGE_ALIASES = {
     "banana_pro": "nano-banana-pro",
     "nano_banana_pro": "nano-banana-pro",
@@ -173,6 +176,34 @@ class PresetManager:
 
         with open(self.price_path, "r", encoding="utf-8") as f:
             self._price_config = json.load(f)
+
+        if product.product_id == "happyfox":
+            # Keep the proven numeric pricing/model table, but never expose or
+            # trust imported source-product presentation/configuration.
+            self._price_config["credit_name"] = product.credit_name
+            self._price_config["credit_name_plural"] = product.credit_name_plural
+            self._price_config["credit_emoji"] = product.credit_emoji
+            self._price_config["credit_value"] = "1 лапка = 10 ₽"
+            self._price_config["support_contact"] = product.support_contact
+            self._price_config["admin_ids"] = list(config.admin_ids)
+
+            package_names = {
+                "mini": "Мини",
+                "start": "Старт",
+                "optimal": "Оптимальный",
+                "pro": "Про",
+                "studio": "Студия",
+                "business": "Бизнес",
+            }
+            for package in self._price_config.get("packages", []):
+                package_id = str(package.get("id") or "")
+                if package_id in package_names:
+                    package["name"] = package_names[package_id]
+                # Imported payment offer IDs are product credentials. HappyFox
+                # resolves its Lava offers exclusively from environment config.
+                package.pop("lava_offer_id", None)
+                package.pop("lava_currency", None)
+
         self._admin_ids = self._price_config.get("admin_ids", [])
 
     def reload(self) -> bool:
@@ -276,7 +307,7 @@ class PresetManager:
         return max(min_duration, min(max_duration, int(duration)))
 
     def _format_cost(self, value):
-        """Округляем до ближайшего 0.5 для поддержки дробных кредитов."""
+        """Округляем до ближайшего 0.5 для поддержки дробных лапок."""
         v = float(value)
         rounded = round(v * 2) / 2
         return int(rounded) if rounded == int(rounded) else rounded

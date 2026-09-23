@@ -293,11 +293,11 @@ async def show_direct_payment_methods(
 
     bonus_lines: list[str] = []
     if package_bonus > 0:
-        bonus_lines.append(f"Бонус пакета: <code>{package_bonus}</code>🍌")
+        bonus_lines.append(f"Бонус пакета: <code>{package_bonus}</code>🐾")
     if promo_bonus > 0 and promo:
         bonus_lines.append(
             f"Промокод <code>{html.escape(promo.code)}</code>: "
-            f"+<code>{promo_bonus}</code>🍌"
+            f"+<code>{promo_bonus}</code>🐾"
         )
     bonus_text = ("\n" + "\n".join(bonus_lines)) if bonus_lines else ""
 
@@ -308,7 +308,7 @@ async def show_direct_payment_methods(
     await callback.message.edit_text(
         "💳 <b>Выберите способ оплаты</b>\n\n"
         f"Пакет: <b>{html.escape(str(package['name']))}</b>\n"
-        f"Бананы: <code>{total_credits}</code>🍌\n"
+        f"Лапки: <code>{total_credits}</code>🐾\n"
         f"Сумма: {' / '.join(amount_parts)}{bonus_text}",
         reply_markup=_payment_options_keyboard(
             package_id,
@@ -419,7 +419,7 @@ async def handle_eur_checkout(
     await callback.message.edit_text(
         "💶 <b>Оплата банковской картой (EUR, Lava)</b>\n"
         f"• Пакет: <code>{html.escape(str(package['name']))}</code>\n"
-        f"• Бананов: <code>{total_credits}</code>🍌\n"
+        f"• Лапок: <code>{total_credits}</code>🐾\n"
         f"• Сумма: <code>{package['price_rub']}</code> ₽ / EUR\n\n"
         "Нажмите кнопку ниже и завершите оплату.",
         reply_markup=get_payment_confirmation_keyboard(payment_url, order_id),
@@ -596,18 +596,18 @@ async def create_lava_checkout(
     await state.clear()
     bonus_lines: list[str] = []
     if package_bonus > 0:
-        bonus_lines.append(f"Бонус пакета: <code>{package_bonus}</code> бананов")
+        bonus_lines.append(f"Бонус пакета: <code>{package_bonus}</code> лапок")
     if promo and promo_bonus > 0:
         bonus_lines.append(
             f"Промокод <code>{html.escape(promo.code)}</code>: "
-            f"+<code>{promo_bonus}</code> бананов"
+            f"+<code>{promo_bonus}</code> лапок"
         )
     bonus_text = "\n" + "\n".join(bonus_lines) if bonus_lines else ""
 
     await message.answer(
         f"{_checkout_title(mode)}\n"
         f"• Пакет: <code>{html.escape(str(package['name']))}</code>\n"
-        f"• Бананов: <code>{total_credits}</code>{bonus_text}\n"
+        f"• Лапок: <code>{total_credits}</code>{bonus_text}\n"
         f"• Сумма: <code>{package['price_rub']}</code> ₽\n"
         f"• Почта: <code>{html.escape(email)}</code>\n\n"
         "Проверьте данные и перейдите к оплате.",

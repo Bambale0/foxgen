@@ -101,7 +101,7 @@ def validate_telegram_id(user_id: int) -> bool:
 
 def validate_credits_amount(amount: int) -> Tuple[bool, Optional[str]]:
     """
-    Валидирует количество кредитов
+    Валидирует количество лапок
     """
     if not isinstance(amount, int):
         return False, "Количество должно быть целым числом"
@@ -110,7 +110,7 @@ def validate_credits_amount(amount: int) -> Tuple[bool, Optional[str]]:
         return False, "Количество не может быть отрицательным"
 
     if amount > 100000:
-        return False, "Превышен лимит кредитов"
+        return False, "Превышен лимит лапок"
 
     return True, None
 

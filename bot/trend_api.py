@@ -261,14 +261,14 @@ async def _debit_for_generation(
         return False, web.json_response(
             {
                 "ok": False,
-                "error": f"Недостаточно бананов. Нужно {amount}🍌",
+                "error": f"Недостаточно лапок. Нужно {amount}🐾",
                 "credits": user.credits,
             },
             status=400,
         )
     if not await deduct_credits(telegram_id, amount):
         return False, web.json_response(
-            {"ok": False, "error": "Не удалось списать бананы. Обновите баланс"},
+            {"ok": False, "error": "Не удалось списать лапки. Обновите баланс"},
             status=409,
         )
     return True, None
@@ -359,7 +359,7 @@ async def _run_image_trend(
             return web.json_response(
                 {
                     "ok": False,
-                    "error": "Не удалось запустить тренд. Бананы уже возвращены.",
+                    "error": "Не удалось запустить тренд. Лапки уже возвращены.",
                 },
                 status=500,
             )
@@ -545,7 +545,7 @@ async def _run_video_trend(
                 {
                     "ok": False,
                     "error": launch_result.get("error")
-                    or "Не удалось запустить видео-тренд. Бананы уже возвращены.",
+                    or "Не удалось запустить видео-тренд. Лапки уже возвращены.",
                 },
                 status=500,
             )

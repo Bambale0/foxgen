@@ -365,7 +365,7 @@ class AIAssistantService:
         lines = []
 
         if "user_credits" in context:
-            lines.append(f"- Баланс: {context['user_credits']} бананов")
+            lines.append(f"- Баланс: {context['user_credits']} лапок")
 
         if "preferred_model" in context:
             lines.append(f"- Текущая модель изображений: {context['preferred_model']}")
@@ -485,27 +485,27 @@ class AIAssistantService:
         return f"""## АКТУАЛЬНЫЕ ЦЕНЫ
 
 🖼 Генерация изображений:
-- Banana Pro: {banana_pro_cost}🍌
-- Banana 2: {banana_2_cost}🍌
-- Seedream 5 Pro / Seedream 4.5: {seedream_cost}🍌
-- Grok Imagine i2i: {grok_i2i_cost}🍌
+- Banana Pro: {banana_pro_cost}🐾
+- Banana 2: {banana_2_cost}🐾
+- Seedream 5 Pro / Seedream 4.5: {seedream_cost}🐾
+- Grok Imagine i2i: {grok_i2i_cost}🐾
 
 🎬 Генерация видео:
-- Kling 3 Std: {kling_std_5}🍌 / {kling_std_10}🍌 / {kling_std_15}🍌 за 5/10/15 сек
-- Kling 3 Pro: {kling_pro_5}🍌 / {kling_pro_10}🍌 / {kling_pro_15}🍌 за 5/10/15 сек
-- Kling 2.6: {kling26_5}🍌 / {kling26_10}🍌 за 5/10 сек
-- Grok Imagine: {grok_6}🍌 / {grok_10}🍌 / {grok_20}🍌 / {grok_30}🍌 за 6/10/20/30 сек
-- Glow: {glow_5}🍌 / {glow_10}🍌 за 5/10 сек
-- Veo 3.1 Quality: {veo_quality}🍌
-- Veo 3.1 Fast: {veo_fast}🍌
-- Veo 3.1 Lite: {veo_lite}🍌
-- Gemini Omni: Video {omni_video_6}🍌 за 6 сек, Audio ID {omni_audio}🍌, Character ID {omni_character}🍌
+- Kling 3 Std: {kling_std_5}🐾 / {kling_std_10}🐾 / {kling_std_15}🐾 за 5/10/15 сек
+- Kling 3 Pro: {kling_pro_5}🐾 / {kling_pro_10}🐾 / {kling_pro_15}🐾 за 5/10/15 сек
+- Kling 2.6: {kling26_5}🐾 / {kling26_10}🐾 за 5/10 сек
+- Grok Imagine: {grok_6}🐾 / {grok_10}🐾 / {grok_20}🐾 / {grok_30}🐾 за 6/10/20/30 сек
+- Glow: {glow_5}🐾 / {glow_10}🐾 за 5/10 сек
+- Veo 3.1 Quality: {veo_quality}🐾
+- Veo 3.1 Fast: {veo_fast}🐾
+- Veo 3.1 Lite: {veo_lite}🐾
+- Gemini Omni: Video {omni_video_6}🐾 за 6 сек, Audio ID {omni_audio}🐾, Character ID {omni_character}🐾
 
 🎯 Motion Control:
-- Pro: {motion_pro_5}🍌 / {motion_pro_10}🍌 за 5/10 сек
-- Std: {motion_std_5}🍌 / {motion_std_10}🍌 за 5/10 сек
+- Pro: {motion_pro_5}🐾 / {motion_pro_10}🐾 за 5/10 сек
+- Std: {motion_std_5}🐾 / {motion_std_10}🐾 за 5/10 сек
 
-✏️ Редактирование фото: от {banana_pro_cost}🍌"""
+✏️ Редактирование фото: от {banana_pro_cost}🐾"""
 
     async def close(self):
         """Закрытие HTTP-сессии."""

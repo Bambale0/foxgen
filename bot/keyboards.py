@@ -103,7 +103,7 @@ def get_main_menu_keyboard(user_credits: int = 0, telegram_id: int | None = None
         InlineKeyboardButton(text="💬 Поддержка", callback_data="menu_support"),
     )
     builder.row(
-        InlineKeyboardButton(text=f"🍌 Баланс: {user_credits}", callback_data="menu_balance"),
+        InlineKeyboardButton(text=f"🐾 Баланс: {user_credits}", callback_data="menu_balance"),
         InlineKeyboardButton(text="🤝 Партнёры", callback_data="menu_partner"),
     )
     builder.row(
@@ -164,7 +164,7 @@ def get_motion_control_model_keyboard(current_model: str = "motion_control_v26")
         per_second = preset_manager.get_video_cost_per_second(model_key, 5)
         builder.row(
             InlineKeyboardButton(
-                text=f"{check}{title} • {per_second}🍌/с",
+                text=f"{check}{title} • {per_second}🐾/с",
                 callback_data=f"v_model_{model_key}",
             )
         )
@@ -200,7 +200,7 @@ def get_admin_keyboard(subscription_required: bool | None = None):
     builder.button(text="🤖 ИИ-админ", callback_data="admin_ai")
     builder.button(text="📘 Инструкция ИИ", callback_data="admin_ai_help")
     builder.button(text=subscription_label, callback_data="admin_required_subscription_toggle")
-    builder.button(text=f"🎞 Видео → prompt • {_video_prompt_price_label()}🍌", callback_data="video_to_prompt")
+    builder.button(text=f"🎞 Видео → prompt • {_video_prompt_price_label()}🐾", callback_data="video_to_prompt")
     builder.button(text="⚙️ Рассылка", callback_data="admin_broadcast")
     builder.button(text="🏠 Главное меню", callback_data="back_main")
     builder.adjust(2, 2, 2, 2, 2, 2, 2)
@@ -359,11 +359,11 @@ def get_video_model_selection_keyboard(
         pricing_quality = "720p" if model_key.startswith("veo3") or model_key == "gemini_omni" else None
         per_second = preset_manager.get_video_cost_per_second(model_key, default_duration, pricing_quality)
         if model_key == "gemini_omni":
-            price_label = f"от {preset_manager.get_video_cost('gemini_omni_audio', 6)}🍌"
+            price_label = f"от {preset_manager.get_video_cost('gemini_omni_audio', 6)}🐾"
         elif model_key in {"gemini_omni_audio", "gemini_omni_character"}:
-            price_label = f"{cost}🍌"
+            price_label = f"{cost}🐾"
         else:
-            price_label = f"{per_second}🍌/с"
+            price_label = f"{per_second}🐾/с"
         builder.row(
             InlineKeyboardButton(
                 text=f"{check}{label} • {price_label}",
@@ -565,7 +565,7 @@ def get_create_video_keyboard(
             check = "✅ " if current_veo_resolution == resolution else ""
             label = resolution.upper() if resolution == "4k" else resolution
             resolution_cost = preset_manager.get_video_cost_with_quality(current_model, current_duration, resolution)
-            builder.button(text=f"{check}🖥 {label} • {resolution_cost}🍌", callback_data=f"veo_resolution_{resolution}")
+            builder.button(text=f"{check}🖥 {label} • {resolution_cost}🐾", callback_data=f"veo_resolution_{resolution}")
         seed_label = str(current_veo_seed) if current_veo_seed is not None else "auto"
         watermark_label = "off" if not current_veo_watermark else "on"
         builder.button(text=f"🎲 Seed: {seed_label}", callback_data="veo_seed_edit")
@@ -579,7 +579,7 @@ def get_create_video_keyboard(
             check = "✅ " if current_omni_resolution == resolution else ""
             label = resolution.upper() if resolution == "4k" else resolution
             resolution_cost = preset_manager.get_video_cost_with_quality(current_model, current_duration, resolution)
-            builder.button(text=f"{check}🖥 {label} • {resolution_cost}🍌", callback_data=f"omni_resolution_{resolution}")
+            builder.button(text=f"{check}🖥 {label} • {resolution_cost}🐾", callback_data=f"omni_resolution_{resolution}")
         seed_label = str(current_omni_seed) if current_omni_seed is not None else "auto"
         audio_count = len(current_omni_audio_ids or [])
         character_count = len(current_omni_character_ids or [])
@@ -610,7 +610,7 @@ def get_create_video_keyboard(
 
     pricing_quality = _video_pricing_quality(current_model, current_veo_resolution, current_omni_resolution, current_mode, current_grok_resolution)
     per_second_cost = preset_manager.get_video_cost_per_second(current_model, current_duration, pricing_quality)
-    builder.button(text=f"Цена: {per_second_cost}🍌/с", callback_data="ignore")
+    builder.button(text=f"Цена: {per_second_cost}🐾/с", callback_data="ignore")
     builder.button(text="🏠 Главное меню", callback_data="back_main")
     widths = [2]
     if ratio_buttons:
@@ -703,10 +703,10 @@ def get_saved_reference_picker_keyboard(reference_id: int, current_index: int, t
 def get_image_model_selection_keyboard(current_service: str = "banana_pro"):
     builder = InlineKeyboardBuilder()
     model_rows = [
-        ("nano-banana-2-lite", "model_nano_banana_2_lite", "🍌 Nano Banana 2 Lite 🔥 НОВИНКА", preset_manager.get_generation_cost("nano-banana-2-lite")),
+        ("nano-banana-2-lite", "model_nano_banana_2_lite", "✨ Nano Banana 2 Lite 🔥 НОВИНКА", preset_manager.get_generation_cost("nano-banana-2-lite")),
         ("seedream_5_pro", "model_seedream_5_pro", "🌟 Seedream 5 Pro 🔥 НОВИНКА", 2),
         ("banana_pro", "model_banana_pro", "💎 Nano Banana Pro", preset_manager.get_generation_cost("nano-banana-pro")),
-        ("banana_2", "model_banana_2", "🍌 Nano Banana 2", preset_manager.get_generation_cost("banana_2")),
+        ("banana_2", "model_banana_2", "✨ Nano Banana 2", preset_manager.get_generation_cost("banana_2")),
         ("seedream_edit", "model_seedream_edit", "🖌 Seedream 4.5", preset_manager.get_generation_cost("seedream_edit")),
         ("grok_imagine_i2i", "model_grok_i2i", "🧠 Grok Imagine", preset_manager.get_generation_cost("grok_imagine_i2i")),
         ("wan_27", "model_wan_27", "🧪 Wan 2.7 Pro", preset_manager.get_generation_cost("wan_27")),
@@ -715,7 +715,7 @@ def get_image_model_selection_keyboard(current_service: str = "banana_pro"):
     for model_row in model_rows:
         model_key, callback_data, label, cost = model_row[:4]
         check = "✅ " if current_service == model_key else ""
-        builder.row(InlineKeyboardButton(text=f"{check}{label} • {cost}🍌", callback_data=callback_data))
+        builder.row(InlineKeyboardButton(text=f"{check}{label} • {cost}🐾", callback_data=callback_data))
     builder.row(InlineKeyboardButton(text="🏠 Главное меню", callback_data="back_main"))
     return builder.as_markup()
 
@@ -775,7 +775,7 @@ def get_payment_packages_keyboard(packages: list, promo_active: bool = False):
     builder = InlineKeyboardBuilder()
     for pkg in packages:
         popular = " 🔥" if pkg.get("popular") else ""
-        builder.button(text=f"{pkg['name']}: {pkg['credits']}🍌 за {pkg['price_rub']}₽{popular}", callback_data=f"choose_pay_{pkg['id']}")
+        builder.button(text=f"{pkg['name']}: {pkg['credits']}🐾 за {pkg['price_rub']}₽{popular}", callback_data=f"choose_pay_{pkg['id']}")
     builder.button(text="🎟 Ввести промокод" if not promo_active else "🎟 Изменить промокод", callback_data="topup_enter_promo")
     if promo_active:
         builder.button(text="❌ Убрать промокод", callback_data="topup_remove_promo")
@@ -826,7 +826,7 @@ def get_payment_provider_keyboard():
 
 def get_balance_keyboard(user_credits: int = 0):
     builder = InlineKeyboardBuilder()
-    builder.button(text=f"У тебя: {user_credits} 🍌", callback_data="back_main")
+    builder.button(text=f"У тебя: {user_credits} 🐾", callback_data="back_main")
     builder.button(text="💰 Пополнить", callback_data="menu_topup")
     builder.button(text="📋 История", callback_data="menu_history")
     builder.adjust(1, 2)
@@ -878,7 +878,7 @@ def get_photo_prompt_result_keyboard(prompt_en: str, prompt_ru: str = "", negati
 
 def get_video_prompt_result_keyboard():
     builder = InlineKeyboardBuilder()
-    builder.button(text=f"🆕 Новый видео-промпт • {_video_prompt_price_label()}🍌", callback_data="video_to_prompt")
+    builder.button(text=f"🆕 Новый видео-промпт • {_video_prompt_price_label()}🐾", callback_data="video_to_prompt")
     builder.button(text="🏠 Главное меню", callback_data="back_main")
     builder.adjust(1, 1)
     return builder.as_markup()
@@ -991,7 +991,7 @@ def get_partner_program_keyboard(referral_link: str, is_partner: bool = False):
     builder.button(text="📈 Детальная статистика", callback_data="partner_stats")
     builder.button(text="🔄 Обновить", callback_data="menu_partner")
     builder.button(text="🎟️ Вывод заработка", callback_data="partner_withdraw")
-    builder.button(text="🍌 Обменять на бананы", callback_data="partner_exchange")
+    builder.button(text="🐾 Обменять на лапки", callback_data="partner_exchange")
     builder.button(text="🏠 Главное меню", callback_data="back_main")
     builder.adjust(1, 1, 1, 1, 1, 1)
     return builder.as_markup()
@@ -1018,7 +1018,7 @@ def get_settings_keyboard(current_model: str = "flash", current_video_model: str
 
 def get_settings_keyboard_with_ai(current_model: str = "flash", current_video_model: str = "v3_std", current_i2v_model: str = "v3_std", image_service: str = "nanobanana", referral_purchase_notifications_enabled: bool = True):
     builder = InlineKeyboardBuilder()
-    image_services = [("nanobanana", "🍌 Nano Banana"), ("flux_pro", "💎 GPT Image 2"), ("seedream", "🖌 Seedream"), ("z_image_turbo", "⚡ Z-Image")]
+    image_services = [("nanobanana", "✨ Nano Banana"), ("flux_pro", "💎 GPT Image 2"), ("seedream", "🖌 Seedream"), ("z_image_turbo", "⚡ Z-Image")]
     for service, label in image_services:
         check = "✅ " if image_service == service else ""
         builder.button(text=f"{check}{label}", callback_data=f"settings_service_{service}")
@@ -1118,7 +1118,7 @@ def get_category_keyboard(category: str, presets: list, user_credits: int):
     builder = InlineKeyboardBuilder()
     for preset in presets:
         affordable = "✅" if user_credits >= preset.cost else "❌"
-        builder.button(text=f"{preset.name} - {preset.cost}🍌 {affordable}", callback_data=f"preset_{preset.id}")
+        builder.button(text=f"{preset.name} - {preset.cost}🐾 {affordable}", callback_data=f"preset_{preset.id}")
     builder.button(text="🔙 Назад в меню", callback_data="back_main")
     builder.adjust(1)
     return builder.as_markup()
@@ -1175,3 +1175,8 @@ def get_advanced_options_keyboard():
     builder.button(text="🔙 Назад", callback_data="back_main")
     builder.adjust(1)
     return builder.as_markup()
+
+# HappyFox product UI: v7_kate-style dynamic video controls on one screen.
+from bot.happyfox_video_ui import happyfox_dynamic_video_keyboard  # noqa: E402
+
+get_create_video_keyboard = happyfox_dynamic_video_keyboard(get_create_video_keyboard)

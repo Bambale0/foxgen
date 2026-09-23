@@ -513,7 +513,7 @@ async def _handle_generate_image(
         job, balance = await enqueue_image(identity, body)
     except MaxInsufficientBalanceError:
         return _json_error(
-            "Недостаточно бананов для этой генерации",
+            "Недостаточно лапок для этой генерации",
             status=400,
         )
     return web.json_response(
@@ -543,7 +543,7 @@ async def _handle_generate_video(
         job, balance = await enqueue_video(identity, body)
     except MaxInsufficientBalanceError:
         return _json_error(
-            "Недостаточно бананов для этой генерации",
+            "Недостаточно лапок для этой генерации",
             status=400,
         )
     return web.json_response(

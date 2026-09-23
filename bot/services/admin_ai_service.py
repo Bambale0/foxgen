@@ -133,7 +133,7 @@ def _extract_promo_code(raw_text: str) -> str | None:
         "деактивируй",
         "скидка",
         "лимит",
-        "бананы",
+        "лапки",
     }
     for pattern in patterns:
         for match in re.finditer(pattern, raw_text, flags=re.IGNORECASE):
@@ -364,7 +364,7 @@ def validate_plan(plan: dict[str, Any], *, nested: bool = False) -> str | None:
         return "Нужен Telegram ID пользователя."
 
     if action in {"add_credits", "deduct_credits"} and not params.get("amount"):
-        return "Нужна сумма бананов."
+        return "Нужна сумма лапок."
 
     if action == "maintenance_set" and "enabled" not in params:
         return "Нужно указать: включить или выключить техрежим."
@@ -505,7 +505,7 @@ def fallback_plan_action(user_message: str) -> dict[str, Any]:
             params: dict[str, Any] = {"code": code}
             discount = _extract_named_number(raw, ("скидка", "discount"))
             limit = _extract_named_number(raw, ("лимит", "limit"))
-            bonus = _extract_named_number(raw, ("бананы", "бананов", "bonus"))
+            bonus = _extract_named_number(raw, ("лапки", "лапок", "bonus"))
             if discount:
                 params["discount_percent"] = discount
             if limit:
@@ -535,11 +535,11 @@ def fallback_plan_action(user_message: str) -> dict[str, Any]:
         if not telegram_id:
             return build_plan("unknown", summary="Нужен Telegram ID пользователя.")
         if not amount:
-            return build_plan("unknown", summary="Нужна сумма бананов.")
+            return build_plan("unknown", summary="Нужна сумма лапок.")
         return build_plan(
             "add_credits",
             {"telegram_id": telegram_id, "amount": amount},
-            summary="Начислить бананы пользователю. Требуется подтверждение.",
+            summary="Начислить лапки пользователю. Требуется подтверждение.",
             confidence=0.85,
         )
 
@@ -548,11 +548,11 @@ def fallback_plan_action(user_message: str) -> dict[str, Any]:
         if not telegram_id:
             return build_plan("unknown", summary="Нужен Telegram ID пользователя.")
         if not amount:
-            return build_plan("unknown", summary="Нужна сумма бананов.")
+            return build_plan("unknown", summary="Нужна сумма лапок.")
         return build_plan(
             "deduct_credits",
             {"telegram_id": telegram_id, "amount": amount},
-            summary="Списать бананы у пользователя. Требуется подтверждение.",
+            summary="Списать лапки у пользователя. Требуется подтверждение.",
             confidence=0.85,
         )
 
