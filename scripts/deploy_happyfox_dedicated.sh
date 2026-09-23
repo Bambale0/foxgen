@@ -11,6 +11,7 @@ MAX_APP_ORIGIN="${HAPPYFOX_MAX_APP_ORIGIN:-$APP_ORIGIN}"
 LANDING_ORIGIN="${HAPPYFOX_LANDING_ORIGIN:-https://happy-fox.online}"
 DATABASE_NAME="${HAPPYFOX_DATABASE_NAME:-happyfox_cutover}"
 TELEGRAM_RELAY_IP="${HAPPYFOX_TELEGRAM_RELAY_IP:-2.27.160.11}"
+TELEGRAM_EGRESS_PORT="${HAPPYFOX_TELEGRAM_EGRESS_PORT:-18443}"
 GITHUB_REPO="${HAPPYFOX_GITHUB_REPO:-Bambale0/foxgen}"
 RUNTIME_ENV="$PROJECT_DIR/.env.happyfox.runtime"
 
@@ -132,8 +133,14 @@ python3 scripts/validate_happyfox_env.py .env .env.happyfox.runtime .env.postgre
 install -m 0755 scripts/happyfox_docker_prune.sh /usr/local/sbin/happyfox-docker-prune
 install -m 0644 deploy/systemd/happyfox-docker-prune.service /etc/systemd/system/happyfox-docker-prune.service
 install -m 0644 deploy/systemd/happyfox-docker-prune.timer /etc/systemd/system/happyfox-docker-prune.timer
+install -m 0755 scripts/happyfox_telegram_egress_nat.sh /usr/local/sbin/happyfox-telegram-egress-nat
+install -m 0644 deploy/systemd/happyfox-telegram-egress.service /etc/systemd/system/happyfox-telegram-egress.service
+install -m 0644 deploy/systemd/happyfox-telegram-egress-guard.service /etc/systemd/system/happyfox-telegram-egress-guard.service
+install -m 0644 deploy/systemd/happyfox-telegram-egress-guard.timer /etc/systemd/system/happyfox-telegram-egress-guard.timer
 systemctl daemon-reload
 systemctl enable --now happyfox-docker-prune.timer
+systemctl enable happyfox-telegram-egress.service
+systemctl enable --now happyfox-telegram-egress-guard.timer
 
 for path in data static/uploads logs backups outputs; do
   install -d -m 0755 "$path"
@@ -149,6 +156,34 @@ for i in $(seq 1 60); do
   sleep 2
   [[ "$i" -lt 60 ]] || { echo "HappyFox data plane did not become ready" >&2; exit 1; }
 done
+
+# Telegram Bot API egress is carried by the SSH tunnel on the Docker gateway.
+# The tunnel port must stay accepted by the host firewall: the INPUT chain policy
+# is DROP, and without the explicit ACCEPT the SSH tunnel still looks healthy
+# while every Bot API call times out, which makes the bot silent. Subnet and
+# gateway come from the live Docker network so a network change never needs a
+# source edit.
+network_subnet="$(docker network inspect foxgen_backend --format '{{(index .IPAM.Config 0).Subnet}}' 2>/dev/null || true)"
+network_gateway="$(docker network inspect foxgen_backend --format '{{(index .IPAM.Config 0).Gateway}}' 2>/dev/null || true)"
+[[ -n "$network_subnet" && -n "$network_gateway" ]] || {
+  echo "HappyFox backend Docker network foxgen_backend is missing" >&2
+  exit 1
+}
+install -d -m 0755 /etc/default
+cat >/etc/default/happyfox-telegram-egress <<EOF
+HAPPYFOX_TELEGRAM_EGRESS_RELAY=$TELEGRAM_RELAY_IP
+HAPPYFOX_TELEGRAM_EGRESS_PORT=$TELEGRAM_EGRESS_PORT
+HAPPYFOX_TELEGRAM_EGRESS_GATEWAY=$network_gateway
+HAPPYFOX_TELEGRAM_EGRESS_CONTAINER_SUBNETS=$network_subnet
+EOF
+chmod 0644 /etc/default/happyfox-telegram-egress
+systemctl restart happyfox-telegram-egress.service
+for i in $(seq 1 30); do
+  systemctl is-active --quiet happyfox-telegram-egress.service && break
+  sleep 2
+  [[ "$i" -lt 30 ]] || { echo "HappyFox Telegram egress tunnel did not become active" >&2; exit 1; }
+done
+/usr/local/sbin/happyfox-telegram-egress-nat status
 
 if docker inspect foxgen-happyfox-bot >/dev/null 2>&1; then
   current_state="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' foxgen-happyfox-bot 2>/dev/null || true)"
@@ -299,6 +334,7 @@ kie_status="$(curl -sS -o /dev/null -w '%{http_code}' -X POST --max-time 20 \
 
 docker exec foxgen-happyfox-bot python /app/scripts/ensure_telegram_webhook.py
 docker exec foxgen-happyfox-bot python -m scripts.check_max_connectivity
+docker exec foxgen-happyfox-bot python -m scripts.check_telegram_egress
 docker logs foxgen-happyfox-bot 2>&1 | grep -F "$API_ORIGIN/max/webhook" >/dev/null
 
 docker exec -e SEND_BACKUP_TO_ADMINS=0 foxgen-happyfox-bot bash /app/scripts/backup_db.sh

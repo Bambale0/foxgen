@@ -1,0 +1,29 @@
+[Unit]
+Description=HappyFox Telegram API SSH egress tunnel via apix
+Documentation=https://github.com/Bambale0/foxgen
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+# All operational values are overridable in
+# /etc/default/happyfox-telegram-egress (written by the deploy gate), so the
+# relay endpoint, tunnel port and container subnet never require a unit edit.
+# The defaults are declared before the EnvironmentFile on purpose: systemd
+# applies assignments in order, so the operator/deploy file wins over defaults.
+Environment=HAPPYFOX_TELEGRAM_EGRESS_RELAY=2.27.160.11
+Environment=HAPPYFOX_TELEGRAM_EGRESS_PORT=18443
+Environment=HAPPYFOX_TELEGRAM_EGRESS_GATEWAY=172.18.0.1
+EnvironmentFile=-/etc/default/happyfox-telegram-egress
+# The tunnel needs the NAT redirects, the OUTPUT redirect for host-local calls
+# and the INPUT ACCEPT for the tunnel port. A missing INPUT accept silently
+# breaks Bot API egress while the SSH listener still looks healthy, so the
+# canonical script owns and re-applies the whole rule set on every start.
+ExecStartPre=/usr/local/sbin/happyfox-telegram-egress-nat up
+ExecStart=/usr/bin/ssh -N -T -i /root/.ssh/happyfox_telegram_egress -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o ExitOnForwardFailure=yes -o ServerAliveInterval=20 -o ServerAliveCountMax=3 -L 127.0.0.1:${HAPPYFOX_TELEGRAM_EGRESS_PORT}:api.telegram.org:443 -L ${HAPPYFOX_TELEGRAM_EGRESS_GATEWAY}:${HAPPYFOX_TELEGRAM_EGRESS_PORT}:api.telegram.org:443 root@${HAPPYFOX_TELEGRAM_EGRESS_RELAY}
+ExecStopPost=/usr/local/sbin/happyfox-telegram-egress-nat down
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

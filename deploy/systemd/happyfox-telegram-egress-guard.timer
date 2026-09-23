@@ -1,0 +1,12 @@
+[Unit]
+Description=HappyFox Telegram egress firewall guard timer
+Documentation=https://github.com/Bambale0/foxgen
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+AccuracySec=30s
+Unit=happyfox-telegram-egress-guard.service
+
+[Install]
+WantedBy=timers.target

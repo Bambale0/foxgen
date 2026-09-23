@@ -1,0 +1,20 @@
+[Unit]
+Description=HappyFox Telegram egress firewall guard
+Documentation=https://github.com/Bambale0/foxgen
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# Keeps the Telegram egress rule set applied. The canonical script is
+# idempotent: it re-inserts only missing rules and logs an error if the set
+# stays incomplete. This is the recovery path when a host firewall policy or
+# third-party hardening silently drops the tunnel port again, which shows up as
+# a silent bot (every Bot API reply times out).
+ExecStart=/usr/local/sbin/happyfox-telegram-egress-nat up
+ExecStartPost=/usr/local/sbin/happyfox-telegram-egress-nat status
+User=root
+Group=root
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7

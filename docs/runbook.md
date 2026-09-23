@@ -93,7 +93,12 @@ redis
 
 1. Confirm production deploy SHA and `foxgen-happyfox-bot` health on the dedicated host.
 2. Call `getWebhookInfo`: expected URL is `https://api.happy-fox.online/webhook`, `pending_update_count=0`, `last_error_message` empty.
-3. Confirm `happyfox-telegram-egress.service` is active and `api.telegram.org:443` is reachable from the runtime.
+3. Confirm `happyfox-telegram-egress.service` is active, `/usr/local/sbin/happyfox-telegram-egress-nat status` reports `outcome=ok`, and `api.telegram.org:443` is reachable from the runtime via `docker exec foxgen-happyfox-bot python -m scripts.check_telegram_egress`.
+   The tunnel listener alone proves nothing: the INPUT chain policy is `DROP`, so
+   `/usr/local/sbin/happyfox-telegram-egress-nat status` must report
+   `rules=complete` and `python -m scripts.check_telegram_egress` must succeed in
+   the bot container. A missing INPUT ACCEPT for the tunnel port produces silent
+   Bot API timeouts while the tunnel still looks healthy (troubleshooting 26).
 4. Confirm the relay TLS endpoint accepts `api.happy-fox.online` on the configured fixed Telegram ingress IP.
 5. Confirm Telegram native menu type is `commands` and the quick-command list is registered.
 6. Distinguish expected Mini App auth failure without valid `initData` from backend outage.
