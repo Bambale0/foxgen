@@ -56,7 +56,7 @@ def _balance_menu(balance: float) -> list[dict[str, Any]]:
     return [
         inline_keyboard(
             [
-                [callback_button(f"У тебя: {_format_cost(balance)} 🍌", "max:home")],
+                [callback_button(f"У тебя: {_format_cost(balance)} 🐾", "max:home")],
                 [
                     callback_button("💰 Пополнить", "max:topup"),
                     callback_button("📋 История", "max:history"),
@@ -68,7 +68,7 @@ def _balance_menu(balance: float) -> list[dict[str, Any]]:
 
 def _prompt_result_menu(kind: str, price: float = 0) -> list[dict[str, Any]]:
     if kind == "video":
-        label = f"🆕 Новый видео-промпт • {_format_cost(price)}🍌"
+        label = f"🆕 Новый видео-промпт • {_format_cost(price)}🐾"
         payload = "max:video_prompt"
     else:
         label = "🆕 Новый промпт"
@@ -184,8 +184,8 @@ class MaxTelegramParityChannelService(MaxProductChannelService):
         balance = await get_max_balance(user_id)
         await self._respond(
             user_id,
-            "🍌 <b>Баланс</b>\n\n"
-            f"У тебя: <b>{_format_cost(balance)} 🍌</b>",
+            "🐾 <b>Баланс</b>\n\n"
+            f"У тебя: <b>{_format_cost(balance)} 🐾</b>",
             attachments=_balance_menu(balance),
             callback_id=callback_id,
         )
@@ -269,7 +269,7 @@ class MaxTelegramParityChannelService(MaxProductChannelService):
         await self._respond(
             user_id,
             "🎞 <b>Промпт по видео</b>\n\n"
-            f"Стоимость анализа: <b>{_format_cost(price)}🍌</b>.\n"
+            f"Стоимость анализа: <b>{_format_cost(price)}🐾</b>.\n"
             "Пришлите видео — я разберу движение камеры, темп, композицию, свет и стиль.",
             attachments=back_home_menu(),
             callback_id=callback_id,
@@ -303,7 +303,7 @@ class MaxTelegramParityChannelService(MaxProductChannelService):
         except MaxInsufficientBalanceError:
             await self._respond(
                 user_id,
-                "🍌 Баланса не хватает для анализа фотографии.",
+                "🐾 Баланса не хватает для анализа фотографии.",
                 attachments=topup_menu(self.catalog),
             )
             return True
@@ -378,7 +378,7 @@ class MaxTelegramParityChannelService(MaxProductChannelService):
         except MaxInsufficientBalanceError:
             await self._respond(
                 user_id,
-                "🍌 Баланса не хватает для анализа видео.",
+                "🐾 Баланса не хватает для анализа видео.",
                 attachments=topup_menu(self.catalog),
             )
             return True

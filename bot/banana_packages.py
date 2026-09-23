@@ -7,4 +7,4 @@ BANANA_PACKAGES = [
     {"credits": 500, "amount_rub": 1500, "title": "Бизнес"},
     {"credits": 1000, "amount_rub": 2900, "title": "Максимум"},
 ]
-VALUE_HINT = "Чем больше 🍌 — тем дешевле генерация"
+VALUE_HINT = "Чем больше 🐾 — тем дешевле генерация"

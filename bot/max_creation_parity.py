@@ -486,7 +486,7 @@ class MaxCreationParityChannelService(MaxTelegramParityChannelService):
             f"Формат: <b>{html.escape(str(prepared['options']['aspect_ratio']))}</b>\n"
             f"Качество: <b>{html.escape(str(prepared['options']['quality']))}</b>\n"
             f"Количество: <b>{count}</b>\n"
-            f"Стоимость: <b>{_format_cost(unit_cost * count)} 🍌</b>\n\n"
+            f"Стоимость: <b>{_format_cost(unit_cost * count)} 🐾</b>\n\n"
             f"Промпт: {html.escape(prompt[:900])}",
             attachments=generation_confirm_menu(),
         )
@@ -676,7 +676,7 @@ class MaxCreationParityChannelService(MaxTelegramParityChannelService):
             f"Модель: <b>{html.escape(VIDEO_LABELS.get(model, model))}</b>\n"
             f"Длительность: <b>{duration}с</b>\n"
             f"Формат: <b>{html.escape(str(options.get('aspect_ratio') or '16:9'))}</b>\n"
-            f"Стоимость: <b>{_format_cost(cost)} 🍌</b>\n\n"
+            f"Стоимость: <b>{_format_cost(cost)} 🐾</b>\n\n"
             f"Промпт: {html.escape(prompt[:900])}",
             attachments=generation_confirm_menu(),
         )
@@ -733,7 +733,7 @@ class MaxCreationParityChannelService(MaxTelegramParityChannelService):
         if balance + 1e-9 < total_cost:
             await self._respond(
                 user_id,
-                "🍌 Баланса не хватает. Подготовленный prompt сохранён.",
+                "🐾 Баланса не хватает. Подготовленный prompt сохранён.",
                 attachments=topup_menu(self.catalog),
                 callback_id=callback_id,
             )
@@ -775,8 +775,8 @@ class MaxCreationParityChannelService(MaxTelegramParityChannelService):
             user_id,
             "🚀 <b>Генерация запущена</b>\n\n"
             f"Задач: <b>{len(jobs)}</b>\n"
-            f"Списано: <b>{_format_cost(sum(job.cost for job in jobs))} 🍌</b>\n"
-            f"Осталось: <b>{_format_cost(balance)} 🍌</b>\n\n"
+            f"Списано: <b>{_format_cost(sum(job.cost for job in jobs))} 🐾</b>\n"
+            f"Осталось: <b>{_format_cost(balance)} 🐾</b>\n\n"
             "Результаты придут сюда автоматически.",
             attachments=back_home_menu(),
             callback_id=callback_id,

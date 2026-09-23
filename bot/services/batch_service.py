@@ -82,7 +82,7 @@ class BatchEditingService:
     """Сервис пакетного редактирования изображений"""
 
     MAX_CONCURRENT = 3
-    COST_PER_IMAGE = 2  # 2 банана за изображение
+    COST_PER_IMAGE = 2  # 2 лапки за изображение
 
     def __init__(self):
         self._semaphore = asyncio.Semaphore(self.MAX_CONCURRENT)
@@ -141,7 +141,7 @@ class BatchEditingService:
         if not images or not prompt:
             return None
 
-        # Рассчитываем стоимость (Pro модель = 3 банана)
+        # Рассчитываем стоимость (Pro модель = 3 лапки)
         total_cost = len(images) * 3
 
         # Генерируем ID задачи

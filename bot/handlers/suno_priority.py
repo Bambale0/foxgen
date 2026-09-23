@@ -29,11 +29,11 @@ async def _queued(message: types.Message, state: FSMContext, operation: str, req
             request_data=request,
         )
     except ValueError:
-        await message.answer("🍌 Баланса не хватает для этой Suno-задачи.")
+        await message.answer("🐾 Баланса не хватает для этой Suno-задачи.")
         return
     await state.clear()
     await message.answer(
-        f"🚀 Suno-задача запущена · списано {job.cost:g}🍌. Результат придёт автоматически."
+        f"🚀 Suno-задача запущена · списано {job.cost:g}🐾. Результат придёт автоматически."
     )
 
 

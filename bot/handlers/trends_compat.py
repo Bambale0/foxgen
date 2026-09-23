@@ -115,7 +115,7 @@ async def _render_trends(
     if not trends:
         text = (
             "🔥 <b>Тренды</b>\n\n"
-            "Здесь скоро появятся готовые шаблоны от команды NEUROMIX. "
+            "Здесь скоро появятся готовые шаблоны HappyFox. "
             "Пользователи не могут публиковать сюда свои материалы."
         )
         if config.is_admin(admin_telegram_id):

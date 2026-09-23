@@ -1417,7 +1417,7 @@ async def _send_polled_nexus_image_result(
         f"{_provider_task_id_line(task, task_lookup_id)}"
     )
     if getattr(task, "cost", None):
-        full_caption += f"\n• Стоимость: <code>{_html_fragment(task.cost)}🍌</code>"
+        full_caption += f"\n• Стоимость: <code>{_html_fragment(task.cost)}🐾</code>"
     if getattr(task, "aspect_ratio", None):
         full_caption += (
             f"\n• Формат: <code>{_html_fragment(str(task.aspect_ratio).replace(':', '∶'))}</code>"
@@ -1570,7 +1570,7 @@ async def _fail_polled_nexus_image_task(
                 reason=reason,
                 media_kind="результата",
                 refund_text=(
-                    "\n\nБананы за эту попытку уже возвращены."
+                    "\n\nЛапки за эту попытку уже возвращены."
                     if getattr(task, "cost", None)
                     else "\n\nПопробуйте повторить попытку немного позже."
                 ),
@@ -2855,7 +2855,7 @@ async def handle_kling_webhook(request: web.Request) -> web.Response:
                             if task.aspect_ratio:
                                 caption += f"\\n📐 <code>{_html_fragment(task.aspect_ratio)}</code>"
                             if task.cost:
-                                caption += f"\\n💰 <code>{_html_fragment(task.cost)}🍌</code>"
+                                caption += f"\\n💰 <code>{_html_fragment(task.cost)}🐾</code>"
                             if getattr(task, 'source_feed_gen_id', None):
                                 caption += f"\\n\\n🎯 Промпт скрыт"
                             elif task.preset_id == "no_preset" and task.prompt:
@@ -2991,7 +2991,7 @@ async def handle_kling_webhook(request: web.Request) -> web.Response:
                                     caption += f"\n• Формат: <code>{_html_fragment(str(task.aspect_ratio).replace(':', '∶'))}</code>"
                                 if task.cost:
                                     caption += (
-                                        f"\n• Стоимость: <code>{_html_fragment(task.cost)}🍌</code>"
+                                        f"\n• Стоимость: <code>{_html_fragment(task.cost)}🐾</code>"
                                     )
                                 if getattr(task, 'source_feed_gen_id', None):
                                     caption += f"\n\n🎯 <b>Промпт скрыт</b>"
@@ -3129,7 +3129,7 @@ async def handle_kling_webhook(request: web.Request) -> web.Response:
                                     else fail_msg[:100]
                                 )
                                 await add_credits(telegram_id, task.cost or 0)
-                                refund_text = "\n\nБананы за эту попытку уже возвращены."
+                                refund_text = "\n\nЛапки за эту попытку уже возвращены."
                                 await bot_instance.send_message(
                                     chat_id=telegram_id,
                                     text=_build_failure_notification_text(
@@ -3237,7 +3237,7 @@ async def handle_kling_webhook(request: web.Request) -> web.Response:
             if task.aspect_ratio:
                 caption += f"\\n📐 <code>{_html_fragment(task.aspect_ratio)}</code>"
             if task.cost:
-                caption += f"\\n💰 <code>{_html_fragment(task.cost)}🍌</code>"
+                caption += f"\\n💰 <code>{_html_fragment(task.cost)}🐾</code>"
             if getattr(task, 'source_feed_gen_id', None):
                 caption += f"\\n\\n🎯 Промпт скрыт"
             elif task.preset_id == "no_preset" and task.prompt:
@@ -3399,7 +3399,7 @@ async def handle_kling_webhook(request: web.Request) -> web.Response:
                             "msg", str(status) if status else "Unknown error"
                         )
                         await add_credits(telegram_id, task.cost)
-                        refund_text = "\n\nКредиты возвращены."
+                        refund_text = "\n\nЛапки возвращены."
                         await bot_instance.send_message(
                             chat_id=telegram_id,
                             text=_build_failure_notification_text(
@@ -3464,7 +3464,7 @@ async def handle_kling_webhook(request: web.Request) -> web.Response:
                                 text=(
                                     "❌ <b>Ваш промпт был помечен как чувствительный контент</b>"
                                     "Пожалуйста, попробуйте другой промпт без чувствительного контента."
-                                    "🍌 Кредиты возвращены на счёт."
+                                    "🐾 Лапки возвращены на счёт."
                                 ),
                                 parse_mode="HTML",
                             )
@@ -3613,7 +3613,7 @@ async def handle_seedream_webhook(request: web.Request) -> web.Response:
             if task.aspect_ratio:
                 caption += f"\\n📐 <code>{task.aspect_ratio}</code>"
             if task.cost:
-                caption += f"\\n💰 <code>{task.cost}🍌</code>"
+                caption += f"\\n💰 <code>{task.cost}🐾</code>"
             if getattr(task, 'source_feed_gen_id', None):
                 caption += f"\\n\\n🎯 Промпт скрыт"
             elif task.preset_id == "no_preset" and task.prompt:
@@ -4307,7 +4307,7 @@ async def handle_kie_ai_webhook(request: web.Request) -> web.Response:
                 f"{_provider_task_id_line(task, task_id)}"
             )
             if task.cost:
-                full_caption += f"\n• Стоимость: <code>{_html_fragment(task.cost)}🍌</code>"
+                full_caption += f"\n• Стоимость: <code>{_html_fragment(task.cost)}🐾</code>"
             if task.duration:
                 full_caption += f"\n• Длительность: <code>{_html_fragment(task.duration)}с</code>"
             if task.aspect_ratio:
@@ -4607,7 +4607,7 @@ async def handle_kie_ai_webhook(request: web.Request) -> web.Response:
                 bot_instance = request.app["bot"]
                 try:
                     refund_text = (
-                        "\n\nБананы за эту попытку уже возвращены."
+                        "\n\nЛапки за эту попытку уже возвращены."
                         if task and task.cost and task.cost > 0
                         else "\n\nПопробуйте упростить промпт или повторить попытку немного позже."
                     )

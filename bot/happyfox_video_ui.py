@@ -176,7 +176,7 @@ def _paw_text(text: str) -> str:
     for old, new in replacements:
         value = value.replace(old, new)
     # Nano Banana is a real model name, not the HappyFox currency.
-    return value.replace("🐾 Nano Banana", "✨ Nano Banana")
+    return value.replace("✨ Nano Banana", "✨ Nano Banana")
 
 
 def _copy_button_with_paws(button: InlineKeyboardButton) -> InlineKeyboardButton:

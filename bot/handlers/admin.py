@@ -193,8 +193,8 @@ ADMIN_FINANCE_COLUMNS = {
         ("created_at", "Дата"),
         ("telegram_id", "Telegram ID"),
         ("user_db_id", "User DB ID"),
-        ("credits", "Бананы"),
-        ("promo_bonus_credits", "Промо бонус, 🍌"),
+        ("credits", "Лапки"),
+        ("promo_bonus_credits", "Промо бонус, 🐾"),
         ("promo_code", "Промокод"),
         ("promo_partner_name", "Промо партнёр"),
         ("promo_partner_telegram_id", "Промо партнёр Telegram ID"),
@@ -214,7 +214,7 @@ ADMIN_FINANCE_COLUMNS = {
         ("created_at", "Дата"),
         ("telegram_id", "Telegram ID"),
         ("user_db_id", "User DB ID"),
-        ("cost", "Списано, 🍌"),
+        ("cost", "Списано, 🐾"),
         ("status", "Статус"),
         ("task_id", "Task/Job ID"),
         ("type", "Тип"),
@@ -249,10 +249,10 @@ ADMIN_FINANCE_COLUMNS = {
         ("referred_has_paid", "Оплачивал"),
         ("payments_count", "Оплат"),
         ("paid_rub", "Оплачено, ₽"),
-        ("paid_credits", "Куплено 🍌"),
+        ("paid_credits", "Куплено 🐾"),
         ("last_payment_at", "Последняя оплата"),
         ("subrefs_count", "Рефералов 2 линии"),
-        ("bonus_credits", "Бонус пригласившему, 🍌"),
+        ("bonus_credits", "Бонус пригласившему, 🐾"),
     ],
     "referrals_l2": [
         ("root_partner_telegram_id", "Корневой партнёр Telegram ID"),
@@ -272,9 +272,9 @@ ADMIN_FINANCE_COLUMNS = {
         ("referral_created_at", "Дата привязки"),
         ("payments_count", "Оплат"),
         ("paid_rub", "Оплачено, ₽"),
-        ("paid_credits", "Куплено 🍌"),
+        ("paid_credits", "Куплено 🐾"),
         ("last_payment_at", "Последняя оплата"),
-        ("bonus_credits", "Бонус, 🍌"),
+        ("bonus_credits", "Бонус, 🐾"),
     ],
     "partner_commissions": [
         ("transaction_id", "Transaction ID"),
@@ -284,7 +284,7 @@ ADMIN_FINANCE_COLUMNS = {
         ("payer_telegram_id", "Плательщик Telegram ID"),
         ("payer_user_id", "Плательщик DB ID"),
         ("payer_code", "Код плательщика"),
-        ("credits", "Куплено 🍌"),
+        ("credits", "Куплено 🐾"),
         ("amount_rub", "Сумма оплаты, ₽"),
         ("level1_partner_telegram_id", "Партнёр L1 Telegram ID"),
         ("level1_partner_user_id", "Партнёр L1 DB ID"),
@@ -321,7 +321,7 @@ ADMIN_PARTNER_REFERRAL_XLS_COLUMNS = [
     ("has_paid", "Платил"),
     ("payments_count", "Оплат после привязки"),
     ("spent_rub", "Сумма оплат после привязки, ₽"),
-    ("credits", "Текущий баланс, 🍌"),
+    ("credits", "Текущий баланс, 🐾"),
     ("subrefs_count", "Рефералов 2 уровня"),
 ]
 ADMIN_PARTNER_PAYMENT_XLS_COLUMNS = [
@@ -332,7 +332,7 @@ ADMIN_PARTNER_PAYMENT_XLS_COLUMNS = [
     ("referred_code", "Код реферала"),
     ("referral_created_at", "Дата привязки"),
     ("amount_rub", "Сумма, ₽"),
-    ("credits", "Куплено 🍌"),
+    ("credits", "Куплено 🐾"),
     ("provider", "Провайдер"),
     ("order_id", "Order ID"),
     ("payment_id", "Payment ID"),
@@ -412,7 +412,7 @@ def _admin_price_menu_keyboard() -> types.InlineKeyboardMarkup:
 def _promo_rules_lines(bonus_by_credits: dict | None = None) -> list[str]:
     items = bonus_by_credits or {25: 5, 50: 10, 100: 15, 200: 20, 500: 50}
     return [
-        f"• <code>{credits}</code>🍌 → +<code>{bonus}</code>🍌"
+        f"• <code>{credits}</code>🐾 → +<code>{bonus}</code>🐾"
         for credits, bonus in sorted(
             ((int(credits), int(bonus)) for credits, bonus in items.items()),
             key=lambda item: item[0],
@@ -445,7 +445,7 @@ def _admin_promocodes_keyboard(promocodes: list[dict]) -> types.InlineKeyboardMa
         rows.append(
             [
                 types.InlineKeyboardButton(
-                    text=f"{status} {code} • {usage} оплат • +{bonus}🍌",
+                    text=f"{status} {code} • {usage} оплат • +{bonus}🐾",
                     callback_data=f"admin_promo_view_{promo['id']}",
                 )
             ]
@@ -488,7 +488,7 @@ def _admin_finance_keyboard() -> types.InlineKeyboardMarkup:
                     text="📥 Пополнения", callback_data="admin_finance_topups"
                 ),
                 types.InlineKeyboardButton(
-                    text="🍌 Списания", callback_data="admin_finance_deductions"
+                    text="🐾 Списания", callback_data="admin_finance_deductions"
                 ),
             ],
             [
@@ -846,7 +846,7 @@ def _admin_packages_keyboard() -> types.InlineKeyboardMarkup:
     for pkg in preset_manager.get_packages():
         buttons.append(
             types.InlineKeyboardButton(
-                text=f"{pkg['name']} • {pkg['price_rub']}₽ / {pkg['credits']}🍌",
+                text=f"{pkg['name']} • {pkg['price_rub']}₽ / {pkg['credits']}🐾",
                 callback_data=f"admin_price_package_{pkg['id']}",
             )
         )
@@ -865,7 +865,7 @@ def _admin_package_fields_keyboard(package_id: str) -> types.InlineKeyboardMarku
                     callback_data=f"admin_price_package_field_{package_id}_price_rub",
                 ),
                 types.InlineKeyboardButton(
-                    text="🍌 Кол-во бананов",
+                    text="🐾 Кол-во лапок",
                     callback_data=f"admin_price_package_field_{package_id}_credits",
                 ),
             ],
@@ -896,7 +896,7 @@ def _admin_image_prices_keyboard() -> types.InlineKeyboardMarkup:
     for key, value in image_models.items():
         buttons.append(
             types.InlineKeyboardButton(
-                text=f"{labels.get(key, key)} • {value}🍌",
+                text=f"{labels.get(key, key)} • {value}🐾",
                 callback_data=f"admin_price_image_{key}",
             )
         )
@@ -925,7 +925,7 @@ VIDEO_MODEL_LABELS = {
 
 
 def _model_per_sec(model_cfg: dict) -> str:
-    """Возвращает строку 'X🍌/с' для модели."""
+    """Возвращает строку 'X🐾/с' для модели."""
     def _format_per_sec(value: float) -> str:
         return f"{value:.2f}".rstrip("0").rstrip(".")
 
@@ -963,7 +963,7 @@ def _admin_video_prices_keyboard() -> types.InlineKeyboardMarkup:
         label = VIDEO_MODEL_LABELS.get(model_key, model_key)
         buttons.append(
             types.InlineKeyboardButton(
-                text=f"{label} • {per_sec}🍌/с",
+                text=f"{label} • {per_sec}🐾/с",
                 callback_data=f"admin_video_model_{model_key}",
             )
         )
@@ -994,7 +994,7 @@ def _admin_video_model_keyboard(model_key: str) -> types.InlineKeyboardMarkup:
             cost = quality_costs[quality]
             buttons.append(
                 types.InlineKeyboardButton(
-                    text=f"{quality} → {cost}🍌/с",
+                    text=f"{quality} → {cost}🐾/с",
                     callback_data=f"admin_price_video_{model_key}_q{quality}",
                 )
             )
@@ -1002,7 +1002,7 @@ def _admin_video_model_keyboard(model_key: str) -> types.InlineKeyboardMarkup:
         for dur_str, cost in sorted(duration_costs.items(), key=lambda x: int(x[0])):
             buttons.append(
                 types.InlineKeyboardButton(
-                    text=f"{dur_str}с → {cost}🍌",
+                    text=f"{dur_str}с → {cost}🐾",
                     callback_data=f"admin_price_video_{model_key}_{dur_str}",
                 )
             )
@@ -1016,7 +1016,7 @@ def _admin_video_model_keyboard(model_key: str) -> types.InlineKeyboardMarkup:
         base = model_cfg.get("base", model_cfg.get("cost"))
         buttons.append(
             types.InlineKeyboardButton(
-                text=f"Базовая цена → {base}🍌",
+                text=f"Базовая цена → {base}🐾",
                 callback_data=f"admin_price_video_{model_key}_base",
             )
         )
@@ -1230,7 +1230,7 @@ def _format_admin_partner_details_text(details: dict) -> str:
         "",
         f"🆔 Telegram ID: <code>{details['telegram_id']}</code>",
         f"🔗 Рефкод: <code>{details.get('referral_code') or '—'}</code>",
-        f"🍌 Баланс пользователя: <code>{details['credits']}</code>",
+        f"🐾 Баланс пользователя: <code>{details['credits']}</code>",
         f"🤝 Активировал партнёрку: <code>{'да' if details['is_partner'] else 'нет'}</code>",
         f"📅 Активирована: <code>{details.get('partner_agreed_at') or '—'}</code>",
         "",
@@ -1257,7 +1257,7 @@ def _format_admin_partner_details_text(details: dict) -> str:
                 f"• <code>{ref['telegram_id']}</code> "
                 f"({paid_label}, {ref['payments_count']} оплат) "
                 f"• потратил <code>{ref['spent_rub']:.2f}</code> ₽ "
-                f"• 🍌 <code>{ref['credits']}</code> "
+                f"• 🐾 <code>{ref['credits']}</code> "
                 f"• привёл <code>{ref['subrefs_count']}</code>"
             )
 
@@ -1342,7 +1342,7 @@ def _format_admin_ai_help_text() -> str:
 • <code>проанализируй последние логи</code>
 • <code>найди новые ИИ для генерации видео и фото</code>
 • <code>проверь пользователя 123456789</code>
-• <code>начисли 50 бананов пользователю 123456789</code>
+• <code>начисли 50 лапок пользователю 123456789</code>
 • <code>создай промокод VIP20 скидка 20 лимит 100</code>
 • <code>очисти контекст</code>"""
 
@@ -1361,8 +1361,8 @@ def _admin_ai_action_title(action: str) -> str:
     return {
         "stats": "статистика",
         "user_info": "карточка пользователя",
-        "add_credits": "начислить бананы",
-        "deduct_credits": "списать бананы",
+        "add_credits": "начислить лапки",
+        "deduct_credits": "списать лапки",
         "ban_user": "забанить пользователя",
         "unban_user": "разбанить пользователя",
         "maintenance_status": "статус техрежима",
@@ -1439,12 +1439,12 @@ def _format_admin_ai_user_stats(telegram_id: int, stats: dict) -> str:
             "Пользователь",
             f"Telegram ID: {telegram_id}",
             f"Статус: {status}",
-            f"Баланс: {stats['credits']} бананов",
+            f"Баланс: {stats['credits']} лапок",
             f"Генераций: {stats['generations']}",
             f"Потрачено: {stats['total_spent']}",
             f"Регистрация: {stats['member_since']}",
             f"Рефералов: {stats['referrals_count']}",
-            f"Заработано по рефке: {stats['referral_earned']} 🍌",
+            f"Заработано по рефке: {stats['referral_earned']} 🐾",
             f"Рефкод: {stats['referral_code'] or '—'}",
         ]
     )
@@ -1456,7 +1456,7 @@ def _format_admin_ai_promos(stats: dict) -> str:
         f"Всего: {stats.get('total_codes', 0)}",
         f"Активных: {stats.get('active_codes', 0)}",
         f"Использований: {stats.get('usage_count', 0)}",
-        f"Начислено бонусов: {stats.get('total_bonus_credits', 0)} 🍌",
+        f"Начислено бонусов: {stats.get('total_bonus_credits', 0)} 🐾",
     ]
     promocodes = stats.get("promocodes") or []
     if promocodes:
@@ -1600,9 +1600,9 @@ async def execute_admin_ai_action(
         success = await add_credits(telegram_id, amount)
         stats = await get_existing_user_stats(telegram_id)
         if not success or not stats:
-            return "Не удалось начислить бананы."
+            return "Не удалось начислить лапки."
         return (
-            f"Начислено {amount:g} бананов пользователю {telegram_id}.\n"
+            f"Начислено {amount:g} лапок пользователю {telegram_id}.\n"
             f"Текущий баланс: {stats['credits']}."
         )
 
@@ -1614,9 +1614,9 @@ async def execute_admin_ai_action(
         success = await deduct_credits(telegram_id, amount)
         stats = await get_existing_user_stats(telegram_id)
         if not success or not stats:
-            return "Не удалось списать бананы. Возможно, недостаточно баланса."
+            return "Не удалось списать лапки. Возможно, недостаточно баланса."
         return (
-            f"Списано {amount:g} бананов у пользователя {telegram_id}.\n"
+            f"Списано {amount:g} лапок у пользователя {telegram_id}.\n"
             f"Текущий баланс: {stats['credits']}."
         )
 
@@ -1742,13 +1742,13 @@ def _format_admin_promocodes_text(stats: dict) -> str:
         f"• Всего кодов: {_code(stats.get('total_codes', 0))}",
         f"• Активных: {_code(stats.get('active_codes', 0))}",
         f"• Использований: {_code(stats.get('usage_count', 0))}",
-        f"• Начислено бонусов: {_code(stats.get('total_bonus_credits', 0))}🍌",
+        f"• Начислено бонусов: {_code(stats.get('total_bonus_credits', 0))}🐾",
         f"• Оборот по промокодам: {_code(total_amount)} ₽",
         "",
         "<b>Бонусная сетка:</b>",
         *_promo_rules_lines(stats.get("bonus_by_credits")),
         "",
-        "Код можно использовать много раз. Бонус считается автоматически по количеству бананов в пакете.",
+        "Код можно использовать много раз. Бонус считается автоматически по количеству лапок в пакете.",
     ]
     return "\n".join(lines)
 
@@ -1770,7 +1770,7 @@ def _format_admin_promo_details_text(details: dict) -> str:
         f"Партнёр: {_code(partner_name)}",
         f"Telegram ID партнёра: {_code(partner_tg or '—')}",
         f"Использований: {_code(promo.get('usage_count', 0))}",
-        f"Начислено бонусов: {_code(promo.get('total_bonus_credits', 0))}🍌",
+        f"Начислено бонусов: {_code(promo.get('total_bonus_credits', 0))}🐾",
         f"Оборот: {_code(total_amount)} ₽",
         f"Создан: {_code(_short(promo.get('created_at'), 19))}",
         "",
@@ -1789,7 +1789,7 @@ def _format_admin_promo_details_text(details: dict) -> str:
             lines.append(
                 f"• ID {_code(row.get('telegram_id'))} "
                 f"• {_code(row_amount)} ₽ "
-                f"• +{_code(row.get('bonus_credits'))}🍌 "
+                f"• +{_code(row.get('bonus_credits'))}🐾 "
                 f"• {_code(_short(row.get('created_at'), 19))}"
             )
 
@@ -1976,7 +1976,7 @@ def _format_admin_finance_overview(report: dict) -> str:
     if int(summary.get("completed_promo_count", 0) or 0) > 0:
         promo_line = (
             f"• Промокоды: {_code(summary.get('completed_promo_count', 0))} оплат "
-            f"на +{_code(summary.get('completed_promo_bonus_credits', 0))}🍌"
+            f"на +{_code(summary.get('completed_promo_bonus_credits', 0))}🐾"
         )
     lines = [
         "📒 <b>Финансы и рефералы</b>",
@@ -1987,11 +1987,11 @@ def _format_admin_finance_overview(report: dict) -> str:
         f"на {_code(_money(summary.get('completed_revenue_rub')))} ₽",
         f"• Ожидают: {_code(summary.get('pending_topups_count', 0))} "
         f"• ошибок/отмен: {_code(summary.get('failed_topups_count', 0))}",
-        f"• Куплено бананов: {_code(summary.get('completed_credits', 0))}",
+        f"• Куплено лапок: {_code(summary.get('completed_credits', 0))}",
         "",
         "<b>Списания:</b>",
         f"• Операций: {_code(summary.get('deductions_count', 0))}",
-        f"• Списано: {_code(_money(summary.get('deductions_cost')))} 🍌",
+        f"• Списано: {_code(_money(summary.get('deductions_cost')))} 🐾",
         "",
         "<b>Реферальные линии:</b>",
         f"• 1 линия: {_code(summary.get('referrals_l1_count', 0))} "
@@ -2016,13 +2016,13 @@ def _format_admin_finance_preview_row(section: str, row: dict) -> str:
         if row.get("promo_code"):
             promo = (
                 f" • 🎟 {_code(row.get('promo_code'))}"
-                f" +{_code(row.get('promo_bonus_credits') or 0)}🍌"
+                f" +{_code(row.get('promo_bonus_credits') or 0)}🐾"
             )
         return (
             f"• #{_html(row.get('id'))} "
             f"ID {_code(row.get('telegram_id'))} "
             f"• {_code(_money(row.get('amount_rub')))} ₽ "
-            f"• {_code(row.get('credits'))}🍌 "
+            f"• {_code(row.get('credits'))}🐾 "
             f"• {_code(row.get('status'))} "
             f"• {_code(_short(row.get('created_at'), 19))}"
             f"{promo}"
@@ -2032,7 +2032,7 @@ def _format_admin_finance_preview_row(section: str, row: dict) -> str:
         return (
             f"• {_html(row.get('source'))} #{_html(row.get('id'))} "
             f"ID {_code(row.get('telegram_id'))} "
-            f"• {_code(_money(row.get('cost')))}🍌 "
+            f"• {_code(_money(row.get('cost')))}🐾 "
             f"• {_code(row.get('status'))} "
             f"• {_code(_short(model, 28))} "
             f"• {_code(_short(row.get('created_at'), 19))}"
@@ -2206,7 +2206,7 @@ def _build_admin_partner_xls(report: dict) -> tuple[bytes, str]:
         ("2 уровень", overview.get("level2_count", 0)),
         ("Оплат по 1 уровню", payments_summary.get("payments_count", 0)),
         ("Выручка по оплатам 1 уровня, ₽", payments_summary.get("paid_rub", 0)),
-        ("Куплено бананов 1 уровнем", payments_summary.get("paid_credits", 0)),
+        ("Куплено лапок 1 уровнем", payments_summary.get("paid_credits", 0)),
         ("Баланс к выводу, ₽", overview.get("balance_rub", 0)),
         ("Выведено, ₽", overview.get("withdrawn_rub", 0)),
         ("Оборот партнёра, ₽", overview.get("total_revenue_rub", 0)),
@@ -2565,7 +2565,7 @@ async def admin_prices_packages(callback: types.CallbackQuery):
 
     await callback.message.edit_text(
         "📦 <b>Пакеты пополнения</b>\n\n"
-        "Выберите пакет, чтобы поменять цену в рублях или количество бананов.",
+        "Выберите пакет, чтобы поменять цену в рублях или количество лапок.",
         reply_markup=_admin_packages_keyboard(),
         parse_mode="HTML",
     )
@@ -2580,7 +2580,7 @@ async def admin_prices_images(callback: types.CallbackQuery):
 
     await callback.message.edit_text(
         "🖼 <b>Цены на фото</b>\n\n"
-        "Выберите модель и отправьте новую стоимость в бананах.",
+        "Выберите модель и отправьте новую стоимость в лапких.",
         reply_markup=_admin_image_prices_keyboard(),
         parse_mode="HTML",
     )
@@ -2603,7 +2603,7 @@ async def admin_prices_videos(callback: types.CallbackQuery):
 
 @router.callback_query(F.data == "admin_prices_partner_exchange")
 async def admin_prices_partner_exchange(callback: types.CallbackQuery, state: FSMContext):
-    """Экран настройки курса обмена партнёрского баланса в бананы."""
+    """Экран настройки курса обмена партнёрского баланса в лапки."""
     if not is_admin(callback.from_user.id):
         await callback.answer("⛔ Нет доступа")
         return
@@ -2620,9 +2620,9 @@ async def admin_prices_partner_exchange(callback: types.CallbackQuery, state: FS
     )
     await callback.message.edit_text(
         "🤝 <b>Обмен партнёрского баланса</b>\n\n"
-        f"Текущий курс: <code>{current_value:g}</code> ₽ → <code>1</code> 🍌\n\n"
-        "Отправьте новую цену одного банана в рублях.\n"
-        "Например: <code>10</code> — это 10 ₽ за 1 🍌.",
+        f"Текущий курс: <code>{current_value:g}</code> ₽ → <code>1</code> 🐾\n\n"
+        "Отправьте новую цену одного лапки в рублях.\n"
+        "Например: <code>10</code> — это 10 ₽ за 1 🐾.",
         reply_markup=get_back_keyboard("admin_prices"),
         parse_mode="HTML",
     )
@@ -2647,7 +2647,7 @@ async def admin_prices_video_prompt(callback: types.CallbackQuery, state: FSMCon
     )
     await callback.message.edit_text(
         "🎞 <b>Видео-промпт</b>\n\n"
-        f"Текущая стоимость: <code>{current_value:g}</code> 🍌\n\n"
+        f"Текущая стоимость: <code>{current_value:g}</code> 🐾\n\n"
         "Отправьте новую стоимость одним сообщением.",
         reply_markup=get_back_keyboard("admin_prices"),
         parse_mode="HTML",
@@ -2680,7 +2680,7 @@ async def admin_video_model(callback: types.CallbackQuery):
 
     if quality_costs:
         lines = "\n".join(
-            f"• {quality} → <code>{cost}</code>🍌/с"
+            f"• {quality} → <code>{cost}</code>🐾/с"
             for quality, cost in sorted(
                 quality_costs.items(),
                 key=lambda item: (
@@ -2692,15 +2692,15 @@ async def admin_video_model(callback: types.CallbackQuery):
         detail = f"Цены по качеству за 1 секунду:\n{lines}"
     elif duration_costs:
         lines = "\n".join(
-            f"• {dur}с → <code>{cost}</code>🍌"
+            f"• {dur}с → <code>{cost}</code>🐾"
             for dur, cost in sorted(duration_costs.items(), key=lambda x: int(x[0]))
         )
         detail = (
-            f"Текущие длительности:\n{lines}\n\nЦена за 1с: <code>{per_sec}</code>🍌"
+            f"Текущие длительности:\n{lines}\n\nЦена за 1с: <code>{per_sec}</code>🐾"
         )
     else:
         base = model_cfg.get("base", model_cfg.get("cost"))
-        detail = f"Базовая стоимость: <code>{base}</code>🍌"
+        detail = f"Базовая стоимость: <code>{base}</code>🐾"
 
     await callback.message.edit_text(
         f"🎬 <b>{label}</b>\n\n{detail}\n\n" "Выберите параметр для изменения:",
@@ -2727,7 +2727,7 @@ async def admin_price_package(callback: types.CallbackQuery):
         "📦 <b>Редактирование пакета</b>\n\n"
         f"Пакет: <code>{package['name']}</code>\n"
         f"Цена: <code>{package['price_rub']}</code> ₽\n"
-        f"Бананы: <code>{package['credits']}</code> 🍌\n\n"
+        f"Лапки: <code>{package['credits']}</code> 🐾\n\n"
         "Что хотите изменить?",
         reply_markup=_admin_package_fields_keyboard(package_id),
         parse_mode="HTML",
@@ -2757,7 +2757,7 @@ async def admin_price_package_field(callback: types.CallbackQuery, state: FSMCon
         await callback.answer("Некорректное поле", show_alert=True)
         return
 
-    field_label = "цену в ₽" if field == "price_rub" else "количество бананов"
+    field_label = "цену в ₽" if field == "price_rub" else "количество лапок"
     current_value = package[field]
     await state.set_state(AdminStates.waiting_price_value)
     await state.update_data(
@@ -2807,7 +2807,7 @@ async def admin_price_image(callback: types.CallbackQuery, state: FSMContext):
     await callback.message.edit_text(
         f"🖼 <b>Изменение цены фото-модели</b>\n\n"
         f"Модель: <code>{model_key}</code>\n"
-        f"Текущая стоимость: <code>{current_value}</code> 🍌\n\n"
+        f"Текущая стоимость: <code>{current_value}</code> 🐾\n\n"
         "Отправьте новую стоимость одним сообщением.",
         reply_markup=get_back_keyboard("admin_prices_images"),
         parse_mode="HTML",
@@ -2873,7 +2873,7 @@ async def admin_price_video(callback: types.CallbackQuery, state: FSMContext):
 
     await callback.message.edit_text(
         f"🎬 <b>{model_label}</b> — {param_label}\n\n"
-        f"Текущее значение: <code>{current_value}</code>🍌\n\n"
+        f"Текущее значение: <code>{current_value}</code>🐾\n\n"
         f"{hint_text}",
         reply_markup=get_back_keyboard(return_to),
         parse_mode="HTML",
@@ -2912,8 +2912,8 @@ async def admin_process_price_value(message: types.Message, state: FSMContext):
     if field == "persec":
         success_text = (
             "✅ <b>Цена за секунду обновлена</b>\n\n"
-            f"Было: <code>{old_value}</code>🍌/с\n"
-            f"Стало: <code>{new_value}</code>🍌/с\n\n"
+            f"Было: <code>{old_value}</code>🐾/с\n"
+            f"Стало: <code>{new_value}</code>🐾/с\n\n"
             "Все длительности пересчитаны автоматически."
         )
     else:
@@ -2961,7 +2961,7 @@ async def admin_promo_create_prompt(callback: types.CallbackQuery, state: FSMCon
         "<code>CODE | Имя партнёра | Telegram ID</code>\n\n"
         "Telegram ID можно не указывать:\n"
         "<code>MARIA | Мария</code>\n\n"
-        "Код будет многоразовым, а бонусы начислятся по количеству бананов в пакете автоматически.",
+        "Код будет многоразовым, а бонусы начислятся по количеству лапок в пакете автоматически.",
         reply_markup=get_back_keyboard("admin_promocodes"),
         parse_mode="HTML",
     )
@@ -3802,12 +3802,12 @@ async def admin_process_user_id(message: types.Message, state: FSMContext):
 👤 <b>Пользователь</b>
 
 🆔 ID: <code>{user_id}</code>
-💰 Кредитов: <code>{stats['credits']}</code>
+💰 Лапок: <code>{stats['credits']}</code>
 📊 Генераций: <code>{stats['generations']}</code>
 💸 Потрачено: <code>{stats['total_spent']}</code>
 📅 Регистрация: <code>{stats['member_since']}</code>
 🤝 Рефералов: <code>{stats['referrals_count']}</code>
-🎁 Заработано по рефке: <code>{stats['referral_earned']}</code> 🍌
+🎁 Заработано по рефке: <code>{stats['referral_earned']}</code> 🐾
 🔗 Рефкод: <code>{stats['referral_code'] or '—'}</code>
 
 Выберите действие:
@@ -3819,13 +3819,13 @@ async def admin_process_user_id(message: types.Message, state: FSMContext):
             inline_keyboard=[
                 [
                     types.InlineKeyboardButton(
-                        text="➕ Добавить кредиты",
+                        text="➕ Добавить лапки",
                         callback_data=f"admin_add_credits_{user_id}",
                     )
                 ],
                 [
                     types.InlineKeyboardButton(
-                        text="➖ Списать кредиты",
+                        text="➖ Списать лапки",
                         callback_data=f"admin_deduct_credits_{user_id}",
                     )
                 ],
@@ -3850,7 +3850,7 @@ async def admin_process_user_id(message: types.Message, state: FSMContext):
 
 @router.callback_query(F.data.startswith("admin_add_credits_"))
 async def admin_add_credits_prompt(callback: types.CallbackQuery, state: FSMContext):
-    """Запрашивает количество кредитов для добавления"""
+    """Запрашивает количество лапок для добавления"""
     if not is_admin(callback.from_user.id):
         await callback.answer("⛔ Нет доступа")
         return
@@ -3859,9 +3859,9 @@ async def admin_add_credits_prompt(callback: types.CallbackQuery, state: FSMCont
     await state.update_data(target_user_id=user_id, action="add")
 
     await callback.message.edit_text(
-        f"➕ <b>Добавление кредитов</b>\n\n"
+        f"➕ <b>Добавление лапок</b>\n\n"
         f"Пользователь ID: <code>{user_id}</code>\n"
-        f"Введите количество кредитов для добавления:",
+        f"Введите количество лапок для добавления:",
         reply_markup=get_back_keyboard("admin_back"),
         parse_mode="HTML",
     )
@@ -3871,7 +3871,7 @@ async def admin_add_credits_prompt(callback: types.CallbackQuery, state: FSMCont
 
 @router.callback_query(F.data.startswith("admin_deduct_credits_"))
 async def admin_deduct_credits_prompt(callback: types.CallbackQuery, state: FSMContext):
-    """Запрашивает количество кредитов для списания"""
+    """Запрашивает количество лапок для списания"""
     if not is_admin(callback.from_user.id):
         await callback.answer("⛔ Нет доступа")
         return
@@ -3880,9 +3880,9 @@ async def admin_deduct_credits_prompt(callback: types.CallbackQuery, state: FSMC
     await state.update_data(target_user_id=user_id, action="deduct")
 
     await callback.message.edit_text(
-        f"➖ <b>Списание кредитов</b>\n\n"
+        f"➖ <b>Списание лапок</b>\n\n"
         f"Пользователь ID: <code>{user_id}</code>\n"
-        f"Введите количество кредитов для списания:",
+        f"Введите количество лапок для списания:",
         reply_markup=get_back_keyboard("admin_back"),
         parse_mode="HTML",
     )
@@ -3892,7 +3892,7 @@ async def admin_deduct_credits_prompt(callback: types.CallbackQuery, state: FSMC
 
 @router.message(AdminStates.waiting_credits_amount)
 async def admin_process_credits_amount(message: types.Message, state: FSMContext):
-    """Обрабатывает ввод количества кредитов"""
+    """Обрабатывает ввод количества лапок"""
     try:
         amount = int(message.text)
         if amount <= 0:
@@ -3907,13 +3907,13 @@ async def admin_process_credits_amount(message: types.Message, state: FSMContext
 
     if action == "add":
         success = await add_credits(user_id, amount)
-        action_text = f"добавлено <code>{amount}</code> кредитов"
+        action_text = f"добавлено <code>{amount}</code> лапок"
     else:
         # Для списания нужно реализовать deduct_credits_by_admin
         from bot.database import deduct_credits
 
         success = await deduct_credits(user_id, amount)
-        action_text = f"списано <code>{amount}</code> кредитов"
+        action_text = f"списано <code>{amount}</code> лапок"
 
     if success:
         stats = await get_user_stats(user_id)
@@ -3921,13 +3921,13 @@ async def admin_process_credits_amount(message: types.Message, state: FSMContext
             f"✅ <b>Успешно!</b>\n\n"
             f"Пользователь ID: <code>{user_id}</code>\n"
             f"Действие: {action_text}\n"
-            f"Текущий баланс: <code>{stats['credits']}</code> кредитов",
+            f"Текущий баланс: <code>{stats['credits']}</code> лапок",
             reply_markup=get_admin_keyboard(),
             parse_mode="HTML",
         )
     else:
         await message.answer(
-            f"❌ Ошибка! Возможно, недостаточно кредитов для списания.",
+            f"❌ Ошибка! Возможно, недостаточно лапок для списания.",
             reply_markup=get_admin_keyboard(),
         )
 

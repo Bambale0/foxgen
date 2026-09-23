@@ -6,10 +6,10 @@ from bot.max_api import callback_button, inline_keyboard, open_app_button
 from bot.max_catalog import MaxPresetManager, max_preset_manager
 
 IMAGE_LABELS = {
-    "nano-banana-2-lite": "🍌 Nano Banana 2 Lite 🔥 НОВИНКА",
+    "nano-banana-2-lite": "✨ Nano Banana 2 Lite 🔥 НОВИНКА",
     "seedream_5_pro": "🌟 Seedream 5 Pro 🔥 НОВИНКА",
     "banana_pro": "💎 Nano Banana Pro",
-    "banana_2": "🍌 Nano Banana 2",
+    "banana_2": "✨ Nano Banana 2",
     "flux_pro": "🧩 GPT Image 2",
     "seedream_edit": "🖌 Seedream 4.5",
     "grok_imagine_i2i": "🧠 Grok Imagine",
@@ -87,7 +87,7 @@ def main_menu(
             ],
             [
                 callback_button(
-                    f"🎞 Промпт по видео • {_format_amount(video_prompt_price)}🍌",
+                    f"🎞 Промпт по видео • {_format_amount(video_prompt_price)}🐾",
                     "max:video_prompt",
                 ),
                 callback_button("🤖 AI-помощник", "max:assistant"),
@@ -98,7 +98,7 @@ def main_menu(
             ],
             [
                 callback_button(
-                    f"🍌 Баланс: {_format_amount(balance)}",
+                    f"🐾 Баланс: {_format_amount(balance)}",
                     "max:balance",
                 ),
                 callback_button("💬 Поддержка", "max:support"),
@@ -136,7 +136,7 @@ def image_model_menu(
         label = IMAGE_LABELS.get(model, model)
         buttons.append(
             callback_button(
-                f"{label} • {_format_amount(cost)}🍌",
+                f"{label} • {_format_amount(cost)}🐾",
                 f"max:image:{model}",
             )
         )
@@ -172,9 +172,9 @@ def video_model_selection_menu(
                 quality=pricing_quality,
             )
             per_second = cost / max(duration, 1)
-            price_label = f"{_format_amount(per_second)}🍌/с"
+            price_label = f"{_format_amount(per_second)}🐾/с"
         except (KeyError, TypeError, ValueError, RuntimeError):
-            price_label = "🍌"
+            price_label = "🐾"
         rows.append(
             [
                 callback_button(
@@ -220,9 +220,9 @@ def _video_price_label(
     )
     try:
         cost = catalog.video_cost(model, duration=duration, quality=quality)
-        return f"от {_format_amount(cost)}🍌"
+        return f"от {_format_amount(cost)}🐾"
     except (KeyError, TypeError, ValueError, RuntimeError):
-        return "🍌"
+        return "🐾"
 
 
 def video_model_menu(
@@ -254,7 +254,7 @@ def topup_menu(
         rows.append(
             [
                 callback_button(
-                    f"{package['name']}: {package['credits']}🍌 за "
+                    f"{package['name']}: {package['credits']}🐾 за "
                     f"{package['price_rub']}₽{popular}",
                     f"max:package:{package['id']}",
                 )

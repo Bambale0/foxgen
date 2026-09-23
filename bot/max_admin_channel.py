@@ -60,7 +60,7 @@ class MaxAdminChannelService(MaxCreationParityChannelService):
             user_id,
             "🦊 <b>HappyFox</b>\n\n"
             "Создавайте фото, видео и промпты — все основные сценарии доступны кнопками ниже.\n\n"
-            f"🍌 <b>Баланс:</b> {_format_cost(balance)}\n"
+            f"🐾 <b>Баланс:</b> {_format_cost(balance)}\n"
             "🔧 <b>Роль:</b> администратор",
             attachments=_admin_main_menu(
                 balance,

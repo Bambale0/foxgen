@@ -48,12 +48,12 @@ def _user_card_text(telegram_id: int, stats: dict) -> str:
             f"🆔 Telegram ID: <code>{telegram_id}</code>",
             f"🔗 Ссылка: {_user_profile_link(telegram_id, stats)}",
             f"🚦 Статус: <b>{_user_status_text(is_banned)}</b>",
-            f"💰 Кредитов: <code>{html.escape(str(stats.get('credits', 0)))}</code>",
+            f"💰 Лапок: <code>{html.escape(str(stats.get('credits', 0)))}</code>",
             f"📊 Генераций: <code>{html.escape(str(stats.get('generations', 0)))}</code>",
             f"💸 Потрачено: <code>{html.escape(str(stats.get('total_spent', 0)))}</code>",
             f"📅 Регистрация: <code>{html.escape(str(stats.get('member_since') or '—'))}</code>",
             f"🤝 Рефералов: <code>{html.escape(str(stats.get('referrals_count', 0)))}</code>",
-            f"🎁 Заработано по рефке: <code>{html.escape(str(stats.get('referral_earned', 0)))}</code> 🍌",
+            f"🎁 Заработано по рефке: <code>{html.escape(str(stats.get('referral_earned', 0)))}</code> 🐾",
             f"🔗 Рефкод: <code>{html.escape(str(stats.get('referral_code') or '—'))}</code>",
             "",
             "Выберите действие:",
@@ -77,13 +77,13 @@ def _user_card_keyboard(telegram_id: int, *, is_banned: bool) -> types.InlineKey
         inline_keyboard=[
             [
                 types.InlineKeyboardButton(
-                    text="➕ Добавить кредиты",
+                    text="➕ Добавить лапки",
                     callback_data=f"admin_add_credits_{telegram_id}",
                 )
             ],
             [
                 types.InlineKeyboardButton(
-                    text="➖ Списать кредиты",
+                    text="➖ Списать лапки",
                     callback_data=f"admin_deduct_credits_{telegram_id}",
                 )
             ],

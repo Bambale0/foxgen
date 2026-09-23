@@ -65,7 +65,7 @@ class PaymentStates(StatesGroup):
     waiting_lava_email = State()  # Реальная почта покупателя для Lava
     waiting_partner_withdraw_requisites = State()  # Реквизиты для вывода партнёру
     waiting_partner_withdraw_amount = State()  # Сумма вывода партнёру
-    waiting_partner_exchange_amount = State()  # Сумма обмена партнёрского баланса в бананы
+    waiting_partner_exchange_amount = State()  # Сумма обмена партнёрского баланса в лапки
 
 
 class AdminStates(StatesGroup):
@@ -75,7 +75,7 @@ class AdminStates(StatesGroup):
     confirming_broadcast = State()  # Подтверждение рассылки
     waiting_user_id = State()  # Ввод ID пользователя
     waiting_partner_user_id = State()  # Ввод ID партнёра для статистики
-    waiting_credits_amount = State()  # Ввод количества кредитов
+    waiting_credits_amount = State()  # Ввод количества лапок
     waiting_price_value = State()  # Ввод нового значения цены
     waiting_prompt_id = State()  # Ввод промпта для модерации
     waiting_prompt_reject_reason = State()  # Причина отклонения промпта

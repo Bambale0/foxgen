@@ -112,7 +112,7 @@ async def _run_seedance25_trend(
             return web.json_response(
                 {
                     "ok": False,
-                    "error": f"Seedance 2.5 не запустила тренд: {error}. Бананы возвращены.",
+                    "error": f"Seedance 2.5 не запустила тренд: {error}. Лапки возвращены.",
                 },
                 status=502,
             )

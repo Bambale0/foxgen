@@ -13,6 +13,7 @@ from aiohttp import web
 
 from bot import db as db_backend
 from bot.config import config
+from bot.product import product
 from bot.business_rules import promo_bonus_map
 from bot.database import (
     complete_payment_atomic,
@@ -56,6 +57,13 @@ router = Router()
 
 def _package_lava_offer_config(package: dict) -> tuple[str, str]:
     package_id = str(package.get("id") or "")
+    if product.product_id == "happyfox":
+        # Product credentials must come from the HappyFox environment only.
+        return (
+            config.lava_offer_id_for_package(package_id),
+            config.lava_currency_for_package(package_id),
+        )
+
     currency = str(package.get("lava_currency") or "").strip().upper()
     offer_id = str(package.get("lava_offer_id") or "").strip()
     if offer_id:
@@ -64,7 +72,7 @@ def _package_lava_offer_config(package: dict) -> tuple[str, str]:
         config.lava_offer_id_for_package(package_id),
         currency or config.lava_currency_for_package(package_id),
     )
-
+    
 
 def _is_ignored_telegram_error(error: Exception) -> bool:
     error_msg = str(error).lower()
@@ -91,7 +99,7 @@ def _build_bonus_text(referral_bonus: dict[str, Any]) -> str:
     if referral_bonus.get("mode") == "partner":
         return f"\n🎁 Партнёрский бонус: <code>{referral_bonus['value']}</code> ₽"
     if referral_bonus.get("mode") == "banana":
-        return f"\n🎁 Реферальный бонус: <code>{referral_bonus['value']}</code> бананов"
+        return f"\n🎁 Реферальный бонус: <code>{product.format_credits(referral_bonus['value'])}</code>"
     return ""
 
 
@@ -169,7 +177,7 @@ async def _notify_referrers_about_purchase(
             text = (
                 f"{target['title']}\n\n"
                 f"Реферал: <b>{buyer_name}</b>{buyer_username_line}\n"
-                f"Покупка: <code>{credits}</code>🍌 на <code>{amount_rub}</code> ₽\n"
+                f"Покупка: <code>{product.format_credits(credits)}</code> на <code>{amount_rub}</code> ₽\n"
                 f"{target['bonus_label']}: "
                 f"<code>{_format_money(target['bonus_value'])}</code> ₽"
             )
@@ -197,7 +205,7 @@ async def _notify_referrers_about_purchase(
 
 def _build_promo_rules_text() -> str:
     return "\n".join(
-        f"• {credits}🍌 → +<code>{bonus}</code>🍌"
+        f"• {product.format_credits(credits)} → +<code>{product.format_credits(bonus)}</code>"
         for credits, bonus in promo_bonus_map().items()
     )
 
@@ -208,7 +216,7 @@ def _build_promo_bonus_text(promo_bonus: dict[str, Any] | None) -> str:
     code = normalize_promo_code(promo_bonus.get("code"))
     code_part = f" <code>{code}</code>" if code else ""
     return (
-        f"\n🎟 Промокод{code_part}: +<code>{promo_bonus['bonus_credits']}</code> бананов"
+        f"\n🎟 Промокод{code_part}: +<code>{product.format_credits(promo_bonus['bonus_credits'])}</code>"
     )
 
 
@@ -527,7 +535,7 @@ async def reconcile_lava_pending_transactions(
                             bot,
                             telegram_id,
                             "✅ <b>Оплата Lava успешно обработана</b>\n"
-                            f"• Начислено: <code>{transaction.credits}</code> бананов\n"
+                            f"• Начислено: <code>{transaction.credits}</code> лапок\n"
                             f"• Сумма: <code>{transaction.amount_rub}</code> ₽{bonus_text}",
                             parse_mode="HTML",
                         )
@@ -601,15 +609,15 @@ async def _render_topup_menu(message: types.Message, state: FSMContext | None = 
     if promo:
         promo_text = (
             f"\n\n🎟 Активный промокод: <code>{promo.code}</code>\n"
-            "Бонус будет начислен автоматически по количеству бананов в пакете."
+            "Бонус будет начислен автоматически по количеству лапок в пакете."
         )
     text = (
-        "🍌 <b>Пополнение баланса</b>\n\n"
+        "🐾 <b>Пополнение баланса</b>\n\n"
         "Оплата выполняется через выбранного платёжного провайдера.\n"
-        "Выберите пакет бананов ниже.\n\n"
-        "<b>Бонусы по промокоду:</b>\n"
+        "Выберите пакет лапок. Итоговую сумму увидите до перехода к оплате.\n\n"
+        "<b>Бонусы по промокоду</b>\n"
         f"{_build_promo_rules_text()}\n\n"
-        "<i>Чем больше пакет, тем выгоднее цена за банан.</i>"
+        "<i>Большие пакеты дают более выгодную стоимость одной лапки.</i>"
         f"{promo_text}"
     )
 
@@ -675,7 +683,7 @@ async def topup_process_promo(message: types.Message, state: FSMContext):
     await message.answer(
         "✅ <b>Промокод применён</b>\n\n"
         f"Код: <code>{promo.code}</code>\n"
-        "Теперь выберите пакет. Бонус добавится автоматически по количеству бананов.\n\n"
+        "Теперь выберите пакет. Бонус добавится автоматически по количеству лапок.\n\n"
         f"{_build_promo_rules_text()}",
         reply_markup=get_payment_packages_keyboard(packages, promo_active=True),
         parse_mode="HTML",
@@ -728,17 +736,17 @@ async def choose_payment_method(callback: types.CallbackQuery, state: FSMContext
     stars_amount = package_stars_amount(package)
     bonus_lines = []
     if package_bonus > 0:
-        bonus_lines.append(f"Бонус пакета: <code>{package_bonus}</code>🍌")
+        bonus_lines.append(f"Бонус пакета: <code>{package_bonus}</code>🐾")
     if promo_bonus > 0 and promo:
         bonus_lines.append(
-            f"Промокод <code>{promo.code}</code>: +<code>{promo_bonus}</code>🍌"
+            f"Промокод <code>{promo.code}</code>: +<code>{promo_bonus}</code>🐾"
         )
     bonus_text = "\n".join(bonus_lines)
     bonus_text = f"\n{bonus_text}" if bonus_text else ""
     await callback.message.edit_text(
         f"💳 <b>Выберите способ оплаты</b>\n\n"
         f"Пакет: <b>{package['name']}</b>\n"
-        f"Бананы: <code>{total_credits}</code>🍌\n"
+        f"Лапки: <code>{total_credits}</code>🐾\n"
         f"Сумма: <code>{package['price_rub']}</code>₽ / <code>{stars_amount}</code>⭐"
         f"{bonus_text}",
         reply_markup=get_payment_method_keyboard(
@@ -829,7 +837,7 @@ async def initiate_payment(callback: types.CallbackQuery, state: FSMContext):
     package_bonus = package_bonus_credits(package)
     promo_bonus = _promo_bonus_for_package(promo, package)
     total_credits = total_package_credits(package, promo_bonus)
-    description = f"Покупка {total_credits} бананов ({package['name']})"
+    description = f"Покупка {total_credits} лапок ({package['name']})"
     user = await get_or_create_user(callback.from_user.id)
 
     if provider == TELEGRAM_STARS_PROVIDER:
@@ -858,13 +866,13 @@ async def initiate_payment(callback: types.CallbackQuery, state: FSMContext):
 
         try:
             await callback.message.answer_invoice(
-                title=f"{package['name']} · {total_credits}🍌",
+                title=f"{package['name']} · {total_credits}🐾",
                 description=description,
                 payload=invoice_payload,
                 currency=TELEGRAM_STARS_CURRENCY,
                 prices=[
                     types.LabeledPrice(
-                        label=f"{total_credits} бананов",
+                        label=f"{total_credits} лапок",
                         amount=stars_amount,
                     )
                 ],
@@ -883,10 +891,10 @@ async def initiate_payment(callback: types.CallbackQuery, state: FSMContext):
 
         bonus_text = ""
         if package_bonus > 0:
-            bonus_text += f"\n• Бонус пакета: <code>{package_bonus}</code> бананов"
+            bonus_text += f"\n• Бонус пакета: <code>{package_bonus}</code> лапок"
         if promo and promo_bonus > 0:
             bonus_text += (
-                f"\n• Промокод <code>{promo.code}</code>: +<code>{promo_bonus}</code> бананов"
+                f"\n• Промокод <code>{promo.code}</code>: +<code>{promo_bonus}</code> лапок"
             )
         elif promo:
             bonus_text += "\n• Промокод применён, но для этой суммы бонуса нет"
@@ -894,9 +902,9 @@ async def initiate_payment(callback: types.CallbackQuery, state: FSMContext):
         await callback.message.edit_text(
             "⭐ <b>Оплата Telegram Stars</b>\n"
             f"• Пакет: <code>{package['name']}</code>\n"
-            f"• Бананов: <code>{total_credits}</code>{bonus_text}\n"
+            f"• Лапок: <code>{total_credits}</code>{bonus_text}\n"
             f"• К оплате: <code>{stars_amount}</code>⭐\n\n"
-            "Счёт отправлен отдельным сообщением. После оплаты бананы начислятся автоматически.",
+            "Счёт отправлен отдельным сообщением. После оплаты лапки начислятся автоматически.",
             reply_markup=get_back_keyboard("menu_topup"),
             parse_mode="HTML",
         )
@@ -1025,10 +1033,10 @@ async def initiate_payment(callback: types.CallbackQuery, state: FSMContext):
 
     bonus_text = ""
     if package_bonus > 0:
-        bonus_text += f"\n• Бонус пакета: <code>{package_bonus}</code> бананов"
+        bonus_text += f"\n• Бонус пакета: <code>{package_bonus}</code> лапок"
     if promo and promo_bonus > 0:
         bonus_text += (
-            f"\n• Промокод <code>{promo.code}</code>: +<code>{promo_bonus}</code> бананов"
+            f"\n• Промокод <code>{promo.code}</code>: +<code>{promo_bonus}</code> лапок"
         )
     elif promo:
         bonus_text += "\n• Промокод применён, но для этой суммы бонуса нет"
@@ -1042,7 +1050,7 @@ async def initiate_payment(callback: types.CallbackQuery, state: FSMContext):
     await callback.message.edit_text(
         f"💳 <b>Оплата через {provider_label}</b>\n"
         f"• Пакет: <code>{package['name']}</code>\n"
-        f"• Бананов: <code>{total_credits}</code>{bonus_text}\n"
+        f"• Лапок: <code>{total_credits}</code>{bonus_text}\n"
         f"• Сумма: <code>{package['price_rub']}</code> ₽\n\n"
         "Нажмите кнопку ниже и завершите оплату.",
         reply_markup=get_payment_confirmation_keyboard(payment_url, order_id),
@@ -1064,7 +1072,7 @@ async def check_payment_status(callback: types.CallbackQuery):
         promo_text = _transaction_promo_text(transaction)
         await callback.message.edit_text(
             "✅ <b>Оплата подтверждена</b>\n"
-            f"• Начислено: <code>{transaction.credits}</code> бананов\n"
+            f"• Начислено: <code>{transaction.credits}</code> лапок\n"
             f"• Сумма: <code>{transaction.amount_rub}</code> ₽{promo_text}",
             reply_markup=get_main_menu_keyboard(),
             parse_mode="HTML",
@@ -1097,7 +1105,7 @@ async def check_payment_status(callback: types.CallbackQuery):
     transaction = result["transaction"]
     await callback.message.edit_text(
         "✅ <b>Оплата подтверждена</b>\n"
-        f"• Начислено: <code>{transaction.credits}</code> бананов\n"
+        f"• Начислено: <code>{transaction.credits}</code> лапок\n"
         f"• Сумма: <code>{transaction.amount_rub}</code> ₽{bonus_text}",
         reply_markup=get_main_menu_keyboard(),
         parse_mode="HTML",
@@ -1195,7 +1203,7 @@ async def process_successful_stars_payment(message: types.Message):
             result.get("reason"),
         )
         await message.answer(
-            "Оплата Stars прошла, но бананы не начислились автоматически. "
+            "Оплата Stars прошла, но лапки не начислились автоматически. "
             "Напишите в поддержку, мы проверим транзакцию.",
             reply_markup=get_main_menu_keyboard(),
         )
@@ -1216,14 +1224,14 @@ async def process_successful_stars_payment(message: types.Message):
     try:
         await create_miniapp_notification(
             transaction.user_id,
-            f"✅ Оплата Stars обработана — {transaction.credits} бананов за {stars_amount}⭐",
+            f"✅ Оплата Stars обработана — {transaction.credits} лапок за {stars_amount}⭐",
         )
     except Exception:
         logger.exception("Failed to create miniapp Stars notification order=%s", order_id)
 
     await message.answer(
         "✅ <b>Оплата Stars подтверждена</b>\n"
-        f"• Начислено: <code>{transaction.credits}</code> бананов\n"
+        f"• Начислено: <code>{transaction.credits}</code> лапок\n"
         f"• Списано: <code>{stars_amount}</code>⭐{bonus_text}",
         reply_markup=get_main_menu_keyboard(),
         parse_mode="HTML",
@@ -1312,7 +1320,7 @@ async def handle_cryptobot_webhook(request: web.Request):
                 request.app["bot"],
                 telegram_id,
                 "✅ <b>Оплата успешно обработана</b>\n"
-                f"• Начислено: <code>{transaction.credits}</code> бананов\n"
+                f"• Начислено: <code>{transaction.credits}</code> лапок\n"
                 f"• Сумма: <code>{transaction.amount_rub}</code> ₽{bonus_text}",
                 parse_mode="HTML",
             )
@@ -1327,11 +1335,11 @@ async def handle_cryptobot_webhook(request: web.Request):
         # Создаём уведомление для мини‑аппа (чтобы UI показал результат при следующем bootstrap)
         try:
             note = (
-                f"✅ Оплата успешно обработана — {transaction.credits} бананов "
+                f"✅ Оплата успешно обработана — {transaction.credits} лапок "
                 f"за {transaction.amount_rub} ₽"
             )
             if promo_bonus:
-                note += f" (промокод +{promo_bonus['bonus_credits']}🍌)"
+                note += f" (промокод +{promo_bonus['bonus_credits']}🐾)"
             await create_miniapp_notification(transaction.user_id, note)
         except Exception:
             logger.exception(
@@ -1491,7 +1499,7 @@ async def handle_lava_webhook(request: web.Request):
                 request.app["bot"],
                 telegram_id,
                 "✅ <b>Оплата успешно обработана</b>\n"
-                f"• Начислено: <code>{transaction.credits}</code> бананов\n"
+                f"• Начислено: <code>{transaction.credits}</code> лапок\n"
                 f"• Сумма: <code>{transaction.amount_rub}</code> ₽{bonus_text}",
                 parse_mode="HTML",
             )
