@@ -46,6 +46,7 @@ jobs:
       API_ORIGIN: ${{ vars.HAPPYFOX_API_ORIGIN || 'https://api.happy-fox.online' }}
       APP_ORIGIN: ${{ vars.HAPPYFOX_APP_ORIGIN || 'https://app.happy-fox.online' }}
       MAX_APP_ORIGIN: ${{ vars.HAPPYFOX_MAX_APP_ORIGIN || 'https://app.happy-fox.online' }}
+      TELEGRAM_WEBHOOK_IP: ${{ vars.HAPPYFOX_TELEGRAM_WEBHOOK_IP || '2.27.160.11' }}
       EXPECTED_HOST_FINGERPRINT: SHA256:NjLkwjwPwDroguKC0FMTFEjaSJD+vFEfL3EsjEN0pI4
       EXPECTED_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || inputs.commit_sha || github.sha }}
 
@@ -72,6 +73,7 @@ jobs:
           : "${API_ORIGIN:?Missing HappyFox API origin}"
           : "${APP_ORIGIN:?Missing HappyFox app origin}"
           : "${MAX_APP_ORIGIN:?Missing MAX app origin}"
+          : "${TELEGRAM_WEBHOOK_IP:?Missing Telegram webhook IP}"
           [[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]] || {
             echo "EXPECTED_SHA must be a full 40-character SHA" >&2
             exit 1
@@ -151,6 +153,7 @@ jobs:
           printf -v quoted_max_origin '%q' "$MAX_APP_ORIGIN"
           printf -v quoted_api_origin '%q' "$API_ORIGIN"
           printf -v quoted_app_origin '%q' "$APP_ORIGIN"
+          printf -v quoted_telegram_webhook_ip '%q' "$TELEGRAM_WEBHOOK_IP"
           ssh \
             -i "$HOME/.ssh/id_ed25519" \
             -p "$DEPLOY_PORT" \
@@ -161,19 +164,21 @@ jobs:
             -o ServerAliveInterval=20 \
             -o ServerAliveCountMax=6 \
             "$DEPLOY_USER@$DEPLOY_HOST" \
-            "bash -s -- $quoted_path $quoted_sha $quoted_max_origin $quoted_api_origin $quoted_app_origin" <<'REMOTE'
+            "bash -s -- $quoted_path $quoted_sha $quoted_max_origin $quoted_api_origin $quoted_app_origin $quoted_telegram_webhook_ip" <<'REMOTE'
           set -Eeuo pipefail
           project_dir="$1"
           expected_sha="$2"
           max_app_origin="$3"
           api_origin="$4"
           app_origin="$5"
+          telegram_webhook_ip="$6"
           cd "$project_dir"
           chmod +x scripts/deploy_happyfox_dedicated.sh
           env \
             HAPPYFOX_API_ORIGIN="$api_origin" \
             HAPPYFOX_APP_ORIGIN="$app_origin" \
             HAPPYFOX_MAX_APP_ORIGIN="$max_app_origin" \
+            HAPPYFOX_TELEGRAM_RELAY_IP="$telegram_webhook_ip" \
             HAPPYFOX_LANDING_ORIGIN=https://happy-fox.online \
             HAPPYFOX_DATABASE_NAME=happyfox_cutover \
             bash scripts/deploy_happyfox_dedicated.sh "$expected_sha"
