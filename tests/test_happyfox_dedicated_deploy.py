@@ -16,6 +16,9 @@ def test_dedicated_deploy_pins_three_public_origins_and_runtime_db() -> None:
     assert "TELEGRAM_WEBHOOK_URL" in deploy
     assert "TELEGRAM_WEBHOOK_IP_ADDRESS" in deploy
     assert "HAPPYFOX_TELEGRAM_RELAY_IP:-2.27.160.11" in deploy
+    workflow = Path(".github/workflows/deploy-production.yml").read_text(encoding="utf-8")
+    assert "HAPPYFOX_TELEGRAM_WEBHOOK_IP" in workflow
+    assert 'HAPPYFOX_TELEGRAM_RELAY_IP="$telegram_webhook_ip"' in workflow
     assert 'values["TELEGRAM_WEBHOOK_URL"] = f"{api}/webhook"' in deploy
     assert 'telegram_webhook_url = values.get("TELEGRAM_WEBHOOK_URL", "").strip()' not in deploy
     assert 'values["TELEGRAM_WEBHOOK_IP_ADDRESS"] = telegram_relay_ip' in deploy
