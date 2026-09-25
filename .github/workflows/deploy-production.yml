@@ -43,6 +43,8 @@ jobs:
       DEPLOY_USER: ${{ vars.HAPPYFOX_DEPLOY_USER || 'root' }}
       DEPLOY_PORT: ${{ vars.HAPPYFOX_DEPLOY_PORT || '22' }}
       DEPLOY_PATH: ${{ vars.HAPPYFOX_DEPLOY_PATH || '/opt/happyfox/repo' }}
+      API_ORIGIN: ${{ vars.HAPPYFOX_API_ORIGIN || 'https://api.happy-fox.online' }}
+      APP_ORIGIN: ${{ vars.HAPPYFOX_APP_ORIGIN || 'https://app.happy-fox.online' }}
       MAX_APP_ORIGIN: ${{ vars.HAPPYFOX_MAX_APP_ORIGIN || 'https://app.happy-fox.online' }}
       EXPECTED_HOST_FINGERPRINT: SHA256:NjLkwjwPwDroguKC0FMTFEjaSJD+vFEfL3EsjEN0pI4
       EXPECTED_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || inputs.commit_sha || github.sha }}
@@ -67,15 +69,20 @@ jobs:
           : "${DEPLOY_USER:?Missing HappyFox deploy user}"
           : "${DEPLOY_PORT:?Missing HappyFox deploy port}"
           : "${DEPLOY_PATH:?Missing HappyFox deploy path}"
+          : "${API_ORIGIN:?Missing HappyFox API origin}"
+          : "${APP_ORIGIN:?Missing HappyFox app origin}"
           : "${MAX_APP_ORIGIN:?Missing MAX app origin}"
           [[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]] || {
             echo "EXPECTED_SHA must be a full 40-character SHA" >&2
             exit 1
           }
-          [[ "$MAX_APP_ORIGIN" =~ ^https://[^/]+$ ]] || {
-            echo "MAX_APP_ORIGIN must be an HTTPS origin without a path" >&2
-            exit 1
-          }
+          for origin_name in API_ORIGIN APP_ORIGIN MAX_APP_ORIGIN; do
+            origin="${!origin_name}"
+            [[ "$origin" =~ ^https://[^/]+$ ]] || {
+              echo "$origin_name must be an HTTPS origin without a path" >&2
+              exit 1
+            }
+          done
 
       - name: Configure pinned SSH for dedicated host
         shell: bash
@@ -142,6 +149,8 @@ jobs:
           printf -v quoted_path '%q' "$DEPLOY_PATH"
           printf -v quoted_sha '%q' "$EXPECTED_SHA"
           printf -v quoted_max_origin '%q' "$MAX_APP_ORIGIN"
+          printf -v quoted_api_origin '%q' "$API_ORIGIN"
+          printf -v quoted_app_origin '%q' "$APP_ORIGIN"
           ssh \
             -i "$HOME/.ssh/id_ed25519" \
             -p "$DEPLOY_PORT" \
@@ -152,16 +161,18 @@ jobs:
             -o ServerAliveInterval=20 \
             -o ServerAliveCountMax=6 \
             "$DEPLOY_USER@$DEPLOY_HOST" \
-            "bash -s -- $quoted_path $quoted_sha $quoted_max_origin" <<'REMOTE'
+            "bash -s -- $quoted_path $quoted_sha $quoted_max_origin $quoted_api_origin $quoted_app_origin" <<'REMOTE'
           set -Eeuo pipefail
           project_dir="$1"
           expected_sha="$2"
           max_app_origin="$3"
+          api_origin="$4"
+          app_origin="$5"
           cd "$project_dir"
           chmod +x scripts/deploy_happyfox_dedicated.sh
           env \
-            HAPPYFOX_API_ORIGIN=https://api.happy-fox.online \
-            HAPPYFOX_APP_ORIGIN=https://app.happy-fox.online \
+            HAPPYFOX_API_ORIGIN="$api_origin" \
+            HAPPYFOX_APP_ORIGIN="$app_origin" \
             HAPPYFOX_MAX_APP_ORIGIN="$max_app_origin" \
             HAPPYFOX_LANDING_ORIGIN=https://happy-fox.online \
             HAPPYFOX_DATABASE_NAME=happyfox_cutover \
@@ -173,19 +184,19 @@ jobs:
         run: |
           set -Eeuo pipefail
           curl -fsS --retry 5 --retry-delay 2 --retry-all-errors --max-time 20 \
-            https://api.happy-fox.online/health >/dev/null
+            $API_ORIGIN/health >/dev/null
           revision="$(curl -fsS --retry 5 --retry-delay 2 --retry-all-errors --max-time 20 \
-            "https://app.happy-fox.online/mini-app/revision.txt?revision=${EXPECTED_SHA}")"
+            "$APP_ORIGIN/mini-app/revision.txt?revision=${EXPECTED_SHA}")"
           [ "$revision" = "$EXPECTED_SHA" ]
-          if [ "$MAX_APP_ORIGIN" != "https://app.happy-fox.online" ]; then
+          if [ "$MAX_APP_ORIGIN" != "$APP_ORIGIN" ]; then
             max_revision="$(curl -fsS --retry 5 --retry-delay 2 --retry-all-errors --max-time 20 \
               "$MAX_APP_ORIGIN/mini-app/revision.txt?revision=${EXPECTED_SHA}")"
             [ "$max_revision" = "$EXPECTED_SHA" ]
           fi
           curl -fsS --retry 5 --retry-delay 2 --retry-all-errors --max-time 20 \
             https://happy-fox.online/ >/dev/null
-          miniapp_origins=(https://app.happy-fox.online https://happy-fox.online)
-          if [ "$MAX_APP_ORIGIN" != "https://app.happy-fox.online" ] && [ "$MAX_APP_ORIGIN" != "https://happy-fox.online" ]; then
+          miniapp_origins=("$APP_ORIGIN" https://happy-fox.online)
+          if [ "$MAX_APP_ORIGIN" != "$APP_ORIGIN" ] && [ "$MAX_APP_ORIGIN" != "https://happy-fox.online" ]; then
             miniapp_origins+=("$MAX_APP_ORIGIN")
           fi
           for miniapp_origin in "${miniapp_origins[@]}"; do
@@ -196,7 +207,7 @@ jobs:
               "$miniapp_origin/mini-app/" || true)"
             [ "$post_status" = "200" ]
           done
-          max_location="$(curl -sS -D - -o /dev/null --max-time 20 https://api.happy-fox.online/max/webhook \
+          max_location="$(curl -sS -D - -o /dev/null --max-time 20 "$API_ORIGIN/max/webhook" \
             | awk 'BEGIN{IGNORECASE=1} /^location:/ {gsub(/\r/, "", $2); print $2; exit}')"
           [ "$max_location" = "$MAX_APP_ORIGIN/mini-app/" ]
 
@@ -211,8 +222,8 @@ jobs:
             echo "- Checkout: \`${DEPLOY_PATH}\`"
             echo '- Source sync: server-side `gh` + exact main SHA verification'
             echo '- Secrets/runtime overlay: server-authoritative; Actions does not overwrite it'
-            echo '- API/webhooks: `https://api.happy-fox.online`'
-            echo '- Telegram Mini App: `https://app.happy-fox.online/mini-app/`'
+            echo "- API/webhooks: \`$API_ORIGIN\`"
+            echo "- Telegram Mini App: \`$APP_ORIGIN/mini-app/\`"
             echo "- MAX Mini App: \`${MAX_APP_ORIGIN}/mini-app/\`"
             echo '- Landing: `https://happy-fox.online/`'
             echo '- Telegram webhook and MAX subscription are reconciled by the deploy gate.'
