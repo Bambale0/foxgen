@@ -247,7 +247,7 @@ def test_production_deploy_runs_automatically_after_green_main_ci() -> None:
 def test_production_deploy_pins_dedicated_server_topology() -> None:
     workflow = Path(".github/workflows/deploy-production.yml").read_text(encoding="utf-8")
 
-    assert "5.35.124.201" in workflow
+    assert "89.125.51.145" in workflow
     assert "/opt/happyfox/repo" in workflow
     assert "https://api.happy-fox.online" in workflow
     assert "https://app.happy-fox.online" in workflow
@@ -255,3 +255,5 @@ def test_production_deploy_pins_dedicated_server_topology() -> None:
     assert "Resolve HappyFox Mini App domain" not in workflow
     assert "DEPLOY_KNOWN_HOSTS" not in workflow
     assert "EXPECTED_HOST_FINGERPRINT" in workflow
+    assert "HAPPYFOX_DEPLOY_HOST_FINGERPRINT" in workflow
+    assert "SHA256:5Ux1ce1iJuEkgOV5tDIqyZl0Fki6qYwC7PTWHekLX1c" in workflow
