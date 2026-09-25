@@ -35,6 +35,7 @@ def test_dedicated_deploy_pins_three_public_origins_and_runtime_db() -> None:
     assert "happyfox-docker-prune.service" in deploy
     assert "happyfox-docker-prune.timer" in deploy
     assert "systemctl enable --now happyfox-docker-prune.timer" in deploy
+    assert '--build-arg "NEXT_PUBLIC_MINIAPP_ORIGIN=$APP_ORIGIN"' in deploy
 
 
 def test_happyfox_runtime_uses_configurable_public_dns() -> None:
