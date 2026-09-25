@@ -5,12 +5,12 @@ umask 027
 
 PROJECT_DIR="${PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 EXPECTED_SHA="${1:-$(git -C "$PROJECT_DIR" rev-parse HEAD)}"
-API_ORIGIN="${HAPPYFOX_API_ORIGIN:-https://api.happy-fox.online}"
-APP_ORIGIN="${HAPPYFOX_APP_ORIGIN:-https://app.happy-fox.online}"
+API_ORIGIN="${HAPPYFOX_API_ORIGIN:-https://alena.xn--e1aikcel5c5a.online}"
+APP_ORIGIN="${HAPPYFOX_APP_ORIGIN:-https://alena.xn--e1aikcel5c5a.online}"
 MAX_APP_ORIGIN="${HAPPYFOX_MAX_APP_ORIGIN:-$APP_ORIGIN}"
-LANDING_ORIGIN="${HAPPYFOX_LANDING_ORIGIN:-https://happy-fox.online}"
+LANDING_ORIGIN="${HAPPYFOX_LANDING_ORIGIN:-$APP_ORIGIN}"
 DATABASE_NAME="${HAPPYFOX_DATABASE_NAME:-happyfox_cutover}"
-TELEGRAM_RELAY_IP="${HAPPYFOX_TELEGRAM_RELAY_IP:-2.27.160.11}"
+TELEGRAM_RELAY_IP="${HAPPYFOX_TELEGRAM_RELAY_IP:-89.125.51.145}"
 GITHUB_REPO="${HAPPYFOX_GITHUB_REPO:-Bambale0/foxgen}"
 RUNTIME_ENV="$PROJECT_DIR/.env.happyfox.runtime"
 
@@ -238,19 +238,24 @@ if [[ "$MAX_APP_ORIGIN" != "$APP_ORIGIN" ]]; then
   max_live_revision="$(curl -fsS --retry 8 --retry-delay 2 --retry-all-errors --max-time 20 "$MAX_APP_ORIGIN/mini-app/revision.txt?revision=$EXPECTED_SHA")"
   [[ "$max_live_revision" == "$EXPECTED_SHA" ]]
 fi
-curl -fsS --retry 5 --retry-delay 2 --retry-all-errors --max-time 20 "$LANDING_ORIGIN/" | grep -Fq 'https://t.me/'
-robots_body="$(curl -fsS --retry 5 --retry-delay 2 --retry-all-errors --max-time 20 "$LANDING_ORIGIN/robots.txt")"
-grep -Fq "Sitemap: ${LANDING_ORIGIN}/sitemap.xml" <<<"$robots_body" || {
-  echo "HappyFox public robots.txt is missing canonical sitemap directive" >&2
-  exit 1
-}
-sitemap_body="$(curl -fsS --retry 5 --retry-delay 2 --retry-all-errors --max-time 20 "$LANDING_ORIGIN/sitemap.xml")"
-grep -Fq "<loc>${LANDING_ORIGIN}/</loc>" <<<"$sitemap_body" || {
-  echo "HappyFox public sitemap.xml is not the canonical XML sitemap" >&2
-  exit 1
-}
+if [[ "$LANDING_ORIGIN" != "$APP_ORIGIN" ]]; then
+  curl -fsS --retry 5 --retry-delay 2 --retry-all-errors --max-time 20 "$LANDING_ORIGIN/" | grep -Fq 'https://t.me/'
+  robots_body="$(curl -fsS --retry 5 --retry-delay 2 --retry-all-errors --max-time 20 "$LANDING_ORIGIN/robots.txt")"
+  grep -Fq "Sitemap: ${LANDING_ORIGIN}/sitemap.xml" <<<"$robots_body" || {
+    echo "HappyFox public robots.txt is missing canonical sitemap directive" >&2
+    exit 1
+  }
+  sitemap_body="$(curl -fsS --retry 5 --retry-delay 2 --retry-all-errors --max-time 20 "$LANDING_ORIGIN/sitemap.xml")"
+  grep -Fq "<loc>${LANDING_ORIGIN}/</loc>" <<<"$sitemap_body" || {
+    echo "HappyFox public sitemap.xml is not the canonical XML sitemap" >&2
+    exit 1
+  }
+fi
 
-miniapp_origins=("$APP_ORIGIN" "$LANDING_ORIGIN")
+miniapp_origins=("$APP_ORIGIN")
+if [[ "$LANDING_ORIGIN" != "$APP_ORIGIN" ]]; then
+  miniapp_origins+=("$LANDING_ORIGIN")
+fi
 if [[ "$MAX_APP_ORIGIN" != "$APP_ORIGIN" && "$MAX_APP_ORIGIN" != "$LANDING_ORIGIN" ]]; then
   miniapp_origins+=("$MAX_APP_ORIGIN")
 fi
