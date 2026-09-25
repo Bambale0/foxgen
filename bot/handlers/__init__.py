@@ -78,6 +78,7 @@ from .partner_approval import admin_router as partner_approval_admin_router
 from .partner_approval import user_router as partner_approval_user_router
 from .photo_prompt_vk_result_compat import install_vk_photo_prompt_result_compat
 from .prompt_analyzer_v2 import router as prompt_analyzer_v2_router
+from .quick_commands import router as quick_commands_router
 from .repeat_result_compat import router as repeat_result_compat_router
 from .seedance_25_chunk_upload import install_seedance_25_chunk_upload
 from .seedance_25_client_compat import install_seedance_25_client_compat
@@ -184,6 +185,7 @@ __all__ = [
     "feed_model_filter_compat_router",
     "freekassa_payments_router",
     "generation_router",
+    "quick_commands_router",
     "image_analyzer_router",
     "instagram_account_link_router",
     "lava_checkout_router",
