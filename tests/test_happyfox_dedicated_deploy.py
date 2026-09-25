@@ -54,7 +54,7 @@ def test_production_workflow_targets_dedicated_host_with_server_side_gh() -> Non
 
     assert "5.35.124.201" in workflow
     assert "/opt/happyfox/repo" in workflow
-    assert "SHA256:NjLkwjwPwDroguKC0FMTFEjaSJD+vFEfL3EsjEN0pI4" in workflow
+    assert "SHA256:5Ux1ce1iJuEkgOV5tDIqyZl0Fki6qYwC7PTWHekLX1c" in workflow
     assert "Sync exact main on HappyFox host with gh" in workflow
     assert "gh auth status -h github.com" in workflow
     assert "gh auth setup-git" in workflow
