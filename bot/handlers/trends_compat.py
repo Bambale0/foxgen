@@ -1,19 +1,15 @@
 from __future__ import annotations
 
-import asyncio
 import html
 import logging
 from collections.abc import Callable
 from functools import wraps
 from typing import Any
 
-from aiogram import Bot, F, Router, types
+from aiogram import F, Router, types
 from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import (
-    BotCommand,
-    BotCommandScopeAllPrivateChats,
-    BotCommandScopeDefault,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
     InputMediaPhoto,
@@ -31,7 +27,6 @@ router = Router(name="admin_curated_trends")
 
 TREND_TAG = "trend"
 TREND_LIMIT = 80
-_COMMAND_TASKS: set[asyncio.Task[Any]] = set()
 _INSTALLED = False
 
 
@@ -244,36 +239,6 @@ def _wrap_keyboard(factory: Callable[..., InlineKeyboardMarkup]) -> Callable[...
 
     return wrapped
 
-
-async def _set_trend_commands(bot: Bot) -> None:
-    commands = [
-        BotCommand(command="start", description="Текстовый бот и главное меню"),
-        BotCommand(command="feed", description="Лента работ"),
-        BotCommand(command="trends", description="Готовые шаблоны от NEUROMIX"),
-        BotCommand(command="help", description="Помощь и возможности"),
-        BotCommand(command="ref", description="Партнёрская программа"),
-        BotCommand(command="earn", description="Заработок на рефералах"),
-    ]
-    for scope in (BotCommandScopeDefault(), BotCommandScopeAllPrivateChats()):
-        for language_code in (None, "ru"):
-            await bot.set_my_commands(commands, scope=scope, language_code=language_code)
-
-
-async def _delayed_command_refresh(bot: Bot) -> None:
-    await asyncio.sleep(2)
-    try:
-        await _set_trend_commands(bot)
-    except Exception:
-        logger.exception("Unable to register trend commands")
-
-
-async def _schedule_command_refresh(bot: Bot) -> None:
-    task = asyncio.create_task(_delayed_command_refresh(bot))
-    _COMMAND_TASKS.add(task)
-    task.add_done_callback(_COMMAND_TASKS.discard)
-
-
-router.startup.register(_schedule_command_refresh)
 
 
 def _install_miniapp_trends(miniapp_module: Any) -> None:
