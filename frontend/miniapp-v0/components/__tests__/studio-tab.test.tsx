@@ -10,7 +10,9 @@ jest.mock('@/lib/app-context', () => ({
 
 jest.mock('next/image', () => ({
   __esModule: true,
-  default: (props: React.ImgHTMLAttributes<HTMLImageElement>) => <img {...props} alt={props.alt || ''} />,
+  default: ({ fill: _fill, ...props }: React.ImgHTMLAttributes<HTMLImageElement> & { fill?: boolean }) => (
+    <img {...props} alt={props.alt || ''} />
+  ),
 }))
 
 jest.mock('@/components/quick-action-grid', () => ({
