@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 def test_max_origin_is_independent_from_telegram_origin() -> None:
     deploy = (ROOT / "scripts" / "deploy_happyfox_dedicated.sh").read_text()
 
-    assert 'APP_ORIGIN="${HAPPYFOX_APP_ORIGIN:-https://app.happy-fox.online}"' in deploy
+    assert 'APP_ORIGIN="${HAPPYFOX_APP_ORIGIN:-https://alena.xn--e1aikcel5c5a.online}"' in deploy
     assert 'MAX_APP_ORIGIN="${HAPPYFOX_MAX_APP_ORIGIN:-$APP_ORIGIN}"' in deploy
     assert 'values["MINI_APP_URL"] = f"{app}/mini-app/"' in deploy
     assert 'values["MAX_MINI_APP_URL"] = f"{max_app}/mini-app/"' in deploy
@@ -28,7 +28,7 @@ def test_verified_bundle_is_published_to_dedicated_max_webroot() -> None:
 def test_production_workflow_keeps_max_origin_configurable() -> None:
     workflow = (ROOT / ".github" / "workflows" / "deploy-production.yml").read_text()
 
-    assert "MAX_APP_ORIGIN: ${{ vars.HAPPYFOX_MAX_APP_ORIGIN || 'https://app.happy-fox.online' }}" in workflow
+    assert "MAX_APP_ORIGIN: ${{ vars.HAPPYFOX_MAX_APP_ORIGIN || 'https://alena.xn--e1aikcel5c5a.online' }}" in workflow
     assert 'HAPPYFOX_MAX_APP_ORIGIN="$max_app_origin"' in workflow
     assert '${MAX_APP_ORIGIN}/mini-app/' in workflow
     assert "curl -sS -D - -o /dev/null" in workflow
