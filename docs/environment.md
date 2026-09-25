@@ -55,7 +55,7 @@ Use `.env.happyfox.example` as the actual template.
 
 `TELEGRAM_WEBHOOK_URL` optionally overrides only the Telegram callback URL without changing provider/payment `WEBHOOK_HOST`. `TELEGRAM_WEBHOOK_IP_ADDRESS` maps to Telegram Bot API `setWebhook(ip_address=...)` and is used only when Telegram must enter through a fixed relay IP. Keep it empty in ordinary deployments.
 
-The native Telegram system menu is a `web_app` Mini App launcher. Quick commands remain registered separately through the bot command list.
+The native Telegram system menu is a `commands` launcher. The Mini App remains available from the bot's main keyboard, while the system button exposes action-oriented quick commands.
 
 `MINI_APP_URL` belongs to Telegram and remains `https://app.happy-fox.online/mini-app/` in production.
 

@@ -114,24 +114,14 @@ NEW_MORE_MENU = '''def get_more_menu_keyboard():
     return builder.as_markup()
 '''
 
-WEBAPP_SYSTEM_MENU = '''async def _set_miniapp_chat_menu_button() -> None:
-    """Keep Telegram's system menu button on the native Mini App entrypoint."""
+COMMANDS_SYSTEM_MENU = '''async def _set_commands_chat_menu_button() -> None:
+    """Keep Telegram's system menu button on quick commands."""
     url = f"https://api.telegram.org/bot{config.BOT_TOKEN}/setChatMenuButton"
-    mini_app_url = _mini_app_url_with_start_param()
-    menu_button = (
-        {
-            "type": "web_app",
-            "text": "🚀 Mini App",
-            "web_app": {"url": mini_app_url},
-        }
-        if mini_app_url
-        else {"type": "commands"}
-    )
     timeout = aiohttp.ClientTimeout(total=15)
     async with aiohttp.ClientSession(timeout=timeout) as session:
         async with session.post(
             url,
-            json={"menu_button": menu_button},
+            json={"menu_button": {"type": "commands"}},
         ) as response:
             payload = await response.json(content_type=None)
     if not payload.get("ok"):
@@ -266,33 +256,45 @@ def _patch_common() -> None:
 
 
 def _patch_system_menu_button() -> None:
-    """Keep Telegram's native Menu button on the Mini App; commands stay registered."""
+    """Keep Telegram's native Menu button on quick commands."""
     text = MAIN_PATH.read_text(encoding="utf-8")
-    if WEBAPP_SYSTEM_MENU not in text:
-        for legacy in (LEGACY_COMMANDS_SYSTEM_MENU, LEGACY_INLINE_WEBAPP_SYSTEM_MENU):
+    commands_marker = "async def _set_commands_chat_menu_button() -> None:"
+    if commands_marker not in text:
+        legacy_candidates = (
+            LEGACY_COMMANDS_SYSTEM_MENU,
+            LEGACY_INLINE_WEBAPP_SYSTEM_MENU,
+        )
+        for legacy in legacy_candidates:
             if legacy in text:
-                text = text.replace(legacy, WEBAPP_SYSTEM_MENU, 1)
+                text = text.replace(legacy, COMMANDS_SYSTEM_MENU, 1)
                 break
         else:
-            raise RuntimeError("HappyFox Telegram system menu anchor was not found")
+            # Migrate the current Web App implementation structurally.
+            marker = "async def _set_miniapp_chat_menu_button() -> None:"
+            if marker not in text:
+                raise RuntimeError("HappyFox Telegram system menu anchor was not found")
+            start = text.index(marker)
+            end = text.index("\nasync def _complete_reconciled_order", start)
+            text = text[:start] + COMMANDS_SYSTEM_MENU + text[end:]
+
     text = text.replace(
-        "await _set_commands_chat_menu_button()",
         "await _set_miniapp_chat_menu_button()",
+        "await _set_commands_chat_menu_button()",
         1,
     )
     text = text.replace(
-        'logger.info("Configured Telegram chat menu button for bot commands")',
         'logger.info("Configured Telegram chat menu button for Mini App")',
+        'logger.info("Configured Telegram chat menu button for quick commands")',
         1,
     )
 
-    menu_block = text.split("async def _set_miniapp_chat_menu_button", 1)[1].split(
+    menu_block = text.split("async def _set_commands_chat_menu_button", 1)[1].split(
         "async def _complete_reconciled_order", 1
     )[0]
-    if '"type": "web_app"' not in menu_block:
-        raise RuntimeError("HappyFox Telegram system menu does not open the Mini App")
-    if "mini_app_url = _mini_app_url_with_start_param()" not in menu_block:
-        raise RuntimeError("HappyFox Telegram system menu does not use the versioned Mini App URL")
+    if 'json={"menu_button": {"type": "commands"}}' not in menu_block:
+        raise RuntimeError("HappyFox Telegram system menu does not expose quick commands")
+    if '"type": "web_app"' in menu_block:
+        raise RuntimeError("HappyFox Telegram system menu still opens the Mini App")
     if "await bot.set_my_commands(" not in text:
         raise RuntimeError("HappyFox bot command registration is missing")
 

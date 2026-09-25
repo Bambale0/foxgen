@@ -33,19 +33,16 @@ class _FakeBot:
 
 
 @pytest.mark.asyncio
-async def test_reconcile_menu_sets_default_webapp_and_clears_chat_overrides(monkeypatch):
+async def test_reconcile_menu_sets_default_commands_and_clears_chat_overrides(monkeypatch):
     bot = _FakeBot()
 
     async def fake_user_ids() -> list[int]:
         return [101, 202]
 
     monkeypatch.setattr(target, "_telegram_user_ids", fake_user_ids)
-    monkeypatch.setenv("MINI_APP_URL", "https://app.happy-fox.online/mini-app/")
-    monkeypatch.setenv("HAPPYFOX_RELEASE", "release-test")
+    result = await target._reconcile_commands_menu(bot)
 
-    result = await target._reconcile_miniapp_menu(bot)
-
-    assert (None, "web_app") in bot.set_calls
+    assert (None, "commands") in bot.set_calls
     assert (101, "default") in bot.set_calls
     assert (202, "default") not in bot.set_calls
     assert result == {"checked": 2, "reset": 1, "skipped": 0}
@@ -59,7 +56,7 @@ def test_reconciliation_script_imports_when_executed_outside_repo(tmp_path):
         "spec = importlib.util.spec_from_file_location('telegram_reconcile_probe', path)\n"
         "module = importlib.util.module_from_spec(spec)\n"
         "spec.loader.exec_module(module)\n"
-        "assert hasattr(module, '_reconcile_miniapp_menu')\n"
+        "assert hasattr(module, '_reconcile_commands_menu')\n"
     )
     env = os.environ.copy()
     env.pop("PYTHONPATH", None)
