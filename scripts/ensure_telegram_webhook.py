@@ -7,11 +7,11 @@ import os
 import sys
 import time
 from pathlib import Path
-from urllib.parse import parse_qsl, urlencode, urljoin, urlsplit, urlunsplit
+from urllib.parse import urljoin
 
 from aiogram import Bot
 from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
-from aiogram.types import MenuButtonDefault, MenuButtonWebApp, WebAppInfo
+from aiogram.types import MenuButtonCommands, MenuButtonDefault
 
 # The production deploy executes this file directly as
 # /app/scripts/ensure_telegram_webhook.py. In that mode Python puts /app/scripts
@@ -22,7 +22,6 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 from bot import db as db_backend  # noqa: E402
-from bot.config import config  # noqa: E402
 
 
 def _webhook_url() -> str:
@@ -55,18 +54,6 @@ def _webhook_secret() -> str:
     ).hexdigest()
 
 
-def _mini_app_url_with_release() -> str:
-    base_url = str(config.mini_app_url or "").strip()
-    if not base_url:
-        return ""
-    parts = urlsplit(base_url)
-    query = dict(parse_qsl(parts.query, keep_blank_values=True))
-    release = str(os.getenv("HAPPYFOX_RELEASE", "")).strip()
-    if release and release.lower() not in {"unknown", "local"}:
-        query["release"] = release
-    return urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(query), parts.fragment))
-
-
 async def _telegram_user_ids() -> list[int]:
     """Return known Telegram private-chat ids from the HappyFox user table."""
     async with db_backend.connect() as db:
@@ -86,14 +73,9 @@ async def _telegram_user_ids() -> list[int]:
     return result
 
 
-async def _reconcile_miniapp_menu(bot: Bot) -> dict[str, int]:
-    """Set the default menu to Mini App and clear stale per-chat overrides."""
-    mini_app_url = _mini_app_url_with_release()
-    if not mini_app_url:
-        raise RuntimeError("Telegram Mini App URL is unavailable")
-    await bot.set_chat_menu_button(
-        menu_button=MenuButtonWebApp(text="🚀 Mini App", web_app=WebAppInfo(url=mini_app_url))
-    )
+async def _reconcile_commands_menu(bot: Bot) -> dict[str, int]:
+    """Set the default menu to quick commands and clear stale per-chat overrides."""
+    await bot.set_chat_menu_button(menu_button=MenuButtonCommands())
 
     checked = 0
     reset = 0
@@ -154,14 +136,14 @@ async def ensure() -> None:
 
         # Telegram can retain stale per-chat menu overrides even after the
         # default button is updated. Reconcile both levels.
-        menu_result = await _reconcile_miniapp_menu(bot)
+        menu_result = await _reconcile_commands_menu(bot)
     finally:
         await bot.session.close()
 
     print(f"telegram_webhook_ok={target}")
     if menu_result is not None:
         print(
-            "telegram_miniapp_menu_ok="
+            "telegram_commands_menu_ok="
             f"checked:{menu_result['checked']},"
             f"reset:{menu_result['reset']},"
             f"skipped:{menu_result['skipped']}"

@@ -74,7 +74,7 @@ Redis namespace isolated
 happyfox-docker-prune.timer enabled and waiting
 Telegram webhook URL is https://api.happy-fox.online/webhook
 Telegram pending_update_count = 0 and last_error_message is empty
-Telegram native chat menu type = web_app and URL starts with https://app.happy-fox.online/mini-app/
+Telegram native chat menu type = commands
 MAX has exactly one subscription, matching MAX_WEBHOOK_URL (api.happy-fox.online)
 MAX native quick commands are /start, /feed, /prompts, /help, /ref, /earn
 YooKassa/provider webhook routes are live
@@ -93,7 +93,7 @@ TELEGRAM_WEBHOOK_IP_ADDRESS=<relay IPv4>
 
 The apix relay owns a separate Let's Encrypt certificate for `api.happy-fox.online`. Telegram still uses the canonical URL/SNI `https://api.happy-fox.online/webhook`; `TELEGRAM_WEBHOOK_IP_ADDRESS` only pins ingress to the relay IPv4. Certificate renewal is handled on the relay host and must be followed by `nginx -t`/reload verification.
 
-After each deploy, the system menu must be reconciled to the native Mini App launcher (`MenuButtonWebApp`) using the versioned `MINI_APP_URL`. Bot commands (`/start`, `/feed`, `/prompts`, `/help`, `/ref`, `/earn`) must remain registered separately.
+After each deploy, the system menu must be reconciled to the native quick-command launcher (`MenuButtonCommands`). The registered quick commands are `/photo`, `/video`, `/music`, `/motion`, `/feed`, `/trends`, `/balance`, `/start`; creator commands must interrupt stale FSM/assistant state and route directly to their product flow.
 
 CI already validates production Docker image/runtime imports before the deploy workflow is allowed to act.
 
