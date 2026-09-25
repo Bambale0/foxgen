@@ -21,6 +21,41 @@ Branch:           main
 
 Runtime secrets and host-specific paths are supplied through production environment/GitHub configuration and must not be committed.
 
+### Temporary public ingress override — 2026-09-25
+
+Until this cutover is reverted, the live Foxgen public ingress is:
+
+```text
+Unified origin:            https://alena.xn--e1aikcel5c5a.online
+Telegram Mini App:         https://alena.xn--e1aikcel5c5a.online/mini-app/
+Telegram webhook:          https://alena.xn--e1aikcel5c5a.online/webhook
+MAX webhook:               https://alena.xn--e1aikcel5c5a.online/max/webhook
+YooKassa webhook:          https://alena.xn--e1aikcel5c5a.online/yookassa/webhook
+CryptoBot webhook:         https://alena.xn--e1aikcel5c5a.online/cryptobot/webhook
+Lava webhook:              https://alena.xn--e1aikcel5c5a.online/lava/webhook
+FreeKassa webhook:         https://alena.xn--e1aikcel5c5a.online/freekassa/webhook
+Kie callback:              https://alena.xn--e1aikcel5c5a.online/webhook/kie_ai
+Kie Market callback:       https://alena.xn--e1aikcel5c5a.online/webhooks/kie
+Kling callback:            https://alena.xn--e1aikcel5c5a.online/webhook/kling
+Seedance 2.5 callback:     https://alena.xn--e1aikcel5c5a.online/webhook/kie_seedance25
+Suno callback:             https://alena.xn--e1aikcel5c5a.online/webhook/suno
+VK Callback API:           https://alena.xn--e1aikcel5c5a.online/vk
+VK provider callback:      https://alena.xn--e1aikcel5c5a.online/vk/webhook
+VK TBank notification:     https://alena.xn--e1aikcel5c5a.online/vk/webhook/tbank
+```
+
+The deploy workflow reads the temporary ingress from repository Actions variables:
+
+```text
+HAPPYFOX_API_ORIGIN
+HAPPYFOX_APP_ORIGIN
+HAPPYFOX_MAX_APP_ORIGIN
+HAPPYFOX_TELEGRAM_WEBHOOK_IP
+```
+
+Do not hardcode the temporary hostname into provider code. Telegram, MAX, Kie/Kling/Seedance/Suno and other per-request provider callbacks derive from runtime configuration. External merchant/provider cabinets that store a fixed callback URL must be updated separately (notably YooKassa; also Lava, Crypto Pay or FreeKassa when those integrations are enabled). Keep the former HappyFox/VK ingress endpoints available during the transition so callbacks from already-created provider tasks can still complete.
+
+
 ## Preconditions
 
 Before deploy:
