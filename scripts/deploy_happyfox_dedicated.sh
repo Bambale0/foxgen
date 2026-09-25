@@ -158,6 +158,7 @@ if docker inspect foxgen-happyfox-bot >/dev/null 2>&1; then
 fi
 
 docker build \
+  --build-arg "NEXT_PUBLIC_MINIAPP_ORIGIN=$APP_ORIGIN" \
   --build-arg "VCS_REF=$EXPECTED_SHA" \
   --build-arg "BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
   -t foxgen-happyfox-bot:local .
