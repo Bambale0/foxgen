@@ -52,9 +52,9 @@ def test_happyfox_runtime_uses_configurable_public_dns() -> None:
 def test_production_workflow_targets_dedicated_host_with_server_side_gh() -> None:
     workflow = Path(".github/workflows/deploy-production.yml").read_text(encoding="utf-8")
 
-    assert "5.35.124.201" in workflow
+    assert "89.125.51.145" in workflow
     assert "/opt/happyfox/repo" in workflow
-    assert "SHA256:NjLkwjwPwDroguKC0FMTFEjaSJD+vFEfL3EsjEN0pI4" in workflow
+    assert "HAPPYFOX_DEPLOY_HOST_FINGERPRINT" in workflow\n    assert "SHA256:5Ux1ce1iJuEkgOV5tDIqyZl0Fki6qYwC7PTWHekLX1c" in workflow
     assert "Sync exact main on HappyFox host with gh" in workflow
     assert "gh auth status -h github.com" in workflow
     assert "gh auth setup-git" in workflow
