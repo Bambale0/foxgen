@@ -9,7 +9,10 @@ RUN npm ci --no-audit --no-fund
 
 COPY frontend/miniapp-v0/ ./
 
+ARG NEXT_PUBLIC_MINIAPP_ORIGIN=https://app.happy-fox.online
+
 ENV NEXT_PUBLIC_PRODUCT_ID=happyfox \
+    NEXT_PUBLIC_MINIAPP_ORIGIN="${NEXT_PUBLIC_MINIAPP_ORIGIN}" \
     NEXT_PUBLIC_MINIAPP_BASE_PATH=/mini-app
 
 RUN npm run build \
