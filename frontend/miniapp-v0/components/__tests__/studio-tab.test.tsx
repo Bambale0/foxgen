@@ -43,10 +43,10 @@ describe('StudioTab', () => {
   it('opens trends and feed from the inspiration section', () => {
     render(<StudioTab />)
 
-    fireEvent.click(screen.getByRole('button', { name: /Тренды/i }))
+    fireEvent.click(screen.getByRole('button', { name: 'Открыть подборку трендов' }))
     expect(setActiveTab).toHaveBeenCalledWith(5)
 
-    fireEvent.click(screen.getByRole('button', { name: /Лента сообщества/i }))
+    fireEvent.click(screen.getByRole('button', { name: 'Открыть работы сообщества' }))
     expect(setActiveTab).toHaveBeenCalledWith(4)
   })
 })
