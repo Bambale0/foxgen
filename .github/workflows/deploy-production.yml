@@ -47,7 +47,7 @@ jobs:
       APP_ORIGIN: ${{ vars.HAPPYFOX_APP_ORIGIN || 'https://app.happy-fox.online' }}
       MAX_APP_ORIGIN: ${{ vars.HAPPYFOX_MAX_APP_ORIGIN || 'https://app.happy-fox.online' }}
       TELEGRAM_WEBHOOK_IP: ${{ vars.HAPPYFOX_TELEGRAM_WEBHOOK_IP || '2.27.160.11' }}
-      EXPECTED_HOST_FINGERPRINT: SHA256:NjLkwjwPwDroguKC0FMTFEjaSJD+vFEfL3EsjEN0pI4
+      EXPECTED_HOST_FINGERPRINT: SHA256:5Ux1ce1iJuEkgOV5tDIqyZl0Fki6qYwC7PTWHekLX1c
       EXPECTED_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || inputs.commit_sha || github.sha }}
 
     steps:
