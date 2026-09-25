@@ -59,6 +59,7 @@ from bot.handlers import (
     generation_router,
     image_analyzer_router,
     payments_router,
+    quick_commands_router,
 )
 from bot.handlers.common import ensure_feed_cache_warmup
 from bot.handlers.fast_start import router as fast_start_router
@@ -123,12 +124,14 @@ _TELEGRAM_WEBHOOK_SEMAPHORE = asyncio.Semaphore(TELEGRAM_WEBHOOK_CONCURRENCY_LIM
 _NEXUS_POLL_IN_FLIGHT: set[str] = set()
 
 USER_BOT_COMMANDS = [
-    BotCommand(command="start", description="Текстовый бот и главное меню"),
-    BotCommand(command="feed", description="Лента работ"),
-    BotCommand(command="prompts", description="Библиотека промптов"),
-    BotCommand(command="help", description="Помощь и возможности"),
-    BotCommand(command="ref", description="Партнёрская программа"),
-    BotCommand(command="earn", description="Заработок на рефералах"),
+    BotCommand(command="photo", description="🖼 Создать фото"),
+    BotCommand(command="video", description="🎬 Создать видео"),
+    BotCommand(command="music", description="🎵 Создать музыку"),
+    BotCommand(command="motion", description="🎯 Motion Control"),
+    BotCommand(command="feed", description="🔥 Лента работ"),
+    BotCommand(command="trends", description="🔥 Тренды"),
+    BotCommand(command="balance", description="🐾 Баланс и пополнение"),
+    BotCommand(command="start", description="🏠 Главное меню"),
 ]
 USER_BOT_COMMAND_SCOPES = (
     BotCommandScopeDefault(),
@@ -136,24 +139,14 @@ USER_BOT_COMMAND_SCOPES = (
 )
 USER_BOT_COMMAND_LANGUAGES = (None, "ru")
 
-async def _set_miniapp_chat_menu_button() -> None:
-    """Keep Telegram's system menu button on the native Mini App entrypoint."""
+async def _set_commands_chat_menu_button() -> None:
+    """Keep Telegram's system menu button on the bot quick-command list."""
     url = f"https://api.telegram.org/bot{config.BOT_TOKEN}/setChatMenuButton"
-    mini_app_url = _mini_app_url_with_start_param()
-    menu_button = (
-        {
-            "type": "web_app",
-            "text": "🚀 Mini App",
-            "web_app": {"url": mini_app_url},
-        }
-        if mini_app_url
-        else {"type": "commands"}
-    )
     timeout = aiohttp.ClientTimeout(total=15)
     async with aiohttp.ClientSession(timeout=timeout) as session:
         async with session.post(
             url,
-            json={"menu_button": menu_button},
+            json={"menu_button": {"type": "commands"}},
         ) as response:
             payload = await response.json(content_type=None)
     if not payload.get("ok"):
@@ -2408,8 +2401,8 @@ async def on_startup(bot: Bot, dispatcher: Dispatcher | None = None):
         logger.exception("Failed to clear Telegram bot descriptions")
 
     try:
-        await _set_miniapp_chat_menu_button()
-        logger.info("Configured Telegram chat menu button for Mini App")
+        await _set_commands_chat_menu_button()
+        logger.info("Configured Telegram chat menu button for quick commands")
     except Exception:
         logger.exception("Failed to configure Telegram chat menu button")
 
@@ -2575,6 +2568,7 @@ def setup_dispatcher() -> Dispatcher:
     # 5. common_router (общие команды /start /help - самые общие)
 
     dp.include_router(fast_start_router)  # Plain /start fast webhook reply
+    dp.include_router(quick_commands_router)  # Global quick actions before every FSM router
     # Global admin commands must preempt state-specific text handlers so /admin
     # is never interpreted as an image/video prompt while an FSM is active.
     dp.include_router(admin_router)  # Админ-команды

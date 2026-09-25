@@ -24,6 +24,10 @@ Remaining: full suite result, standards/spec review axes, PR, exact-head CI, pos
 
 ---
 
+# Superseding product decision — Telegram quick-command system menu (2026-09-25)
+
+The earlier native-launch work below is retained as historical implementation context, but its Telegram system-menu acceptance criterion is superseded. The Telegram native chat menu now uses the command list, not a Web App button. The Mini App remains available from the bot main keyboard. Registered quick commands are photo, video, music, motion, feed, trends, balance, and start; prompts remains a legacy alias; quick action commands must interrupt stale FSM/AI-assistant state and route directly to the requested product flow. Deployment reconciliation must preserve the commands menu rather than restoring the previous Mini App launcher.
+
 # Active: Mini App native launch recovery for Telegram and MAX
 
 Update 2026-09-18 follow-up: user retest on Telegram Desktop still showed the auth gate on the deployed 4bac0c11 release. Fresh logs prove the new Mini App document loads with Telegram.WebApp present and tgWebAppData length 603, but /mini-app/api/bootstrap reaches backend as Missing init_data. Backend already accepts X-Telegram-Init-Data as a fallback transport in _miniapp_payload, so this follow-up sends signed init_data in both the existing JSON body and that header. Auth remains backend-verified; no billing/referral/provider/config behavior changes. Verification so far: focused Mini App auth/gate Jest passed 4 suites / 32 tests; full Mini App Jest passed 19 suites / 84 tests; Mini App lint passed with 0 errors and the same 5 pre-existing hook warnings; production static export build passed; git diff --check passed.

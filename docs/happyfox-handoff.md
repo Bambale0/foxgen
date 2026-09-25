@@ -24,7 +24,7 @@ Redis namespace:   foxgen_happyfox
 Production branch: main
 ```
 
-Telegram uses the native system menu as the Mini App launcher, while quick commands remain registered as bot commands. Current Telegram transport uses an `apix` ingress/egress relay while application state remains exclusively on the dedicated `happyfox` host.
+Telegram uses the native system menu as the quick-command launcher; the Mini App remains available from the bot's main keyboard. Current Telegram transport uses an `apix` ingress/egress relay while application state remains exclusively on the dedicated `happyfox` host.
 
 Configuration contract: `.env.happyfox.example`.
 
