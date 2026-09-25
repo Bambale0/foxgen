@@ -74,6 +74,7 @@ export function StudioTab() {
         <div className="grid gap-2.5 sm:grid-cols-2 sm:gap-3">
           <button
             type="button"
+            aria-label="Открыть подборку трендов"
             onClick={() => setActiveTab(5)}
             className="fox-surface group relative min-h-[126px] overflow-hidden rounded-[22px] border-gold/20 p-4 text-left transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.985]"
           >
@@ -96,6 +97,7 @@ export function StudioTab() {
 
           <button
             type="button"
+            aria-label="Открыть работы сообщества"
             onClick={() => setActiveTab(4)}
             className="fox-surface group relative min-h-[126px] overflow-hidden rounded-[22px] border-gold/15 p-4 text-left transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.985]"
           >
