@@ -4,9 +4,8 @@ from pathlib import Path
 def test_dedicated_deploy_pins_three_public_origins_and_runtime_db() -> None:
     deploy = Path("scripts/deploy_happyfox_dedicated.sh").read_text(encoding="utf-8")
 
-    assert "https://api.happy-fox.online" in deploy
-    assert "https://app.happy-fox.online" in deploy
-    assert "https://happy-fox.online" in deploy
+    assert "https://alena.xn--e1aikcel5c5a.online" in deploy
+    assert 'LANDING_ORIGIN="${HAPPYFOX_LANDING_ORIGIN:-$APP_ORIGIN}"' in deploy
     assert "HAPPYFOX_DATABASE_NAME:-happyfox_cutover" in deploy
     assert "recover_happyfox_channel_runtime.py" in deploy
     assert "install_russian_trusted_ca.sh" in deploy
@@ -15,7 +14,7 @@ def test_dedicated_deploy_pins_three_public_origins_and_runtime_db() -> None:
     assert "ensure_telegram_webhook.py" in deploy
     assert "TELEGRAM_WEBHOOK_URL" in deploy
     assert "TELEGRAM_WEBHOOK_IP_ADDRESS" in deploy
-    assert "HAPPYFOX_TELEGRAM_RELAY_IP:-2.27.160.11" in deploy
+    assert "HAPPYFOX_TELEGRAM_RELAY_IP:-89.125.51.145" in deploy
     workflow = Path(".github/workflows/deploy-production.yml").read_text(encoding="utf-8")
     assert "HAPPYFOX_TELEGRAM_WEBHOOK_IP" in workflow
     assert 'HAPPYFOX_TELEGRAM_RELAY_IP="$telegram_webhook_ip"' in workflow
@@ -52,7 +51,7 @@ def test_happyfox_runtime_uses_configurable_public_dns() -> None:
 def test_production_workflow_targets_dedicated_host_with_server_side_gh() -> None:
     workflow = Path(".github/workflows/deploy-production.yml").read_text(encoding="utf-8")
 
-    assert "5.35.124.201" in workflow
+    assert "89.125.51.145" in workflow
     assert "/opt/happyfox/repo" in workflow
     assert "SHA256:5Ux1ce1iJuEkgOV5tDIqyZl0Fki6qYwC7PTWHekLX1c" in workflow
     assert "Sync exact main on HappyFox host with gh" in workflow
@@ -113,3 +112,13 @@ def test_max_connectivity_smoke_uses_authenticated_client_and_system_tls() -> No
     assert "max_api_ok=1" in script
     assert "ssl=False" not in script
     assert "CERT_NONE" not in script
+
+def test_deploy_supports_app_origin_without_dedicated_marketing_landing() -> None:
+    deploy = Path("scripts/deploy_happyfox_dedicated.sh").read_text(encoding="utf-8")
+    workflow = Path(".github/workflows/deploy-production.yml").read_text(encoding="utf-8")
+
+    assert 'LANDING_ORIGIN="${HAPPYFOX_LANDING_ORIGIN:-$APP_ORIGIN}"' in deploy
+    assert 'if [[ "$LANDING_ORIGIN" != "$APP_ORIGIN" ]]; then' in deploy
+    assert 'LANDING_ORIGIN: ${{ vars.HAPPYFOX_LANDING_ORIGIN || vars.HAPPYFOX_APP_ORIGIN' in workflow
+    assert 'HAPPYFOX_LANDING_ORIGIN="$landing_origin"' in workflow
+    assert 'https://happy-fox.online/' not in workflow
