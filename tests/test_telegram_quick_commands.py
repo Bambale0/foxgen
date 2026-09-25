@@ -59,6 +59,13 @@ def test_motion_quick_command_uses_clicking_user_identity():
     assert "get_motion_control_model_keyboard" in quick
 
 
+def test_trends_compat_does_not_overwrite_global_quick_commands():
+    compat = Path("bot/handlers/trends_compat.py").read_text(encoding="utf-8")
+
+    assert "set_my_commands" not in compat
+    assert "router.startup.register(_schedule_command_refresh)" not in compat
+
+
 def test_deploy_reconciles_commands_menu():
     script = Path("scripts/ensure_telegram_webhook.py").read_text(encoding="utf-8")
 
