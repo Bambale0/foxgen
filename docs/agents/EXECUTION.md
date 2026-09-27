@@ -1,3 +1,25 @@
+# Active: recurring referral purchase cashback for Telegram + MAX (2026-09-27)
+
+Baseline: main `18e02aabe9ea2bc0f5d9c8981bf59b274c7628b7`, branch `feat/referral-cashback-every-purchase-20260927`.
+
+User outcome: preserve the existing welcome gift for the referred/new user (5 лапок by the live shared business rules); registration/referral attach must credit the inviter 0; every verified successful purchase by a direct referral credits the inviter +`inviter_bonus_credits` (currently 3 лапки) as recurring cashback. Existing L1/L2 partner purchase commissions remain unchanged.
+
+Fresh audit: Telegram and MAX already defer the inviter gift until the referred user's first purchase (PR #263), so signup abuse is closed, but the gift is currently one-time. Telegram stores that one-time marker in `referrals.bonus_credits`; this cannot safely represent recurring per-payment cashback. Telegram payment completion is already atomic/idempotent and is the correct seam. MAX has an isolated `max_transactions` ledger with unique idempotency keys and can award one cashback entry per local order without a new MAX table.
+
+Design: keep the existing audited/mutable `business_rules.inviter_bonus_credits` setting for backward-compatible control-plane behavior, but redefine its product semantics as direct-referral purchase cashback. Add an additive Telegram ledger keyed by payment transaction + referrer, and production migration v4. MAX uses a per-order cashback idempotency key in its existing ledger. No historical backfill and no retroactive credits. Legacy one-time referral rows remain for history only.
+
+Antifraud/integrity: existing self-referral, one-time attribution, paid-user attach rejection, cycle checks, block lists and burst/rate controls stay intact. Cashback requires a verified successful payment. Duplicate webhooks/reconciliation/concurrent completion must not duplicate cashback. No frontend identity is trusted for financial credit.
+
+TDD seams: `database.complete_payment_atomic()` for Telegram; `MaxYooKassaService.complete_order()` for MAX; registered PostgreSQL migration SQL; partner-facing copy. First red slice requires two distinct purchases to each pay cashback while replaying one order pays none.
+
+Parity: Telegram bot and Mini App share the Telegram payment core, so both inherit the same cashback. MAX gets equivalent behavior on its isolated ledger and visible partner copy. Instagram uses the shared Telegram user/payment ledger where applicable and therefore inherits the backend rule; there is no Instagram-native referral acquisition UI in scope.
+
+Release: additive schema only; rollback leaves the ledger table harmlessly in place. Required path: tests red -> implementation green -> full suite -> code-review against main (Standards + Spec) -> exact-head CI -> PR merge -> canonical exact-SHA deploy -> revision/health/payment/referral telemetry verification.
+
+Skills/guides: `Bambale0/skills` engineering `implement`, `tdd`, `code-review`; `Bambale0/claw` QA/idempotency guidance; `wondelai/skills` `release-it`; Anthropic skills searched for payment/idempotency guidance, no directly applicable skill found.
+
+---
+
 # Active: fix/telegram-rich-message-prompts — rich_message prompts were silently dropped
 
 Baseline: main 196f0f4c8e51e03651db2fbe3ee97049001488e9, branch fix/telegram-rich-message-prompts.
