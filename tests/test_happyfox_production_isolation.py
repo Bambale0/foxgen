@@ -251,7 +251,7 @@ def test_production_deploy_pins_dedicated_server_topology() -> None:
     assert "/opt/happyfox/repo" in workflow
     assert "API_ORIGIN: ${{ vars.HAPPYFOX_API_ORIGIN }}" in workflow
     assert "APP_ORIGIN: ${{ vars.HAPPYFOX_APP_ORIGIN }}" in workflow
-    assert "LANDING_ORIGIN: ${{ vars.HAPPYFOX_LANDING_ORIGIN || vars.HAPPYFOX_APP_ORIGIN }}" in workflow
+    assert "LANDING_ORIGIN: ${{ vars.HAPPYFOX_LANDING_ORIGIN }}" in workflow
     assert "https://happy-fox.online" not in workflow
     assert "Resolve HappyFox Mini App domain" not in workflow
     assert "DEPLOY_KNOWN_HOSTS" not in workflow
