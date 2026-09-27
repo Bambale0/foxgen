@@ -252,7 +252,8 @@ ADMIN_FINANCE_COLUMNS = {
         ("paid_credits", "Куплено 🍌"),
         ("last_payment_at", "Последняя оплата"),
         ("subrefs_count", "Рефералов 2 линии"),
-        ("bonus_credits", "Бонус пригласившему, 🍌"),
+        ("purchase_cashback_credits", "Кешбэк с покупок, 🐾"),
+        ("legacy_bonus_credits", "Исторический разовый бонус, 🐾"),
     ],
     "referrals_l2": [
         ("root_partner_telegram_id", "Корневой партнёр Telegram ID"),
@@ -274,7 +275,8 @@ ADMIN_FINANCE_COLUMNS = {
         ("paid_rub", "Оплачено, ₽"),
         ("paid_credits", "Куплено 🍌"),
         ("last_payment_at", "Последняя оплата"),
-        ("bonus_credits", "Бонус, 🍌"),
+        ("purchase_cashback_credits", "Кешбэк прямому рефереру, 🐾"),
+        ("legacy_bonus_credits", "Исторический разовый бонус, 🐾"),
     ],
     "partner_commissions": [
         ("transaction_id", "Transaction ID"),
