@@ -67,8 +67,8 @@ async def test_telegram_webhook_routes_and_credits_once(tmp_path, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_telegram_referral_inviter_gift_is_awarded_after_first_purchase_once(tmp_path, monkeypatch):
-    monkeypatch.setattr(database, "DATABASE_PATH", str(tmp_path / "referral-gift.db"))
+async def test_telegram_referral_cashback_is_paid_on_each_distinct_purchase_once(tmp_path, monkeypatch):
+    monkeypatch.setattr(database, "DATABASE_PATH", str(tmp_path / "referral-cashback.db"))
     await database.init_db()
     from bot.services import referral_service
 
@@ -98,47 +98,42 @@ async def test_telegram_referral_inviter_gift_is_awarded_after_first_purchase_on
     assert after_attach.credits == before_referrer.credits
     assert after_attach.referral_earned == before_referrer.referral_earned
 
-    async with db.connect() as connection:
-        connection.row_factory = db.Row
-        referral = await (await connection.execute(
-            "SELECT bonus_credits FROM referrals WHERE referrer_id=? AND referred_id=?",
-            (referrer.id, referred.id),
-        )).fetchone()
-        assert referral is not None
-        assert int(referral["bonus_credits"] or 0) == 0
+    cashback = int(get_business_rules()["inviter_bonus_credits"])
+    for index in (1, 2):
+        order_id = f"ref-order-{index}"
+        await database.create_transaction(
+            order_id=order_id,
+            user_id=referred.id,
+            credits=25,
+            amount_rub=250,
+            provider="yookassa",
+            payment_id=f"ref-payment-{index}",
+        )
+        completion = await database.complete_payment_atomic(order_id)
+        assert completion["ok"] is True
+        assert completion["already_completed"] is False
+        assert completion["referral_bonus"]["purchase_cashback_credits"] == cashback
 
-    await database.create_transaction(
-        order_id="ref-first-order",
-        user_id=referred.id,
-        credits=25,
-        amount_rub=250,
-        provider="yookassa",
-        payment_id="ref-first-payment",
-    )
+        duplicate = await database.complete_payment_atomic(order_id)
+        assert duplicate["ok"] is True
+        assert duplicate["already_completed"] is True
 
-    completion = await database.complete_payment_atomic("ref-first-order")
-    assert completion["ok"] is True
-    assert completion["already_completed"] is False
-    assert completion["referral_bonus"]["invite_bonus_credits"] == get_business_rules()["inviter_bonus_credits"]
-
-    after_first_purchase = await database.get_or_create_user(930)
-    assert after_first_purchase.credits == before_referrer.credits + get_business_rules()["inviter_bonus_credits"]
-    assert after_first_purchase.referral_earned == before_referrer.referral_earned + get_business_rules()["inviter_bonus_credits"]
-
-    duplicate = await database.complete_payment_atomic("ref-first-order")
-    assert duplicate["ok"] is True
-    assert duplicate["already_completed"] is True
-    after_duplicate = await database.get_or_create_user(930)
-    assert after_duplicate.credits == after_first_purchase.credits
-    assert after_duplicate.referral_earned == after_first_purchase.referral_earned
+    after_two_purchases = await database.get_or_create_user(930)
+    assert after_two_purchases.credits == before_referrer.credits + cashback * 2
+    assert after_two_purchases.referral_earned == before_referrer.referral_earned + cashback * 2
 
     async with db.connect() as connection:
         connection.row_factory = db.Row
-        referral = await (await connection.execute(
-            "SELECT bonus_credits FROM referrals WHERE referrer_id=? AND referred_id=?",
-            (referrer.id, referred.id),
-        )).fetchone()
-        assert int(referral["bonus_credits"] or 0) == get_business_rules()["inviter_bonus_credits"]
+        rows = await (
+            await connection.execute(
+                "SELECT transaction_id, referrer_id, credits "
+                "FROM referral_purchase_credit_rewards "
+                "WHERE referrer_id=? ORDER BY transaction_id",
+                (referrer.id,),
+            )
+        ).fetchall()
+        assert len(rows) == 2
+        assert [int(row["credits"]) for row in rows] == [cashback, cashback]
 
 
 @pytest.mark.asyncio
