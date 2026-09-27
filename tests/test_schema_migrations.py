@@ -125,6 +125,7 @@ def test_prompt_feed_schema_repair_is_registered_as_migration_v2() -> None:
         (1, "unique payment provider identity"),
         (2, "prompt feed compatibility columns"),
         (3, "durable payment buyer notifications"),
+        (4, "recurring referral purchase credit ledger"),
     ]
 
 
@@ -156,3 +157,16 @@ async def test_prompt_feed_schema_migration_uses_raw_postgres_ddl(monkeypatch) -
     )
     for fragment in required_fragments:
         assert fragment in executed
+
+
+@pytest.mark.asyncio
+async def test_referral_purchase_credit_migration_uses_raw_postgres_ddl(monkeypatch) -> None:
+    monkeypatch.setattr(schema_migrations.db_backend, "is_postgres", lambda: True)
+    connection = _CompatibilityPostgresConnection()
+
+    await schema_migrations._referral_purchase_credit_ledger(connection)
+
+    executed = "\n".join(connection._conn.statements)
+    assert "CREATE TABLE IF NOT EXISTS referral_purchase_credit_rewards" in executed
+    assert "UNIQUE(transaction_id, referrer_id)" in executed
+    assert "CREATE INDEX IF NOT EXISTS idx_referral_purchase_credit_referrer" in executed
