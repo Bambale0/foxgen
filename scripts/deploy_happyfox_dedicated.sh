@@ -8,7 +8,7 @@ EXPECTED_SHA="${1:-$(git -C "$PROJECT_DIR" rev-parse HEAD)}"
 API_ORIGIN="${HAPPYFOX_API_ORIGIN:-}"
 APP_ORIGIN="${HAPPYFOX_APP_ORIGIN:-}"
 MAX_APP_ORIGIN="${HAPPYFOX_MAX_APP_ORIGIN:-$APP_ORIGIN}"
-LANDING_ORIGIN="${HAPPYFOX_LANDING_ORIGIN:-$APP_ORIGIN}"
+LANDING_ORIGIN="${HAPPYFOX_LANDING_ORIGIN:-}"
 DATABASE_NAME="${HAPPYFOX_DATABASE_NAME:-happyfox_cutover}"
 TELEGRAM_RELAY_IP="${HAPPYFOX_TELEGRAM_RELAY_IP:-2.27.160.11}"
 GITHUB_REPO="${HAPPYFOX_GITHUB_REPO:-Bambale0/foxgen}"
@@ -22,13 +22,17 @@ RUNTIME_ENV="$PROJECT_DIR/.env.happyfox.runtime"
   echo "HAPPYFOX_DATABASE_NAME must be a simple SQL identifier" >&2
   exit 1
 }
-for origin_name in API_ORIGIN APP_ORIGIN MAX_APP_ORIGIN LANDING_ORIGIN; do
+for origin_name in API_ORIGIN APP_ORIGIN MAX_APP_ORIGIN; do
   origin="${!origin_name}"
   [[ "$origin" =~ ^https://[^/]+$ ]] || {
     echo "$origin_name must be an HTTPS origin without a path" >&2
     exit 1
   }
 done
+if [[ -n "$LANDING_ORIGIN" && ! "$LANDING_ORIGIN" =~ ^https://[^/]+$ ]]; then
+  echo "LANDING_ORIGIN must be empty or an HTTPS origin without a path" >&2
+  exit 1
+fi
 
 cd "$PROJECT_DIR"
 [[ -s .env && -s "$RUNTIME_ENV" ]] || {
@@ -238,19 +242,24 @@ if [[ "$MAX_APP_ORIGIN" != "$APP_ORIGIN" ]]; then
   max_live_revision="$(curl -fsS --retry 8 --retry-delay 2 --retry-all-errors --max-time 20 "$MAX_APP_ORIGIN/mini-app/revision.txt?revision=$EXPECTED_SHA")"
   [[ "$max_live_revision" == "$EXPECTED_SHA" ]]
 fi
-curl -fsS --retry 5 --retry-delay 2 --retry-all-errors --max-time 20 "$LANDING_ORIGIN/" | grep -Fq 'https://t.me/'
-robots_body="$(curl -fsS --retry 5 --retry-delay 2 --retry-all-errors --max-time 20 "$LANDING_ORIGIN/robots.txt")"
-grep -Fq "Sitemap: ${LANDING_ORIGIN}/sitemap.xml" <<<"$robots_body" || {
-  echo "HappyFox public robots.txt is missing canonical sitemap directive" >&2
-  exit 1
-}
-sitemap_body="$(curl -fsS --retry 5 --retry-delay 2 --retry-all-errors --max-time 20 "$LANDING_ORIGIN/sitemap.xml")"
-grep -Fq "<loc>${LANDING_ORIGIN}/</loc>" <<<"$sitemap_body" || {
-  echo "HappyFox public sitemap.xml is not the canonical XML sitemap" >&2
-  exit 1
-}
+if [[ -n "$LANDING_ORIGIN" ]]; then
+  curl -fsS --retry 5 --retry-delay 2 --retry-all-errors --max-time 20 "$LANDING_ORIGIN/" | grep -Fq 'https://t.me/'
+  robots_body="$(curl -fsS --retry 5 --retry-delay 2 --retry-all-errors --max-time 20 "$LANDING_ORIGIN/robots.txt")"
+  grep -Fq "Sitemap: ${LANDING_ORIGIN}/sitemap.xml" <<<"$robots_body" || {
+    echo "HappyFox public robots.txt is missing canonical sitemap directive" >&2
+    exit 1
+  }
+  sitemap_body="$(curl -fsS --retry 5 --retry-delay 2 --retry-all-errors --max-time 20 "$LANDING_ORIGIN/sitemap.xml")"
+  grep -Fq "<loc>${LANDING_ORIGIN}/</loc>" <<<"$sitemap_body" || {
+    echo "HappyFox public sitemap.xml is not the canonical XML sitemap" >&2
+    exit 1
+  }
+fi
 
-miniapp_origins=("$APP_ORIGIN" "$LANDING_ORIGIN")
+miniapp_origins=("$APP_ORIGIN")
+if [[ -n "$LANDING_ORIGIN" && "$LANDING_ORIGIN" != "$APP_ORIGIN" ]]; then
+  miniapp_origins+=("$LANDING_ORIGIN")
+fi
 if [[ "$MAX_APP_ORIGIN" != "$APP_ORIGIN" && "$MAX_APP_ORIGIN" != "$LANDING_ORIGIN" ]]; then
   miniapp_origins+=("$MAX_APP_ORIGIN")
 fi
@@ -304,4 +313,4 @@ docker logs foxgen-happyfox-bot 2>&1 | grep -F "$API_ORIGIN/max/webhook" >/dev/n
 
 docker exec -e SEND_BACKUP_TO_ADMINS=0 foxgen-happyfox-bot bash /app/scripts/backup_db.sh
 
-echo "[happyfox-dedicated] DEPLOY_OK revision=$EXPECTED_SHA api=$API_ORIGIN telegram_app=$APP_ORIGIN max_app=$MAX_APP_ORIGIN landing=$LANDING_ORIGIN db=$DATABASE_NAME"
+echo "[happyfox-dedicated] DEPLOY_OK revision=$EXPECTED_SHA api=$API_ORIGIN telegram_app=$APP_ORIGIN max_app=$MAX_APP_ORIGIN landing=${LANDING_ORIGIN:-none} db=$DATABASE_NAME"

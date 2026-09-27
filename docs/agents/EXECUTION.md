@@ -1,3 +1,17 @@
+# Active: optional landing gate on unified production origin
+
+Baseline: main d2dcb28a283b84450fc3c23b2eead7bf14d81a48, branch fix/optional-production-landing-20260927.
+
+Production evidence after the domain-origin fix: the canonical deploy built and recreated `foxgen-happyfox-bot` on `vpncreative2026`; health and Mini App revision both report `d2dcb28a283b84450fc3c23b2eead7bf14d81a48`, Telegram webhook reconciliation and MAX subscription/commands succeeded on `https://alena.xn--e1aikcel5c5a.online`. The workflow still exited non-zero after nginx because the deploy script treated the shared origin as a dedicated marketing landing and required `/` to contain a Telegram link plus canonical `robots.txt`/`sitemap.xml`. Actual production contract is `/ -> 302 /mini-app/`, `/mini-app/ -> 200`, health 200, while robots/sitemap are not served there.
+
+Acceptance: `HAPPYFOX_LANDING_ORIGIN` is optional. When unset, deployment must skip landing-only marketing/SEO gates and validate API/App/MAX/Mini App/channel reconciliation only. When explicitly configured, the existing dedicated landing CTA/robots/sitemap checks remain mandatory. No referral, payment, balance, database schema, generation, Telegram or MAX business behavior changes.
+
+Antifraud/payment applicability: N/A; this is deployment verification only. Telegram/MAX/Mini App compatibility remains required. Instagram behavior N/A.
+
+Verification: test-first source contracts for optional landing semantics; full exact-head CI; two-axis review against main; PR merge; exact-main CI; canonical deploy must complete green; then verify production SHA, health, Mini App revision, Telegram webhook and MAX subscription/commands.
+
+---
+
 # Active: production origin drift in canonical deploy
 
 Baseline: main 1881b8eff1d634d62cd5c68b3432e229f495df85, branch fix/production-origin-deploy-20260927.
