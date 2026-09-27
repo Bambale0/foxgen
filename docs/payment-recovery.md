@@ -12,7 +12,7 @@ Checkout ownership and a durable creation snapshot are saved before the external
 
 The existing authenticated, actor-audited, versioned tariffs API publishes `business_rules` alongside prices. Existing snapshots without this key receive bundled defaults. Fields and their defaults are in `bot/business_rules_defaults.json`; validation rejects unknown fields, non-finite values, invalid percentages, retry bounds, bonus maps and template placeholders. A completion snapshots monetary policy once. Historical finance reports use recorded commission amounts and rates rather than current tariffs. Partner screens display current shared rates.
 
-Fields include first/second referral percentages, signup/inviter bonuses, MAX RUB-per-credit conversion, package promo bonuses, notification retry attempts/delays/poll interval and buyer/referrer templates. Preserve the entire price snapshot when publishing. Changed rates apply to future completions; they do not recalculate historical balances.
+Fields include first/second referral percentages, the new-user welcome credit and direct-referral per-purchase cashback (`inviter_bonus_credits`), MAX RUB-per-credit conversion, package promo bonuses, notification retry attempts/delays/poll interval and buyer/referrer templates. Preserve the entire price snapshot when publishing. Changed rates apply to future completions; they do not recalculate historical balances.
 
 ## Delivery and readiness
 
@@ -31,6 +31,6 @@ SELECT order_id,status FROM max_payment_orders WHERE status IN ('created','pendi
 
 ## Migration and release
 
-Migration 3 adds checkout intents, promo redemption and delivery tables without deleting old schema or balances. Run the registered migrations before channel/delivery contexts. Existing pending orders with known IDs use the new path; legacy orders with missing IDs and no creation snapshot cannot be recreated safely. Historical completed orders do not receive unsolicited backfilled notifications. Rollback retains expanded tables and ledger data; pause the new delivery worker when rolling back rather than deleting records.
+Migration 3 adds checkout intents, promo redemption and delivery tables without deleting old schema or balances. Migration 4 adds the Telegram recurring referral purchase-credit ledger; it does not backfill historical purchases or change existing balances. Run the registered migrations before channel/delivery contexts. Existing pending orders with known IDs use the new path; legacy orders with missing IDs and no creation snapshot cannot be recreated safely. Historical completed orders do not receive unsolicited backfilled notifications. Rollback retains expanded tables and ledger data; pause the new delivery worker when rolling back rather than deleting records.
 
 CI includes real PostgreSQL concurrency with 16 simultaneous completions for each channel, provider final-state checks, ownership mismatch, HTTP duplicate routing, atomic failure recovery, durable creation bounds, promo redemption and notification retries. Browser tests use mocked bridge/API data and do not establish successful live payment delivery. Native Telegram/MAX payment confirmation and cabinet configuration require separate external evidence.
