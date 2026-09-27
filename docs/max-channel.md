@@ -247,7 +247,7 @@ Mini App deep links use the MAX-native form:
 https://max.ru/<botName>?startapp=<payload>
 ```
 
-`bot_started.payload` records at most one referral edge per invited MAX user. Self-referrals and referral cycles are rejected. Signup and purchase rewards are MAX-ledger entries with idempotency keys.
+`bot_started.payload` records at most one referral edge per invited MAX user. Self-referrals and referral cycles are rejected. Registration does not reward the inviter; every verified purchase pays the configured direct-referral cashback once per MAX order. Purchase rewards are MAX-ledger entries with idempotency keys.
 
 Economics remain owned by `data/max_price.json`; UX parity does not mean silently sharing Telegram database state.
 

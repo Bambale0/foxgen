@@ -1712,7 +1712,7 @@ async def process_referral(
     signup_bonus: int = 0,
     inviter_bonus: int | None = None,
 ) -> bool:
-    """Закрепляет пользователя за партнёром; подарок пригласившему начисляется после первой покупки."""
+    """Закрепляет пользователя за партнёром; кешбэк пригласившему начисляется после покупок."""
     if inviter_bonus is None:
         inviter_bonus = get_business_rules()["inviter_bonus_credits"]
     referral_code = (referral_code or "").strip().upper()
@@ -2173,33 +2173,31 @@ async def complete_payment_atomic(
                 }
 
                 inviter_bonus_credits = int(rules.get("inviter_bonus_credits") or 0)
-                if not user_already_paid and inviter_bonus_credits > 0:
+                if inviter_bonus_credits > 0:
                     await db.execute(
                         "INSERT OR IGNORE INTO referrals (referrer_id, referred_id, bonus_credits) VALUES (?, ?, 0)",
                         (ref1_id, txn_row["user_id"]),
                     )
-                    gift_cursor = await db.execute(
+                    await db.execute(
                         """
                         UPDATE referrals
-                        SET bonus_credits = ?
+                        SET bonus_credits = COALESCE(bonus_credits, 0) + ?
                         WHERE referrer_id = ?
                           AND referred_id = ?
-                          AND COALESCE(bonus_credits, 0) = 0
                         """,
                         (inviter_bonus_credits, ref1_id, txn_row["user_id"]),
                     )
-                    if gift_cursor.rowcount == 1:
-                        await db.execute(
-                            """
-                            UPDATE users
-                            SET credits = credits + ?,
-                                referral_earned = referral_earned + ?,
-                                updated_at = CURRENT_TIMESTAMP
-                            WHERE id = ?
-                            """,
-                            (inviter_bonus_credits, inviter_bonus_credits, ref1_id),
-                        )
-                        referral_bonus["invite_bonus_credits"] = inviter_bonus_credits
+                    await db.execute(
+                        """
+                        UPDATE users
+                        SET credits = credits + ?,
+                            referral_earned = referral_earned + ?,
+                            updated_at = CURRENT_TIMESTAMP
+                        WHERE id = ?
+                        """,
+                        (inviter_bonus_credits, inviter_bonus_credits, ref1_id),
+                    )
+                    referral_bonus["invite_bonus_credits"] = inviter_bonus_credits
 
             # 5. promo redemption
             promo_bonus: dict[str, Any] = {}
@@ -2252,8 +2250,8 @@ async def complete_payment_atomic(
                         db, channel="telegram", order_id=f"{order_id}:referrer:gift",
                         recipient_id=int(referral_bonus["referrer_telegram_id"]),
                         message=(
-                            "🎁 <b>Подарок за реферала</b>\n\n"
-                            f"Ваш реферал сделал первую покупку. Начислено: "
+                            "🎁 <b>Кешбэк за покупку реферала</b>\n\n"
+                            f"Ваш реферал сделал покупку. Начислено: "
                             f"<code>{int(referral_bonus['invite_bonus_credits'] or 0)}</code>🐾"
                         ),
                     )
