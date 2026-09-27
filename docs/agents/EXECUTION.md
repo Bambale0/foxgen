@@ -18,6 +18,10 @@ Release: additive schema only; rollback leaves the ledger table harmlessly in pl
 
 Skills/guides: `Bambale0/skills` engineering `implement`, `tdd`, `code-review`; `Bambale0/claw` QA/idempotency guidance; `wondelai/skills` `release-it`; Anthropic skills searched for payment/idempotency guidance, no directly applicable skill found.
 
+Progress: TDD RED captured on test-only head `b995f71c` (backend regression failed as expected while dependency/callback/frontend gates stayed green). Implementation now uses a per-payment Telegram ledger and per-order MAX idempotency key; Telegram/MAX partner copy is aligned, PostgreSQL migration v4 is registered, runtime readiness requires the new ledger, and no historical purchase backfill is performed. Standards/Spec self-review found and corrected two drift points before the final gate: MAX tests now derive cashback from mutable business rules instead of hardcoding 3, and admin referral exports expose recurring purchase cashback separately from the legacy one-time `referrals.bonus_credits` field.
+
+Review status: Standards pass after the above corrections; Spec pass for welcome-credit preservation, registration=0 for inviter, recurring direct-referral cashback, 30%/7% preservation, duplicate/replay protection, Telegram/Mini App/MAX parity, and no retroactive credits. Remaining external validation is exact-head CI, merge/deploy, production migration/revision/health and telemetry evidence; no real paid customer purchase will be manufactured for smoke testing.
+
 ---
 
 # Active: fix/telegram-rich-message-prompts — rich_message prompts were silently dropped
