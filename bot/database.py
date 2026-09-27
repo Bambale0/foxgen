@@ -1066,6 +1066,29 @@ async def init_db():
             )
         """)
 
+        # SQLite compatibility ledger. PostgreSQL creates the same table through
+        # registered schema migration v4 before application startup.
+        if not db_backend.is_postgres():
+            await db.execute("""
+                CREATE TABLE IF NOT EXISTS referral_purchase_credit_rewards (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    transaction_id INTEGER NOT NULL,
+                    order_id TEXT NOT NULL,
+                    buyer_user_id INTEGER NOT NULL,
+                    referrer_id INTEGER NOT NULL,
+                    credits INTEGER NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (transaction_id) REFERENCES transactions(id),
+                    FOREIGN KEY (buyer_user_id) REFERENCES users(id),
+                    FOREIGN KEY (referrer_id) REFERENCES users(id),
+                    UNIQUE(transaction_id, referrer_id)
+                )
+            """)
+            await db.execute(
+                "CREATE INDEX IF NOT EXISTS idx_referral_purchase_credit_referrer "
+                "ON referral_purchase_credit_rewards(referrer_id, created_at DESC)"
+            )
+
         await db.execute("""
             CREATE TABLE IF NOT EXISTS feed_comments (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1712,7 +1735,7 @@ async def process_referral(
     signup_bonus: int = 0,
     inviter_bonus: int | None = None,
 ) -> bool:
-    """Закрепляет пользователя за партнёром; подарок пригласившему начисляется после первой покупки."""
+    """Закрепляет пользователя за партнёром; cashback пригласившему платится только после покупок."""
     if inviter_bonus is None:
         inviter_bonus = get_business_rules()["inviter_bonus_credits"]
     referral_code = (referral_code or "").strip().upper()
@@ -2173,22 +2196,24 @@ async def complete_payment_atomic(
                 }
 
                 inviter_bonus_credits = int(rules.get("inviter_bonus_credits") or 0)
-                if not user_already_paid and inviter_bonus_credits > 0:
-                    await db.execute(
-                        "INSERT OR IGNORE INTO referrals (referrer_id, referred_id, bonus_credits) VALUES (?, ?, 0)",
-                        (ref1_id, txn_row["user_id"]),
-                    )
-                    gift_cursor = await db.execute(
+                if inviter_bonus_credits > 0:
+                    cashback_cursor = await db.execute(
                         """
-                        UPDATE referrals
-                        SET bonus_credits = ?
-                        WHERE referrer_id = ?
-                          AND referred_id = ?
-                          AND COALESCE(bonus_credits, 0) = 0
+                        INSERT INTO referral_purchase_credit_rewards (
+                            transaction_id, order_id, buyer_user_id, referrer_id, credits
+                        )
+                        VALUES (?, ?, ?, ?, ?)
+                        ON CONFLICT(transaction_id, referrer_id) DO NOTHING
                         """,
-                        (inviter_bonus_credits, ref1_id, txn_row["user_id"]),
+                        (
+                            txn_row["id"],
+                            order_id,
+                            txn_row["user_id"],
+                            ref1_id,
+                            inviter_bonus_credits,
+                        ),
                     )
-                    if gift_cursor.rowcount == 1:
+                    if cashback_cursor.rowcount == 1:
                         await db.execute(
                             """
                             UPDATE users
@@ -2199,7 +2224,19 @@ async def complete_payment_atomic(
                             """,
                             (inviter_bonus_credits, inviter_bonus_credits, ref1_id),
                         )
+                        # Keep the legacy key for callers during the transition,
+                        # but the new name describes the recurring semantics.
+                        referral_bonus["purchase_cashback_credits"] = inviter_bonus_credits
                         referral_bonus["invite_bonus_credits"] = inviter_bonus_credits
+                        logger.info(
+                            "referral_purchase_cashback channel=telegram transaction_id=%s "
+                            "order_id=%s buyer_user_id=%s referrer_user_id=%s credits=%s",
+                            txn_row["id"],
+                            order_id,
+                            txn_row["user_id"],
+                            ref1_id,
+                            inviter_bonus_credits,
+                        )
 
             # 5. promo redemption
             promo_bonus: dict[str, Any] = {}
@@ -2247,15 +2284,16 @@ async def complete_payment_atomic(
                     message=buyer_message(transaction.credits, transaction.amount_rub),
                 )
                 from bot.business_rules import referrer_message
-                if int(referral_bonus.get("invite_bonus_credits") or 0) > 0 and referral_bonus.get("referrer_telegram_id"):
+                cashback_credits = int(
+                    referral_bonus.get("purchase_cashback_credits") or 0
+                )
+                if cashback_credits > 0 and referral_bonus.get("referrer_telegram_id"):
                     await enqueue_payment_notification(
-                        db, channel="telegram", order_id=f"{order_id}:referrer:gift",
+                        db,
+                        channel="telegram",
+                        order_id=f"{order_id}:referrer:cashback",
                         recipient_id=int(referral_bonus["referrer_telegram_id"]),
-                        message=(
-                            "🎁 <b>Подарок за реферала</b>\n\n"
-                            f"Ваш реферал сделал первую покупку. Начислено: "
-                            f"<code>{int(referral_bonus['invite_bonus_credits'] or 0)}</code>🐾"
-                        ),
+                        message=referrer_message(1, cashback_credits, "🐾"),
                     )
                 targets = [
                     (1, referral_bonus.get("referrer_user_id"), referral_bonus.get("referrer_telegram_id"), referral_bonus.get("value", 0)),
