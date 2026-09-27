@@ -1,6 +1,7 @@
 import asyncio
 
 from bot import database
+from bot.business_rules import get_business_rules
 from bot.max_payments import (
     MaxYooKassaService,
     get_max_payment_order,
@@ -99,7 +100,7 @@ def test_max_referrals_award_cashback_on_each_distinct_purchase_once(tmp_path, m
     assert before_l2 == 5
 
     service, _ = _payment_service(monkeypatch)
-    cashback = 3
+    cashback = float(get_business_rules()["inviter_bonus_credits"])
 
     first_order = asyncio.run(service.create_checkout(30, "start"))
     first_result = asyncio.run(service.complete_order(first_order.order_id))
