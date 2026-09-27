@@ -260,12 +260,15 @@ class MaxChannelService:
         partner = get_business_rules()
         l1 = _format_cost(float(partner.get("level1_percent") or 0))
         l2 = _format_cost(float(partner.get("level2_percent") or 0))
+        cashback = _format_cost(float(partner.get("inviter_bonus_credits") or 0))
         await self._respond(
             user_id,
             "🤝 <b>Партнёрская программа MAX</b>\n\n"
             f"Приглашено: <b>{int(stats['referrals'])}</b>\n"
             f"Заработано: <b>{_format_cost(float(stats['earned_credits']))} 🐾</b>\n"
-            f"Покупки: <b>{l1}%</b> с 1 уровня и <b>{l2}%</b> со 2 уровня.\n\n"
+            f"Покупки: <b>{l1}%</b> с 1 уровня и <b>{l2}%</b> со 2 уровня.\n"
+            f"Кешбэк: <b>+{cashback} 🐾</b> после каждой подтверждённой покупки прямого реферала.\n"
+            "За регистрацию лапки пригласившему не начисляются.\n\n"
             f"Ваша ссылка:\n{html.escape(invite)}",
             attachments=back_home_menu(),
             callback_id=callback_id,
@@ -775,20 +778,26 @@ class MaxChannelService:
         if update_type == "bot_started":
             payload = str(update.get("payload") or "").strip()
             referral = _REFERRAL_PAYLOAD_RE.fullmatch(payload)
-            bonus_applied = False
+            referral_attached = False
             if referral:
-                bonus_applied = await register_max_referral(
+                referral_attached = await register_max_referral(
                     user_id,
                     int(referral.group(1)),
                     catalog=self.catalog,
                 )
             await self._home(user_id)
-            if bonus_applied:
-                balance = await get_max_balance(user_id)
+            if referral_attached:
+                from bot.business_rules import get_business_rules
+
+                cashback = float(
+                    get_business_rules().get("inviter_bonus_credits") or 0
+                )
                 await self.client.send_message(
                     user_id,
-                    "🎁 Реферальный бонус MAX начислен. "
-                    f"Баланс: {_format_cost(balance)} 🐾",
+                    "🤝 Реферальная ссылка применена. "
+                    "Приветственные лапки остаются у вас, а пригласившему "
+                    f"будет начисляться +{_format_cost(cashback)} 🐾 "
+                    "после каждой вашей подтверждённой покупки.",
                 )
             return
 
