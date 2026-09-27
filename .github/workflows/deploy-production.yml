@@ -234,6 +234,6 @@ jobs:
             echo "- API/webhooks: \`$API_ORIGIN\`"
             echo "- Telegram Mini App: \`$APP_ORIGIN/mini-app/\`"
             echo "- MAX Mini App: \`${MAX_APP_ORIGIN}/mini-app/\`"
-            echo "- Landing: `$LANDING_ORIGIN/`"
+            echo "- Landing: \`$LANDING_ORIGIN/\`"
             echo '- Telegram webhook and MAX subscription are reconciled by the deploy gate.'
           } >> "$GITHUB_STEP_SUMMARY"
