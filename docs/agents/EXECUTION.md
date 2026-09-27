@@ -1,3 +1,21 @@
+# Active: production origin drift in canonical deploy
+
+Baseline: main 1881b8eff1d634d62cd5c68b3432e229f495df85, branch fix/production-origin-deploy-20260927.
+
+Fresh audit: GitHub Environment currently supplies API_ORIGIN, APP_ORIGIN and MAX_APP_ORIGIN as `https://alena.xn--e1aikcel5c5a.online` (human-readable: `https://alena.нейроныч.online`). The referral release itself passed exact-SHA CI and the deploy reached image build/container recreation, but the canonical deploy script/workflow still hardcode legacy `happy-fox.online` as the landing origin. The deploy therefore failed during post-deploy smoke with DNS resolution errors for a retired domain even though the current production origin variables were correct.
+
+Acceptance: canonical deploy must take landing/API/app/MAX origins from protected GitHub Environment/runtime configuration; no retired HappyFox domain may be a release-critical fallback; if landing is not separately configured it follows APP_ORIGIN; public smoke and deployment summary use the effective landing variable; exact-SHA release path, database, Telegram relay and channel behavior stay unchanged.
+
+Risk/impact: deployment-only/configuration-path change. No payment/referral/balance schema or user data mutation. Production deploy is expected to rerun the already-green main revision after the workflow fix. Rollback is reverting the workflow/script commit; no data rollback needed.
+
+Observability: deployment logs already print effective non-secret origins and exact SHA. Post-deploy verification must confirm health/revision on the configured current origin and that Telegram/MAX reconciliation succeeds.
+
+Verification plan: regression-test workflow/script source contracts first; Ruff/compile where applicable; full CI; two-axis review against main using AGENTS.md + this section as spec; merge via PR; canonical deploy; verify exact deployed revision and channel reconciliation. Paid payment smoke is N/A.
+
+Skills/guides: Bambale0/skills ask-matt + code-review; Bambale0/claw payment/release safety checklist. wondelai/skills and anthropics/skills searched for directly applicable deploy-origin guidance; no narrower matching skill found.
+
+---
+
 # Active: referral purchase cashback parity — Telegram + MAX
 
 Baseline: main 18e02aabe9ea2bc0f5d9c8981bf59b274c7628b7, branch feat/referral-credit-every-purchase-20260927.
