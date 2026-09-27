@@ -3249,7 +3249,13 @@ async def get_admin_finance_report(limit: int = 100) -> dict:
             SELECT
                 r.id,
                 r.created_at AS referral_created_at,
-                r.bonus_credits,
+                r.bonus_credits AS legacy_bonus_credits,
+                COALESCE((
+                    SELECT SUM(cash.credits)
+                    FROM referral_purchase_credit_rewards cash
+                    WHERE cash.referrer_id = r.referrer_id
+                      AND cash.buyer_user_id = r.referred_id
+                ), 0) AS purchase_cashback_credits,
                 ref.id AS referrer_user_id,
                 ref.telegram_id AS referrer_telegram_id,
                 ref.referral_code AS referrer_code,
@@ -3310,7 +3316,13 @@ async def get_admin_finance_report(limit: int = 100) -> dict:
                 l2.credits AS line2_balance,
                 l2.has_paid AS line2_has_paid,
                 r.created_at AS referral_created_at,
-                r.bonus_credits,
+                r.bonus_credits AS legacy_bonus_credits,
+                COALESCE((
+                    SELECT SUM(cash.credits)
+                    FROM referral_purchase_credit_rewards cash
+                    WHERE cash.referrer_id = l1.id
+                      AND cash.buyer_user_id = l2.id
+                ), 0) AS purchase_cashback_credits,
                 COALESCE(pay.payments_count, 0) AS payments_count,
                 COALESCE(pay.paid_rub, 0) AS paid_rub,
                 COALESCE(pay.paid_credits, 0) AS paid_credits,
