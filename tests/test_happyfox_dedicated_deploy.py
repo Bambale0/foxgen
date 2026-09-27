@@ -4,9 +4,11 @@ from pathlib import Path
 def test_dedicated_deploy_pins_three_public_origins_and_runtime_db() -> None:
     deploy = Path("scripts/deploy_happyfox_dedicated.sh").read_text(encoding="utf-8")
 
-    assert "https://api.happy-fox.online" in deploy
-    assert "https://app.happy-fox.online" in deploy
-    assert "https://happy-fox.online" in deploy
+    assert 'API_ORIGIN="${HAPPYFOX_API_ORIGIN:-}"' in deploy
+    assert 'APP_ORIGIN="${HAPPYFOX_APP_ORIGIN:-}"' in deploy
+    assert 'MAX_APP_ORIGIN="${HAPPYFOX_MAX_APP_ORIGIN:-$APP_ORIGIN}"' in deploy
+    assert 'LANDING_ORIGIN="${HAPPYFOX_LANDING_ORIGIN:-$APP_ORIGIN}"' in deploy
+    assert "happy-fox.online" not in deploy
     assert "HAPPYFOX_DATABASE_NAME:-happyfox_cutover" in deploy
     assert "recover_happyfox_channel_runtime.py" in deploy
     assert "install_russian_trusted_ca.sh" in deploy
@@ -18,7 +20,12 @@ def test_dedicated_deploy_pins_three_public_origins_and_runtime_db() -> None:
     assert "HAPPYFOX_TELEGRAM_RELAY_IP:-2.27.160.11" in deploy
     workflow = Path(".github/workflows/deploy-production.yml").read_text(encoding="utf-8")
     assert "HAPPYFOX_TELEGRAM_WEBHOOK_IP" in workflow
+    assert "HAPPYFOX_LANDING_ORIGIN" in workflow
+    assert 'LANDING_ORIGIN: ${{ vars.HAPPYFOX_LANDING_ORIGIN || vars.HAPPYFOX_APP_ORIGIN }}' in workflow
+    assert 'HAPPYFOX_LANDING_ORIGIN="$landing_origin"' in workflow
     assert 'HAPPYFOX_TELEGRAM_RELAY_IP="$telegram_webhook_ip"' in workflow
+    assert "https://happy-fox.online" not in workflow
+    assert 'echo "- Landing: \\`$LANDING_ORIGIN/\\`"' in workflow
     assert 'values["TELEGRAM_WEBHOOK_URL"] = f"{api}/webhook"' in deploy
     assert 'telegram_webhook_url = values.get("TELEGRAM_WEBHOOK_URL", "").strip()' not in deploy
     assert 'values["TELEGRAM_WEBHOOK_IP_ADDRESS"] = telegram_relay_ip' in deploy
