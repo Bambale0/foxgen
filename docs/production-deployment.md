@@ -8,11 +8,11 @@ This document describes the accepted production path. Historical NEUROMIX servic
 
 ```text
 Product:          happyfox
-Dedicated host:   happyfox
-Landing:          https://happy-fox.online/
-Mini App:         https://app.happy-fox.online/mini-app/
-API/webhooks:     https://api.happy-fox.online
-Compose project:  foxgen-happyfox
+Production host:  configured by HAPPYFOX_DEPLOY_HOST
+API/App/MAX:       configured by HAPPYFOX_API_ORIGIN / HAPPYFOX_APP_ORIGIN / HAPPYFOX_MAX_APP_ORIGIN
+Landing:           HAPPYFOX_LANDING_ORIGIN; defaults to HAPPYFOX_APP_ORIGIN
+Current origin:    https://alena.xn--e1aikcel5c5a.online (https://alena.нейроныч.online)
+Compose project:   foxgen-happyfox
 Container:        foxgen-happyfox-bot
 Database:         happyfox_cutover
 Redis prefix:     foxgen_happyfox
@@ -66,16 +66,16 @@ Post-deploy checks should include:
 
 ```text
 container/service healthy
-https://api.happy-fox.online/health succeeds
+$HAPPYFOX_API_ORIGIN/health succeeds
 Mini App static revision equals expected SHA
 landing returns 200
 PostgreSQL 17 reachable and pre/post backup verified
 Redis namespace isolated
 happyfox-docker-prune.timer enabled and waiting
-Telegram webhook URL is https://api.happy-fox.online/webhook
+Telegram webhook URL is $HAPPYFOX_API_ORIGIN/webhook
 Telegram pending_update_count = 0 and last_error_message is empty
 Telegram native chat menu type = commands
-MAX has exactly one subscription, matching MAX_WEBHOOK_URL (api.happy-fox.online)
+MAX has exactly one subscription, matching the configured MAX_WEBHOOK_URL
 MAX native quick commands are /start, /feed, /prompts, /help, /ref, /earn
 YooKassa/provider webhook routes are live
 ```
@@ -85,13 +85,13 @@ YooKassa/provider webhook routes are live
 The application/data plane stays on the dedicated `happyfox` host. Because its network path to Telegram is currently unreliable, Telegram uses a transport-only `apix` relay:
 
 ```dotenv
-TELEGRAM_WEBHOOK_URL=https://api.happy-fox.online/webhook
+TELEGRAM_WEBHOOK_URL=$HAPPYFOX_API_ORIGIN/webhook
 TELEGRAM_WEBHOOK_IP_ADDRESS=<relay IPv4>
 ```
 
-`setWebhook` must use `drop_pending_updates=False`. The relay presents a valid certificate for `api.happy-fox.online`, forwards the request to the dedicated API origin and does not run a second bot worker. Outbound Bot API traffic is carried by `happyfox-telegram-egress.service`.
+`setWebhook` must use `drop_pending_updates=False`. The relay presents a valid certificate for the configured API origin, forwards the request to the dedicated API origin and does not run a second bot worker. Outbound Bot API traffic is carried by `happyfox-telegram-egress.service`.
 
-The apix relay owns a separate Let's Encrypt certificate for `api.happy-fox.online`. Telegram still uses the canonical URL/SNI `https://api.happy-fox.online/webhook`; `TELEGRAM_WEBHOOK_IP_ADDRESS` only pins ingress to the relay IPv4. Certificate renewal is handled on the relay host and must be followed by `nginx -t`/reload verification.
+Telegram uses the configured canonical `$HAPPYFOX_API_ORIGIN/webhook`; `TELEGRAM_WEBHOOK_IP_ADDRESS` only pins ingress to the relay IPv4. Certificate renewal is handled on the relay host and must be followed by `nginx -t`/reload verification.
 
 After each deploy, the system menu must be reconciled to the native quick-command launcher (`MenuButtonCommands`). The registered quick commands are `/photo`, `/video`, `/music`, `/motion`, `/feed`, `/trends`, `/balance`, `/start`; creator commands must interrupt stale FSM/assistant state and route directly to their product flow.
 
