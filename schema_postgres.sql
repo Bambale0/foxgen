@@ -167,6 +167,22 @@ CREATE TABLE IF NOT EXISTS referrals (
 );
 
 -- ============================================================
+-- REFERRAL PURCHASE CREDIT CASHBACK
+-- ============================================================
+CREATE TABLE IF NOT EXISTS referral_purchase_credit_rewards (
+    id BIGSERIAL PRIMARY KEY,
+    transaction_id BIGINT NOT NULL REFERENCES transactions(id),
+    order_id TEXT NOT NULL,
+    buyer_user_id BIGINT NOT NULL REFERENCES users(id),
+    referrer_id BIGINT NOT NULL REFERENCES users(id),
+    credits INTEGER NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(transaction_id, referrer_id)
+);
+CREATE INDEX IF NOT EXISTS idx_referral_purchase_credit_referrer
+    ON referral_purchase_credit_rewards(referrer_id, created_at DESC);
+
+-- ============================================================
 -- REFERRAL EVENTS (transition tracking)
 -- ============================================================
 CREATE TABLE IF NOT EXISTS referral_events (
