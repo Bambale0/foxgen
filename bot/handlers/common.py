@@ -1174,7 +1174,8 @@ async def _notify_partner_about_new_referral(
     text = (
         "🎉 <b>Новый реферал</b>\n\n"
         f"К вам присоединился: <b>{referred_name}</b>{referred_username_line}\n\n"
-        "Подарок пригласившему начислим после первой покупки реферала. "
+        "За регистрацию лапки пригласившему не начисляются. "
+        f"После каждой подтверждённой покупки вы получите +{get_business_rules()['inviter_bonus_credits']:g} 🐾 кешбэка. "
         "Партнёрские начисления с оплат появятся в вашей статистике."
     )
 
@@ -4302,7 +4303,8 @@ async def render_partner_program(target, user_id: int):
         f"Ваш реферал привёл ещё рефералов. За все их покупки вам также начисляется денежное вознаграждение — <code>{rules['level2_percent']:g}%</code>.\n\n"
         "• Вывод доступен после достижения минимальной суммы <code>1000₽</code>\n"
         f"• Каждый новый пользователь получает 🐾 <code>{rules['new_user_bonus_credits']:g}</code> лапок для тестирования бота\n"
-        f"• Подарок пригласившему: + 🐾 <code>{rules['inviter_bonus_credits']:g}</code> лапки после первой покупки реферала\n\n"
+        f"• Кешбэк пригласившему: + 🐾 <code>{rules['inviter_bonus_credits']:g}</code> лапки после каждой подтверждённой покупки прямого реферала\n"
+        "• За регистрацию реферала бесплатные лапки пригласившему не начисляются\n\n"
         "<b>Ваша статистика:</b>\n"
         f"👥 1 уровень: <code>{stats.get('level1_count', stats.get('referrals_count', 0))}</code>\n"
         f"👥 2 уровень: <code>{stats.get('level2_count', 0)}</code>\n"
