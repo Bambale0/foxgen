@@ -21,6 +21,7 @@ REQUIRED_TABLES = (
     "user_prompts",
     "promo_codes",
     "referrals",
+    "referral_purchase_credit_rewards",
 )
 
 
