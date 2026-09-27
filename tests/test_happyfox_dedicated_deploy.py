@@ -7,7 +7,7 @@ def test_dedicated_deploy_pins_three_public_origins_and_runtime_db() -> None:
     assert 'API_ORIGIN="${HAPPYFOX_API_ORIGIN:-}"' in deploy
     assert 'APP_ORIGIN="${HAPPYFOX_APP_ORIGIN:-}"' in deploy
     assert 'MAX_APP_ORIGIN="${HAPPYFOX_MAX_APP_ORIGIN:-$APP_ORIGIN}"' in deploy
-    assert 'LANDING_ORIGIN="${HAPPYFOX_LANDING_ORIGIN:-$APP_ORIGIN}"' in deploy
+    assert 'LANDING_ORIGIN="${HAPPYFOX_LANDING_ORIGIN:-}"' in deploy
     assert "happy-fox.online" not in deploy
     assert "HAPPYFOX_DATABASE_NAME:-happyfox_cutover" in deploy
     assert "recover_happyfox_channel_runtime.py" in deploy
@@ -21,11 +21,13 @@ def test_dedicated_deploy_pins_three_public_origins_and_runtime_db() -> None:
     workflow = Path(".github/workflows/deploy-production.yml").read_text(encoding="utf-8")
     assert "HAPPYFOX_TELEGRAM_WEBHOOK_IP" in workflow
     assert "HAPPYFOX_LANDING_ORIGIN" in workflow
-    assert 'LANDING_ORIGIN: ${{ vars.HAPPYFOX_LANDING_ORIGIN || vars.HAPPYFOX_APP_ORIGIN }}' in workflow
+    assert 'LANDING_ORIGIN: ${{ vars.HAPPYFOX_LANDING_ORIGIN }}' in workflow
     assert 'HAPPYFOX_LANDING_ORIGIN="$landing_origin"' in workflow
     assert 'HAPPYFOX_TELEGRAM_RELAY_IP="$telegram_webhook_ip"' in workflow
     assert "https://happy-fox.online" not in workflow
+    assert 'if [ -n "$LANDING_ORIGIN" ]; then' in workflow
     assert 'echo "- Landing: \\`$LANDING_ORIGIN/\\`"' in workflow
+    assert "Separate landing: not configured" in workflow
     assert 'values["TELEGRAM_WEBHOOK_URL"] = f"{api}/webhook"' in deploy
     assert 'telegram_webhook_url = values.get("TELEGRAM_WEBHOOK_URL", "").strip()' not in deploy
     assert 'values["TELEGRAM_WEBHOOK_IP_ADDRESS"] = telegram_relay_ip' in deploy
@@ -40,6 +42,7 @@ def test_dedicated_deploy_pins_three_public_origins_and_runtime_db() -> None:
     assert '$LANDING_ORIGIN/sitemap.xml' in deploy
     assert 'Sitemap: ${LANDING_ORIGIN}/sitemap.xml' in deploy
     assert '<loc>${LANDING_ORIGIN}/</loc>' in deploy
+    assert 'if [[ -n "$LANDING_ORIGIN" ]]; then' in deploy
     assert "backup_db.sh" in deploy
     assert "scripts/happyfox_docker_prune.sh" in deploy
     assert "happyfox-docker-prune.service" in deploy

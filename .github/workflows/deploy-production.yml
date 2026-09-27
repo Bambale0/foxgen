@@ -46,7 +46,7 @@ jobs:
       API_ORIGIN: ${{ vars.HAPPYFOX_API_ORIGIN }}
       APP_ORIGIN: ${{ vars.HAPPYFOX_APP_ORIGIN }}
       MAX_APP_ORIGIN: ${{ vars.HAPPYFOX_MAX_APP_ORIGIN || vars.HAPPYFOX_APP_ORIGIN }}
-      LANDING_ORIGIN: ${{ vars.HAPPYFOX_LANDING_ORIGIN || vars.HAPPYFOX_APP_ORIGIN }}
+      LANDING_ORIGIN: ${{ vars.HAPPYFOX_LANDING_ORIGIN }}
       TELEGRAM_WEBHOOK_IP: ${{ vars.HAPPYFOX_TELEGRAM_WEBHOOK_IP || '2.27.160.11' }}
       EXPECTED_HOST_FINGERPRINT: SHA256:5Ux1ce1iJuEkgOV5tDIqyZl0Fki6qYwC7PTWHekLX1c
       EXPECTED_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || inputs.commit_sha || github.sha }}
@@ -74,19 +74,22 @@ jobs:
           : "${API_ORIGIN:?Missing HappyFox API origin}"
           : "${APP_ORIGIN:?Missing HappyFox app origin}"
           : "${MAX_APP_ORIGIN:?Missing MAX app origin}"
-          : "${LANDING_ORIGIN:?Missing HappyFox landing origin}"
           : "${TELEGRAM_WEBHOOK_IP:?Missing Telegram webhook IP}"
           [[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]] || {
             echo "EXPECTED_SHA must be a full 40-character SHA" >&2
             exit 1
           }
-          for origin_name in API_ORIGIN APP_ORIGIN MAX_APP_ORIGIN LANDING_ORIGIN; do
+          for origin_name in API_ORIGIN APP_ORIGIN MAX_APP_ORIGIN; do
             origin="${!origin_name}"
             [[ "$origin" =~ ^https://[^/]+$ ]] || {
               echo "$origin_name must be an HTTPS origin without a path" >&2
               exit 1
             }
           done
+          if [ -n "$LANDING_ORIGIN" ] && [[ ! "$LANDING_ORIGIN" =~ ^https://[^/]+$ ]]; then
+            echo "LANDING_ORIGIN must be empty or an HTTPS origin without a path" >&2
+            exit 1
+          fi
 
       - name: Configure pinned SSH for dedicated host
         shell: bash
@@ -202,9 +205,14 @@ jobs:
               "$MAX_APP_ORIGIN/mini-app/revision.txt?revision=${EXPECTED_SHA}")"
             [ "$max_revision" = "$EXPECTED_SHA" ]
           fi
-          curl -fsS --retry 5 --retry-delay 2 --retry-all-errors --max-time 20 \
-            "$LANDING_ORIGIN/" >/dev/null
-          miniapp_origins=("$APP_ORIGIN" "$LANDING_ORIGIN")
+          miniapp_origins=("$APP_ORIGIN")
+          if [ -n "$LANDING_ORIGIN" ]; then
+            curl -fsS --retry 5 --retry-delay 2 --retry-all-errors --max-time 20 \
+              "$LANDING_ORIGIN/" >/dev/null
+            if [ "$LANDING_ORIGIN" != "$APP_ORIGIN" ]; then
+              miniapp_origins+=("$LANDING_ORIGIN")
+            fi
+          fi
           if [ "$MAX_APP_ORIGIN" != "$APP_ORIGIN" ] && [ "$MAX_APP_ORIGIN" != "$LANDING_ORIGIN" ]; then
             miniapp_origins+=("$MAX_APP_ORIGIN")
           fi
@@ -234,6 +242,10 @@ jobs:
             echo "- API/webhooks: \`$API_ORIGIN\`"
             echo "- Telegram Mini App: \`$APP_ORIGIN/mini-app/\`"
             echo "- MAX Mini App: \`${MAX_APP_ORIGIN}/mini-app/\`"
-            echo "- Landing: \`$LANDING_ORIGIN/\`"
+            if [ -n "$LANDING_ORIGIN" ]; then
+              echo "- Landing: \`$LANDING_ORIGIN/\`"
+            else
+              echo '- Separate landing: not configured'
+            fi
             echo '- Telegram webhook and MAX subscription are reconciled by the deploy gate.'
           } >> "$GITHUB_STEP_SUMMARY"
