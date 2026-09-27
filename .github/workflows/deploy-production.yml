@@ -43,9 +43,10 @@ jobs:
       DEPLOY_USER: ${{ vars.HAPPYFOX_DEPLOY_USER || 'root' }}
       DEPLOY_PORT: ${{ vars.HAPPYFOX_DEPLOY_PORT || '22' }}
       DEPLOY_PATH: ${{ vars.HAPPYFOX_DEPLOY_PATH || '/opt/happyfox/repo' }}
-      API_ORIGIN: ${{ vars.HAPPYFOX_API_ORIGIN || 'https://api.happy-fox.online' }}
-      APP_ORIGIN: ${{ vars.HAPPYFOX_APP_ORIGIN || 'https://app.happy-fox.online' }}
-      MAX_APP_ORIGIN: ${{ vars.HAPPYFOX_MAX_APP_ORIGIN || 'https://app.happy-fox.online' }}
+      API_ORIGIN: ${{ vars.HAPPYFOX_API_ORIGIN }}
+      APP_ORIGIN: ${{ vars.HAPPYFOX_APP_ORIGIN }}
+      MAX_APP_ORIGIN: ${{ vars.HAPPYFOX_MAX_APP_ORIGIN || vars.HAPPYFOX_APP_ORIGIN }}
+      LANDING_ORIGIN: ${{ vars.HAPPYFOX_LANDING_ORIGIN || vars.HAPPYFOX_APP_ORIGIN }}
       TELEGRAM_WEBHOOK_IP: ${{ vars.HAPPYFOX_TELEGRAM_WEBHOOK_IP || '2.27.160.11' }}
       EXPECTED_HOST_FINGERPRINT: SHA256:5Ux1ce1iJuEkgOV5tDIqyZl0Fki6qYwC7PTWHekLX1c
       EXPECTED_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || inputs.commit_sha || github.sha }}
@@ -73,12 +74,13 @@ jobs:
           : "${API_ORIGIN:?Missing HappyFox API origin}"
           : "${APP_ORIGIN:?Missing HappyFox app origin}"
           : "${MAX_APP_ORIGIN:?Missing MAX app origin}"
+          : "${LANDING_ORIGIN:?Missing HappyFox landing origin}"
           : "${TELEGRAM_WEBHOOK_IP:?Missing Telegram webhook IP}"
           [[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]] || {
             echo "EXPECTED_SHA must be a full 40-character SHA" >&2
             exit 1
           }
-          for origin_name in API_ORIGIN APP_ORIGIN MAX_APP_ORIGIN; do
+          for origin_name in API_ORIGIN APP_ORIGIN MAX_APP_ORIGIN LANDING_ORIGIN; do
             origin="${!origin_name}"
             [[ "$origin" =~ ^https://[^/]+$ ]] || {
               echo "$origin_name must be an HTTPS origin without a path" >&2
@@ -153,6 +155,7 @@ jobs:
           printf -v quoted_max_origin '%q' "$MAX_APP_ORIGIN"
           printf -v quoted_api_origin '%q' "$API_ORIGIN"
           printf -v quoted_app_origin '%q' "$APP_ORIGIN"
+          printf -v quoted_landing_origin '%q' "$LANDING_ORIGIN"
           printf -v quoted_telegram_webhook_ip '%q' "$TELEGRAM_WEBHOOK_IP"
           ssh \
             -i "$HOME/.ssh/id_ed25519" \
@@ -164,22 +167,23 @@ jobs:
             -o ServerAliveInterval=20 \
             -o ServerAliveCountMax=6 \
             "$DEPLOY_USER@$DEPLOY_HOST" \
-            "bash -s -- $quoted_path $quoted_sha $quoted_max_origin $quoted_api_origin $quoted_app_origin $quoted_telegram_webhook_ip" <<'REMOTE'
+            "bash -s -- $quoted_path $quoted_sha $quoted_max_origin $quoted_api_origin $quoted_app_origin $quoted_landing_origin $quoted_telegram_webhook_ip" <<'REMOTE'
           set -Eeuo pipefail
           project_dir="$1"
           expected_sha="$2"
           max_app_origin="$3"
           api_origin="$4"
           app_origin="$5"
-          telegram_webhook_ip="$6"
+          landing_origin="$6"
+          telegram_webhook_ip="$7"
           cd "$project_dir"
           chmod +x scripts/deploy_happyfox_dedicated.sh
           env \
             HAPPYFOX_API_ORIGIN="$api_origin" \
             HAPPYFOX_APP_ORIGIN="$app_origin" \
             HAPPYFOX_MAX_APP_ORIGIN="$max_app_origin" \
+            HAPPYFOX_LANDING_ORIGIN="$landing_origin" \
             HAPPYFOX_TELEGRAM_RELAY_IP="$telegram_webhook_ip" \
-            HAPPYFOX_LANDING_ORIGIN=https://happy-fox.online \
             HAPPYFOX_DATABASE_NAME=happyfox_cutover \
             bash scripts/deploy_happyfox_dedicated.sh "$expected_sha"
           REMOTE
@@ -199,9 +203,9 @@ jobs:
             [ "$max_revision" = "$EXPECTED_SHA" ]
           fi
           curl -fsS --retry 5 --retry-delay 2 --retry-all-errors --max-time 20 \
-            https://happy-fox.online/ >/dev/null
-          miniapp_origins=("$APP_ORIGIN" https://happy-fox.online)
-          if [ "$MAX_APP_ORIGIN" != "$APP_ORIGIN" ] && [ "$MAX_APP_ORIGIN" != "https://happy-fox.online" ]; then
+            "$LANDING_ORIGIN/" >/dev/null
+          miniapp_origins=("$APP_ORIGIN" "$LANDING_ORIGIN")
+          if [ "$MAX_APP_ORIGIN" != "$APP_ORIGIN" ] && [ "$MAX_APP_ORIGIN" != "$LANDING_ORIGIN" ]; then
             miniapp_origins+=("$MAX_APP_ORIGIN")
           fi
           for miniapp_origin in "${miniapp_origins[@]}"; do
@@ -230,6 +234,6 @@ jobs:
             echo "- API/webhooks: \`$API_ORIGIN\`"
             echo "- Telegram Mini App: \`$APP_ORIGIN/mini-app/\`"
             echo "- MAX Mini App: \`${MAX_APP_ORIGIN}/mini-app/\`"
-            echo '- Landing: `https://happy-fox.online/`'
+            echo "- Landing: `$LANDING_ORIGIN/`"
             echo '- Telegram webhook and MAX subscription are reconciled by the deploy gate.'
           } >> "$GITHUB_STEP_SUMMARY"
