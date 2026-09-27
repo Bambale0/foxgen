@@ -111,6 +111,33 @@ async def _payment_notification_outbox(connection):
     await _execute_schema_ddl(connection, PROMO_DDL)
 
 
+async def _referral_purchase_credit_ledger(
+    connection: db_backend.Connection,
+) -> None:
+    await _execute_schema_ddl(
+        connection,
+        """
+        CREATE TABLE IF NOT EXISTS referral_purchase_credit_rewards (
+            id BIGSERIAL PRIMARY KEY,
+            transaction_id BIGINT NOT NULL REFERENCES transactions(id),
+            order_id TEXT NOT NULL,
+            buyer_user_id BIGINT NOT NULL REFERENCES users(id),
+            referrer_id BIGINT NOT NULL REFERENCES users(id),
+            credits INTEGER NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(transaction_id, referrer_id)
+        )
+        """,
+    )
+    await _execute_schema_ddl(
+        connection,
+        """
+        CREATE INDEX IF NOT EXISTS idx_referral_purchase_credit_referrer
+        ON referral_purchase_credit_rewards(referrer_id, created_at DESC)
+        """,
+    )
+
+
 MIGRATIONS: tuple[Migration, ...] = (
     Migration(
         version=1,
@@ -123,6 +150,11 @@ MIGRATIONS: tuple[Migration, ...] = (
         apply=_prompt_feed_compatibility_columns,
     ),
     Migration(version=3, name="durable payment buyer notifications", apply=_payment_notification_outbox),
+    Migration(
+        version=4,
+        name="recurring referral purchase credit ledger",
+        apply=_referral_purchase_credit_ledger,
+    ),
 )
 
 
