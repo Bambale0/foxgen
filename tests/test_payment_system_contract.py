@@ -67,7 +67,7 @@ async def test_telegram_webhook_routes_and_credits_once(tmp_path, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_telegram_referral_inviter_gift_is_awarded_after_first_purchase_once(tmp_path, monkeypatch):
+async def test_telegram_referral_credit_is_awarded_for_each_distinct_purchase_once(tmp_path, monkeypatch):
     monkeypatch.setattr(database, "DATABASE_PATH", str(tmp_path / "referral-gift.db"))
     await database.init_db()
     from bot.services import referral_service
@@ -132,13 +132,43 @@ async def test_telegram_referral_inviter_gift_is_awarded_after_first_purchase_on
     assert after_duplicate.credits == after_first_purchase.credits
     assert after_duplicate.referral_earned == after_first_purchase.referral_earned
 
+    await database.create_transaction(
+        order_id="ref-second-order",
+        user_id=referred.id,
+        credits=50,
+        amount_rub=500,
+        provider="yookassa",
+        payment_id="ref-second-payment",
+    )
+    second_completion = await database.complete_payment_atomic("ref-second-order")
+    assert second_completion["ok"] is True
+    assert second_completion["already_completed"] is False
+    assert (
+        second_completion["referral_bonus"]["invite_bonus_credits"]
+        == get_business_rules()["inviter_bonus_credits"]
+    )
+
+    after_second_purchase = await database.get_or_create_user(930)
+    expected_credit_bonus = get_business_rules()["inviter_bonus_credits"] * 2
+    assert after_second_purchase.credits == before_referrer.credits + expected_credit_bonus
+    assert (
+        after_second_purchase.referral_earned
+        == before_referrer.referral_earned + expected_credit_bonus
+    )
+
+    second_duplicate = await database.complete_payment_atomic("ref-second-order")
+    assert second_duplicate["ok"] is True
+    assert second_duplicate["already_completed"] is True
+    after_second_duplicate = await database.get_or_create_user(930)
+    assert after_second_duplicate.credits == after_second_purchase.credits
+
     async with db.connect() as connection:
         connection.row_factory = db.Row
         referral = await (await connection.execute(
             "SELECT bonus_credits FROM referrals WHERE referrer_id=? AND referred_id=?",
             (referrer.id, referred.id),
         )).fetchone()
-        assert int(referral["bonus_credits"] or 0) == get_business_rules()["inviter_bonus_credits"]
+        assert int(referral["bonus_credits"] or 0) == expected_credit_bonus
 
 
 @pytest.mark.asyncio
