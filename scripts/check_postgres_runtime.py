@@ -9,8 +9,8 @@ from typing import Any
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from bot import db as db_backend
-from bot.env import load_project_env
+from bot import db as db_backend  # noqa: E402
+from bot.env import load_project_env  # noqa: E402
 
 
 REQUIRED_TABLES = (
