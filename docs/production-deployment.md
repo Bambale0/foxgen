@@ -10,7 +10,7 @@ This document describes the accepted production path. Historical NEUROMIX servic
 Product:          happyfox
 Production host:  configured by HAPPYFOX_DEPLOY_HOST
 API/App/MAX:       configured by HAPPYFOX_API_ORIGIN / HAPPYFOX_APP_ORIGIN / HAPPYFOX_MAX_APP_ORIGIN
-Landing:           HAPPYFOX_LANDING_ORIGIN; defaults to HAPPYFOX_APP_ORIGIN
+Landing:           optional HAPPYFOX_LANDING_ORIGIN; omit it when the App origin is the public entrypoint
 Current origin:    https://alena.xn--e1aikcel5c5a.online (https://alena.нейроныч.online)
 Compose project:   foxgen-happyfox
 Container:        foxgen-happyfox-bot
@@ -68,7 +68,7 @@ Post-deploy checks should include:
 container/service healthy
 $HAPPYFOX_API_ORIGIN/health succeeds
 Mini App static revision equals expected SHA
-landing returns 200
+dedicated landing checks run only when HAPPYFOX_LANDING_ORIGIN is configured
 PostgreSQL 17 reachable and pre/post backup verified
 Redis namespace isolated
 happyfox-docker-prune.timer enabled and waiting
