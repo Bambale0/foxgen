@@ -1,3 +1,19 @@
+# Active: referral purchase cashback parity — Telegram + MAX
+
+Baseline: main 18e02aabe9ea2bc0f5d9c8981bf59b274c7628b7, branch feat/referral-credit-every-purchase-20260927.
+
+Fresh audit: registration rewards are already deferred in both Telegram and MAX, and every new user keeps the existing 5-credit welcome balance. The remaining mismatch is that the inviter's configured 3-credit reward is currently paid only on the referred user's first purchase. Telegram completes payments atomically through `complete_payment_atomic`; MAX completes orders atomically through `MaxYooKassaService.complete_order` and `apply_max_balance_delta`. Existing L1/L2 partner purchase commissions are already idempotent and must remain unchanged.
+
+Acceptance: referral registration pays the inviter 0 credits; referred users keep the existing welcome balance; every distinct verified successful purchase by a direct referral pays the inviter `inviter_bonus_credits` (currently 3); duplicate/replayed completion of the same Telegram transaction or MAX order pays no duplicate cashback; Telegram and MAX keep their separate identity/wallet ledgers; existing 30%/7% partner commissions remain unchanged; public copy says cashback is paid after every purchase.
+
+Antifraud/integrity: existing self-referral, one-time binding and cycle protections remain; Telegram payment status claim is the idempotency boundary for one cashback per completed transaction; MAX uses a per-order `max_transactions.idempotency_key`; no frontend identity is trusted; no new hardcoded mutable amount is introduced.
+
+Verification plan: focused Telegram/MAX payment regressions first, changed-file Ruff/compile, full safe backend suite, two-axis review against main, exact-head CI, merge, canonical exact-SHA deploy, then production revision/health plus read-only verification of the effective business rules and referral/payment telemetry. No paid live transaction will be created without an explicit test payment mechanism.
+
+Skills/guides: Bambale0/skills ask-matt + code-review; repository AGENTS.md. Bambale0/claw and wondelai/skills were searched for referral/payment-idempotency guidance with no more specific matching skill found. anthropics/skills was searched; no applicable backend/referral skill found.
+
+---
+
 # Active: fix/telegram-rich-message-prompts — rich_message prompts were silently dropped
 
 Baseline: main 196f0f4c8e51e03651db2fbe3ee97049001488e9, branch fix/telegram-rich-message-prompts.

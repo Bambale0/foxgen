@@ -86,7 +86,7 @@ def test_max_yookassa_credits_only_max_ledger_and_is_idempotent(tmp_path, monkey
     asyncio.run(_assert_telegram_untouched())
 
 
-def test_max_referrals_award_signup_and_first_purchase_rewards_in_max_credits(tmp_path, monkeypatch) -> None:
+def test_max_referrals_award_credit_on_each_distinct_purchase_in_max_credits(tmp_path, monkeypatch) -> None:
     _prepare_database(tmp_path / "max-referrals.db", monkeypatch)
 
     assert asyncio.run(register_max_referral(20, 10)) is True
@@ -95,8 +95,7 @@ def test_max_referrals_award_signup_and_first_purchase_rewards_in_max_credits(tm
 
     before_l1 = asyncio.run(get_max_balance(20))
     before_l2 = asyncio.run(get_max_balance(10))
-    # Every new MAX user gets the signup gift. The inviter gift is deferred until
-    # the invited user's first purchase.
+    # Every new MAX user keeps the welcome gift; the inviter gets nothing yet.
     assert before_l1 == 5
     assert before_l2 == 5
 
@@ -105,7 +104,7 @@ def test_max_referrals_award_signup_and_first_purchase_rewards_in_max_credits(tm
     result = asyncio.run(service.complete_order(order.order_id))
     assert result["ok"] is True
 
-    # First purchase gift (3 paws) + 250 RUB * 30% / 10 RUB per paw = 7.5 paws.
+    # Purchase cashback (3 paws) + 250 RUB * 30% / 10 RUB per paw = 7.5 paws.
     assert asyncio.run(get_max_balance(20)) == before_l1 + 10.5
     # 250 RUB * 7% / 10 RUB per paw = 1.75 paws for level 2.
     assert asyncio.run(get_max_balance(10)) == before_l2 + 1.75
@@ -117,8 +116,8 @@ def test_max_referrals_award_signup_and_first_purchase_rewards_in_max_credits(tm
     second_order = asyncio.run(service.create_checkout(30, "start"))
     second_result = asyncio.run(service.complete_order(second_order.order_id))
     assert second_result["ok"] is True
-    # A second distinct purchase pays only percentage commissions, not the one-time gift.
-    assert asyncio.run(get_max_balance(20)) == before_l1 + 18.0
+    # A second distinct purchase earns another +3 cashback and percentage commission.
+    assert asyncio.run(get_max_balance(20)) == before_l1 + 21.0
     assert asyncio.run(get_max_balance(10)) == before_l2 + 3.5
 
     async def _gift_notifications() -> int:
@@ -135,11 +134,11 @@ def test_max_referrals_award_signup_and_first_purchase_rewards_in_max_credits(tm
             row = await cursor.fetchone()
             return int(row[0])
 
-    assert asyncio.run(_gift_notifications()) == 1
+    assert asyncio.run(_gift_notifications()) == 2
 
     stats = asyncio.run(get_max_referral_stats(20))
     assert stats["referrals"] == 1
-    assert stats["earned_credits"] >= 18.0
+    assert stats["earned_credits"] >= 21.0
 
 
 def test_max_new_user_bonus_is_awarded_once_without_referral(tmp_path, monkeypatch) -> None:
@@ -154,7 +153,7 @@ def test_max_new_user_bonus_is_awarded_once_without_referral(tmp_path, monkeypat
     assert asyncio.run(get_max_balance(777)) == 5
 
 
-def test_max_legacy_inviter_bonus_key_prevents_first_purchase_gift_replay(tmp_path, monkeypatch) -> None:
+def test_max_legacy_inviter_bonus_does_not_block_new_purchase_cashback(tmp_path, monkeypatch) -> None:
     _prepare_database(tmp_path / "max-legacy-referral.db", monkeypatch)
 
     assert asyncio.run(register_max_referral(30, 20)) is True
@@ -182,7 +181,7 @@ def test_max_legacy_inviter_bonus_key_prevents_first_purchase_gift_replay(tmp_pa
     result = asyncio.run(service.complete_order(order.order_id))
     assert result["ok"] is True
 
-    assert asyncio.run(get_max_balance(20)) == before_l1 + 7.5
+    assert asyncio.run(get_max_balance(20)) == before_l1 + 10.5
     stats = asyncio.run(get_max_referral_stats(20))
     assert stats["earned_credits"] >= 10.5
 
@@ -200,7 +199,7 @@ def test_max_legacy_inviter_bonus_key_prevents_first_purchase_gift_replay(tmp_pa
             row = await cursor.fetchone()
             return int(row[0])
 
-    assert asyncio.run(_gift_notifications()) == 0
+    assert asyncio.run(_gift_notifications()) == 1
 
 
 def test_max_yookassa_refuses_amount_mismatch_without_credit(tmp_path, monkeypatch) -> None:
