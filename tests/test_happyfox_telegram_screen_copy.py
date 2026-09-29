@@ -9,19 +9,10 @@ def _read(path: str) -> str:
 
 def test_telegram_primary_screens_use_current_happyfox_copy() -> None:
     common = _read("bot/handlers/common.py")
-    assert (
-        "Скажите, что хотите получить: изображение, ролик, озвучку или музыку."
-        in common
-    )
-    assert "<b>Быстрый старт</b>" in common
-    assert "🖼 Фото — создать с нуля или изменить по референсу" in common
-    assert "🎬 Видео — сделать по тексту, фото или ролику" in common
-    assert "🎙 Озвучка — создать голос или говорящего персонажа" in common
-    assert "🎵 Музыка — создать готовый трек через Suno" in common
-    assert "🎯 Motion Control — перенести движение на персонажа" in common
-    assert "✨ Промпты — разобрать референс или подготовить запрос" in common
-    assert "🔗 Работы — открыть сохранённые ссылки и результаты" in common
-    assert "🤖 AI-помощник — подобрать модель и собрать промпт" in common
+    assert "Создавайте фото, видео, озвучку и музыку с AI." in common
+    assert "Можно начать с идеи или загрузить готовый файл." in common
+    assert "<i>Выберите действие ниже 👇</i>" in common
+    assert "🐾 <b>Баланс:</b>" in common
     assert "Что создаём? Выберите результат" in common
     assert "🐾 <b>Баланс HappyFox</b>" in common
     assert (
@@ -35,13 +26,25 @@ def test_telegram_primary_screens_drop_stale_copy() -> None:
     common = _read("bot/handlers/common.py")
     stale = (
         "Создавайте фото, видео и анимацию по описанию или референсам.",
-        "Выберите задачу — дальше покажу только нужные шаги.",
+        "Скажите, что хотите получить: изображение, ролик, озвучку или музыку.",
+        "<b>Быстрый старт</b>",
+        "🖼 Фото — создать с нуля или изменить по референсу",
+        "🎁 <b>Новым пользователям",
+        "Реферальный бонус не начислен",
+        "Если вы ещё не нажимали «Запустить»",
         "💎 <b>Баланс и статистика</b>",
         "Можно написать прямо сюда — AI-ассистент поможет с:",
         "🤖 <b>BotAI:</b>",
     )
     for fragment in stale:
         assert fragment not in common
+
+
+def test_referral_status_copy_is_short_and_does_not_claim_extra_welcome_credit() -> None:
+    common = _read("bot/handlers/common.py")
+    assert "🤝 <b>Приглашение привязано</b>" in common
+    assert "Ссылка-приглашение применяется только при первой регистрации." in common
+    assert "лапок за регистрацию по приглашению" not in common
 
 
 def test_telegram_partner_and_payment_screens_are_current() -> None:
