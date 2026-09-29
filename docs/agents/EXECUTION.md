@@ -1,3 +1,21 @@
+# Active: MAX generated-image delivery failure
+
+Baseline: main df5ee673aab5a08cd888c4501d7cb47c5433b391, branch fix/max-image-delivery-20260930.
+
+Incident evidence (2026-09-29 21:05-21:07 UTC): MAX job 7d43ebab4452467c814a69fbf957242e reached provider success with a persisted result URL, then failed only during message delivery with MaxApiError: Failed to upload image. The provider asset was reachable from the HappyFox host as a valid 2048x2048 PNG (~5.17 MB), within MAX documented image limits. The MAX ledger issued exactly one +2 refund after the failed -2 generation debit.
+
+Root cause: bot/max_api.py used a direct third-party URL attachment for images, making delivery depend on MAX fetching the provider host. The existing official /uploads path was used for video/audio/file, but image upload responses use a nested photos -> <photo-id> -> token shape that the generic token parser did not understand.
+
+Acceptance: all generated MAX media, including images, is downloaded by the HappyFox backend and uploaded through MAX /uploads before POST /messages; image upload token extraction supports the observed official nested response while preserving existing top-level token responses; 2xx upload payloads with error_code become explicit MaxApiError failures; no billing, provider generation, Telegram, referral, payment, or model-selection behavior changes.
+
+Safety/idempotency: delivery transport only. Existing generation refund/idempotency boundaries remain unchanged. Failed delivery must continue to refund at most once. The incident user's balance was already restored before this change.
+
+Verification plan: test-first unit coverage for nested image token extraction and tokenized image delivery; changed-file Ruff/compile; full safe backend CI; two-axis review against main; merge only after green CI; exact-SHA canonical deploy; production smoke with a benign generated/test image upload and MAX connectivity check. Do not replay or redistribute the incident asset.
+
+Skills/guides: repository AGENTS.md; Bambale0/skills code-review; Bambale0/claw external-API verification guidance; wondelai/skills release-it. anthropics/skills searched; no directly applicable MAX/media integration skill found.
+
+---
+
 # Active: optional landing gate on unified production origin
 
 Baseline: main d2dcb28a283b84450fc3c23b2eead7bf14d81a48, branch fix/optional-production-landing-20260927.
