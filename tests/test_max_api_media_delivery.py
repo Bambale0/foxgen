@@ -48,6 +48,7 @@ async def test_send_media_url_reuploads_image_before_message(monkeypatch) -> Non
         url="https://provider.example/result.png",
         text="done",
         filename="result.jpg",
+        correlation_id="job-123",
     )
 
     assert result == {"success": True}
@@ -55,6 +56,7 @@ async def test_send_media_url_reuploads_image_before_message(monkeypatch) -> Non
         "image",
         "https://provider.example/result.png",
         filename="result.jpg",
+        correlation_id="job-123",
     )
     send.assert_awaited_once_with(
         42,
