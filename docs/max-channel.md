@@ -211,6 +211,14 @@ Home
 
 Seedance 2.5 keeps its dedicated full settings/media FSM, but it is entered from the same model-first Telegram navigation contract.
 
+## Result delivery
+
+Generated MAX media is delivered through the official MAX upload flow before the final message is sent. HappyFox first downloads the provider result, requests a MAX upload slot, uploads the media, extracts the attachment token, and then sends the token attachment.
+
+This applies to images as well as video/audio/file results. Although MAX can accept an external URL for an image attachment, generated provider URLs are not a reliable delivery boundary because MAX may be unable to fetch a third-party result host even when HappyFox can. Image upload responses use the MAX `photos -> <photo-id> -> token` response shape; generic media may expose a top-level token.
+
+A delivery failure remains part of the durable generation lifecycle and uses the existing idempotent refund path. Provider success without successful MAX delivery must never be recorded as a completed user-visible generation.
+
 ## Prompt analysis
 
 `Промпт по описанию` and `Промпт по видео` reuse the shared HappyFox analysis services but use MAX-native sessions and MAX-native idempotent balance movements.
