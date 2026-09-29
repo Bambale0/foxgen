@@ -1,3 +1,19 @@
+# Active: Telegram main screen copy simplification
+
+Baseline: main df5ee673aab5a08cd888c4501d7cb47c5433b391, branch fix/telegram-main-copy-20260930.
+
+User feedback: the Telegram home screen became visually noisy because it repeated every product capability in prose and appended a long referral-status explanation plus the generic new-user welcome promo on every return to the main menu.
+
+Acceptance: the Telegram main screen is reduced to product purpose, one short file/idea hint, current balance, and a single action prompt; the keyboard remains the source of detailed actions. The generic 5-paw welcome promo is removed from the recurring home screen but the underlying welcome balance is unchanged. Referral deep-link status copy is short, does not advise deleting the chat, and does not claim the universal welcome credit is an extra referral bonus.
+
+Scope: Telegram copy only. No keyboard callback, pricing, balance, referral binding, cashback, payment, MAX, provider, or Mini App behavior changes.
+
+Verification: source-copy regressions, product copy normalizers, focused Telegram start/menu tests, changed-file Ruff/compile, safe backend regression, two-axis review, PR, CI/deploy when GitHub Actions runners are available.
+
+Skills/guides: repository AGENTS.md; mandatory skill repositories searched for Telegram UX/copy guidance. No narrower dedicated copy skill was found, so repository UX patterns and regression-first changes are used.
+
+---
+
 # Active: optional landing gate on unified production origin
 
 Baseline: main d2dcb28a283b84450fc3c23b2eead7bf14d81a48, branch fix/optional-production-landing-20260927.
