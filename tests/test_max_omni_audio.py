@@ -61,6 +61,7 @@ class FakeTransport:
         url,
         text="",
         filename=None,
+        correlation_id="",
     ):
         self.media.append(
             {
@@ -69,6 +70,7 @@ class FakeTransport:
                 "url": url,
                 "text": text,
                 "filename": filename,
+                "correlation_id": correlation_id,
             }
         )
         return {"ok": True}
