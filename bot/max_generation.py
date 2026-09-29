@@ -885,18 +885,42 @@ class MaxGenerationService:
             return
         media_type = "image" if job.kind == "image" else "video"
         filename = f"happyfox-{job.id}.{'jpg' if media_type == 'image' else 'mp4'}"
-        await self.client.send_media_url(
-            job.max_user_id,
-            media_type=media_type,
-            url=result_url,
-            text=(
-                "Готово ✨\n\nРезультат сохранён в истории MAX."
-                if job.kind == "image"
-                else "Готово 🎬\n\nВидео сохранено в истории MAX."
-            ),
-            filename=filename,
+        delivery_started = time.monotonic()
+        try:
+            await self.client.send_media_url(
+                job.max_user_id,
+                media_type=media_type,
+                url=result_url,
+                text=(
+                    "Готово ✨\n\nРезультат сохранён в истории MAX."
+                    if job.kind == "image"
+                    else "Готово 🎬\n\nВидео сохранено в истории MAX."
+                ),
+                filename=filename,
+                correlation_id=job.id,
+            )
+            await _mark_delivered(job.id)
+        except Exception as exc:
+            logger.warning(
+                "max_generation_delivery job_id=%s provider_task_id=%s "
+                "model=%s media_type=%s outcome=error duration_ms=%.1f error_type=%s",
+                job.id,
+                job.provider_task_id or "-",
+                job.model,
+                media_type,
+                (time.monotonic() - delivery_started) * 1000.0,
+                type(exc).__name__,
+            )
+            raise
+        logger.info(
+            "max_generation_delivery job_id=%s provider_task_id=%s "
+            "model=%s media_type=%s outcome=success duration_ms=%.1f error_type=-",
+            job.id,
+            job.provider_task_id or "-",
+            job.model,
+            media_type,
+            (time.monotonic() - delivery_started) * 1000.0,
         )
-        await _mark_delivered(job.id)
 
     async def _process(self, job: MaxGenerationJob) -> None:
         current = job
