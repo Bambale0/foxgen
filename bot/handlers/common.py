@@ -1263,25 +1263,16 @@ def _get_user_menu(user_id: int) -> str:
 
 
 def _build_main_menu_text(user_credits: int, referral_bonus_text: str = "") -> str:
-    bonus_block = f"\n{referral_bonus_text.strip()}\n" if referral_bonus_text else "\n"
-    new_user_bonus = get_business_rules()["new_user_bonus_credits"]
+    referral_block = (
+        f"\n\n{referral_bonus_text.strip()}" if referral_bonus_text.strip() else ""
+    )
     return (
-        f"🏠 <b>{html.escape(product.brand_name)}</b>\n"
-        "Скажите, что хотите получить: изображение, ролик, озвучку или музыку. Можно начать с идеи или готового файла.\n"
-        "Выберите действие ниже — дальше останутся только нужные шаги. 👇\n\n"
-        "<b>Быстрый старт</b>\n"
-        "🖼 Фото — создать с нуля или изменить по референсу\n"
-        "🎬 Видео — сделать по тексту, фото или ролику\n"
-        "🎙 Озвучка — создать голос или говорящего персонажа\n"
-        "🎵 Музыка — создать готовый трек через Suno\n"
-        "🎯 Motion Control — перенести движение на персонажа\n"
-        "✨ Промпты — разобрать референс или подготовить запрос\n"
-        "🔗 Работы — открыть сохранённые ссылки и результаты\n"
-        "🤖 AI-помощник — подобрать модель и собрать промпт\n\n"
+        f"🏠 <b>{html.escape(product.brand_name)}</b>\n\n"
+        "Создавайте фото, видео, озвучку и музыку с AI.\n"
+        "Можно начать с идеи или загрузить готовый файл.\n\n"
         f"🐾 <b>Баланс:</b> <code>{user_credits}</code> лапок"
-        f"{bonus_block}"
-        f"🎁 <b>Новым пользователям — {new_user_bonus:g} лапок в подарок!</b>\n"
-        "<i>Просто выбери, что сделать, и нажми кнопку ниже 👇</i>"
+        f"{referral_block}\n\n"
+        "<i>Выберите действие ниже 👇</i>"
     )
 
 
@@ -2207,11 +2198,7 @@ async def _activate_referral_code(
                 "Проверьте ссылку — возможно, она устарела."
             )
         return (
-            "\nℹ️ <b>Реферальный бонус не начислен</b>\n"
-            "Вы уже зарегистрированы в боте. Бонус даётся только при первом входе "
-            "по ссылке-приглашению.\n\n"
-            "💡 Если вы ещё не нажимали «Запустить» — удалите чат с ботом "
-            "и перейдите по ссылке заново."
+            "\nℹ️ Ссылка-приглашение применяется только при первой регистрации."
         )
 
     # Уведомление партнёру отправляется в cmd_start, не дублируем здесь.
@@ -2222,11 +2209,7 @@ async def _activate_referral_code(
         code,
         getattr(referrer, "telegram_id", None) if referrer else None,
     )
-    new_user_bonus = get_business_rules()["new_user_bonus_credits"]
-    return (
-        "\n🎁 <b>Реферальный бонус активирован!</b>\n"
-        f"Вы получили {new_user_bonus:g} лапок за регистрацию по приглашению."
-    )
+    return "\n🤝 <b>Приглашение привязано</b>"
 
 
 def _feed_start_param(gen_id: int | str, referral_code: str | None = None) -> str:
@@ -3940,11 +3923,7 @@ async def cmd_start(message: types.Message, state: FSMContext):
         main_menu_referral_code = referral_code.strip().upper() or None
         # Уведомление реферрера, если привязка уже произошла в get_or_create_user
         if user.referred_by:
-            new_user_bonus = get_business_rules()["new_user_bonus_credits"]
-            referral_bonus_text = (
-                "\n🎁 <b>Реферальный бонус активирован!</b>\n"
-                f"Вы получили {new_user_bonus:g} лапок за регистрацию по приглашению."
-            )
+            referral_bonus_text = "\n🤝 <b>Приглашение привязано</b>"
         else:
             # Fallback — старый путь, если get_or_create_user не смог привязать
             referral_bonus_text = await _activate_referral_code(
