@@ -21,7 +21,7 @@ PRESET_MANAGER_PATH = Path("bot/services/preset_manager.py")
 PRODUCT_IMPORT = "from bot.product import product\n"
 PRODUCT_IMPORT_ANCHOR = "from bot.config import config\n"
 OLD_MAIN_MENU_BRAND = '        "🏠 <b>NEUROMIX</b>\\n"\n'
-NEW_MAIN_MENU_BRAND = '        f"🏠 <b>{html.escape(product.brand_name)}</b>\\n"\n'
+NEW_MAIN_MENU_BRAND = '        f"🏠 <b>{html.escape(product.brand_name)}</b>\\n\\n"\n'
 SUPPORT_CONTACT_EXPRESSION = (
     'f"{html.escape(product.support_contact) if product.support_contact else '
     "'через встроенную поддержку'}\""
