@@ -60,6 +60,30 @@ def _extract_upload_token(
     return ""
 
 
+def _log_media_transfer(
+    *,
+    correlation_id: str,
+    stage: str,
+    media_type: str,
+    outcome: str,
+    started_at: float,
+    size_bytes: int | None = None,
+    error_type: str = "",
+) -> None:
+    log = logger.info if outcome == "success" else logger.warning
+    log(
+        "max_media_transfer correlation_id=%s stage=%s media_type=%s "
+        "outcome=%s duration_ms=%.1f size_bytes=%s error_type=%s",
+        str(correlation_id or "-"),
+        stage,
+        media_type,
+        outcome,
+        (time.monotonic() - started_at) * 1000.0,
+        size_bytes if size_bytes is not None else "-",
+        error_type or "-",
+    )
+
+
 @dataclass(frozen=True)
 class MaxSettings:
     enabled: bool
@@ -275,9 +299,30 @@ class MaxClient:
         *,
         filename: str,
         content_type: str = "application/octet-stream",
+        correlation_id: str = "",
     ) -> str:
         """Upload one MAX media object and return its attachment token."""
-        slot = await self.get_upload_slot(media_type)
+        slot_started = time.monotonic()
+        try:
+            slot = await self.get_upload_slot(media_type)
+        except Exception as exc:
+            _log_media_transfer(
+                correlation_id=correlation_id,
+                stage="max_upload_slot",
+                media_type=media_type,
+                outcome="error",
+                started_at=slot_started,
+                error_type=type(exc).__name__,
+            )
+            raise
+        _log_media_transfer(
+            correlation_id=correlation_id,
+            stage="max_upload_slot",
+            media_type=media_type,
+            outcome="success",
+            started_at=slot_started,
+        )
+
         upload_url = str(slot.get("url") or "")
         if not upload_url.startswith("https://"):
             raise MaxApiError("MAX upload slot did not contain an HTTPS URL")
@@ -290,6 +335,7 @@ class MaxClient:
             filename=filename,
             content_type=content_type,
         )
+        upload_started = time.monotonic()
         try:
             async with session.post(upload_url, data=form) as response:
                 raw = await response.text()
@@ -312,14 +358,51 @@ class MaxClient:
                         f"MAX media upload rejected: {detail}"[:500],
                         status=response.status,
                     )
+                token = _extract_upload_token(uploaded, slot)
+                if not token:
+                    raise MaxApiError("MAX media upload did not return a token")
         except asyncio.TimeoutError as exc:
+            _log_media_transfer(
+                correlation_id=correlation_id,
+                stage="max_upload",
+                media_type=media_type,
+                outcome="error",
+                started_at=upload_started,
+                size_bytes=len(content),
+                error_type="timeout",
+            )
             raise MaxApiError("MAX media upload timed out") from exc
         except aiohttp.ClientError as exc:
+            _log_media_transfer(
+                correlation_id=correlation_id,
+                stage="max_upload",
+                media_type=media_type,
+                outcome="error",
+                started_at=upload_started,
+                size_bytes=len(content),
+                error_type=type(exc).__name__,
+            )
             raise MaxApiError(f"MAX media upload transport error: {exc}") from exc
+        except MaxApiError as exc:
+            _log_media_transfer(
+                correlation_id=correlation_id,
+                stage="max_upload",
+                media_type=media_type,
+                outcome="error",
+                started_at=upload_started,
+                size_bytes=len(content),
+                error_type=type(exc).__name__,
+            )
+            raise
 
-        token = _extract_upload_token(uploaded, slot)
-        if not token:
-            raise MaxApiError("MAX media upload did not return a token")
+        _log_media_transfer(
+            correlation_id=correlation_id,
+            stage="max_upload",
+            media_type=media_type,
+            outcome="success",
+            started_at=upload_started,
+            size_bytes=len(content),
+        )
         return token
 
     async def upload_media_from_url(
@@ -328,6 +411,7 @@ class MaxClient:
         source_url: str,
         *,
         filename: str,
+        correlation_id: str = "",
     ) -> str:
         """Download a provider result and upload it to MAX.
 
@@ -338,6 +422,7 @@ class MaxClient:
         if media_type not in MAX_MEDIA_TYPES:
             raise ValueError("Unsupported MAX media type")
         session = await self._get_session()
+        download_started = time.monotonic()
         try:
             async with session.get(source_url) as response:
                 if response.status < 200 or response.status >= 300:
@@ -346,16 +431,54 @@ class MaxClient:
                         status=response.status,
                     )
                 content = await response.read()
-                content_type = str(response.headers.get("Content-Type") or "application/octet-stream")
+                content_type = str(
+                    response.headers.get("Content-Type") or "application/octet-stream"
+                )
         except asyncio.TimeoutError as exc:
+            _log_media_transfer(
+                correlation_id=correlation_id,
+                stage="provider_download",
+                media_type=media_type,
+                outcome="error",
+                started_at=download_started,
+                error_type="timeout",
+            )
             raise MaxApiError("Provider media download timed out") from exc
         except aiohttp.ClientError as exc:
+            _log_media_transfer(
+                correlation_id=correlation_id,
+                stage="provider_download",
+                media_type=media_type,
+                outcome="error",
+                started_at=download_started,
+                error_type=type(exc).__name__,
+            )
             raise MaxApiError(f"Provider media download failed: {exc}") from exc
+        except MaxApiError as exc:
+            _log_media_transfer(
+                correlation_id=correlation_id,
+                stage="provider_download",
+                media_type=media_type,
+                outcome="error",
+                started_at=download_started,
+                error_type=type(exc).__name__,
+            )
+            raise
+
+        _log_media_transfer(
+            correlation_id=correlation_id,
+            stage="provider_download",
+            media_type=media_type,
+            outcome="success",
+            started_at=download_started,
+            size_bytes=len(content),
+        )
         return await self.upload_media_bytes(
             media_type,
             content,
             filename=filename,
             content_type=content_type,
+            correlation_id=correlation_id,
         )
 
     async def send_media_url(
@@ -367,12 +490,14 @@ class MaxClient:
         text: str = "",
         filename: str = "result.bin",
         attachments: list[dict[str, Any]] | None = None,
+        correlation_id: str = "",
     ) -> dict[str, Any]:
         extra = list(attachments or [])
         token = await self.upload_media_from_url(
             media_type,
             url,
             filename=filename,
+            correlation_id=correlation_id,
         )
         media = token_attachment(media_type, token)
         return await self.send_message(
