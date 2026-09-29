@@ -35,6 +35,31 @@ class MaxApiError(RuntimeError):
         self.status = status
 
 
+def _extract_upload_token(
+    uploaded: dict[str, Any],
+    slot: dict[str, Any],
+) -> str:
+    """Extract an attachment token from MAX upload responses.
+
+    Generic media responses may expose token directly. Image uploads return
+    photos keyed by a provider photo id, with the attachment token nested
+    inside the photo object.
+    """
+    direct = str(uploaded.get("token") or slot.get("token") or "").strip()
+    if direct:
+        return direct
+
+    photos = uploaded.get("photos")
+    if isinstance(photos, dict):
+        for photo in photos.values():
+            if not isinstance(photo, dict):
+                continue
+            token = str(photo.get("token") or "").strip()
+            if token:
+                return token
+    return ""
+
+
 @dataclass(frozen=True)
 class MaxSettings:
     enabled: bool
@@ -277,12 +302,22 @@ class MaxClient:
                         str(uploaded.get("message") or raw or "MAX media upload failed")[:500],
                         status=response.status,
                     )
+                if uploaded.get("error_code"):
+                    detail = str(
+                        uploaded.get("error_data")
+                        or uploaded.get("message")
+                        or uploaded.get("error_code")
+                    ).strip()
+                    raise MaxApiError(
+                        f"MAX media upload rejected: {detail}"[:500],
+                        status=response.status,
+                    )
         except asyncio.TimeoutError as exc:
             raise MaxApiError("MAX media upload timed out") from exc
         except aiohttp.ClientError as exc:
             raise MaxApiError(f"MAX media upload transport error: {exc}") from exc
 
-        token = str(uploaded.get("token") or slot.get("token") or "").strip()
+        token = _extract_upload_token(uploaded, slot)
         if not token:
             raise MaxApiError("MAX media upload did not return a token")
         return token
@@ -296,8 +331,9 @@ class MaxClient:
     ) -> str:
         """Download a provider result and upload it to MAX.
 
-        MAX supports direct external URLs only for images. Video/audio/file results
-        therefore pass through the official upload endpoint before delivery.
+        Provider result hosts are not guaranteed to be reachable by MAX itself.
+        Re-upload every media type through MAX's official upload endpoint so
+        delivery does not depend on MAX fetching a third-party URL.
         """
         if media_type not in MAX_MEDIA_TYPES:
             raise ValueError("Unsupported MAX media type")
@@ -333,15 +369,12 @@ class MaxClient:
         attachments: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         extra = list(attachments or [])
-        if media_type == "image":
-            media = image_url_attachment(url)
-        else:
-            token = await self.upload_media_from_url(
-                media_type,
-                url,
-                filename=filename,
-            )
-            media = token_attachment(media_type, token)
+        token = await self.upload_media_from_url(
+            media_type,
+            url,
+            filename=filename,
+        )
+        media = token_attachment(media_type, token)
         return await self.send_message(
             user_id,
             text,
