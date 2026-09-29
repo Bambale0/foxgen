@@ -38,12 +38,6 @@ DATABASE_IMPORT_WITH_WELCOME_BONUS = (
     "    PARTNER_INVITER_BONUS,\n"
     "    PARTNER_NEW_USER_BONUS,\n"
 )
-OLD_WELCOME_COPY = (
-    '        "🎁 <b>Новым пользователям — 15 бананов в подарок!</b>\\n"\n'
-)
-NEW_WELCOME_COPY = (
-    '        f"🎁 <b>Новым пользователям — {new_user_bonus:g} лапок в подарок!</b>\\n"\n'
-)
 OLD_PARTNER_BONUS_COPY = (
     '        "• Каждый, кто перейдёт по вашей реферальной ссылке, получает 🍌 <code>15</code> бананов для тестирования бота\\n"\n'
 )
@@ -174,25 +168,7 @@ def normalize_runtime_bonus_copy() -> None:
             1,
         )
 
-    welcome_copy = NEW_WELCOME_COPY
     partner_copy = NEW_PARTNER_BONUS_COPY
-
-    main_menu_anchor = (
-        'def _build_main_menu_text(user_credits: int, referral_bonus_text: str = "") -> str:\n'
-        '    bonus_block = f"\\n{referral_bonus_text.strip()}\\n" if referral_bonus_text else "\\n"\n'
-    )
-    main_menu_with_bonus = main_menu_anchor + '    new_user_bonus = get_business_rules()["new_user_bonus_credits"]\n'
-    if main_menu_anchor in handler_text and main_menu_with_bonus not in handler_text:
-        handler_text = handler_text.replace(main_menu_anchor, main_menu_with_bonus, 1)
-
-    if OLD_WELCOME_COPY in handler_text:
-        handler_text = handler_text.replace(
-            OLD_WELCOME_COPY,
-            welcome_copy,
-            1,
-        )
-    elif welcome_copy not in handler_text:
-        raise RuntimeError("Telegram welcome bonus copy was not found")
 
     if OLD_PARTNER_BONUS_COPY in handler_text:
         handler_text = handler_text.replace(
