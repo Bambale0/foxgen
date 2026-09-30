@@ -231,7 +231,7 @@ class MaxCreatorChannelService(MaxChannelService):
             if not images:
                 await self._respond(
                     user_id,
-                    "Сначала пришлите изображение персонажа для Motion Control.",
+                    "Сначала пришли изображение персонажа для Motion Control.",
                     attachments=back_home_menu(),
                 )
                 return True
@@ -244,7 +244,7 @@ class MaxCreatorChannelService(MaxChannelService):
             await self._respond(
                 user_id,
                 "Фото есть 🖼\n\n"
-                "Теперь пришлите видео с движением длительностью от 3 до 30 секунд.",
+                "Теперь пришли видео с движением длительностью от 3 до 30 секунд.",
                 attachments=back_home_menu(),
             )
             return True
@@ -257,7 +257,7 @@ class MaxCreatorChannelService(MaxChannelService):
                 await self._respond(
                     user_id,
                     "Не удалось прочитать это видео из MAX. Пришлите ролик ещё раз "
-                    "или выберите другой файл.",
+                    "или выбери другой файл.",
                     attachments=back_home_menu(),
                 )
                 return True
@@ -339,7 +339,7 @@ class MaxCreatorChannelService(MaxChannelService):
                 await self._respond(
                     user_id,
                     "Не удалось прочитать видео из MAX. Пришлите ролик ещё раз "
-                    "или выберите другой файл.",
+                    "или выбери другой файл.",
                     attachments=back_home_menu(),
                 )
                 return True
@@ -396,7 +396,7 @@ class MaxCreatorChannelService(MaxChannelService):
                 await self._respond(
                     user_id,
                     "Ориентация из фото поддерживает ролики до 10 секунд. "
-                    "Для этого видео выберите ориентацию из видео.",
+                    "Для этого видео выбери ориентацию из видео.",
                     attachments=_motion_orientation_menu(),
                     callback_id=callback_id,
                 )
