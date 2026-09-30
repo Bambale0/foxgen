@@ -1,3 +1,21 @@
+# Active: Telegram green buttons + animated custom-emoji icons
+
+Baseline: main df5ee673aab5a08cd888c4501d7cb47c5433b391, branch feat/telegram-green-animated-menu.
+
+Fresh audit: the Telegram text-bot main menu is built in `bot/keyboards.py::get_main_menu_keyboard` with `InlineKeyboardButton`. Runtime is pinned to aiogram 3.31.0, which supports Bot API button `style` and `icon_custom_emoji_id`. Current menu has no button styles and embeds ordinary Unicode emoji directly in button text. Telegram Bot API 9.4 supports green `success` buttons and custom emoji icons; custom-emoji document IDs cannot be derived from Unicode emoji and must come from real Telegram custom emoji.
+
+Acceptance: every main-menu Telegram inline button uses `style="success"`. Existing callbacks/WebApp URLs and menu layout stay unchanged. If `HAPPYFOX_TELEGRAM_MENU_EMOJI_IDS` contains a valid JSON object mapping menu keys to numeric Telegram custom-emoji IDs, the matching button uses `icon_custom_emoji_id` and drops the duplicate Unicode prefix. Missing/invalid IDs fall back to the current Unicode emoji without breaking the menu. No secret, price, provider, payment, referral, generation, or database behavior changes.
+
+No-hardcode/configuration: custom emoji IDs are runtime configuration because they are Telegram-owned mutable identifiers. No invented IDs are committed. Invalid configuration fails soft to ordinary emoji and emits a structured warning event.
+
+Parity: Telegram-only visual capability. MAX has no equivalent Bot API button-style/custom-emoji contract, so MAX visual parity is N/A while behavior/callback outcomes remain unchanged. Mini App is unaffected. Instagram N/A.
+
+Verification plan: failing contract test first; focused `tests/test_happyfox_main_menu.py`; changed-file Ruff/compile; full appropriate CI on exact PR head; two-axis code review against AGENTS.md and this acceptance section; merge only if green. Post-deploy Telegram smoke should verify a main-menu response renders green buttons; animated icons require configured IDs and a bot owner eligible to use custom emoji.
+
+Skills/guides: repository AGENTS.md; Bambale0/claw code-review/QA guidance; wondelai testing principles. Bambale0/skills, wondelai/skills, anthropics/skills and Bambale0/claw were searched narrowly; no more specific aiogram button-style implementation skill was found.
+
+---
+
 # Active: optional landing gate on unified production origin
 
 Baseline: main d2dcb28a283b84450fc3c23b2eead7bf14d81a48, branch fix/optional-production-landing-20260927.
