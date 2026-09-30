@@ -120,3 +120,19 @@ def test_text_bot_action_keyboards_are_green_and_destructive_actions_are_danger(
     assert by_text["✅ Подтвердить"] == "success"
     assert by_text["❌ Отмена"] == "danger"
     assert by_text["🏠 Главное меню"] == "success"
+
+
+def test_configured_unicode_prefixes_become_animated_button_icons(monkeypatch):
+    monkeypatch.setenv(
+        "HAPPYFOX_TELEGRAM_MENU_EMOJI_IDS",
+        '{"✅":"1111111111111111111","❌":"2222222222222222222","🏠":"3333333333333333333"}',
+    )
+
+    markup = get_confirm_keyboard("confirm_action", "cancel_action")
+    buttons = _buttons(markup)
+
+    assert [(button.text, button.icon_custom_emoji_id, button.style) for button in buttons] == [
+        ("Подтвердить", "1111111111111111111", "success"),
+        ("Отмена", "2222222222222222222", "danger"),
+        ("Главное меню", "3333333333333333333", "success"),
+    ]
