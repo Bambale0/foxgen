@@ -119,7 +119,7 @@ def more_menu() -> list[dict[str, Any]]:
             [
                 [
                     callback_button("❓ Как это работает", "max:help"),
-                    callback_button("💬 Поддержка", "max:support"),
+                    callback_button("💬 Нужна помощь", "max:support"),
                 ],
                 [callback_button("🐾 Добавить лапки", "max:topup")],
                 [callback_button("🏠 На главную", "max:home")],
@@ -174,7 +174,7 @@ def video_model_selection_menu(
             per_second = cost / max(duration, 1)
             price_label = f"{_format_amount(per_second)}🐾/с"
         except (KeyError, TypeError, ValueError, RuntimeError):
-            price_label = "🍌"
+            price_label = "🐾"
         rows.append(
             [
                 callback_button(
