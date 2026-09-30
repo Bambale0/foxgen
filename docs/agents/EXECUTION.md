@@ -1,16 +1,61 @@
-# Active: Telegram main screen copy simplification
+# Active: HappyFox cross-channel product voice refresh
 
-Baseline: main df5ee673aab5a08cd888c4501d7cb47c5433b391, branch fix/telegram-main-copy-20260930.
+Baseline: main df5ee673aab5a08cd888c4501d7cb47c5433b391, branch fix/telegram-main-copy-20260930, PR #283.
 
-User feedback: the Telegram home screen became visually noisy because it repeated every product capability in prose and appended a long referral-status explanation plus the generic new-user welcome promo on every return to the main menu.
+User request: replace the copy-pasted/catalogue-like bot style across HappyFox. The product should sound concise, confident and human: action/result first, plain Russian, varied rhythm, clear next step, no repetitive “Название — описание” catalogue prose.
 
-Acceptance: the Telegram main screen is reduced to product purpose, one short file/idea hint, current balance, and a single action prompt; the keyboard remains the source of detailed actions. The generic 5-paw welcome promo is removed from the recurring home screen but the underlying welcome balance is unchanged. Referral deep-link status copy is short, does not advise deleting the chat, and does not claim the universal welcome credit is an extra referral bonus.
+Fresh audit:
+1. Existing: Telegram public copy is concentrated in bot/handlers/common.py, bot/keyboards.py, bot/handlers/payments.py and bot/partner_copy.py; MAX mirrors core actions through bot/max_ui.py and bot/max_product_channel.py; Mini App equivalents live in quick-action/service/workspace and creator tabs. Existing source-level copy/parity tests cover all three core surfaces.
+2. Partial: PR #283 already simplifies Telegram home/referral copy, but its stated scope excludes MAX/Mini App and therefore no longer matches the current user request or mandatory release parity.
+3. Missing: one cross-channel voice contract, action-oriented main navigation, consistent creation/support/balance/error/empty-state wording, and explicit stale-copy guards.
+4. Reuse: keep every callback/payload/FSM/business rule unchanged; reuse existing product-screen tests and Telegram/MAX parity tests; update copy normalizers so deploy-time compatibility code cannot restore old wording.
+5. Prefactor: no architectural prefactor required. Copy remains at existing channel seams; no new business/config source of truth is introduced.
+6. Risks: exact-string regressions, accidental callback label/payload mismatch, Telegram HTML formatting, and Mini App test snapshots/contracts. No authorization, payment, provider or balance semantics may change.
+7. Migration/integration impact: no schema migration, no provider/API contract change, no secret/config change.
+8. Public test seams: Telegram rendered screen source/copy tests and keyboard contract; MAX main/product screen render tests; Mini App Jest UX/copy contracts and production build/browser startup; deployed Telegram/MAX smoke plus Mini App revision after release.
+9. Plan/acceptance: (a) lock the new voice in tests first; (b) rewrite the main menu and high-traffic creation/support/balance/payment/partner copy; (c) mirror action labels and core wording in MAX; (d) align Mini App quick actions, creator headings, empty/error states and workspace copy; (e) remove stale catalogue phrasing; (f) run focused + broad checks; (g) two-axis review against main and this request; (h) merge only with exact-head CI green, then canonical auto-deploy and production verification.
 
-Scope: Telegram copy only. No keyboard callback, pricing, balance, referral binding, cashback, payment, MAX, provider, or Mini App behavior changes.
+Voice contract:
+- lead with the user’s action/result, not implementation;
+- short active sentences and ordinary words;
+- one clear next step per screen;
+- varied copy instead of repeated “X — description” rows;
+- specific errors: what happened + what to do next;
+- no provider plumbing or internal task jargon unless the user needs it;
+- dynamic balance/prices/bonuses remain sourced from existing business rules.
 
-Verification: source-copy regressions, product copy normalizers, focused Telegram start/menu tests, changed-file Ruff/compile, safe backend regression, two-axis review, PR, CI/deploy when GitHub Actions runners are available.
+No-hardcode decision: no new mutable price, package, bonus, provider, routing or permission values. Product wording is source-owned interface copy; all existing dynamic values remain dynamic.
 
-Skills/guides: repository AGENTS.md; mandatory skill repositories searched for Telegram UX/copy guidance. No narrower dedicated copy skill was found, so repository UX patterns and regression-first changes are used.
+Observability: no backend flow semantics change, so no new telemetry event is required. Existing Telegram/MAX update telemetry and deploy revision/health checks remain the production verification seam.
+
+Verification layers:
+- unit/domain: N/A — no domain rule changes;
+- database/repository: N/A — no persistence changes;
+- authorization/ownership: N/A — no auth path changes;
+- migrations: N/A;
+- external adapters: N/A;
+- workflow/idempotency/retry: N/A;
+- API integration: Mini App API contracts unchanged; regression suite required;
+- Telegram: required;
+- MAX: required;
+- Mini App/E2E: required;
+- Instagram: N/A for this release — disabled/separate DM i18n contour, no shared business behavior changed;
+- smoke/deployability: required after merge;
+- observability/audit: existing telemetry + exact revision required;
+- no-hardcode/admin configurability: pass if no mutable business values are added;
+- documentation: this live ledger + PR body required.
+
+Implementation progress:
+1. [done] Read AGENTS.md, deployment docs and current main baseline.
+2. [done] Search all four mandatory skill sources. Applied Bambale0 ask-matt/TDD/code-review; Bambale0 claw code-review guidance; Wondelai UX/UI copy + clean-code/TDD guidance; Anthropic frontend-design writing guidance.
+3. [done] Audit overlapping PR #283 and its P1 review finding; expand this branch rather than create a conflicting PR.
+4. [in progress] Add/adjust cross-channel copy contracts first, then production copy.
+5. [pending] Focused and broad tests, static/build/E2E checks.
+6. [pending] Two-axis standards/spec review, resolve findings.
+7. [pending] Exact-head CI. Current known blocker: GitHub Actions on PR #283 created jobs with zero steps and failed before execution; re-check on final head rather than assuming the blocker persists.
+8. [pending] Merge/canonical deploy only if CI gate is green; then verify revision, health, Telegram/MAX reconciliation and user-visible copy.
+
+Follow-ups: none yet. Do not merge or call complete while CI/deploy verification is unresolved.
 
 ---
 
