@@ -1,5 +1,5 @@
-from pathlib import Path
 import shutil
+from pathlib import Path
 
 
 from bot.config import config
@@ -51,7 +51,11 @@ def test_public_telegram_navigation_uses_green_buttons_and_custom_emoji_icons(mo
 
     # Icons are semantic, not the same animated glyph repeated on every button.
     assert len({button.icon_custom_emoji_id for button in all_buttons}) >= 10
-    assert all(button.text[:1] not in {"🚀", "🖼", "🎙", "🎬", "🎵", "🎯", "✨", "🔷", "🤖", "🔗", "💬", "🍌", "🤝", "💳", "📱", "🛍", "⚡", "⚙", "🏠", "🎨", "🧩", "🧠", "🎞"} for button in all_buttons)
+    unicode_prefixes = {
+        "🚀", "🖼", "🎙", "🎬", "🎵", "🎯", "✨", "🔷", "🤖", "🔗", "💬",
+        "🍌", "🐾", "🤝", "💳", "📱", "🛍", "⚡", "⚙", "🏠", "🎨", "🧩", "🧠", "🎞",
+    }
+    assert all(button.text[:1] not in unicode_prefixes for button in all_buttons)
 
 
 def test_happyfox_main_menu_matches_product_layout(monkeypatch):
@@ -132,7 +136,6 @@ def test_public_telegram_theme_keeps_green_fallback_without_custom_emoji(monkeyp
         ["✨ Улучшение"],
         ["🏠 Главное меню"],
     ]
-
 
 
 def test_happyfox_menu_normalizer_accepts_themed_keyboards(tmp_path, monkeypatch):
