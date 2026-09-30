@@ -99,7 +99,7 @@ OLD_MORE_MENU = '''def get_more_menu_keyboard():
     builder.button(text="❓ Как пользоваться", callback_data="menu_help")
     builder.button(text="💬 Поддержка", callback_data="menu_support")
     builder.button(text="💰 Пополнить", callback_data="menu_topup")
-    builder.button(text="🏠 Главное меню", callback_data="back_main")
+    builder.button(text="🏠 На главную", callback_data="back_main")
     builder.adjust(2, 1, 1)
     return builder.as_markup()
 '''
@@ -110,7 +110,7 @@ NEW_MORE_MENU = '''def get_more_menu_keyboard():
     builder.button(text="🎬 Видео", callback_data="create_video_new")
     builder.button(text="🖼 Фото", callback_data="create_image_text_new")
     builder.button(text="✨ Улучшение", callback_data="create_image_refs_new")
-    builder.button(text="🏠 Главное меню", callback_data="back_main")
+    builder.button(text="🏠 На главную", callback_data="back_main")
     builder.adjust(2, 1, 1)
     return builder.as_markup()
 '''
@@ -229,8 +229,8 @@ def _patch_common() -> None:
             1,
         )
 
-    new_title = "✨ <b>Другие AI-инструменты</b>"
-    legacy_titles = ("⋯ <b>Ещё</b>", "✨ <b>Прочий AI</b>")
+    new_title = "✨ <b>Ещё идеи</b>"
+    legacy_titles = ("⋯ <b>Ещё</b>", "✨ <b>Прочий AI</b>", "✨ <b>Другие AI-инструменты</b>")
     if new_title not in text:
         for legacy_title in legacy_titles:
             if legacy_title in text:
@@ -239,10 +239,11 @@ def _patch_common() -> None:
         else:
             raise RuntimeError("HappyFox other-AI title anchor was not found")
 
-    new_body = "Выберите, что хотите сделать: создать видео, создать фото или улучшить готовое изображение."
+    new_body = "Здесь можно собрать фото или видео нестандартным способом и доработать готовый результат."
     legacy_bodies = (
         "Здесь находятся баланс, история, помощь и поддержка.",
         "Выберите дополнительный сценарий: видео, фото или улучшение.",
+        "Выберите, что хотите сделать: создать видео, создать фото или улучшить готовое изображение.",
         "Баланс, история генераций, поддержка и другие полезные разделы.",
     )
     if new_body not in text:
