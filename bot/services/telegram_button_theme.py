@@ -9,8 +9,8 @@ from typing import Any, Awaitable, Callable
 from aiogram import Bot, types
 from aiogram.client.session.middlewares.base import BaseRequestMiddleware
 from aiogram.methods import TelegramMethod
+from aiogram.methods.base import TelegramType
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
-from aiogram.types.base import TelegramType
 
 logger = logging.getLogger(__name__)
 
