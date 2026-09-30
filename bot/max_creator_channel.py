@@ -196,7 +196,7 @@ class MaxCreatorChannelService(MaxChannelService):
         if model not in MOTION_MODELS:
             await self._respond(
                 user_id,
-                "Эта версия Motion Control сейчас недоступна.",
+                "Этот вариант движения сейчас недоступен. Выбери другой.",
                 attachments=_motion_model_menu(),
                 callback_id=callback_id,
             )
@@ -243,7 +243,7 @@ class MaxCreatorChannelService(MaxChannelService):
             await save_max_session(user_id, "motion:waiting_video", updated)
             await self._respond(
                 user_id,
-                "Фото принято 🖼\n\n"
+                "Фото есть 🖼\n\n"
                 "Теперь пришлите видео с движением длительностью от 3 до 30 секунд.",
                 attachments=back_home_menu(),
             )
@@ -274,7 +274,7 @@ class MaxCreatorChannelService(MaxChannelService):
             if duration is None:
                 await self._respond(
                     user_id,
-                    "MAX не вернул длительность этого видео, поэтому безопасно "
+                     "
                     "посчитать стоимость не получилось. Пришлите ролик ещё раз.",
                     attachments=back_home_menu(),
                 )
@@ -282,7 +282,7 @@ class MaxCreatorChannelService(MaxChannelService):
             if not 3 <= duration <= 30:
                 await self._respond(
                     user_id,
-                    "Для Motion Control нужен ролик длительностью от 3 до 30 секунд.",
+                    "Нужен ролик от 3 до 30 секунд.",
                     attachments=back_home_menu(),
                 )
                 return True
@@ -296,8 +296,8 @@ class MaxCreatorChannelService(MaxChannelService):
             await save_max_session(user_id, "motion:choose_orientation", updated)
             await self._respond(
                 user_id,
-                "Видео принято 🎬\n\n"
-                "Выберите, откуда брать ориентацию персонажа.",
+                "Ролик есть 🎬\n\n"
+                "Как ориентировать персонажа?",
                 attachments=_motion_orientation_menu(),
             )
             return True
@@ -305,7 +305,7 @@ class MaxCreatorChannelService(MaxChannelService):
         if state.startswith("motion:"):
             await self._respond(
                 user_id,
-                "Используйте кнопки ниже, чтобы закончить настройку Motion Control.",
+                "Выбери вариант ниже — и закончим настройку.",
                 attachments=(
                     _motion_orientation_menu()
                     if state == "motion:choose_orientation"
@@ -355,9 +355,9 @@ class MaxCreatorChannelService(MaxChannelService):
             await clear_max_session(user_id)
             await self._respond(
                 user_id,
-                "🎯 <b>Motion Control</b>\n\n"
-                "Перенесите движение из видео на персонажа с изображения. "
-                "Выберите версию Kling.",
+                "🎯 <b>Повторить движение</b>\n\n"
+                "Возьми движение из ролика и перенеси его на своего персонажа. "
+                "Выбери качество переноса.",
                 attachments=_motion_model_menu(),
                 callback_id=callback_id,
             )
@@ -376,7 +376,7 @@ class MaxCreatorChannelService(MaxChannelService):
             if session.state != "motion:choose_orientation":
                 await self._respond(
                     user_id,
-                    "Сценарий Motion Control устарел. Начните его заново.",
+                    "Этот сценарий уже закрыт. Запусти перенос движения заново.",
                     attachments=_motion_model_menu(),
                     callback_id=callback_id,
                 )
@@ -405,7 +405,7 @@ class MaxCreatorChannelService(MaxChannelService):
             await save_max_session(user_id, "motion:choose_quality", data)
             await self._respond(
                 user_id,
-                "Выберите качество итогового видео.",
+                "Какое качество нужно?",
                 attachments=_motion_quality_menu(),
                 callback_id=callback_id,
             )
@@ -416,7 +416,7 @@ class MaxCreatorChannelService(MaxChannelService):
             if session.state != "motion:choose_quality":
                 await self._respond(
                     user_id,
-                    "Сценарий Motion Control устарел. Начните его заново.",
+                    "Этот сценарий уже закрыт. Запусти перенос движения заново.",
                     attachments=_motion_model_menu(),
                     callback_id=callback_id,
                 )
@@ -434,8 +434,8 @@ class MaxCreatorChannelService(MaxChannelService):
                 logger.exception("MAX Motion Control price calculation failed")
                 await self._respond(
                     user_id,
-                    "Не удалось рассчитать стоимость Motion Control. "
-                    "Начните сценарий заново.",
+                    "Не получилось посчитать стоимость. "
+                    "Начни сценарий заново.",
                     attachments=_motion_model_menu(),
                     callback_id=callback_id,
                 )
@@ -448,11 +448,11 @@ class MaxCreatorChannelService(MaxChannelService):
             prompt_line = (
                 f"\nПромпт: {html.escape(prompt[:500])}"
                 if prompt
-                else "\nПромпт: не задан — используется только движение референса."
+                else "\nОписание не задано — перенесу только движение."
             )
             await self._respond(
                 user_id,
-                "✨ <b>Motion Control готов к запуску</b>\n\n"
+                "✨ <b>Всё готово</b>\n\n"
                 f"Модель: <b>{html.escape(_MOTION_MODEL_LABELS.get(model, model))}</b>\n"
                 f"Видео: <b>{int(data['duration'])} сек.</b>\n"
                 f"Качество: <b>{html.escape(quality)}</b>\n"
@@ -487,7 +487,7 @@ class MaxCreatorChannelService(MaxChannelService):
         except MaxInsufficientBalanceError:
             await self._respond(
                 user_id,
-                "🐾 Баланса не хватает. Пополните MAX-баланс — настройки "
+                "🐾 Лапок не хватает. Пополни баланс — настройки "
                 "Motion Control сохранены.",
                 attachments=topup_menu(self.catalog),
                 callback_id=callback_id,
@@ -497,7 +497,7 @@ class MaxCreatorChannelService(MaxChannelService):
             logger.exception("MAX Motion Control enqueue failed")
             await self._respond(
                 user_id,
-                "Не удалось запустить Motion Control. Настройки сохранены — "
+                "Не получилось запустить перенос. Настройки сохранены — "
                 "можно повторить запуск.",
                 attachments=generation_confirm_menu(),
                 callback_id=callback_id,
@@ -508,11 +508,11 @@ class MaxCreatorChannelService(MaxChannelService):
         balance = await get_max_balance(user_id)
         await self._respond(
             user_id,
-            "🚀 <b>Motion Control запущен</b>\n\n"
+            "✨ <b>Движение переносится</b>\n\n"
             f"Задача: <code>{html.escape(job.id[:12])}</code>\n"
             f"Списано: <b>{_format_cost(job.cost)} 🐾</b>\n"
             f"Осталось: <b>{_format_cost(balance)} 🐾</b>\n\n"
-            "Результат придёт сюда автоматически.",
+            "Готовый ролик пришлю сюда автоматически.",
             attachments=main_menu(
                 balance,
                 mini_app_url=self.settings.mini_app_url,
