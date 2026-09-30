@@ -47,7 +47,7 @@ def _audio_confirm_menu() -> list[dict[str, Any]]:
     return [
         inline_keyboard(
             [
-                [callback_button("🚀 Создать Audio ID", "max:generate")],
+                [callback_button("✨ Создать голос", "max:generate")],
                 [callback_button("💬 Добавить пример реплики", "max:audio:example")],
                 [callback_button("🏠 Главное меню", "max:home")],
             ]
@@ -89,7 +89,7 @@ class MaxOmniChannelService(MaxCreatorChannelService):
             if not text:
                 await self._respond(
                     user_id,
-                    "Отправьте имя голоса первой строкой. Описание можно добавить со второй строки.",
+                    "С первой строки — имя голоса. Со второй можно добавить короткое описание.",
                     attachments=back_home_menu(),
                 )
                 return True
@@ -142,7 +142,7 @@ class MaxOmniChannelService(MaxCreatorChannelService):
             if not prompt:
                 await self._respond(
                     user_id,
-                    "Добавьте текстовый промпт для Gemini Omni.",
+                    "Добавь описание того, что должно получиться.",
                     attachments=back_home_menu(),
                 )
                 return True
@@ -212,8 +212,8 @@ class MaxOmniChannelService(MaxCreatorChannelService):
             cost = omni_audio_cost(self.catalog)
             await self._respond(
                 user_id,
-                "🎙 <b>Создать Audio ID для Gemini Omni</b>\n\n"
-                "Выберите базовый голос. Дальше нужно будет одним сообщением прислать имя, а при желании — описание голоса.\n\n"
+                "🎙 <b>Создать голос</b>\n\n"
+                "Выбери основу. Потом одним сообщением пришли имя и, если хочешь, описание голоса.\n\n"
                 f"Стоимость: <b>{_format_cost(cost)} 🐾</b>",
                 attachments=_audio_voice_menu(),
                 callback_id=callback_id,
@@ -251,7 +251,7 @@ class MaxOmniChannelService(MaxCreatorChannelService):
             if session.state != "audio:confirm":
                 await self._respond(
                     user_id,
-                    "Сценарий Audio ID устарел. Начните его заново.",
+                    "Сценарий Audio ID устарел. Начни его заново.",
                     attachments=_audio_voice_menu(),
                     callback_id=callback_id,
                 )
@@ -320,7 +320,7 @@ class MaxOmniChannelService(MaxCreatorChannelService):
         except MaxInsufficientBalanceError:
             await self._respond(
                 user_id,
-                "🐾 Баланса не хватает. Пополните MAX-баланс — профиль голоса сохранён.",
+                "🐾 Лапок не хватает. Пополни баланс — профиль голоса сохранён.",
                 attachments=topup_menu(self.catalog),
                 callback_id=callback_id,
             )
