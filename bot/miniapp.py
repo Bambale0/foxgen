@@ -187,8 +187,8 @@ _miniapp_media_locks: dict[str, asyncio.Lock] = {}
 logger = logging.getLogger(__name__)
 
 _MINIAPP_INIT_DATA_ERRORS = {
-    "Missing init_data": "Откройте Mini App из Telegram и попробуйте снова.",
-    "Missing Telegram hash": "Откройте Mini App из Telegram и попробуйте снова.",
+    "Missing init_data": "Откройте Mini App из Telegram и попробуй снова.",
+    "Missing Telegram hash": "Откройте Mini App из Telegram и попробуй снова.",
     "Invalid Telegram signature": "Откройте Mini App заново из Telegram.",
     "Expired Telegram session": "Сессия Telegram истекла. Откройте Mini App заново из Telegram.",
     "Missing Telegram user": "Откройте Mini App заново из Telegram.",
@@ -218,13 +218,13 @@ def _miniapp_expected_error_response(error: Exception) -> web.Response | None:
 
     if isinstance(error, TimeoutError):
         return web.json_response(
-            {"ok": False, "error": "Загрузка не завершилась за 60 секунд. Попробуйте ещё раз."},
+            {"ok": False, "error": "Загрузка не завершилась за 60 секунд. Попробуй ещё раз."},
             status=408,
         )
 
     if isinstance(error, ConnectionResetError):
         return web.json_response(
-            {"ok": False, "error": "Загрузка была прервана. Попробуйте ещё раз."},
+            {"ok": False, "error": "Загрузка была прервана. Попробуй ещё раз."},
             status=499,
         )
 
@@ -840,7 +840,7 @@ def _load_miniapp_assistant_audio(
 ) -> tuple[bytes, str, str]:
     local_path = resolve_local_upload_path(audio_url)
     if not local_path:
-        raise ValueError("Аудио не найдено. Запишите или загрузите его ещё раз.")
+        raise ValueError("Аудио не найдено. Запишите или загрузи его ещё раз.")
 
     path = Path(local_path)
     if path.stat().st_size > config.PHOTO_PROMPT_MAX_AUDIO_BYTES:
@@ -857,7 +857,7 @@ def _load_miniapp_assistant_audio(
         content_type=content_type,
     )
     if not audio_format:
-        raise ValueError("Этот аудиоформат не поддерживается. Попробуйте ogg, mp3, wav или webm.")
+        raise ValueError("Этот аудиоформат не поддерживается. Попробуй ogg, mp3, wav или webm.")
 
     return audio_bytes, mime_type, audio_format
 
@@ -2070,7 +2070,7 @@ async def _send_create_hub(app: web.Application, telegram_id: int):
     text = (
         "✨ <b>Создать</b>\n"
         f"🍌 Баланс: <code>{user.credits}</code> бананов\n\n"
-        "Выберите, что хотите получить. Можно использовать готовый сценарий "
+        "Выбери, что хотите получить. Можно использовать готовый сценарий "
         "или открыть пошаговый режим."
     )
     await app["bot"].send_message(
@@ -2087,7 +2087,7 @@ async def _send_edit_hub(app: web.Application, telegram_id: int):
         "✏️ <b>Изменить фото</b>\n"
         f"🍌 Баланс: <code>{user.credits}</code> бананов\n\n"
         "Здесь можно поменять стиль, фон, одежду, детали или настроение кадра.\n"
-        "Сначала выберите сценарий ниже."
+        "Сначала выбери сценарий ниже."
     )
     await app["bot"].send_message(
         telegram_id,
@@ -2102,7 +2102,7 @@ async def _send_animate_hub(app: web.Application, telegram_id: int):
     text = (
         "🎬 <b>Оживить</b>\n"
         f"🍌 Баланс: <code>{user.credits}</code> бананов\n\n"
-        "Выберите, как хотите сделать видео:\n"
+        "Выбери, как хотите сделать видео:\n"
         "• оживить фото\n"
         "• перенести движение\n"
         "• использовать видео-референсы"
@@ -2170,7 +2170,7 @@ async def _send_photo_prompt(app: web.Application, telegram_id: int):
         "📸 <b>Анализ фото -> Промпт</b>\n"
         f"🍌 Баланс: <code>{user.credits}</code> бананов\n\n"
         "<b>Что делает этот режим</b>\n"
-        "Отправьте фото, и бот соберёт по нему аккуратный промпт для дальнейшей генерации.\n\n"
+        "Пришли фото, и бот соберёт по нему аккуратный промпт для дальнейшей генерации.\n\n"
         "Обычно хорошо распознаются:\n"
         "• персонажи, лица и одежда\n"
         "• поза, композиция и ракурс\n"
@@ -2201,7 +2201,7 @@ async def _send_topup(app: web.Application, telegram_id: int):
     text = (
         "🍌 <b>Пополнение баланса</b>\n\n"
         "Оплата выполняется через CryptoBot.\n"
-        "Выберите пакет бананов ниже.\n\n"
+        "Выбери пакет бананов ниже.\n\n"
         "<i>Чем больше пакет, тем выгоднее цена за банан.</i>"
     )
     await app["bot"].send_message(
@@ -2293,12 +2293,12 @@ async def _send_batch_edit(app: web.Application, telegram_id: int):
     text = (
         "🎨 <b>Редактирование по референсам</b>\n"
         f"🍌 Ваш баланс: <code>{user_credits}</code> бананов\n\n"
-        "1. Загрузите <b>главное фото</b> для редактирования\n"
-        "2. Добавьте до <b>14 референсов</b>\n"
+        "1. Загрузи <b>главное фото</b> для редактирования\n"
+        "2. Добавь до <b>14 референсов</b>\n"
         "3. Введите промпт\n"
         "4. Получите результат с учётом исходников\n\n"
         "💰 Стоимость: <b>4🍌</b>\n"
-        "<i>📸 Отправьте главное фото для редактирования.</i>"
+        "<i>📸 Пришли главное фото для редактирования.</i>"
     )
     await app["bot"].send_message(
         telegram_id,
@@ -2357,7 +2357,7 @@ async def _send_admin(app: web.Application, telegram_id: int):
 • Транзакций: <code>{stats['total_transactions']}</code>
 • Выручка: <code>{stats['total_revenue']:.0f}</code> ₽
 
-Выберите действие:
+Выбери действие:
 """
     await app["bot"].send_message(
         telegram_id,
@@ -2768,7 +2768,7 @@ async def miniapp_upload(request: web.Request) -> web.Response:
                     "ok": False,
                     "error": (
                         f"Формат файла не распознан: {declared_type}. "
-                        "Используйте JPG, PNG, WEBP, HEIC, MP4 или MOV."
+                        "Используй JPG, PNG, WEBP, HEIC, MP4 или MOV."
                     ),
                 },
                 status=400,
@@ -2961,7 +2961,7 @@ async def miniapp_create_payment(request: web.Request) -> web.Response:
 
             if not result or not result.get("ok"):
                 return web.json_response(
-                    {"ok": False, "error": "Не удалось создать платёж. Попробуйте снова."},
+                    {"ok": False, "error": "Не удалось создать платёж. Попробуй снова."},
                     status=500,
                 )
 
@@ -3024,7 +3024,7 @@ async def miniapp_create_payment(request: web.Request) -> web.Response:
 
         if not result or not (result.get("Success") or result.get("PaymentId")):
             return web.json_response(
-                {"ok": False, "error": "Не удалось создать платёж. Попробуйте снова."}, status=500
+                {"ok": False, "error": "Не удалось создать платёж. Попробуй снова."}, status=500
             )
 
         payment_id = result.get("PaymentId")
@@ -3065,7 +3065,7 @@ async def miniapp_photo_to_prompt(request: web.Request) -> web.Response:
 
         if not image_url:
             return web.json_response(
-                {"ok": False, "error": "Загрузите фото для анализа"},
+                {"ok": False, "error": "Загрузи фото для анализа"},
                 status=400,
             )
 
@@ -3908,7 +3908,7 @@ async def miniapp_feed_remix(request: web.Request) -> web.Response:
             return web.json_response(
                 {
                     "ok": False,
-                    "error": "Дождитесь окончания загрузки референса и попробуйте снова.",
+                    "error": "Дождитесь окончания загрузки референса и попробуй снова.",
                 },
                 status=400,
             )
@@ -3916,7 +3916,7 @@ async def miniapp_feed_remix(request: web.Request) -> web.Response:
             return web.json_response(
                 {
                     "ok": False,
-                    "error": "Один или несколько старых референсов уже удалены. Загрузите фото заново.",
+                    "error": "Один или несколько старых референсов уже удалены. Загрузи фото заново.",
                 },
                 status=400,
             )
@@ -4060,7 +4060,7 @@ async def miniapp_generate_image(request: web.Request) -> web.Response:
             )
             if not references:
                 return web.json_response(
-                    {"ok": False, "error": "Добавьте своё фото или референс для remix"},
+                    {"ok": False, "error": "Добавь своё фото или референс для remix"},
                     status=400,
                 )
             # P2-03: propagate original source_feed_gen_id for multi-hop remix lineage
@@ -4123,7 +4123,7 @@ async def miniapp_generate_image(request: web.Request) -> web.Response:
             return web.json_response(
                 {
                     "ok": False,
-                    "error": "Дождитесь окончания загрузки референса и попробуйте снова.",
+                    "error": "Дождитесь окончания загрузки референса и попробуй снова.",
                 },
                 status=400,
             )
@@ -4131,7 +4131,7 @@ async def miniapp_generate_image(request: web.Request) -> web.Response:
             return web.json_response(
                 {
                     "ok": False,
-                    "error": "Один или несколько старых референсов уже удалены. Загрузите фото заново.",
+                    "error": "Один или несколько старых референсов уже удалены. Загрузи фото заново.",
                 },
                 status=400,
             )
@@ -4416,7 +4416,7 @@ async def miniapp_generate_video(request: web.Request) -> web.Response:
             return web.json_response(
                 {
                     "ok": False,
-                    "error": "Для нескольких видео-референсов выберите Seedance 2.0",
+                    "error": "Для нескольких видео-референсов выбери Seedance 2.0",
                 },
                 status=400,
             )
@@ -4436,7 +4436,7 @@ async def miniapp_generate_video(request: web.Request) -> web.Response:
             return web.json_response(
                 {
                     "ok": False,
-                    "error": "Для режима Фото + Текст загрузите стартовое фото",
+                    "error": "Для режима Фото + Текст загрузи стартовое фото",
                 },
                 status=400,
             )
@@ -4444,7 +4444,7 @@ async def miniapp_generate_video(request: web.Request) -> web.Response:
             return web.json_response(
                 {
                     "ok": False,
-                    "error": "Для Gemini Omni Character загрузите изображение персонажа",
+                    "error": "Для Gemini Omni Character загрузи изображение персонажа",
                 },
                 status=400,
             )
@@ -4464,7 +4464,7 @@ async def miniapp_generate_video(request: web.Request) -> web.Response:
             return web.json_response(
                 {
                     "ok": False,
-                    "error": "Для Motion Control загрузите фото персонажа и видео движения",
+                    "error": "Для Motion Control загрузи фото персонажа и видео движения",
                 },
                 status=400,
             )
@@ -4472,7 +4472,7 @@ async def miniapp_generate_video(request: web.Request) -> web.Response:
             return web.json_response(
                 {
                     "ok": False,
-                    "error": "Для Kling Avatar загрузите фото персонажа и аудиофайл",
+                    "error": "Для Kling Avatar загрузи фото персонажа и аудиофайл",
                 },
                 status=400,
             )
@@ -4514,7 +4514,7 @@ async def miniapp_generate_video(request: web.Request) -> web.Response:
             return web.json_response(
                 {
                     "ok": False,
-                    "error": "Для Motion Control загрузите фото персонажа и видео движения",
+                    "error": "Для Motion Control загрузи фото персонажа и видео движения",
                 },
                 status=400,
             )
@@ -4522,7 +4522,7 @@ async def miniapp_generate_video(request: web.Request) -> web.Response:
             return web.json_response(
                 {
                     "ok": False,
-                    "error": "Для Kling Avatar загрузите фото персонажа и аудиофайл",
+                    "error": "Для Kling Avatar загрузи фото персонажа и аудиофайл",
                 },
                 status=400,
             )
@@ -4534,7 +4534,7 @@ async def miniapp_generate_video(request: web.Request) -> web.Response:
             return web.json_response(
                 {
                     "ok": False,
-                    "error": "Один или несколько старых фото-референсов уже удалены. Загрузите фото заново.",
+                    "error": "Один или несколько старых фото-референсов уже удалены. Загрузи фото заново.",
                 },
                 status=400,
             )
@@ -4666,12 +4666,12 @@ async def miniapp_generate_motion(request: web.Request) -> web.Response:
 
         if not image_url:
             return web.json_response(
-                {"ok": False, "error": "Загрузите фото персонажа"},
+                {"ok": False, "error": "Загрузи фото персонажа"},
                 status=400,
             )
         if not video_url:
             return web.json_response(
-                {"ok": False, "error": "Загрузите видео движения"},
+                {"ok": False, "error": "Загрузи видео движения"},
                 status=400,
             )
         if mode not in {"720p", "1080p"}:
@@ -5056,7 +5056,7 @@ async def miniapp_ai_assistant(request: web.Request) -> web.Response:
             return web.json_response(
                 {
                     "ok": False,
-                    "error": "AI-ассистент временно недоступен. Попробуйте позже.",
+                    "error": "AI-ассистент временно недоступен. Попробуй позже.",
                 },
                 status=503,
             )
