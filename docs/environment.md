@@ -17,8 +17,8 @@ Programmatic sources of truth are `bot/config.py`, channel settings classes and 
 ```dotenv
 PRODUCT_ID=happyfox
 BOT_TOKEN=
-# Custom emoji ID for animated Telegram public-button icons; set empty to disable the icon.
-TELEGRAM_BUTTON_CUSTOM_EMOJI_ID=5368324170671202286
+# Enable semantic animated custom-emoji icons on Telegram public buttons.
+TELEGRAM_BUTTON_ANIMATED_ICONS_ENABLED=1
 ADMIN_IDS=
 SUPPORT_CONTACT=
 
