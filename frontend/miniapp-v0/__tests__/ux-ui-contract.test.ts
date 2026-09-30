@@ -77,12 +77,12 @@ describe('HappyFox UX/UI guardrails', () => {
     const common = readRepo('bot/handlers/common.py')
     const normalizer = readRepo('scripts/apply_happyfox_main_menu.py')
 
-    expect(common).toContain('✨ <b>Другие AI-инструменты</b>')
-    expect(common).toContain('создать видео, создать фото или улучшить готовое изображение')
+    expect(common).toContain('✨ <b>Ещё идеи</b>')
+    expect(common).toContain('собрать фото или видео нестандартным способом')
     expect(normalizer).toContain('🎬 Видео')
     expect(normalizer).toContain('🖼 Фото')
     expect(normalizer).toContain('✨ Улучшение')
-    expect(normalizer).toContain('Другие AI-инструменты')
+    expect(normalizer).toContain('Ещё идеи')
   })
   test('uses the HappyFox action-first voice across core creator surfaces', () => {
     const quick = read('components/quick-action-grid.tsx')
