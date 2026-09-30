@@ -209,7 +209,7 @@ class MaxChannelService:
         balance = await get_max_balance(user_id)
         await self._respond(
             user_id,
-            "🦊 <b>HappyFox в MAX</b>\n\nВыберите, что хотите создать.",
+            "🦊 <b>HappyFox</b>\n\nЧто создаём?",
             attachments=main_menu(
                 balance,
                 mini_app_url=self.settings.mini_app_url,
@@ -222,8 +222,8 @@ class MaxChannelService:
         balance = await get_max_balance(user_id)
         await self._respond(
             user_id,
-            f"🐾 <b>Баланс MAX</b>\n\nДоступно: <b>{_format_cost(balance)} 🐾</b>\n\n"
-            "Баланс MAX отделён от Telegram.",
+            f"🐾 <b>Твои лапки</b>\n\nДоступно: <b>{_format_cost(balance)} 🐾</b>\n\n"
+            "Баланс MAX отдельный — лапки в Telegram не меняются.",
             attachments=topup_menu(self.catalog),
             callback_id=callback_id,
         )
@@ -231,7 +231,7 @@ class MaxChannelService:
     async def _history(self, user_id: int, *, callback_id: str) -> None:
         history = await list_max_history(user_id, limit=5)
         if not history:
-            text = "🔗 <b>Ссылки на работы</b>\n\nЗдесь появятся ваши готовые генерации в MAX."
+            text = "🔗 <b>Мои результаты</b>\n\nГотовые работы из MAX будут появляться здесь."
         else:
             lines = ["🔗 <b>Последние работы MAX</b>"]
             for item in history:
@@ -282,7 +282,7 @@ class MaxChannelService:
             return
         await self._respond(
             user_id,
-            "💳 <b>Пополнение MAX</b>\n\nВыберите пакет 🐾. Оплата проходит отдельно от Telegram.",
+            "🐾 <b>Добавить лапки</b>\n\nВыбери пакет. Пополнение MAX идёт отдельно от Telegram.",
             attachments=topup_menu(self.catalog),
             callback_id=callback_id,
         )
@@ -300,7 +300,7 @@ class MaxChannelService:
             logger.warning("MAX checkout creation failed: %s", exc)
             await self._respond(
                 user_id,
-                "Не удалось создать оплату. Попробуйте ещё раз чуть позже.",
+                "Не получилось открыть оплату. Попробуй ещё раз чуть позже.",
                 attachments=topup_menu(self.catalog),
                 callback_id=callback_id,
             )
@@ -325,7 +325,7 @@ class MaxChannelService:
             f"Пакет: <b>{html.escape(order.package_id)}</b>\n"
             f"Начисление: <b>{_format_cost(order.credits)} 🐾</b>\n"
             f"Сумма: <b>{_format_cost(order.amount_rub)} ₽</b>\n\n"
-            "После оплаты можно нажать «Проверить оплату». Фоновая сверка также начислит баланс автоматически.",
+            "После оплаты нажми «Проверить оплату». Если не нажмёшь, баланс всё равно обновится после подтверждения.",
             attachments=attachments,
             callback_id=callback_id,
         )
@@ -371,7 +371,7 @@ class MaxChannelService:
             )
             return
         if status == "failed":
-            text = "Платёж отменён или не прошёл. Можно создать новый счёт."
+            text = "Платёж не прошёл или был отменён. Можно попробовать ещё раз."
         elif status == "verification_failed":
             text = (
                 "Платёж найден, но его данные не совпали со счётом MAX. "
@@ -399,7 +399,7 @@ class MaxChannelService:
         if model not in self.catalog.image_models():
             await self._respond(
                 user_id,
-                "Эта модель фото сейчас недоступна.",
+                "Эта модель сейчас недоступна. Выбери другую.",
                 callback_id=callback_id,
             )
             return
@@ -416,7 +416,7 @@ class MaxChannelService:
         await self._respond(
             user_id,
             f"🖼 <b>{html.escape(model)}</b>\n\n"
-            f"Отправьте промпт одним сообщением.{reference_note}",
+            f"Пришли идею одним сообщением.{reference_note}",
             attachments=back_home_menu(),
             callback_id=callback_id,
         )
@@ -435,7 +435,7 @@ class MaxChannelService:
         ):
             await self._respond(
                 user_id,
-                "Эта видео-модель сейчас недоступна для выбранного сценария.",
+                "Эта модель не подходит для этого сценария. Выбери другую.",
                 callback_id=callback_id,
             )
             return
@@ -449,13 +449,13 @@ class MaxChannelService:
             },
         )
         if generation_type == "text":
-            media_note = "Отправьте текстовый промпт."
+            media_note = "Пришли описание сцены."
         elif generation_type == "imgtxt":
-            media_note = "Отправьте промпт и изображение в одном сообщении."
+            media_note = "Пришли описание и изображение одним сообщением."
         elif model == "glow":
-            media_note = "Отправьте промпт, изображение и видео-референс."
+            media_note = "Пришли описание, изображение и видео-референс."
         else:
-            media_note = "Отправьте промпт и видео-референс."
+            media_note = "Пришли описание и видео-референс."
         await self._respond(
             user_id,
             f"🎬 <b>{html.escape(model)}</b>\n\n{media_note}",
@@ -476,7 +476,7 @@ class MaxChannelService:
         if not prompt:
             await self._respond(
                 user_id,
-                "Добавьте текстовый промпт к сообщению — без него генерацию не запускаю.",
+                "Добавь описание сцены — без него запускать нечего.",
             )
             return True
 
@@ -489,7 +489,7 @@ class MaxChannelService:
             if model in _IMAGE_REFERENCE_REQUIRED and not images:
                 await self._respond(
                     user_id,
-                    "Для этой модели нужен референс. Пришлите изображение вместе с промптом.",
+                    "Для этой модели нужен референс. Пришли изображение вместе с описанием.",
                 )
                 return True
             cost = self.catalog.image_cost(model)
@@ -500,19 +500,19 @@ class MaxChannelService:
             if generation_type == "imgtxt" and not images:
                 await self._respond(
                     user_id,
-                    "Для «Фото → Видео» приложите изображение вместе с промптом.",
+                    "Для «Фото → Видео» добавь изображение вместе с описанием.",
                 )
                 return True
             if generation_type == "video" and not videos:
                 await self._respond(
                     user_id,
-                    "Для «Видео → Видео» приложите видео-референс вместе с промптом.",
+                    "Для «Видео → Видео» добавь видео-референс вместе с описанием.",
                 )
                 return True
             if model == "glow" and (not images or not videos):
                 await self._respond(
                     user_id,
-                    "Kling Glow нужны и изображение, и видео-референс.",
+                    "Для Kling Glow нужны сразу изображение и видео-референс.",
                 )
                 return True
             duration = _video_duration(model)
@@ -560,7 +560,7 @@ class MaxChannelService:
         if session.state not in {"image:confirm", "video:confirm"}:
             await self._respond(
                 user_id,
-                "Сценарий уже завершён или устарел. Выберите модель заново.",
+                "Этот сценарий уже закрыт. Выбери модель ещё раз.",
                 attachments=main_menu(
                     await get_max_balance(user_id),
                     mini_app_url=self.settings.mini_app_url,
@@ -584,7 +584,7 @@ class MaxChannelService:
         except MaxInsufficientBalanceError:
             await self._respond(
                 user_id,
-                "🐾 Баланса не хватает. Пополните MAX-баланс — подготовленный промпт сохранён.",
+                "🐾 Лапок не хватает. Пополни баланс — описание сохранено.",
                 attachments=topup_menu(self.catalog),
                 callback_id=callback_id,
             )
@@ -593,7 +593,7 @@ class MaxChannelService:
             logger.exception("MAX generation enqueue failed")
             await self._respond(
                 user_id,
-                f"Не удалось поставить генерацию в очередь: {html.escape(str(exc)[:300])}",
+                f"Не получилось запустить генерацию: {html.escape(str(exc)[:300])}",
                 attachments=back_home_menu(),
                 callback_id=callback_id,
             )
@@ -603,11 +603,11 @@ class MaxChannelService:
         balance = await get_max_balance(user_id)
         await self._respond(
             user_id,
-            "🚀 <b>Генерация запущена</b>\n\n"
+            "✨ <b>Запустил</b>\n\n"
             f"Задача: <code>{html.escape(job.id[:12])}</code>\n"
             f"Списано: <b>{_format_cost(job.cost)} 🐾</b>\n"
             f"Осталось: <b>{_format_cost(balance)} 🐾</b>\n\n"
-            "Результат придёт сюда автоматически.",
+            "Готовый результат пришлю сюда автоматически.",
             attachments=main_menu(
                 balance,
                 mini_app_url=self.settings.mini_app_url,
@@ -652,7 +652,7 @@ class MaxChannelService:
             await clear_max_session(user_id)
             await self._respond(
                 user_id,
-                "🖼 <b>Создать фото</b>\n\nВыберите модель.",
+                "🖼 <b>Сделать фото</b>\n\nВыбери модель.",
                 attachments=image_model_menu(self.catalog),
                 callback_id=callback_id,
             )
@@ -681,7 +681,7 @@ class MaxChannelService:
             else:
                 await self._respond(
                     user_id,
-                    "🎬 <b>Выберите видео-модель</b>",
+                    "🎬 <b>Выбери модель</b>",
                     attachments=video_model_menu(generation_type, self.catalog),
                     callback_id=callback_id,
                 )
@@ -728,7 +728,7 @@ class MaxChannelService:
         elif payload == "max:prompts" and self.settings.mini_app_url:
             await self._respond(
                 user_id,
-                "✨ Библиотека промптов доступна в Mini App.",
+                "✨ Готовые идеи открываются в HappyFox.",
                 attachments=[
                     inline_keyboard(
                         [
@@ -745,9 +745,9 @@ class MaxChannelService:
             labels = {
                 "max:omni_audio": "🎙 Озвучка",
                 "max:music": "🎵 Suno",
-                "max:motion_control": "🎯 Motion Control",
+                "max:motion_control": "🎯 Повторить движение",
                 "max:assistant": "🤖 AI-помощник",
-                "max:prompts": "✨ Промпты",
+                "max:prompts": "✨ Готовые идеи",
             }
             await self._unsupported(
                 user_id,
@@ -817,13 +817,13 @@ class MaxChannelService:
         elif text in {"фото", "создать фото"}:
             await self._respond(
                 user_id,
-                "🖼 <b>Создать фото</b>\n\nВыберите модель.",
+                "🖼 <b>Сделать фото</b>\n\nВыбери модель.",
                 attachments=image_model_menu(self.catalog),
             )
         elif text in {"видео", "создать видео"}:
             await self._respond(
                 user_id,
-                "🎬 <b>Создать видео</b>\n\nВыберите сценарий.",
+                "🎬 <b>Создать видео</b>\n\nВыбери сценарий.",
                 attachments=video_type_menu(),
             )
         elif text in {"баланс", "/balance"}:
@@ -833,7 +833,7 @@ class MaxChannelService:
         else:
             await self._respond(
                 user_id,
-                "Я не потерял сообщение. Выберите действие в меню — так быстрее "
+                "Я не потерял сообщение. Выбери действие в меню — так быстрее "
                 "дойти до результата.",
                 attachments=main_menu(
                     await get_max_balance(user_id),
