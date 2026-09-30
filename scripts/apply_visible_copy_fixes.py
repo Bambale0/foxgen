@@ -10,9 +10,7 @@ LEGACY_DIRECT_PROMPT_BUTTON = (
     'InlineKeyboardButton(text="✍️ Промпт по описанию", '
     'callback_data="photo_to_prompt"),'
 )
-CURRENT_PROMPTS_HUB_BUTTON = (
-    'InlineKeyboardButton(text="✨ Промпты", callback_data="menu_prompts"),'
-)
+CURRENT_PROMPTS_HUB_BUTTON = 'callback_data="menu_prompts"'
 PRICE_IN_BUTTON_FRAGMENT = "Промпт по описанию •"
 
 OLD_SCREEN = (
