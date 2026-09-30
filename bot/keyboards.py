@@ -286,7 +286,7 @@ def get_create_hub_keyboard():
     builder.button(text="⚙️ Свои настройки", callback_data="create_video_new")
     builder.button(text="🏠 Главное меню", callback_data="back_main")
     builder.adjust(2, 2, 2, 1)
-    return builder.as_markup()
+    return _telegram_style_markup(builder.as_markup())
 
 
 def get_edit_hub_keyboard():
@@ -298,7 +298,7 @@ def get_edit_hub_keyboard():
     builder.button(text="⚙️ Свои настройки", callback_data="create_image_refs_new")
     builder.button(text="🏠 Главное меню", callback_data="back_main")
     builder.adjust(2, 2, 1, 1)
-    return builder.as_markup()
+    return _telegram_style_markup(builder.as_markup())
 
 
 def get_animate_hub_keyboard():
@@ -309,7 +309,7 @@ def get_animate_hub_keyboard():
     builder.button(text="🎬 Видео с нуля", callback_data="create_video_new")
     builder.button(text="🏠 Главное меню", callback_data="back_main")
     builder.adjust(1, 1, 1, 1, 1)
-    return builder.as_markup()
+    return _telegram_style_markup(builder.as_markup())
 
 
 def get_motion_control_model_keyboard(current_model: str = "motion_control_v26"):
@@ -332,7 +332,7 @@ def get_motion_control_model_keyboard(current_model: str = "motion_control_v26")
             )
         )
     builder.row(InlineKeyboardButton(text="🏠 Главное меню", callback_data="back_main"))
-    return builder.as_markup()
+    return _telegram_style_markup(builder.as_markup())
 
 
 def get_more_menu_keyboard():
@@ -343,7 +343,7 @@ def get_more_menu_keyboard():
     builder.button(text="✨ Улучшение", callback_data="create_image_refs_new")
     builder.button(text="🏠 Главное меню", callback_data="back_main")
     builder.adjust(2, 1, 1)
-    return builder.as_markup()
+    return _telegram_style_markup(builder.as_markup())
 
 
 def get_admin_keyboard(subscription_required: bool | None = None):
@@ -367,7 +367,7 @@ def get_admin_keyboard(subscription_required: bool | None = None):
     builder.button(text="⚙️ Рассылка", callback_data="admin_broadcast")
     builder.button(text="🏠 Главное меню", callback_data="back_main")
     builder.adjust(2, 2, 2, 2, 2, 2, 2)
-    return builder.as_markup()
+    return _telegram_style_markup(builder.as_markup())
 
 
 def get_required_subscription_keyboard(channel_url: str = REQUIRED_CHANNEL_URL) -> types.InlineKeyboardMarkup:
@@ -375,7 +375,7 @@ def get_required_subscription_keyboard(channel_url: str = REQUIRED_CHANNEL_URL) 
     builder.button(text="📢 Подписаться на канал", url=channel_url)
     builder.button(text="✅ Проверить подписку", callback_data=SUBSCRIPTION_CHECK_CALLBACK)
     builder.adjust(1)
-    return builder.as_markup()
+    return _telegram_style_markup(builder.as_markup())
 
 
 SUPPORTED_RATIOS = {
@@ -535,7 +535,7 @@ def get_video_model_selection_keyboard(
         )
 
     builder.row(InlineKeyboardButton(text="🏠 Главное меню", callback_data="back_main"))
-    return builder.as_markup()
+    return _telegram_style_markup(builder.as_markup())
 
 
 def get_video_media_step_keyboard(
@@ -553,7 +553,7 @@ def get_video_media_step_keyboard(
         builder.button(text="🤖 Сменить модель", callback_data="video_change_model")
         builder.button(text="🏠 Главное меню", callback_data="back_main")
         builder.adjust(2, 1, 2)
-        return builder.as_markup()
+        return _telegram_style_markup(builder.as_markup())
     if current_v_type == "avatar":
         image_status = "загружено" if has_start_image else "не загружено"
         audio_status = "загружено" if has_avatar_audio else "не загружено"
@@ -563,7 +563,7 @@ def get_video_media_step_keyboard(
         builder.button(text="🤖 Сменить модель", callback_data="video_change_model")
         builder.button(text="🏠 Главное меню", callback_data="back_main")
         builder.adjust(2, 1, 2)
-        return builder.as_markup()
+        return _telegram_style_markup(builder.as_markup())
     if current_v_type == "character":
         image_status = "загружено" if has_start_image else "не загружено"
         builder.button(text=f"🖼 Персонаж: {image_status}", callback_data="ignore")
@@ -571,13 +571,13 @@ def get_video_media_step_keyboard(
         builder.button(text="🤖 Сменить модель", callback_data="video_change_model")
         builder.button(text="🏠 Главное меню", callback_data="back_main")
         builder.adjust(1, 1, 2)
-        return builder.as_markup()
+        return _telegram_style_markup(builder.as_markup())
     if current_v_type == "audio":
         builder.button(text="▶️ К настройкам", callback_data="video_media_continue")
         builder.button(text="🤖 Сменить модель", callback_data="video_change_model")
         builder.button(text="🏠 Главное меню", callback_data="back_main")
         builder.adjust(1, 2)
-        return builder.as_markup()
+        return _telegram_style_markup(builder.as_markup())
     if current_model in {"grok_imagine", "grok_imagine_v15"}:
         start_status = "загружено" if has_start_image else "не загружено"
         builder.button(text=f"📷 Стартовое фото: {start_status}", callback_data="ignore")
@@ -587,7 +587,7 @@ def get_video_media_step_keyboard(
         builder.button(text="🤖 Сменить модель", callback_data="video_change_model")
         builder.button(text="🏠 Главное меню", callback_data="back_main")
         builder.adjust(1, 1, 1, 2)
-        return builder.as_markup()
+        return _telegram_style_markup(builder.as_markup())
     if current_model == "gemini_omni_video":
         image_count = (1 if has_start_image else 0) + reference_image_count
         text_check = "✅ " if current_v_type == "text" else ""
@@ -602,7 +602,7 @@ def get_video_media_step_keyboard(
         builder.button(text="🤖 Сменить модель", callback_data="video_change_model")
         builder.button(text="🏠 Главное меню", callback_data="back_main")
         builder.adjust(3, 2, 1, 2)
-        return builder.as_markup()
+        return _telegram_style_markup(builder.as_markup())
 
     text_check = "✅ " if current_v_type == "text" else ""
     imgtxt_check = "✅ " if current_v_type == "imgtxt" else ""
@@ -630,7 +630,7 @@ def get_video_media_step_keyboard(
         builder.adjust(3, 1, 2, 2)
     else:
         builder.adjust(3, 1, 2)
-    return builder.as_markup()
+    return _telegram_style_markup(builder.as_markup())
 
 
 def get_create_video_keyboard(
@@ -812,7 +812,7 @@ def get_create_video_keyboard(
         widths += [2]
     widths += [2]
     builder.adjust(*widths)
-    return builder.as_markup()
+    return _telegram_style_markup(builder.as_markup())
 
 
 def get_reference_videos_upload_keyboard(current_count: int = 0, max_count: int = 9, preset_id: str = None):
@@ -826,7 +826,7 @@ def get_reference_videos_upload_keyboard(current_count: int = 0, max_count: int 
         builder.button(text="✅ Продолжить", callback_data=f"ref_confirm_{preset_id}")
     builder.button(text="🔙 Назад", callback_data="back_main")
     builder.adjust(1, 2, 1)
-    return builder.as_markup()
+    return _telegram_style_markup(builder.as_markup())
 
 
 def get_reference_images_upload_keyboard(current_count: int = 0, max_count: int = 9, preset_id: str = None):
@@ -845,7 +845,7 @@ def get_reference_images_upload_keyboard(current_count: int = 0, max_count: int 
     builder.button(text="🔄 Перезагрузить", callback_data=f"ref_reload_{preset_id}")
     builder.button(text="🔙 Назад", callback_data="back_main")
     builder.adjust(1, 2, 1, 2)
-    return builder.as_markup()
+    return _telegram_style_markup(builder.as_markup())
 
 
 def get_saved_reference_picker_keyboard(reference_id: int, current_index: int, total_count: int, *, already_selected: bool = False):
@@ -860,7 +860,7 @@ def get_saved_reference_picker_keyboard(reference_id: int, current_index: int, t
     builder.button(text="🗑 Удалить", callback_data=f"savedref_delete_{reference_id}_{current_index}")
     builder.button(text="❌ Закрыть", callback_data="savedref_close")
     builder.adjust(3, 2, 1) if total_count > 1 else builder.adjust(2, 1)
-    return builder.as_markup()
+    return _telegram_style_markup(builder.as_markup())
 
 
 def get_image_model_selection_keyboard(current_service: str = "banana_pro"):
@@ -880,7 +880,7 @@ def get_image_model_selection_keyboard(current_service: str = "banana_pro"):
         check = "✅ " if current_service == model_key else ""
         builder.row(InlineKeyboardButton(text=f"{check}{label} • {cost}🍌", callback_data=callback_data))
     builder.row(InlineKeyboardButton(text="🏠 Главное меню", callback_data="back_main"))
-    return builder.as_markup()
+    return _telegram_style_markup(builder.as_markup())
 
 
 def get_create_image_keyboard(
@@ -927,7 +927,7 @@ def get_create_image_keyboard(
         high_marker = "◉" if img_quality == "high" else "○"
         builder.row(InlineKeyboardButton(text=f"{basic_marker} Basic", callback_data="img_quality_basic"), InlineKeyboardButton(text=f"{high_marker} High", callback_data="img_quality_high"))
     builder.row(InlineKeyboardButton(text="🏠 Главное меню", callback_data="back_main"))
-    return builder.as_markup()
+    return _telegram_style_markup(builder.as_markup())
 
 
 def get_topup_keyboard():
@@ -944,7 +944,7 @@ def get_payment_packages_keyboard(packages: list, promo_active: bool = False):
         builder.button(text="❌ Убрать промокод", callback_data="topup_remove_promo")
     builder.button(text="🏠 Главное меню", callback_data="back_main")
     builder.adjust(1)
-    return builder.as_markup()
+    return _telegram_style_markup(builder.as_markup())
 
 
 def get_payment_method_keyboard(
@@ -976,7 +976,7 @@ def get_payment_method_keyboard(
         builder.button(text="₿ Криптовалюта (CryptoBot)", callback_data=f"buy_crypto_{package_id}")
     builder.button(text="◀️ Назад", callback_data="menu_topup")
     builder.adjust(1)
-    return builder.as_markup()
+    return _telegram_style_markup(builder.as_markup())
 
 
 def get_payment_provider_keyboard():
@@ -984,7 +984,7 @@ def get_payment_provider_keyboard():
     builder.button(text="💳 CryptoBot", callback_data="menu_topup")
     builder.button(text="🏠 Главное меню", callback_data="back_main")
     builder.adjust(1, 1)
-    return builder.as_markup()
+    return _telegram_style_markup(builder.as_markup())
 
 
 def get_balance_keyboard(user_credits: int = 0):
@@ -993,7 +993,7 @@ def get_balance_keyboard(user_credits: int = 0):
     builder.button(text="💰 Пополнить", callback_data="menu_topup")
     builder.button(text="📋 История", callback_data="menu_history")
     builder.adjust(1, 2)
-    return builder.as_markup()
+    return _telegram_style_markup(builder.as_markup())
 
 
 def get_support_keyboard():
@@ -1001,14 +1001,14 @@ def get_support_keyboard():
     builder.button(text="💬 ИИ-ассистент", callback_data="menu_ai_assistant")
     builder.button(text="🔙 Главное меню", callback_data="back_main")
     builder.adjust(1, 1)
-    return builder.as_markup()
+    return _telegram_style_markup(builder.as_markup())
 
 
 def get_help_keyboard():
     builder = InlineKeyboardBuilder()
     builder.button(text="🔙 Главное меню", callback_data="back_main")
     builder.adjust(1)
-    return builder.as_markup()
+    return _telegram_style_markup(builder.as_markup())
 
 
 def get_create_menu_keyboard():
@@ -1022,13 +1022,13 @@ def get_payment_confirmation_keyboard(payment_url: str, order_id: str):
     builder.button(text="🔙 Назад", callback_data="menu_topup")
     builder.button(text="🏠 Главное меню", callback_data="back_main")
     builder.adjust(1, 1, 2)
-    return builder.as_markup()
+    return _telegram_style_markup(builder.as_markup())
 
 
 def get_main_menu_button_keyboard():
     builder = InlineKeyboardBuilder()
     builder.button(text="🏠 Главное меню", callback_data="back_main")
-    return builder.as_markup()
+    return _telegram_style_markup(builder.as_markup())
 
 
 def get_photo_prompt_result_keyboard(prompt_en: str, prompt_ru: str = "", negative_prompt: str = ""):
@@ -1036,7 +1036,7 @@ def get_photo_prompt_result_keyboard(prompt_en: str, prompt_ru: str = "", negati
     builder.button(text="🆕 Новый промпт", callback_data="photo_to_prompt")
     builder.button(text="🏠 Главное меню", callback_data="back_main")
     builder.adjust(2)
-    return builder.as_markup()
+    return _telegram_style_markup(builder.as_markup())
 
 
 def get_video_prompt_result_keyboard():
@@ -1044,7 +1044,7 @@ def get_video_prompt_result_keyboard():
     builder.button(text=f"🆕 Новый видео-промпт • {_video_prompt_price_label()}🍌", callback_data="video_to_prompt")
     builder.button(text="🏠 Главное меню", callback_data="back_main")
     builder.adjust(1, 1)
-    return builder.as_markup()
+    return _telegram_style_markup(builder.as_markup())
 
 
 def get_back_keyboard(callback_data: str = "back_main"):
@@ -1052,11 +1052,11 @@ def get_back_keyboard(callback_data: str = "back_main"):
     if callback_data == "back_main":
         builder.button(text="🏠 Главное меню", callback_data="back_main")
         builder.adjust(1)
-        return builder.as_markup()
+        return _telegram_style_markup(builder.as_markup())
     builder.button(text="🔙 Назад", callback_data=callback_data)
     builder.button(text="🏠 Главное меню", callback_data="back_main")
     builder.adjust(2)
-    return builder.as_markup()
+    return _telegram_style_markup(builder.as_markup())
 
 
 def get_confirm_keyboard(confirm_data: str, cancel_data: str):
@@ -1065,7 +1065,7 @@ def get_confirm_keyboard(confirm_data: str, cancel_data: str):
     builder.button(text="❌ Отмена", callback_data=cancel_data)
     builder.button(text="🏠 Главное меню", callback_data="back_main")
     builder.adjust(2, 1)
-    return builder.as_markup()
+    return _telegram_style_markup(builder.as_markup())
 
 
 def get_video_result_keyboard(video_url: str, user_credits: int = 0, task_id: str = None, model: str = None, is_public_feed: bool = False):
@@ -1086,7 +1086,7 @@ def get_video_result_keyboard(video_url: str, user_credits: int = 0, task_id: st
         builder.adjust(1, 1, 1, 1)
     else:
         builder.adjust(1)
-    return builder.as_markup()
+    return _telegram_style_markup(builder.as_markup())
 
 
 def get_image_result_keyboard(image_url: str, task_id: str = None, is_public_feed: bool = False, is_prompt_library: bool = False):
@@ -1101,7 +1101,7 @@ def get_image_result_keyboard(image_url: str, task_id: str = None, is_public_fee
         builder.button(text="🔁 Повторить", callback_data=f"repeat_result_{task_id}")
     builder.button(text="🏠 Главное меню", callback_data="back_main")
     builder.adjust(1, 2, 2, 2, 2, 1)
-    return builder.as_markup()
+    return _telegram_style_markup(builder.as_markup())
 
 
 def get_failed_image_retry_keyboard(task_id: str):
@@ -1110,7 +1110,7 @@ def get_failed_image_retry_keyboard(task_id: str):
     builder.button(text="✏️ Изменить промпт / модель", callback_data=f"retry_prompt_image_{task_id}")
     builder.button(text="🏠 Главное меню", callback_data="back_main")
     builder.adjust(1, 1, 1)
-    return builder.as_markup()
+    return _telegram_style_markup(builder.as_markup())
 
 
 def get_gemini_omni_result_keyboard():
@@ -1118,7 +1118,7 @@ def get_gemini_omni_result_keyboard():
     builder.button(text="🔙 В меню Gemini", callback_data="v_model_gemini_omni")
     builder.button(text="🏠 Главное меню", callback_data="back_main")
     builder.adjust(1, 1)
-    return builder.as_markup()
+    return _telegram_style_markup(builder.as_markup())
 
 
 def get_ai_assistant_keyboard(telegram_id: int | None = None, back_callback: str = "back_main", back_text: str = "🔙 В главное меню"):
@@ -1130,7 +1130,7 @@ def get_ai_assistant_keyboard(telegram_id: int | None = None, back_callback: str
     builder.button(text=back_text, callback_data=back_callback)
     if show_admin_tools:
         builder.adjust(2, 1)
-    return builder.as_markup()
+    return _telegram_style_markup(builder.as_markup())
 
 
 def get_referral_keyboard(referral_link: str):
@@ -1140,7 +1140,7 @@ def get_referral_keyboard(referral_link: str):
     builder.button(text="🔄 Обновить", callback_data="menu_referrals")
     builder.button(text="🏠 Главное меню", callback_data="back_main")
     builder.adjust(1, 1, 1)
-    return builder.as_markup()
+    return _telegram_style_markup(builder.as_markup())
 
 
 def get_partner_program_keyboard(referral_link: str, is_partner: bool = False):
@@ -1157,7 +1157,7 @@ def get_partner_program_keyboard(referral_link: str, is_partner: bool = False):
     builder.button(text="🍌 Обменять на бананы", callback_data="partner_exchange")
     builder.button(text="🏠 Главное меню", callback_data="back_main")
     builder.adjust(1, 1, 1, 1, 1, 1)
-    return builder.as_markup()
+    return _telegram_style_markup(builder.as_markup())
 
 
 def get_partner_consent_keyboard():
@@ -1166,7 +1166,7 @@ def get_partner_consent_keyboard():
     builder.button(text="✔ Прочитал и согласен с условиями", callback_data="partner_accept")
     builder.button(text="🏠 Главное меню", callback_data="back_main")
     builder.adjust(1, 1, 1)
-    return builder.as_markup()
+    return _telegram_style_markup(builder.as_markup())
 
 
 def get_settings_keyboard(current_model: str = "flash", current_video_model: str = "v3_std", current_i2v_model: str = "v3_std", referral_purchase_notifications_enabled: bool = True):
@@ -1176,7 +1176,7 @@ def get_settings_keyboard(current_model: str = "flash", current_video_model: str
     builder.button(text=f"{notify_icon} Покупки рефералов: {notify_label}", callback_data="settings_ref_purchase_notify_toggle")
     builder.button(text="🔙 Назад в главное меню", callback_data="back_main")
     builder.adjust(1)
-    return builder.as_markup()
+    return _telegram_style_markup(builder.as_markup())
 
 
 def get_settings_keyboard_with_ai(current_model: str = "flash", current_video_model: str = "v3_std", current_i2v_model: str = "v3_std", image_service: str = "nanobanana", referral_purchase_notifications_enabled: bool = True):
@@ -1203,7 +1203,7 @@ def get_settings_keyboard_with_ai(current_model: str = "flash", current_video_mo
     builder.button(text="🤖 AI-помощник", callback_data="menu_ai_assistant")
     builder.button(text="🏠 Главное меню", callback_data="back_main")
     builder.adjust(2, 2, 2, 3, 3, 1, 2)
-    return builder.as_markup()
+    return _telegram_style_markup(builder.as_markup())
 
 
 def get_motion_control_keyboard(current_mode: str = "720p", current_orientation: str = "video"):
@@ -1218,7 +1218,7 @@ def get_motion_control_keyboard(current_mode: str = "720p", current_orientation:
         builder.button(text=f"{check}{label}", callback_data=f"motion_orientation_{orientation}")
     builder.button(text="🏠 Главное меню", callback_data="back_main")
     builder.adjust(2, 2, 2, 1)
-    return builder.as_markup()
+    return _telegram_style_markup(builder.as_markup())
 
 
 def get_video_options_no_preset_keyboard(current_duration: int = 5, current_ratio: str = "16:9", generate_audio: bool = True):
@@ -1234,7 +1234,7 @@ def get_video_options_no_preset_keyboard(current_duration: int = 5, current_rati
     builder.button(text="▶️ Продолжить", callback_data="video_media_continue")
     builder.button(text="🏠 Главное меню", callback_data="back_main")
     builder.adjust(3, 3, 1, 2)
-    return builder.as_markup()
+    return _telegram_style_markup(builder.as_markup())
 
 
 def get_video_edit_input_type_keyboard():
@@ -1243,7 +1243,7 @@ def get_video_edit_input_type_keyboard():
     builder.button(text="🖼 Фото", callback_data="video_edit_input_image")
     builder.button(text="🏠 Главное меню", callback_data="back_main")
     builder.adjust(2, 1)
-    return builder.as_markup()
+    return _telegram_style_markup(builder.as_markup())
 
 
 def get_video_edit_keyboard(input_type: str = "video", quality: str = "std", duration: int = 5, aspect_ratio: str = "16:9"):
@@ -1261,7 +1261,7 @@ def get_video_edit_keyboard(input_type: str = "video", quality: str = "std", dur
     builder.button(text=change_label, callback_data="video_edit_change_type")
     builder.button(text="🏠 Главное меню", callback_data="back_main")
     builder.adjust(2, 2, 3, 2)
-    return builder.as_markup()
+    return _telegram_style_markup(builder.as_markup())
 
 
 def get_reference_images_keyboard(preset_id: str):
@@ -1274,7 +1274,7 @@ def get_reference_images_keyboard(preset_id: str):
     builder.button(text="🔄 Обновить", callback_data=f"ref_reload_{preset_id}")
     builder.button(text="🏠 Главное меню", callback_data="back_main")
     builder.adjust(2, 2, 2, 1)
-    return builder.as_markup()
+    return _telegram_style_markup(builder.as_markup())
 
 
 def get_category_keyboard(category: str, presets: list, user_credits: int):
@@ -1284,7 +1284,7 @@ def get_category_keyboard(category: str, presets: list, user_credits: int):
         builder.button(text=f"{preset.name} - {preset.cost}🍌 {affordable}", callback_data=f"preset_{preset.id}")
     builder.button(text="🔙 Назад в меню", callback_data="back_main")
     builder.adjust(1)
-    return builder.as_markup()
+    return _telegram_style_markup(builder.as_markup())
 
 
 def get_preset_action_keyboard(preset_id: str, has_input: bool, category: str = None):
@@ -1297,7 +1297,7 @@ def get_preset_action_keyboard(preset_id: str, has_input: bool, category: str = 
     builder.button(text="🔙 Назад", callback_data=f"back_cat_{preset_id.split('_')[0]}")
     builder.button(text="🏠 Главное меню", callback_data="back_main")
     builder.adjust(2, 1, 1)
-    return builder.as_markup()
+    return _telegram_style_markup(builder.as_markup())
 
 
 def get_duration_keyboard(preset_id: str, current_duration: int = 5):
@@ -1308,7 +1308,7 @@ def get_duration_keyboard(preset_id: str, current_duration: int = 5):
     builder.button(text="🔙 Назад", callback_data=f"preset_{preset_id}")
     builder.button(text="🏠 Главное меню", callback_data="back_main")
     builder.adjust(2, 2)
-    return builder.as_markup()
+    return _telegram_style_markup(builder.as_markup())
 
 
 def get_aspect_ratio_keyboard(preset_id: str, current_ratio: str = "16:9"):
@@ -1319,7 +1319,7 @@ def get_aspect_ratio_keyboard(preset_id: str, current_ratio: str = "16:9"):
     builder.button(text="🔙 Назад", callback_data=f"preset_{preset_id}")
     builder.button(text="🏠 Главное меню", callback_data="back_main")
     builder.adjust(3, 2)
-    return builder.as_markup()
+    return _telegram_style_markup(builder.as_markup())
 
 
 def get_image_aspect_ratio_keyboard(preset_id: str, current_ratio: str = "1:1"):
@@ -1330,11 +1330,11 @@ def get_image_aspect_ratio_keyboard(preset_id: str, current_ratio: str = "1:1"):
     builder.button(text="🔙 Назад", callback_data=f"model_{preset_id}")
     builder.button(text="🏠 Главное меню", callback_data="back_main")
     builder.adjust(3, 2, 2)
-    return builder.as_markup()
+    return _telegram_style_markup(builder.as_markup())
 
 
 def get_advanced_options_keyboard():
     builder = InlineKeyboardBuilder()
     builder.button(text="🔙 Назад", callback_data="back_main")
     builder.adjust(1)
-    return builder.as_markup()
+    return _telegram_style_markup(builder.as_markup())
