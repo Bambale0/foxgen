@@ -138,7 +138,7 @@ def _image_settings_menu(data: dict[str, Any]) -> list[dict[str, Any]]:
     refs = list(data.get("image_urls") or [])
 
     rows: list[list[dict[str, Any]]] = [
-        [callback_button("🤖 Сменить модель", "max:create_image")]
+        [callback_button("↩️ Сменить модель", "max:create_image")]
     ]
     ratios = _IMAGE_RATIOS.get(model, _IMAGE_RATIOS_DEFAULT)
     ratio_buttons = [
@@ -197,7 +197,7 @@ def _video_media_menu(data: dict[str, Any]) -> list[dict[str, Any]]:
     rows.extend(
         [
             [callback_button("▶️ К настройкам", "max:video:media:continue")],
-            [callback_button("🤖 Сменить модель", "max:create_video")],
+            [callback_button("↩️ Сменить модель", "max:create_video")],
             [callback_button("🏠 Главное меню", "max:home")],
         ]
     )
@@ -239,7 +239,7 @@ def _video_settings_menu(data: dict[str, Any], catalog) -> list[dict[str, Any]]:
     ratio = str(options.get("aspect_ratio") or "16:9")
     resolution = str(options.get("resolution") or "720p")
     rows: list[list[dict[str, Any]]] = [
-        [callback_button("🤖 Сменить модель", "max:create_video")]
+        [callback_button("↩️ Сменить модель", "max:create_video")]
     ]
 
     durations = _video_duration_values(catalog, model)
@@ -301,11 +301,11 @@ class MaxCreationParityChannelService(MaxTelegramParityChannelService):
         )
         if refs:
             text = (
-                "🖼 <b>Создать фото</b>\n\n"
-                f"Референсы сохранены: <b>{len(refs)}</b>. Выберите модель."
+                "🖼 <b>Сделать фото</b>\n\n"
+                f"Референсы на месте: <b>{len(refs)}</b>. Теперь выбери модель."
             )
         else:
-            text = "🖼 <b>Создать фото</b>\n\nВыберите модель."
+            text = "🖼 <b>Сделать фото</b>\n\nВыбери модель."
 
         await self._respond(
             user_id,
@@ -324,7 +324,7 @@ class MaxCreationParityChannelService(MaxTelegramParityChannelService):
         if model not in self.catalog.image_models():
             await self._respond(
                 user_id,
-                "Эта модель фото сейчас недоступна.",
+                "Эта модель сейчас недоступна. Выбери другую.",
                 attachments=image_model_menu(self.catalog),
                 callback_id=callback_id,
             )
@@ -372,8 +372,8 @@ class MaxCreationParityChannelService(MaxTelegramParityChannelService):
         await save_max_session(user_id, "parity:image:settings_prompt", data)
         await self._respond(
             user_id,
-            "⚙️ <b>Настройки фото</b>\n\n"
-            "Выберите формат, качество и количество, затем отправьте prompt обычным сообщением.",
+            "⚙️ <b>Как сделать кадр?</b>\n\n"
+            "Выбери формат, качество и количество, затем пришли описание обычным сообщением.",
             attachments=_image_settings_menu(data),
             callback_id=callback_id,
         )
@@ -403,7 +403,7 @@ class MaxCreationParityChannelService(MaxTelegramParityChannelService):
         if not refs and not allow_empty:
             await self._respond(
                 user_id,
-                "Референсы пока не загружены. Можно добавить фото или нажать «Пропустить».",
+                "Референсов пока нет. Добавь фото или нажми «Пропустить».",
                 attachments=_image_reference_menu(0),
                 callback_id=callback_id,
             )
@@ -456,7 +456,7 @@ class MaxCreationParityChannelService(MaxTelegramParityChannelService):
         if not prompt:
             await self._respond(
                 user_id,
-                "Отправьте текстовый prompt. Настройки можно менять кнопками ниже.",
+                "Пришли описание кадра. Настройки можно менять кнопками ниже.",
                 attachments=_image_settings_menu(data),
             )
             return True
@@ -486,7 +486,7 @@ class MaxCreationParityChannelService(MaxTelegramParityChannelService):
             f"Формат: <b>{html.escape(str(prepared['options']['aspect_ratio']))}</b>\n"
             f"Качество: <b>{html.escape(str(prepared['options']['quality']))}</b>\n"
             f"Количество: <b>{count}</b>\n"
-            f"Стоимость: <b>{_format_cost(unit_cost * count)} 🍌</b>\n\n"
+            f"Стоимость: <b>{_format_cost(unit_cost * count)} 🐾</b>\n\n"
             f"Промпт: {html.escape(prompt[:900])}",
             attachments=generation_confirm_menu(),
         )
@@ -557,8 +557,8 @@ class MaxCreationParityChannelService(MaxTelegramParityChannelService):
         await save_max_session(user_id, "parity:video:settings_prompt", data)
         await self._respond(
             user_id,
-            "⚙️ <b>Настройки видео</b>\n\n"
-            "Выберите длительность, формат и качество, затем отправьте prompt обычным сообщением.",
+            "⚙️ <b>Как собрать ролик?</b>\n\n"
+            "Выбери длительность, формат и качество, затем пришли описание обычным сообщением.",
             attachments=_video_settings_menu(data, self.catalog),
             callback_id=callback_id,
         )
@@ -574,9 +574,9 @@ class MaxCreationParityChannelService(MaxTelegramParityChannelService):
         images = list(data.get("image_urls") or [])
         videos = list(data.get("video_urls") or [])
         if generation_type == "imgtxt" and not images:
-            message = "Для «Фото → Видео» сначала загрузите фотографию."
+            message = "Для «Фото → Видео» сначала добавь фотографию."
         elif generation_type == "video" and not videos:
-            message = "Для «Видео → Видео» сначала загрузите видео."
+            message = "Для «Видео → Видео» сначала добавь ролик."
         elif model == "glow" and (not images or not videos):
             message = "Для Kling Glow нужны и изображение, и видео-референс."
         else:
@@ -640,7 +640,7 @@ class MaxCreationParityChannelService(MaxTelegramParityChannelService):
         if not prompt:
             await self._respond(
                 user_id,
-                "Отправьте текстовый prompt. Настройки можно менять кнопками ниже.",
+                "Пришли описание кадра. Настройки можно менять кнопками ниже.",
                 attachments=_video_settings_menu(data, self.catalog),
             )
             return True
@@ -676,7 +676,7 @@ class MaxCreationParityChannelService(MaxTelegramParityChannelService):
             f"Модель: <b>{html.escape(VIDEO_LABELS.get(model, model))}</b>\n"
             f"Длительность: <b>{duration}с</b>\n"
             f"Формат: <b>{html.escape(str(options.get('aspect_ratio') or '16:9'))}</b>\n"
-            f"Стоимость: <b>{_format_cost(cost)} 🍌</b>\n\n"
+            f"Стоимость: <b>{_format_cost(cost)} 🐾</b>\n\n"
             f"Промпт: {html.escape(prompt[:900])}",
             attachments=generation_confirm_menu(),
         )
@@ -733,7 +733,7 @@ class MaxCreationParityChannelService(MaxTelegramParityChannelService):
         if balance + 1e-9 < total_cost:
             await self._respond(
                 user_id,
-                "🍌 Баланса не хватает. Подготовленный prompt сохранён.",
+                "🐾 Лапок не хватает. Описание сохранено.",
                 attachments=topup_menu(self.catalog),
                 callback_id=callback_id,
             )
@@ -764,7 +764,7 @@ class MaxCreationParityChannelService(MaxTelegramParityChannelService):
         if not jobs:
             await self._respond(
                 user_id,
-                "Не удалось поставить генерацию в очередь. Баланс не списан за незапущенные задачи.",
+                "Не получилось запустить генерацию. Лапки не списаны.",
                 attachments=back_home_menu(),
                 callback_id=callback_id,
             )
@@ -773,11 +773,11 @@ class MaxCreationParityChannelService(MaxTelegramParityChannelService):
         balance = await get_max_balance(user_id)
         await self._respond(
             user_id,
-            "🚀 <b>Генерация запущена</b>\n\n"
+            "✨ <b>Запустил</b>\n\n"
             f"Задач: <b>{len(jobs)}</b>\n"
-            f"Списано: <b>{_format_cost(sum(job.cost for job in jobs))} 🍌</b>\n"
-            f"Осталось: <b>{_format_cost(balance)} 🍌</b>\n\n"
-            "Результаты придут сюда автоматически.",
+            f"Списано: <b>{_format_cost(sum(job.cost for job in jobs))} 🐾</b>\n"
+            f"Осталось: <b>{_format_cost(balance)} 🐾</b>\n\n"
+            "Готовые результаты пришлю сюда автоматически.",
             attachments=back_home_menu(),
             callback_id=callback_id,
         )
@@ -818,7 +818,7 @@ class MaxCreationParityChannelService(MaxTelegramParityChannelService):
             await save_max_session(user_id, "parity:image:refs", data)
             await self._respond(
                 user_id,
-                "Добавьте референсы или продолжите с текущими.",
+                "Добавь референсы или продолжите с текущими.",
                 attachments=_image_reference_menu(len(data.get("image_urls") or [])),
                 callback_id=callback_id,
             )
@@ -878,7 +878,7 @@ class MaxCreationParityChannelService(MaxTelegramParityChannelService):
             session = await get_max_session(user_id)
             await self._respond(
                 user_id,
-                "Добавьте нужные медиа следующим сообщением или перейдите к настройкам.",
+                "Добавь нужные медиа следующим сообщением или перейдите к настройкам.",
                 attachments=_video_media_menu(dict(session.data)),
                 callback_id=callback_id,
             )
