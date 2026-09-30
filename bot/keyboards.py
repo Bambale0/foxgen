@@ -77,6 +77,42 @@ def _telegram_main_menu_button(
     )
 
 
+TELEGRAM_DANGER_BUTTON_TERMS = (
+    "отмена",
+    "отменить",
+    "удалить",
+    "удалить всё",
+    "убрать",
+    "отклонить",
+    "заблокировать",
+    "выключить",
+)
+
+
+def _telegram_style_markup(markup: types.InlineKeyboardMarkup) -> types.InlineKeyboardMarkup:
+    """Apply native Telegram button colors across text-bot keyboards.
+
+    Regular navigation/actions are green. Explicitly destructive/cancel actions
+    are red. An explicitly configured style is preserved.
+    """
+    rows: list[list[InlineKeyboardButton]] = []
+    for row in markup.inline_keyboard:
+        styled_row: list[InlineKeyboardButton] = []
+        for button in row:
+            if button.style:
+                styled_row.append(button)
+                continue
+            normalized = str(button.text or "").casefold()
+            style = (
+                "danger"
+                if any(term in normalized for term in TELEGRAM_DANGER_BUTTON_TERMS)
+                else "success"
+            )
+            styled_row.append(button.model_copy(update={"style": style}))
+        rows.append(styled_row)
+    return types.InlineKeyboardMarkup(inline_keyboard=rows)
+
+
 def _mini_app_url_with_start_param(start_param: str | None = None, referral_code: str | None = None) -> str:
     base_url = str(config.mini_app_url or "").strip()
     if not base_url:
@@ -237,7 +273,7 @@ def get_main_menu_keyboard(user_credits: int = 0, telegram_id: int | None = None
         )
     )
 
-    return builder.as_markup()
+    return _telegram_style_markup(builder.as_markup())
 
 
 def get_create_hub_keyboard():
