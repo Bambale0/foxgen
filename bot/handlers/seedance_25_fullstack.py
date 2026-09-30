@@ -383,17 +383,17 @@ async def _miniapp_seedance25_generate(request: web.Request, body: dict[str, Any
         video_urls = []
         audio_urls = []
         if not first_frame:
-            return web.json_response({"ok": False, "error": "Загрузите первый кадр"}, status=400)
+            return web.json_response({"ok": False, "error": "Загрузи первый кадр"}, status=400)
     elif scenario == "first_last":
         image_urls = []
         video_urls = []
         audio_urls = []
         if not first_frame or not last_frame:
-            return web.json_response({"ok": False, "error": "Загрузите первый и последний кадры"}, status=400)
+            return web.json_response({"ok": False, "error": "Загрузи первый и последний кадры"}, status=400)
     else:
         first_frame = last_frame = None
         if not (image_urls or video_urls or audio_urls):
-            return web.json_response({"ok": False, "error": "Добавьте хотя бы один мультимодальный референс"}, status=400)
+            return web.json_response({"ok": False, "error": "Добавь хотя бы один мультимодальный референс"}, status=400)
 
     try:
         await _validate_seedance_sources(
@@ -1035,7 +1035,7 @@ async def seedance25_full_voice(message: types.Message, state: FSMContext):
     data = await state.get_data()
     if data.get("v_model") != MODEL_KEY or not _is_admin(message.from_user.id):
         raise SkipHandler
-    await message.answer("❌ Telegram Voice = OGG. По Seedance 2.5 spec используйте WAV или MP3 файлом.")
+    await message.answer("❌ Telegram Voice = OGG. По Seedance 2.5 spec используй WAV или MP3 файлом.")
 
 
 @router.message(generation_module.GenerationStates.waiting_for_video_prompt, F.document)
@@ -1088,7 +1088,7 @@ async def seedance25_asset_command(message: types.Message, state: FSMContext):
     scenario = str(data.get("seedance25_scenario") or "text")
     if kind in {"first", "last"}:
         if scenario not in {"first_frame", "first_last"}:
-            await message.answer("Сначала выберите сценарий 1-й кадр или 1-й + последний.")
+            await message.answer("Сначала выбери сценарий 1-й кадр или 1-й + последний.")
             return
         if kind == "first":
             await state.update_data(seedance25_first_frame_url=value)
