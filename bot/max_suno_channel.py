@@ -151,7 +151,7 @@ class MaxSunoChannelService(MaxOmniChannelService):
             if len(lines) < 2 or (not instrumental and len(lines) < 3):
                 await self._respond(
                     user_id,
-                    "Для Custom пришлите название, стиль и текст песни с новой строки. Для инструментала достаточно первых двух строк.",
+                    "Для Custom пришли название, стиль и текст песни с новой строки. Для инструментала достаточно первых двух строк.",
                     attachments=back_home_menu(),
                 )
                 return True
