@@ -68,7 +68,7 @@ async def quick_motion(message: types.Message, state: FSMContext) -> None:
     await message.answer(
         "🎯 <b>Motion Control</b>\n"
         f"🐾 Баланс: <code>{user_credits}</code> лапок\n\n"
-        "Выберите версию Kling. На кнопках указана только цена за 1 секунду.",
+        "Выбери версию Kling. На кнопках указана только цена за 1 секунду.",
         reply_markup=get_motion_control_model_keyboard("motion_control_v26"),
         parse_mode="HTML",
     )
