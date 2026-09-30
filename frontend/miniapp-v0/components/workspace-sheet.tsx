@@ -22,36 +22,36 @@ const workspaceConfig: Record<
   { title: string; description: string; icon: typeof Sparkles }
 > = {
   assistant: {
-    title: 'Помощник',
-    description: 'Поможет с идеей, промптом, моделью и настройками.',
+    title: 'Расскажи идею',
+    description: 'Подберём путь, модель, настройки и соберём промпт.',
     icon: Bot,
   },
   'photo-prompt': {
-    title: 'Промпт по фото',
-    description: 'Разберёт фото и соберёт промпт для похожей генерации.',
+    title: 'Разобрать фото',
+    description: 'Покажи кадр — соберём промпт для похожей генерации.',
     icon: Wand2,
   },
   partners: {
-    title: 'Партнёрская программа',
-    description: 'Ссылка, приглашённые пользователи, статистика и выплаты.',
+    title: 'Партнёрка',
+    description: 'Твоя ссылка, приглашённые, начисления и выплаты.',
     icon: BriefcaseBusiness,
   },
   support: {
-    title: 'Поддержка',
-    description: 'Помощь с генерацией, оплатой и результатами.',
+    title: 'Нужна помощь',
+    description: 'Опиши проблему — разберёмся с генерацией, оплатой или результатом.',
     icon: Headphones,
   },
   more: {
     title: 'Ещё',
-    description: 'История, настройки и другие возможности HappyFox.',
+    description: 'История, настройки и дополнительные возможности.',
     icon: PanelTopOpen,
   },
 }
 
 const assistantStarters = [
-  'Какую модель взять для рекламного фото?',
-  'Мне нужно видео до 15 секунд',
-  'Помоги улучшить мой запрос',
+  'Хочу рекламное фото товара',
+  'Хочу короткий ролик для Reels',
+  'Разбери мою идею и собери промпт',
 ]
 
 export function WorkspaceSheet() {
