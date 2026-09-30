@@ -16,6 +16,7 @@ from bot.services.preset_manager import preset_manager
 
 logger = logging.getLogger(__name__)
 
+
 def _apply_public_telegram_button_theme(
     markup: types.InlineKeyboardMarkup,
 ) -> types.InlineKeyboardMarkup:
@@ -35,7 +36,6 @@ def _apply_public_telegram_button_theme(
             for row in markup.inline_keyboard
         ]
     )
-
 
 
 def _mini_app_url_with_start_param(start_param: str | None = None, referral_code: str | None = None) -> str:
