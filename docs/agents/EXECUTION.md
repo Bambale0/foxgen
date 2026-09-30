@@ -10,9 +10,9 @@ No-hardcode/configuration: custom emoji IDs are runtime configuration because th
 
 Parity: Telegram-only visual capability. MAX has no equivalent Bot API button-style/custom-emoji contract, so MAX visual parity is N/A while behavior/callback outcomes remain unchanged. Mini App is unaffected. Instagram N/A.
 
-Verification plan: failing contract test first; focused `tests/test_happyfox_main_menu.py`; changed-file Ruff/compile; full appropriate CI on exact PR head; two-axis code review against AGENTS.md and this acceptance section; merge only if green. Post-deploy Telegram smoke should verify a main-menu response renders green buttons; animated icons require configured IDs and a bot owner eligible to use custom emoji.
+Verification plan: failing contract test first; focused `tests/test_happyfox_main_menu.py` plus `tests/test_telegram_custom_emoji_admin.py`; changed-file Ruff/compile; full appropriate CI on exact PR head; two-axis code review against AGENTS.md and this acceptance section; merge only if green. Admin-only `/emoji_id` accepts a custom emoji in the command, a reply target, or rich-message payload and returns deduplicated numeric IDs; plain Unicode emoji returns usage guidance. Post-deploy Telegram smoke should verify a main-menu response renders green buttons; animated icons require configured IDs and a bot owner eligible to use custom emoji.
 
-Skills/guides: repository AGENTS.md; Bambale0/claw code-review/QA guidance; wondelai testing principles. Bambale0/skills, wondelai/skills, anthropics/skills and Bambale0/claw were searched narrowly; no more specific aiogram button-style implementation skill was found.
+Progress: green-button/custom-emoji menu helper implemented; admin `/emoji_id` extractor/command implemented test-first. PR #285 is open. First exact-head CI attempt created jobs with no runnable steps/logs and failed across all jobs; rerun was requested, so that failure is being treated as CI infrastructure evidence rather than a code failure until a runnable job reports otherwise.\n\nSkills/guides: repository AGENTS.md; Bambale0/claw code-review/QA guidance; wondelai testing principles. Bambale0/skills, wondelai/skills, anthropics/skills and Bambale0/claw were searched narrowly; no more specific aiogram button-style implementation skill was found.
 
 ---
 
