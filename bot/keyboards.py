@@ -90,25 +90,50 @@ TELEGRAM_DANGER_BUTTON_TERMS = (
 
 
 def _telegram_style_markup(markup: types.InlineKeyboardMarkup) -> types.InlineKeyboardMarkup:
-    """Apply native Telegram button colors across text-bot keyboards.
+    """Apply native Telegram colors and configured custom-emoji icons.
 
     Regular navigation/actions are green. Explicitly destructive/cancel actions
-    are red. An explicitly configured style is preserved.
+    are red. Existing styles/icons are preserved. In addition to semantic main
+    menu keys, the emoji config may use a literal Unicode prefix (for example
+    {"🏠": "123..."}) so every matching text-bot button gets that animated
+    Telegram custom emoji without per-screen code.
     """
+    emoji_ids = _telegram_menu_emoji_ids()
+    emoji_prefixes = sorted(
+        (
+            (prefix, emoji_id)
+            for prefix, emoji_id in emoji_ids.items()
+            if prefix and not prefix.isascii()
+        ),
+        key=lambda item: len(item[0]),
+        reverse=True,
+    )
+
     rows: list[list[InlineKeyboardButton]] = []
     for row in markup.inline_keyboard:
         styled_row: list[InlineKeyboardButton] = []
         for button in row:
-            if button.style:
-                styled_row.append(button)
-                continue
-            normalized = str(button.text or "").casefold()
-            style = (
-                "danger"
-                if any(term in normalized for term in TELEGRAM_DANGER_BUTTON_TERMS)
-                else "success"
-            )
-            styled_row.append(button.model_copy(update={"style": style}))
+            text = str(button.text or "")
+            updates: dict[str, str] = {}
+
+            if not button.style:
+                normalized = text.casefold()
+                updates["style"] = (
+                    "danger"
+                    if any(term in normalized for term in TELEGRAM_DANGER_BUTTON_TERMS)
+                    else "success"
+                )
+
+            if not button.icon_custom_emoji_id:
+                for prefix, emoji_id in emoji_prefixes:
+                    if text.startswith(f"{prefix} "):
+                        remainder = text[len(prefix) :].lstrip()
+                        if remainder:
+                            updates["text"] = remainder
+                            updates["icon_custom_emoji_id"] = emoji_id
+                        break
+
+            styled_row.append(button.model_copy(update=updates) if updates else button)
         rows.append(styled_row)
     return types.InlineKeyboardMarkup(inline_keyboard=rows)
 
