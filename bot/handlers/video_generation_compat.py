@@ -101,7 +101,7 @@ async def show_complete_video_model_selection(callback: types.CallbackQuery, sta
 
     text = (
         "🎬 <b>Создание видео</b>\n"
-        "<b>Шаг 1. Выберите модель</b>\n\n"
+        "<b>Шаг 1. Выбери модель</b>\n\n"
         "Доступны production-модели и расширенные режимы."
     )
     try:
