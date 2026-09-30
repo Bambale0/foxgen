@@ -62,14 +62,14 @@ def _assistant_menu() -> list[dict[str, Any]]:
         inline_keyboard(
             [
                 [
-                    callback_button("🖼 Создать фото", "max:create_image"),
-                    callback_button("🎬 Создать видео", "max:create_video"),
+                    callback_button("🖼 Сделать фото", "max:create_image"),
+                    callback_button("🎬 Собрать видео", "max:create_video"),
                 ],
                 [
-                    callback_button("✨ Промпты", "max:prompts"),
-                    callback_button("❓ Что умеет бот", "max:help"),
+                    callback_button("✨ Готовые идеи", "max:prompts"),
+                    callback_button("❓ Как это работает", "max:help"),
                 ],
-                [callback_button("🏠 Главное меню", "max:home")],
+                [callback_button("🏠 На главную", "max:home")],
             ]
         )
     ]
@@ -81,18 +81,18 @@ def _support_menu(
     mini_app_bot_name: str = "",
 ) -> list[dict[str, Any]]:
     rows: list[list[dict[str, Any]]] = [
-        [callback_button("🤖 Спросить AI-помощника", "max:assistant")],
+        [callback_button("🤖 Помочь с идеей", "max:assistant")],
         [
-            callback_button("🐾 Проверить баланс", "max:balance"),
-            callback_button("❓ Инструкция", "max:help"),
+            callback_button("🐾 Мои лапки", "max:balance"),
+            callback_button("❓ Как это работает", "max:help"),
         ],
     ]
     contact = str(support_contact or "").strip()
     if contact.startswith("https://"):
-        rows.append([link_button("💬 Написать оператору", contact)])
+        rows.append([link_button("💬 Оператор", contact)])
     if mini_app_url:
-        rows.append([open_app_button("🚀 Открыть Mini App", web_app=mini_app_bot_name)])
-    rows.append([callback_button("🏠 Главное меню", "max:home")])
+        rows.append([open_app_button("🚀 Открыть HappyFox", web_app=mini_app_bot_name)])
+    rows.append([callback_button("🏠 На главную", "max:home")])
     return [inline_keyboard(rows)]
 
 
@@ -118,15 +118,15 @@ def _prompt_menu(
             callback_button("🔥 Популярные", "max:prompt:nav:popular:0"),
             callback_button("🆕 Новые", "max:prompt:nav:new:0"),
         ],
-        [callback_button("📄 Показать prompt", f"max:prompt:full:{prompt_id}")],
+        [callback_button("📄 Открыть промпт", f"max:prompt:full:{prompt_id}")],
         [
-            callback_button("🖼 Создать фото", "max:create_image"),
-            callback_button("🎬 Создать видео", "max:create_video"),
+            callback_button("🖼 Сделать фото", "max:create_image"),
+            callback_button("🎬 Собрать видео", "max:create_video"),
         ],
     ]
     if mini_app_url:
         rows.append([open_app_button("🚀 Библиотека в Mini App", web_app=mini_app_bot_name)])
-    rows.append([callback_button("🏠 Главное меню", "max:home")])
+    rows.append([callback_button("🏠 На главную", "max:home")])
     return [inline_keyboard(rows)]
 
 
@@ -186,17 +186,17 @@ class MaxProductChannelService(MaxSeedance25ChannelService):
         if not self.payments.enabled:
             await self._respond(
                 user_id,
-                "💳 <b>Тарифы MAX</b>\n\n"
-                "Пополнение сейчас недоступно. Текущий баланс и генерации продолжают работать.",
+                "🐾 <b>Добавить лапки</b>\n\n"
+                "Пополнение сейчас недоступно. Генерации и текущий баланс продолжают работать.",
                 attachments=back_home_menu(),
                 callback_id=callback_id,
             )
             return
         await self._respond(
             user_id,
-            "💳 <b>Тарифы MAX</b>\n\n"
-            "Выберите пакет. Перед оплатой покажем сумму и количество 🐾. "
-            "После успешного платежа баланс MAX пополнится автоматически.",
+            "🐾 <b>Добавить лапки</b>\n\n"
+            "Выбери пакет — сумму и количество лапок увидишь до оплаты. "
+            "После подтверждения платежа баланс обновится автоматически.",
             attachments=topup_menu(self.catalog),
             callback_id=callback_id,
         )
@@ -207,17 +207,16 @@ class MaxProductChannelService(MaxSeedance25ChannelService):
         balance = await get_max_balance(user_id)
         await self._respond(
             user_id,
-            "🤖 <b>AI-помощник HappyFox</b>\n\n"
-            "Опишите задачу обычным сообщением — помогу выбрать модель, улучшить промпт "
-            "и подобрать настройки.\n\n"
-            "<b>Можно спросить, например:</b>\n"
-            "• что лучше для реалистичного рекламного фото товара\n"
-            "• какую модель взять для видео из одной фотографии\n"
-            "• улучши мой промпт для модной рекламы\n"
-            "• какой формат выбрать для Reels / Shorts\n"
-            "• сколько 🐾 стоит нужная модель в MAX\n\n"
-            f"🐾 Сейчас на балансе: <b>{_format_cost(balance)}</b>\n"
-            "<i>Отправьте вопрос следующим сообщением.</i>",
+            "🤖 <b>Расскажи идею</b>\n\n"
+            "Не нужно разбираться в моделях. Опиши результат обычными словами — помогу выбрать путь, модель и настройки.\n\n"
+            "<b>Например:</b>\n"
+            "• рекламное фото товара\n"
+            "• ролик из одной фотографии\n"
+            "• fashion-видео для Reels\n"
+            "• промпт по референсу\n"
+            "• движение из ролика для своего персонажа\n\n"
+            f"🐾 На балансе: <b>{_format_cost(balance)}</b>\n"
+            "<i>Напиши задумку следующим сообщением.</i>",
             attachments=_assistant_menu(),
             callback_id=callback_id,
         )
@@ -227,7 +226,7 @@ class MaxProductChannelService(MaxSeedance25ChannelService):
         if not text:
             await self._respond(
                 user_id,
-                "Напишите вопрос текстом. Например: «какую модель выбрать для видео из фото?»",
+                "Напиши идею текстом. Например: «хочу рекламный ролик из одной фотографии».",
                 attachments=_assistant_menu(),
             )
             return True
@@ -260,8 +259,8 @@ class MaxProductChannelService(MaxSeedance25ChannelService):
         else:
             await self._respond(
                 user_id,
-                "😕 AI-помощник сейчас не ответил. Можно повторить вопрос или открыть поддержку — "
-                "остальные MAX-сценарии продолжают работать.",
+                "Не получилось ответить сейчас. Повтори сообщение или открой помощь — "
+                "остальные сценарии работают как обычно.",
                 attachments=_support_menu(
                     self.support_contact,
                     self.settings.mini_app_url,
@@ -294,15 +293,15 @@ class MaxProductChannelService(MaxSeedance25ChannelService):
             operator_line = f"\n\n<b>Оператор:</b> {html.escape(contact)}"
         else:
             operator_line = (
-                "\n\nКонтакт оператора не задан в конфигурации. "
-                "До его настройки используйте AI-помощника и встроенные экраны диагностики."
+                "\n\nОператор пока не подключён. "
+                "Начни с помощника — он разберёт большинство вопросов прямо здесь."
             )
         await self._respond(
             user_id,
-            "💬 <b>Поддержка HappyFox</b>\n\n"
-            "Если что-то не работает, напишите AI-помощнику или оператору.\n\n"
-            "Для быстрого ответа укажите, что делали, какую модель выбрали и когда возникла ошибка. "
-            "Если есть номер задачи — приложите его."
+            "💬 <b>Что случилось?</b>\n\n"
+            "Опиши проблему одним сообщением. Напиши, что делал и какую модель выбрал. "
+            "Если есть номер задачи — приложи его сразу.\n\n"
+            "Можно начать с помощника или перейти к оператору."
             f"{operator_line}",
             attachments=_support_menu(contact, self.settings.mini_app_url),
             callback_id=callback_id,
@@ -327,13 +326,12 @@ class MaxProductChannelService(MaxSeedance25ChannelService):
         if not prompts:
             rows: list[list[dict[str, Any]]] = []
             if self.settings.mini_app_url:
-                rows.append([link_button("🚀 Открыть Mini App", self.settings.mini_app_url)])
-            rows.append([callback_button("🏠 Главное меню", "max:home")])
+                rows.append([link_button("🚀 Открыть HappyFox", self.settings.mini_app_url)])
+            rows.append([callback_button("🏠 На главную", "max:home")])
             await self._respond(
                 user_id,
-                "✨ <b>Промпты</b>\n\n"
-                "Сейчас в публичной библиотеке нет доступных карточек. "
-                "Можно попросить AI-помощника собрать prompt под задачу.",
+                "✨ <b>Готовых идей пока нет</b>\n\n"
+                "Расскажи задачу помощнику — он соберёт промпт с нуля.",
                 attachments=[inline_keyboard(rows)],
                 callback_id=callback_id,
             )
@@ -409,11 +407,11 @@ class MaxProductChannelService(MaxSeedance25ChannelService):
                 inline_keyboard(
                     [
                         [
-                            callback_button("🖼 Создать фото", "max:create_image"),
-                            callback_button("🎬 Создать видео", "max:create_video"),
+                            callback_button("🖼 Сделать фото", "max:create_image"),
+                            callback_button("🎬 Собрать видео", "max:create_video"),
                         ],
                         [callback_button("✨ К промптам", "max:prompts")],
-                        [callback_button("🏠 Главное меню", "max:home")],
+                        [callback_button("🏠 На главную", "max:home")],
                     ]
                 )
             ],
@@ -473,9 +471,9 @@ class MaxProductChannelService(MaxSeedance25ChannelService):
             await clear_max_session(user_id)
             await self._respond(
                 user_id,
-                "🖼 <b>Создать фото</b>\n\n"
-                "Выберите модель — стоимость указана на кнопке. Затем отправьте описание и, если нужно, "
-                "фото-референс. Для редактирования исходное фото обязательно.",
+                "🖼 <b>Сделать фото</b>\n\n"
+                "Сначала выбери модель. Потом пришли идею и, если нужно, референс. "
+                "Для изменения готового кадра добавь исходное фото.",
                 attachments=image_model_menu(self.catalog),
                 callback_id=callback_id,
             )
@@ -484,9 +482,9 @@ class MaxProductChannelService(MaxSeedance25ChannelService):
             await clear_max_session(user_id)
             await self._respond(
                 user_id,
-                "🎬 <b>Создать видео</b>\n\n"
-                "Выберите, из чего сделать ролик: из текста, фото или готового видео. "
-                "Дальше покажу только подходящие модели и стоимость.",
+                "🎬 <b>Собрать видео</b>\n\n"
+                "Начни с текста, фотографии или готового ролика. "
+                "Дальше останутся только подходящие модели и цена.",
                 attachments=video_type_menu(),
                 callback_id=callback_id,
             )
@@ -506,7 +504,7 @@ class MaxProductChannelService(MaxSeedance25ChannelService):
                                 callback_button("🎬 Gemini Omni Video", "max:video:text:gemini_omni"),
                                 callback_button("🎙 Audio ID", "max:omni_audio"),
                             ],
-                            [callback_button("🏠 Главное меню", "max:home")],
+                            [callback_button("🏠 На главную", "max:home")],
                         ]
                     )
                 ],
