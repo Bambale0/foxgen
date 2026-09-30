@@ -11,13 +11,13 @@ def _rows(attachments):
 def test_max_main_menu_matches_happyfox_telegram_layout() -> None:
     rows = _rows(main_menu(42, mini_app_url="https://example.invalid/max-app"))
     assert [[button["text"] for button in row] for row in rows] == [
-        ["🚀 Открыть Mini App"],
-        ["🖼 Создать фото", "🎬 Создать видео"],
-        ["🎯 Motion Control", "✍️ Промпт по описанию"],
-        ["🎞 Промпт по видео • 3🐾", "🤖 AI-помощник"],
-        ["📚 Библиотека промптов", "🖼 Лента"],
-        ["🐾 Баланс: 42", "💬 Поддержка"],
-        ["🤝 Партнёрам", "⋯ Ещё"],
+        ["🚀 Открыть HappyFox"],
+        ["🖼 Сделать фото", "🎬 Собрать видео"],
+        ["🎯 Повторить движение", "✍️ Разобрать фото"],
+        ["🎞 Разобрать видео • 3🐾", "🤖 Помочь с идеей"],
+        ["📚 Готовые идеи", "🖼 Лента"],
+        ["🐾 Баланс: 42", "💬 Нужна помощь"],
+        ["🤝 Партнёрка", "⋯ Ещё"],
     ]
     callbacks = [
         button.get("payload")
