@@ -84,4 +84,28 @@ describe('HappyFox UX/UI guardrails', () => {
     expect(normalizer).toContain('✨ Улучшение')
     expect(normalizer).toContain('Другие AI-инструменты')
   })
+  test('uses the HappyFox action-first voice across core creator surfaces', () => {
+    const quick = read('components/quick-action-grid.tsx')
+    const services = read('components/service-grid.tsx')
+    const workspace = read('components/workspace-sheet.tsx')
+    const photo = read('components/tabs/photo-tab.tsx')
+    const video = read('components/tabs/video-tab.tsx')
+    const motion = read('components/tabs/motion-tab.tsx')
+
+    expect(quick).toContain("label: 'Сделать фото'")
+    expect(quick).toContain("label: 'Собрать видео'")
+    expect(quick).toContain("label: 'Оживить кадр'")
+    expect(quick).toContain("label: 'Помочь с идеей'")
+    expect(services).toContain('Что хочешь сделать?')
+    expect(services).toContain("title: 'Нужна помощь'")
+    expect(workspace).toContain("title: 'Расскажи идею'")
+    expect(photo).toContain('>Сделать фото</h2>')
+    expect(video).toContain('>Собрать видео</h2>')
+    expect(motion).toContain('Повторить движение')
+
+    const creatorCopy = [photo, video, motion].join('\n')
+    expect(creatorCopy).not.toContain('Откройте Mini App через Telegram')
+    expect(creatorCopy).toContain('Открой HappyFox из Telegram или MAX')
+  })
+
 })
