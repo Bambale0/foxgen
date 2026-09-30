@@ -36,7 +36,7 @@ def test_max_descriptions_use_user_language() -> None:
     assert 'MAX-прайс' not in max_copy
     assert 'Task ID, если он появился' not in max_copy
     assert 'улучшить prompt' not in max_copy
-    assert 'Если есть номер задачи — приложите его.' in max_copy
+    assert 'Если есть номер задачи — приложи его сразу.' in max_copy
 
 
 def test_support_and_partner_descriptions_are_actionable() -> None:
