@@ -3953,7 +3953,7 @@ async def admin_process_credits_amount(message: types.Message, state: FSMContext
         )
     else:
         await message.answer(
-            f"❌ Ошибка! Возможно, недостаточно кредитов для списания.",
+            "❌ Ошибка! Возможно, недостаточно кредитов для списания.",
             reply_markup=get_admin_keyboard(),
         )
 
