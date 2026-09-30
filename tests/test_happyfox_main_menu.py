@@ -21,14 +21,14 @@ def test_happyfox_main_menu_matches_product_layout(monkeypatch):
     markup = get_main_menu_keyboard(user_credits=42, mini_app_referral_code="FOX42")
 
     assert _texts(markup) == [
-        ["🚀 Mini App"],
-        ["🖼 Создать фото", "🎙 Создать озвучку"],
-        ["🎬 Создать видео", "🎵 Создать музыку · Suno"],
-        ["🎯 Motion Control", "✨ Промпты"],
-        ["🔷 Gemini Omni", "🤖 AI-помощник"],
-        ["🔗 Ссылки на работы", "💬 Поддержка"],
-        ["🐾 Баланс: 42", "🤝 Партнёры"],
-        ["💳 Тарифы"],
+        ["🚀 Открыть HappyFox"],
+        ["🖼 Сделать фото", "🎙 Оживить персонажа"],
+        ["🎬 Собрать видео", "🎵 Создать музыку"],
+        ["🎯 Повторить движение", "✨ Разобрать идею"],
+        ["🔷 Gemini Omni", "🤖 Помочь с идеей"],
+        ["🔗 Мои результаты", "💬 Нужна помощь"],
+        ["🐾 42 лапок", "🤝 Партнёрка"],
+        ["💳 Добавить лапки"],
     ]
     assert _callbacks(markup)[1:] == [
         ["create_image_text_new", "omni_mode_audio"],
