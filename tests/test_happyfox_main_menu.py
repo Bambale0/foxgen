@@ -1,3 +1,4 @@
+import runpy
 from pathlib import Path
 
 from bot.config import config
@@ -136,3 +137,18 @@ def test_configured_unicode_prefixes_become_animated_button_icons(monkeypatch):
         ("Отмена", "2222222222222222222", "danger"),
         ("Главное меню", "3333333333333333333", "success"),
     ]
+
+
+def test_product_normalizers_recognize_themed_telegram_menu():
+    keyboards = Path("bot/keyboards.py").read_text(encoding="utf-8")
+    main_menu_patch = runpy.run_path("scripts/apply_happyfox_main_menu.py")
+    visible_copy = runpy.run_path("scripts/apply_visible_copy_fixes.py")
+
+    assert main_menu_patch["NEW_MAIN_MENU"] in keyboards
+    assert main_menu_patch["NEW_MORE_MENU"] in keyboards
+
+    main_menu_block = keyboards.split("def get_main_menu_keyboard", 1)[1].split(
+        "def get_create_hub_keyboard",
+        1,
+    )[0]
+    assert visible_copy["CURRENT_PROMPTS_HUB_BUTTON"] in main_menu_block
