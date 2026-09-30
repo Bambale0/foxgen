@@ -435,7 +435,7 @@ class MaxCreationParityChannelService(MaxTelegramParityChannelService):
             if not images:
                 await self._respond(
                     user_id,
-                    "Пришлите изображения-референсы или используйте кнопки «Пропустить» / «Продолжить».",
+                    "Пришлите изображения-референсы или используй кнопки «Пропустить» / «Продолжить».",
                     attachments=_image_reference_menu(len(data.get("image_urls") or [])),
                 )
                 return True
@@ -622,7 +622,7 @@ class MaxCreationParityChannelService(MaxTelegramParityChannelService):
             if not images and not videos:
                 await self._respond(
                     user_id,
-                    "Пришлите нужный фото/видео-референс или используйте кнопки ниже.",
+                    "Пришлите нужный фото/видео-референс или используй кнопки ниже.",
                     attachments=_video_media_menu(data),
                 )
                 return True
@@ -700,7 +700,7 @@ class MaxCreationParityChannelService(MaxTelegramParityChannelService):
                 await save_max_session(user_id, session.state, data)
                 await self._respond(
                     user_id,
-                    f"Референсы сохранены: <b>{len(refs)}</b>. Теперь выберите модель.",
+                    f"Референсы сохранены: <b>{len(refs)}</b>. Теперь выбери модель.",
                     attachments=image_model_menu(self.catalog),
                 )
                 return True
