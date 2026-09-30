@@ -1266,67 +1266,76 @@ def _build_main_menu_text(user_credits: int, referral_bonus_text: str = "") -> s
     referral_block = (
         f"\n\n{referral_bonus_text.strip()}" if referral_bonus_text.strip() else ""
     )
+    new_user_bonus = get_business_rules()["new_user_bonus_credits"]
     return (
         f"🏠 <b>{html.escape(product.brand_name)}</b>\n\n"
-        "Создавайте фото, видео, озвучку и музыку с AI.\n"
-        "Можно начать с идеи или загрузить готовый файл.\n\n"
-        f"🐾 <b>Баланс:</b> <code>{user_credits}</code> лапок"
-        f"{referral_block}\n\n"
-        "<i>Выберите действие ниже 👇</i>"
+        "Создавай то, что нужно прямо сейчас — от картинки до готового ролика.\n\n"
+        "🖼 <b>Сделать фото</b>\n"
+        "Начни с идеи, измени готовый кадр или добавь референс.\n\n"
+        "🎬 <b>Собрать видео</b>\n"
+        "Опиши сцену или возьми за основу фото и ролик.\n\n"
+        "🎙 <b>Оживить персонажа</b>\n"
+        "Голос, говорящий аватар и работа с аудио.\n\n"
+        "🎵 <b>Создать музыку</b>\n"
+        "Собери готовый трек через Suno.\n\n"
+        "🎯 <b>Повторить движение</b>\n"
+        "Перенеси движение из ролика на своего персонажа.\n\n"
+        "✨ <b>Разобрать идею</b>\n"
+        "Пришли фото, видео или описание — соберём промпт.\n\n"
+        "🤖 <b>Не знаешь, с чего начать?</b>\n"
+        "Расскажи задумку своими словами — HappyFox подберёт подходящий путь.\n\n"
+        "🔗 <b>Вернуться к результатам</b>\n"
+        "Открой готовые работы и используй их снова.\n\n"
+        f"🐾 <b>{user_credits}</b> лапок на балансе"
+        f"{referral_block}\n"
+        f"🎁 Первый раз здесь? Дарим <b>{new_user_bonus:g} лапок</b> на знакомство.\n\n"
+        "<i>Выбирай, что создаём 👇</i>"
     )
-
 
 def _build_balance_text(stats: dict) -> str:
     return (
-        "🐾 <b>Баланс HappyFox</b>\n\n"
-        f"• Сейчас на балансе: <code>{stats['credits']}</code> лапок\n"
-        f"• Всего запусков: <code>{stats['generations']}</code>\n"
-        f"• Всего потрачено: <code>{stats['total_spent']}</code> лапок\n"
-        f"• Вы с нами с: <code>{stats['member_since']}</code>\n"
-        f"• Приглашено друзей: <code>{stats.get('referrals_count', 0)}</code>\n"
-        f"• Заработано по приглашениям: <code>{stats.get('referral_earned', 0)}</code>"
+        "🐾 <b>Твои лапки</b>\n\n"
+        f"Сейчас доступно: <code>{stats['credits']}</code>\n"
+        f"Генераций запущено: <code>{stats['generations']}</code>\n"
+        f"Потрачено: <code>{stats['total_spent']}</code> лапок\n\n"
+        f"С HappyFox с <code>{stats['member_since']}</code>\n"
+        f"Приглашено: <code>{stats.get('referrals_count', 0)}</code>\n"
+        f"Заработано по приглашениям: <code>{stats.get('referral_earned', 0)}</code> лапок"
     )
-
 
 def _build_settings_text() -> str:
     return (
-        "⚙️ <b>Настройки</b>\n"
-        "Выберите модели по умолчанию и настройте уведомления — эти параметры будут использоваться в новых генерациях.\n\n"
-        "<b>Что можно настроить</b>\n"
-        "• фото\n"
-        "• видео из текста\n"
-        "• видео из фото\n"
-        "• основной сервис для картинок\n"
+        "⚙️ <b>Настройки</b>\n\n"
+        "Выбери любимые модели и уведомления один раз — дальше HappyFox будет помнить их сам.\n\n"
+        "<b>Здесь можно выбрать</b>\n"
+        "• модель для фото\n"
+        "• модель для видео по тексту\n"
+        "• модель для видео по фото\n"
+        "• основной сервис изображений\n"
         "• уведомления о покупках рефералов\n\n"
-        "<i>Текущий выбор отмечен в кнопках ниже.</i>"
+        "<i>Текущие варианты отмечены в кнопках.</i>"
     )
 
 
 def _build_motion_control_menu_text(user_credits: int) -> str:
     return (
-        "🎬 <b>Motion Control</b>\n"
-        "Загрузите фото персонажа и ролик с движением — HappyFox перенесёт движение на ваш образ.\n\n"
-        "<b>Как это работает</b>\n"
-        "1. Загрузите фото\n"
-        "2. Добавьте видео с движением\n"
-        "3. Получите анимированный результат\n\n"
-        f"🐾 <b>Баланс:</b> <code>{user_credits}</code> лапок\n\n"
-        "<i>Ниже выберите подходящий вариант.</i>"
+        "🎯 <b>Повторить движение</b>\n\n"
+        "Нужны две вещи: персонаж и ролик с движением. HappyFox соединит их в одной сцене.\n\n"
+        "1. Пришли фото персонажа\n"
+        "2. Добавь видео с нужным движением\n"
+        "3. Выбери вариант генерации\n\n"
+        f"🐾 На балансе: <code>{user_credits}</code> лапок\n\n"
+        "<i>С чего начнём?</i>"
     )
-
 
 def _build_motion_control_step_text(title: str, cost: int) -> str:
     return (
         f"{title}\n"
-        f"🐾 <b>Стоимость:</b> <code>{cost}</code>\n\n"
-        "<b>Шаг 1. Фото персонажа</b>\n"
-        "Загрузите фото или картинку, которую нужно оживить.\n\n"
-        "Подойдёт:\n"
-        "• фото человека\n"
-        "• персонаж или иллюстрация\n"
-        "• любой объект, которому нужно передать движение"
+        f"🐾 Стоимость: <code>{cost}</code> лапок\n\n"
+        "<b>Сначала — персонаж</b>\n"
+        "Пришли фото человека, героя или объекта, которому нужно передать движение.\n\n"
+        "После этого попрошу ролик с нужным движением."
     )
-
 
 FEED_PAGE_LIMIT = 200
 PROMPT_PAGE_LIMIT = 24
@@ -3276,9 +3285,9 @@ async def show_create_hub(callback: types.CallbackQuery, state: FSMContext):
     await state.clear()
     user = await get_or_create_user(callback.from_user.id)
     text = (
-        "✨ <b>Создать</b>\n"
-        f"🐾 Баланс: <code>{user.credits}</code> лапок\n\n"
-        "Что создаём? Выберите результат — дальше бот покажет только нужные шаги и настройки."
+        "✨ <b>Что создаём?</b>\n\n"
+        "Выбери результат — дальше оставлю только нужные шаги.\n\n"
+        f"🐾 На балансе: <code>{user.credits}</code> лапок"
     )
     await callback.message.edit_text(
         text, reply_markup=get_create_hub_keyboard(), parse_mode="HTML"
@@ -3292,9 +3301,9 @@ async def show_edit_hub(callback: types.CallbackQuery, state: FSMContext):
     await state.clear()
     user = await get_or_create_user(callback.from_user.id)
     text = (
-        "✏️ <b>Изменить фото</b>\n"
-        f"🐾 Баланс: <code>{user.credits}</code> лапок\n\n"
-        "Загрузите исходное фото и выберите, что изменить: фон, стиль, одежду, детали или настроение."
+        "✏️ <b>Что меняем?</b>\n\n"
+        "Пришли исходное фото. Можно заменить фон, стиль, одежду, детали или просто настроение кадра.\n\n"
+        f"🐾 На балансе: <code>{user.credits}</code> лапок"
     )
     await callback.message.edit_text(
         text, reply_markup=get_edit_hub_keyboard(), parse_mode="HTML"
@@ -3308,12 +3317,9 @@ async def show_animate_hub(callback: types.CallbackQuery, state: FSMContext):
     await state.clear()
     user = await get_or_create_user(callback.from_user.id)
     text = (
-        "🎬 <b>Оживить</b>\n"
-        f"🐾 Баланс: <code>{user.credits}</code> лапок\n\n"
-        "Выберите способ оживить изображение:\n"
-        "• оживить фото\n"
-        "• перенести движение\n"
-        "• использовать видео-референсы"
+        "🎬 <b>Добавим движение</b>\n\n"
+        "Можно оживить один кадр, повторить движение из ролика или взять видео как референс.\n\n"
+        f"🐾 На балансе: <code>{user.credits}</code> лапок"
     )
     await callback.message.edit_text(
         text, reply_markup=get_animate_hub_keyboard(), parse_mode="HTML"
@@ -3325,7 +3331,7 @@ async def show_animate_hub(callback: types.CallbackQuery, state: FSMContext):
 async def show_happyfox_music(callback: types.CallbackQuery):
     """Keep the planned Suno entry visible without leaving a dead callback."""
     await callback.answer(
-        "🎵 Создание музыки через Suno скоро появится в HappyFox.",
+        "🎵 Музыка через Suno уже на подходе. Пока выбери другой сценарий.",
         show_alert=True,
     )
 
@@ -3336,9 +3342,9 @@ async def show_more_menu(callback: types.CallbackQuery, state: FSMContext):
     await state.clear()
     user = await get_or_create_user(callback.from_user.id)
     text = (
-        "✨ <b>Другие AI-инструменты</b>\n"
-        f"🐾 Баланс: <code>{user.credits}</code> лапок\n\n"
-        "Выберите, что хотите сделать: создать видео, создать фото или улучшить готовое изображение."
+        "✨ <b>Ещё идеи</b>\n\n"
+        "Здесь можно собрать фото или видео нестандартным способом и доработать готовый результат.\n\n"
+        f"🐾 На балансе: <code>{user.credits}</code> лапок"
     )
     await callback.message.edit_text(
         text, reply_markup=get_more_menu_keyboard(), parse_mode="HTML"
@@ -4823,15 +4829,11 @@ async def show_support(callback: types.CallbackQuery):
     from bot.keyboards import get_support_keyboard
 
     support_text = (
-        "🆘 <b>Поддержка</b>\n\n"
-        "Опишите проблему одним сообщением. AI-поддержка попробует решить её сразу.\n\n"
-            "<b>С чем поможем</b>\n"
-        "• генерация не запускается или результат не пришёл\n"
-        "• непонятно, какую модель или настройку выбрать\n"
-        "• вопрос по оплате, списанию или балансу\n"
-        "• нужен разбор конкретной ошибки\n\n"
-        "Если нужна ручная проверка, обращение можно передать оператору.\n\n"
-            "<b>Оператор</b>\n"
+        "💬 <b>Что случилось?</b>\n\n"
+        "Опиши проблему одним сообщением. Если есть номер задачи — добавь его сразу.\n\n"
+        "Помогу, если генерация не запускается, результат не пришёл, непонятна модель или есть вопрос по оплате.\n\n"
+        "Если понадобится ручная проверка — передадим обращение оператору.\n\n"
+        "<b>Оператор</b>\n"
         f"{html.escape(product.support_contact) if product.support_contact else 'через встроенную поддержку'}"
     )
 
@@ -5245,19 +5247,18 @@ async def open_ai_assistant_main(callback: types.CallbackQuery, state: FSMContex
             "• или нажмите «Админ-функции» ниже"
         )
 
-    welcome_ai = f"""🐾 <b>AI-ассистент</b>
+    welcome_ai = f"""🤖 <b>Расскажи идею</b>
 
-Я помогу с моделями, промптами, настройками и сценариями генерации.
+Не нужно знать модели и настройки. Опиши, что хочешь получить, обычными словами.
 
-<b>Например, можно спросить:</b>
-• какая модель лучше для фотореализма
-• что выбрать для видео из фото
-• как использовать референсы
-• как собрать промпт под fashion / anime / product
-• чем отличается Veo от Kling
-• как работает Motion Control
+<b>Например:</b>
+• реалистичное рекламное фото товара
+• видео из одной фотографии
+• fashion-ролик для Reels
+• промпт по референсу
+• движение из одного ролика для другого персонажа
 
-<i>Просто напишите вопрос — отвечу по делу и подскажу следующий шаг в боте.</i>{admin_hint}"""
+<i>Разберу задачу, подберу путь и скажу, что делать дальше.</i>{admin_hint}"""
 
     await callback.message.edit_text(
         welcome_ai,
