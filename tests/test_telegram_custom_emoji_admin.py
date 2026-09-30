@@ -66,3 +66,15 @@ def test_admin_router_exposes_emoji_id_command_with_access_check():
     )[0]
     assert "is_admin(message.from_user.id)" in handler
     assert "extract_custom_emoji_ids(message)" in handler
+
+
+def test_admin_router_exposes_db_backed_emoji_control_plane():
+    source = Path("bot/handlers/admin.py").read_text(encoding="utf-8")
+
+    for command in ("emoji_map", "emoji_set", "emoji_unset"):
+        assert f'@router.message(Command("{command}"))' in source
+
+    assert "get_configured_telegram_emoji_ids()" in source
+    assert "set_configured_telegram_emoji_ids(" in source
+    assert "updated_by_telegram_id=message.from_user.id" in source
+    assert "is_admin(message.from_user.id)" in source
