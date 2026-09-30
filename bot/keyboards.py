@@ -16,6 +16,27 @@ from bot.services.preset_manager import preset_manager
 
 logger = logging.getLogger(__name__)
 
+def _apply_public_telegram_button_theme(
+    markup: types.InlineKeyboardMarkup,
+) -> types.InlineKeyboardMarkup:
+    """Apply HappyFox's native Telegram theme to public navigation buttons."""
+    custom_emoji_id = str(config.TELEGRAM_BUTTON_CUSTOM_EMOJI_ID or "").strip() or None
+    return types.InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                button.model_copy(
+                    update={
+                        "style": "success",
+                        "icon_custom_emoji_id": custom_emoji_id,
+                    }
+                )
+                for button in row
+            ]
+            for row in markup.inline_keyboard
+        ]
+    )
+
+
 
 def _mini_app_url_with_start_param(start_param: str | None = None, referral_code: str | None = None) -> str:
     base_url = str(config.mini_app_url or "").strip()
@@ -110,7 +131,7 @@ def get_main_menu_keyboard(user_credits: int = 0, telegram_id: int | None = None
         InlineKeyboardButton(text="💳 Тарифы", callback_data="menu_topup")
     )
 
-    return builder.as_markup()
+    return _apply_public_telegram_button_theme(builder.as_markup())
 
 
 def get_create_hub_keyboard():
@@ -123,7 +144,7 @@ def get_create_hub_keyboard():
     builder.button(text="⚙️ Свои настройки", callback_data="create_video_new")
     builder.button(text="🏠 Главное меню", callback_data="back_main")
     builder.adjust(2, 2, 2, 1)
-    return builder.as_markup()
+    return _apply_public_telegram_button_theme(builder.as_markup())
 
 
 def get_edit_hub_keyboard():
@@ -135,7 +156,7 @@ def get_edit_hub_keyboard():
     builder.button(text="⚙️ Свои настройки", callback_data="create_image_refs_new")
     builder.button(text="🏠 Главное меню", callback_data="back_main")
     builder.adjust(2, 2, 1, 1)
-    return builder.as_markup()
+    return _apply_public_telegram_button_theme(builder.as_markup())
 
 
 def get_animate_hub_keyboard():
@@ -146,7 +167,7 @@ def get_animate_hub_keyboard():
     builder.button(text="🎬 Видео с нуля", callback_data="create_video_new")
     builder.button(text="🏠 Главное меню", callback_data="back_main")
     builder.adjust(1, 1, 1, 1, 1)
-    return builder.as_markup()
+    return _apply_public_telegram_button_theme(builder.as_markup())
 
 
 def get_motion_control_model_keyboard(current_model: str = "motion_control_v26"):
@@ -180,7 +201,7 @@ def get_more_menu_keyboard():
     builder.button(text="✨ Улучшение", callback_data="create_image_refs_new")
     builder.button(text="🏠 Главное меню", callback_data="back_main")
     builder.adjust(2, 1, 1)
-    return builder.as_markup()
+    return _apply_public_telegram_button_theme(builder.as_markup())
 
 
 def get_admin_keyboard(subscription_required: bool | None = None):
@@ -865,7 +886,7 @@ def get_payment_confirmation_keyboard(payment_url: str, order_id: str):
 def get_main_menu_button_keyboard():
     builder = InlineKeyboardBuilder()
     builder.button(text="🏠 Главное меню", callback_data="back_main")
-    return builder.as_markup()
+    return _apply_public_telegram_button_theme(builder.as_markup())
 
 
 def get_photo_prompt_result_keyboard(prompt_en: str, prompt_ru: str = "", negative_prompt: str = ""):
