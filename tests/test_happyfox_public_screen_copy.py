@@ -26,7 +26,7 @@ def test_miniapp_descriptions_hide_provider_plumbing() -> None:
     assert 'polling fallback' not in video
     assert 'После запуска здесь появятся очередь, task id' not in video
     assert 'точный prompt для похожей генерации' not in services
-    assert 'Если делаете видео из фото' in video
+    assert 'Если ролик начинается с фото' in video
 
 
 def test_max_descriptions_use_user_language() -> None:
@@ -43,6 +43,6 @@ def test_support_and_partner_descriptions_are_actionable() -> None:
     workspace = _read("frontend/miniapp-v0/components/workspace-sheet.tsx")
     partner = _read("frontend/miniapp-v0/components/partner-approval-sheet.tsx")
 
-    assert 'Расскажите, с чем нужна помощь.' in _read("frontend/miniapp-v0/components/tabs/services-tab.tsx")
+    assert 'Опиши проблему одним сообщением.' in _read("frontend/miniapp-v0/components/tabs/services-tab.tsx")
     assert 'Если есть номер задачи — приложите его.' in workspace
     assert 'Отправьте заявку — после одобрения откроются партнёрская ссылка' in partner
