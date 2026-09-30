@@ -15,6 +15,10 @@ def _callbacks(markup):
     ]
 
 
+def _buttons(markup):
+    return [button for row in markup.inline_keyboard for button in row]
+
+
 def test_happyfox_main_menu_matches_product_layout(monkeypatch):
     monkeypatch.setattr(config, "MINI_APP_URL", "https://app.happy-fox.online/mini-app/")
 
@@ -44,6 +48,30 @@ def test_happyfox_main_menu_matches_product_layout(monkeypatch):
     assert mini_app_button.web_app is not None
     assert "app.happy-fox.online/mini-app/" in mini_app_button.web_app.url
     assert "ref=FOX42" in mini_app_button.web_app.url
+    assert {button.style for button in _buttons(markup)} == {"success"}
+    assert all(button.icon_custom_emoji_id is None for button in _buttons(markup))
+
+
+def test_main_menu_uses_configured_custom_emoji_icons(monkeypatch):
+    monkeypatch.setattr(config, "MINI_APP_URL", "https://app.happy-fox.online/mini-app/")
+    monkeypatch.setenv(
+        "HAPPYFOX_TELEGRAM_MENU_EMOJI_IDS",
+        '{"mini_app":"5368324170671202286","photo":"5774022692642492953"}',
+    )
+
+    markup = get_main_menu_keyboard(user_credits=42)
+
+    mini_app_button = markup.inline_keyboard[0][0]
+    photo_button = markup.inline_keyboard[1][0]
+    video_button = markup.inline_keyboard[2][0]
+
+    assert mini_app_button.text == "Mini App"
+    assert mini_app_button.icon_custom_emoji_id == "5368324170671202286"
+    assert photo_button.text == "Создать фото"
+    assert photo_button.icon_custom_emoji_id == "5774022692642492953"
+    assert video_button.text == "🎬 Создать видео"
+    assert video_button.icon_custom_emoji_id is None
+    assert {button.style for button in _buttons(markup)} == {"success"}
 
 
 def test_other_ai_menu_is_a_three_scenario_hub():
