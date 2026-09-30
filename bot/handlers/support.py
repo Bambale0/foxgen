@@ -84,7 +84,7 @@ async def _support_intro() -> str:
     return (
         "💬 <b>Новое обращение в поддержку</b>\n\n"
         "Опишите проблему одним сообщением. Можно приложить фото, видео или документ.\n"
-        "Для отмены отправьте /cancel."
+        "Для отмены пришли /cancel."
     )
 
 
@@ -116,7 +116,7 @@ async def create_support_from_message(message: types.Message, state: FSMContext)
     body = (message.text or message.caption or "").strip()
     attachment = _extract_attachment(message)
     if not body and attachment is None:
-        await message.answer("Пришлите текст, фото, видео или документ с описанием проблемы.")
+        await message.answer("Пришли текст, фото, видео или документ с описанием проблемы.")
         return
 
     ticket_id = await create_support_ticket(
@@ -132,7 +132,7 @@ async def create_support_from_message(message: types.Message, state: FSMContext)
     await state.clear()
     await message.answer(
         f"✅ Обращение <b>#{ticket_id}</b> создано.\n\n"
-        "Ответ придёт сюда от имени бота. Чтобы дополнить обращение, используйте "
+        "Ответ придёт сюда от имени бота. Чтобы дополнить обращение, используй "
         f"команду <code>/support_add {ticket_id}</code>."
     )
 
@@ -152,7 +152,7 @@ async def start_support_followup(message: types.Message, state: FSMContext) -> N
     await state.set_state(SupportStates.waiting_followup)
     await state.update_data(support_ticket_id=ticket_id)
     await message.answer(
-        f"Пришлите дополнение к обращению <b>#{ticket_id}</b>. Можно добавить вложение."
+        f"Пришли дополнение к обращению <b>#{ticket_id}</b>. Можно добавить вложение."
     )
 
 
@@ -165,7 +165,7 @@ async def append_support_followup(message: types.Message, state: FSMContext) -> 
     body = (message.text or message.caption or "").strip()
     attachment = _extract_attachment(message)
     if not body and attachment is None:
-        await message.answer("Пришлите текст или вложение.")
+        await message.answer("Пришли текст или вложение.")
         return
     try:
         await append_user_message(
