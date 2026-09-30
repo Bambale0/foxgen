@@ -56,6 +56,7 @@ from bot.keyboards import (
     get_main_menu_button_keyboard,
 )
 from bot.services.preset_manager import preset_manager
+from bot.services.telegram_custom_emoji import extract_custom_emoji_ids
 from bot.services.subscription_service import (
     REQUIRED_CHANNEL_USERNAME,
     clear_required_subscription_cache,
@@ -2272,6 +2273,31 @@ def _build_admin_partner_xls(report: dict) -> tuple[bytes, str]:
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     filename = f"partner_{report.get('telegram_id')}_level1_payments_{stamp}.xls"
     return "".join(parts).encode("utf-8"), filename
+
+
+@router.message(Command("emoji_id"))
+async def cmd_emoji_id(message: types.Message):
+    """Показывает Telegram custom_emoji_id для настройки анимированных кнопок."""
+    if not message.from_user or not is_admin(message.from_user.id):
+        await message.answer("⛔ У вас нет доступа к этой команде.")
+        return
+
+    emoji_ids = extract_custom_emoji_ids(message)
+    if not emoji_ids:
+        await message.answer(
+            "Пришлите команду вместе с анимированным emoji, например "
+            "<code>/emoji_id 🦊</code>, или ответьте <code>/emoji_id</code> "
+            "на сообщение с custom emoji.",
+            parse_mode="HTML",
+        )
+        return
+
+    lines = ["🎨 <b>Telegram custom emoji</b>"]
+    for index, emoji_id in enumerate(emoji_ids, start=1):
+        prefix = f"{index}. " if len(emoji_ids) > 1 else ""
+        lines.append(f"{prefix}<code>{emoji_id}</code>")
+
+    await message.answer("\n".join(lines), parse_mode="HTML")
 
 
 @router.message(Command("admin"))
