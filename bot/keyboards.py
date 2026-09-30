@@ -17,6 +17,60 @@ from bot.services.preset_manager import preset_manager
 logger = logging.getLogger(__name__)
 
 
+TELEGRAM_MENU_EMOJI_IDS_ENV = "HAPPYFOX_TELEGRAM_MENU_EMOJI_IDS"
+
+
+def _telegram_menu_emoji_ids() -> dict[str, str]:
+    """Return validated custom-emoji IDs for the Telegram main menu.
+
+    Telegram custom emoji document IDs cannot be derived from Unicode emoji,
+    so operations may provide a JSON object through the runtime environment,
+    for example {"photo": "123456789"}. Invalid configuration safely falls
+    back to the ordinary Unicode icon already used by the menu.
+    """
+    raw = str(os.getenv(TELEGRAM_MENU_EMOJI_IDS_ENV, "")).strip()
+    if not raw:
+        return {}
+    try:
+        payload = json.loads(raw)
+    except (TypeError, ValueError):
+        logger.warning(
+            "telegram_menu_custom_emoji_config_invalid",
+            extra={"event": "telegram_menu_custom_emoji_config_invalid"},
+        )
+        return {}
+    if not isinstance(payload, dict):
+        logger.warning(
+            "telegram_menu_custom_emoji_config_invalid_type",
+            extra={"event": "telegram_menu_custom_emoji_config_invalid_type"},
+        )
+        return {}
+
+    result: dict[str, str] = {}
+    for key, value in payload.items():
+        emoji_id = str(value or "").strip()
+        if emoji_id.isdigit():
+            result[str(key)] = emoji_id
+    return result
+
+
+def _telegram_main_menu_button(
+    *,
+    key: str,
+    fallback_emoji: str,
+    text: str,
+    **kwargs,
+) -> InlineKeyboardButton:
+    """Build one green Telegram menu button with an optional animated icon."""
+    custom_emoji_id = _telegram_menu_emoji_ids().get(key)
+    return InlineKeyboardButton(
+        text=text if custom_emoji_id else f"{fallback_emoji} {text}",
+        style="success",
+        icon_custom_emoji_id=custom_emoji_id,
+        **kwargs,
+    )
+
+
 def _mini_app_url_with_start_param(start_param: str | None = None, referral_code: str | None = None) -> str:
     base_url = str(config.mini_app_url or "").strip()
     if not base_url:
@@ -76,38 +130,105 @@ def get_main_menu_keyboard(user_credits: int = 0, telegram_id: int | None = None
 
     if config.mini_app_url:
         builder.row(
-            InlineKeyboardButton(
-                text="🚀 Mini App",
+            _telegram_main_menu_button(
+                key="mini_app",
+                fallback_emoji="🚀",
+                text="Mini App",
                 web_app=WebAppInfo(url=_mini_app_url_with_referral(mini_app_referral_code) or config.mini_app_url),
             )
         )
 
     builder.row(
-        InlineKeyboardButton(text="🖼 Создать фото", callback_data="create_image_text_new"),
-        InlineKeyboardButton(text="🎙 Создать озвучку", callback_data="omni_mode_audio"),
+        _telegram_main_menu_button(
+            key="photo",
+            fallback_emoji="🖼",
+            text="Создать фото",
+            callback_data="create_image_text_new",
+        ),
+        _telegram_main_menu_button(
+            key="voice",
+            fallback_emoji="🎙",
+            text="Создать озвучку",
+            callback_data="omni_mode_audio",
+        ),
     )
     builder.row(
-        InlineKeyboardButton(text="🎬 Создать видео", callback_data="create_video_new"),
-        InlineKeyboardButton(text="🎵 Создать музыку · Suno", callback_data="happyfox_music"),
+        _telegram_main_menu_button(
+            key="video",
+            fallback_emoji="🎬",
+            text="Создать видео",
+            callback_data="create_video_new",
+        ),
+        _telegram_main_menu_button(
+            key="music",
+            fallback_emoji="🎵",
+            text="Создать музыку · Suno",
+            callback_data="happyfox_music",
+        ),
     )
     builder.row(
-        InlineKeyboardButton(text="🎯 Motion Control", callback_data="motion_control"),
-        InlineKeyboardButton(text="✨ Промпты", callback_data="menu_prompts"),
+        _telegram_main_menu_button(
+            key="motion",
+            fallback_emoji="🎯",
+            text="Motion Control",
+            callback_data="motion_control",
+        ),
+        _telegram_main_menu_button(
+            key="prompts",
+            fallback_emoji="✨",
+            text="Промпты",
+            callback_data="menu_prompts",
+        ),
     )
     builder.row(
-        InlineKeyboardButton(text="🔷 Gemini Omni", callback_data="v_model_gemini_omni"),
-        InlineKeyboardButton(text="🤖 AI-помощник", callback_data="menu_ai_assistant"),
+        _telegram_main_menu_button(
+            key="gemini",
+            fallback_emoji="🔷",
+            text="Gemini Omni",
+            callback_data="v_model_gemini_omni",
+        ),
+        _telegram_main_menu_button(
+            key="assistant",
+            fallback_emoji="🤖",
+            text="AI-помощник",
+            callback_data="menu_ai_assistant",
+        ),
     )
     builder.row(
-        InlineKeyboardButton(text="🔗 Ссылки на работы", callback_data="menu_feed"),
-        InlineKeyboardButton(text="💬 Поддержка", callback_data="menu_support"),
+        _telegram_main_menu_button(
+            key="works",
+            fallback_emoji="🔗",
+            text="Ссылки на работы",
+            callback_data="menu_feed",
+        ),
+        _telegram_main_menu_button(
+            key="support",
+            fallback_emoji="💬",
+            text="Поддержка",
+            callback_data="menu_support",
+        ),
     )
     builder.row(
-        InlineKeyboardButton(text=f"🍌 Баланс: {user_credits}", callback_data="menu_balance"),
-        InlineKeyboardButton(text="🤝 Партнёры", callback_data="menu_partner"),
+        _telegram_main_menu_button(
+            key="balance",
+            fallback_emoji="🐾",
+            text=f"Баланс: {user_credits}",
+            callback_data="menu_balance",
+        ),
+        _telegram_main_menu_button(
+            key="partners",
+            fallback_emoji="🤝",
+            text="Партнёры",
+            callback_data="menu_partner",
+        ),
     )
     builder.row(
-        InlineKeyboardButton(text="💳 Тарифы", callback_data="menu_topup")
+        _telegram_main_menu_button(
+            key="tariffs",
+            fallback_emoji="💳",
+            text="Тарифы",
+            callback_data="menu_topup",
+        )
     )
 
     return builder.as_markup()
