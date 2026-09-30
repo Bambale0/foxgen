@@ -1,4 +1,6 @@
 from pathlib import Path
+import shutil
+
 
 from bot.config import config
 from bot.keyboards import (
@@ -130,3 +132,36 @@ def test_public_telegram_theme_keeps_green_fallback_without_custom_emoji(monkeyp
         ["✨ Улучшение"],
         ["🏠 Главное меню"],
     ]
+
+
+
+def test_happyfox_menu_normalizer_accepts_themed_keyboards(tmp_path, monkeypatch):
+    from scripts import apply_happyfox_main_menu as patcher
+
+    temp_keyboards = tmp_path / "bot" / "keyboards.py"
+    temp_common = tmp_path / "bot" / "handlers" / "common.py"
+    temp_main = tmp_path / "bot" / "main.py"
+    temp_common.parent.mkdir(parents=True)
+
+    shutil.copy2("bot/keyboards.py", temp_keyboards)
+    shutil.copy2("bot/handlers/common.py", temp_common)
+    shutil.copy2("bot/main.py", temp_main)
+
+    monkeypatch.setattr(patcher, "KEYBOARDS_PATH", temp_keyboards)
+    monkeypatch.setattr(patcher, "COMMON_PATH", temp_common)
+    monkeypatch.setattr(patcher, "MAIN_PATH", temp_main)
+
+    patcher.apply_happyfox_main_menu()
+    first = (
+        temp_keyboards.read_text(encoding="utf-8"),
+        temp_common.read_text(encoding="utf-8"),
+        temp_main.read_text(encoding="utf-8"),
+    )
+    patcher.apply_happyfox_main_menu()
+    second = (
+        temp_keyboards.read_text(encoding="utf-8"),
+        temp_common.read_text(encoding="utf-8"),
+        temp_main.read_text(encoding="utf-8"),
+    )
+
+    assert second == first
