@@ -516,7 +516,7 @@ async def photo_to_prompt_handler(callback: CallbackQuery, state: FSMContext):
     text = (
         "✍️ <b>Промпт по описанию</b>\n\n"
         f"Стоимость анализа: <b>{photo_prompt_price_label()}</b>\n\n"
-        "Отправьте фото, голосовой промпт или сначала голос, а затем фото.\n"
+        "Пришли фото, голосовой промпт или сначала голос, а затем фото.\n"
         "GPT-5.5 разберёт фото отдельно, голос отдельно или объединит голос с последующим фото.\n\n"
         "В результате вы получите:\n"
         "• точный prompt на английском\n"
@@ -554,7 +554,7 @@ async def video_to_prompt_handler(callback: CallbackQuery, state: FSMContext):
     text = (
         "🎞 <b>Промпт по видео</b>\n\n"
         f"Стоимость: <code>{_video_prompt_cost()}</code> 🍌\n\n"
-        "Отправьте короткое видео как обычное видео или файлом.\n"
+        "Пришли короткое видео как обычное видео или файлом.\n"
         "GPT-5.5 получит сам видеофайл и соберёт подробный prompt для генерации похожего ролика.\n\n"
         "В результате вы получите:\n"
         "• подробный prompt на русском\n"
@@ -708,7 +708,7 @@ async def analyze_photo(message: Message, state: FSMContext):
                     await _safe_edit_or_answer(
                         processing,
                         message,
-                        "🎙 Голосовой промпт ещё загружается. Отправьте фото ещё раз через несколько секунд — я объединю его с голосом.",
+                        "🎙 Голосовой промпт ещё загружается. Пришли фото ещё раз через несколько секунд — я объединю его с голосом.",
                         reply_markup=get_back_keyboard("back_main"),
                         parse_mode="HTML",
                     )
@@ -735,7 +735,7 @@ async def analyze_photo(message: Message, state: FSMContext):
             await _safe_edit_or_answer(
                 processing,
                 message,
-                "❌ Не удалось сохранить фото. Попробуйте загрузить другое изображение.",
+                "❌ Не удалось сохранить фото. Попробуй загрузить другое изображение.",
                 reply_markup=get_main_menu_button_keyboard(),
             )
             return
@@ -788,7 +788,7 @@ async def analyze_photo(message: Message, state: FSMContext):
 async def analyze_video_prompt(message: Message, state: FSMContext):
     if not (message.video or _is_video_prompt_document(message)):
         await message.answer(
-            "Пожалуйста, отправьте видео в формате mp4, mov, webm или m4v.",
+            "Пожалуйста, пришли видео в формате mp4, mov, webm или m4v.",
             reply_markup=get_back_keyboard("back_main"),
         )
         return
@@ -837,7 +837,7 @@ async def analyze_video_prompt(message: Message, state: FSMContext):
             await _safe_edit_or_answer(
                 processing,
                 message,
-                "❌ Не удалось сохранить видео. Попробуйте другой файл.",
+                "❌ Не удалось сохранить видео. Попробуй другой файл.",
                 reply_markup=get_main_menu_button_keyboard(),
             )
             return
@@ -872,7 +872,7 @@ async def analyze_video_prompt(message: Message, state: FSMContext):
 @router.message(ImageAnalyzerStates.waiting_for_video_prompt)
 async def video_prompt_wrong_input(message: Message):
     await message.answer(
-        "Пожалуйста, отправьте короткое видео или видеофайл mp4/mov/webm/m4v.",
+        "Пожалуйста, пришли короткое видео или видеофайл mp4/mov/webm/m4v.",
         reply_markup=get_back_keyboard("back_main"),
     )
 
@@ -880,7 +880,7 @@ async def video_prompt_wrong_input(message: Message):
 @router.message(ImageAnalyzerStates.waiting_for_photo)
 async def photo_prompt_wrong_input(message: Message):
     await message.answer(
-        "Пожалуйста, отправьте фото или голосовой промпт. Можно отправлять их отдельно или сначала голос, затем фото.",
+        "Пожалуйста, пришли фото или голосовой промпт. Можно отправлять их отдельно или сначала голос, затем фото.",
         reply_markup=get_back_keyboard("back_main"),
     )
 
@@ -893,8 +893,8 @@ async def photo_to_prompt_vk_handler(callback: CallbackQuery, state: FSMContext)
 
     text = (
         "📸 Фото→Промпт (бесплатно)\n\n"
-        "Отправьте фото — HappyFox разберёт стиль, композицию, свет и детали и соберёт готовый промпт.\n\n"
-        "Используйте его, если хотите повторить образ или атмосферу кадра. "
+        "Пришли фото — HappyFox разберёт стиль, композицию, свет и детали и соберёт готовый промпт.\n\n"
+        "Используй его, если хотите повторить образ или атмосферу кадра. "
         "Готовый текст можно сразу взять в «Создать фото» или «Создать видео»."
     )
 
@@ -1031,7 +1031,7 @@ async def photo_to_prompt_vk_photo_handler(message: Message, state: FSMContext):
 
         if not photo_url:
             await processing.edit_text(
-                "❌ Не удалось сохранить фото. Попробуйте другое изображение.",
+                "❌ Не удалось сохранить фото. Попробуй другое изображение.",
                 reply_markup=get_main_menu_button_keyboard(),
             )
             await state.clear()
@@ -1047,7 +1047,7 @@ async def photo_to_prompt_vk_photo_handler(message: Message, state: FSMContext):
         await message.answer(
             f"✅ Готовый промпт:\n\n<code>{html.escape(prompt)}</code>\n\n"
             "Как использовать: скопируйте текст и вставьте его в «Создать фото» или «Создать видео». "
-            "При необходимости добавьте свои правки: формат, настроение, цвет, действие.",
+            "При необходимости добавь свои правки: формат, настроение, цвет, действие.",
             reply_markup=get_main_menu_button_keyboard(),
             parse_mode="HTML",
         )
@@ -1057,7 +1057,7 @@ async def photo_to_prompt_vk_photo_handler(message: Message, state: FSMContext):
         await processing.edit_text(
             f"⚠️ Не удалось разобрать фото через APIYI.\n\n"
             f"{html.escape(str(e))}\n\n"
-            "Попробуйте ещё раз. Если ошибка повторится, можно использовать «📸 Промпт по фото» (GPT-5.5).",
+            "Попробуй ещё раз. Если ошибка повторится, можно использовать «📸 Промпт по фото» (GPT-5.5).",
             reply_markup=get_back_keyboard("back_main"),
             parse_mode="HTML",
         )
