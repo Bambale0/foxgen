@@ -638,7 +638,7 @@ async def topup_enter_promo(callback: types.CallbackQuery, state: FSMContext):
     await state.set_state(PaymentStates.waiting_promo_code)
     await callback.message.edit_text(
         "🎟 <b>Промокод</b>\n\n"
-        "Отправьте промокод одним сообщением. Он многоразовый: после ввода можно "
+        "Пришли промокод одним сообщением. Он многоразовый: после ввода можно "
         "пополнять баланс с этим кодом снова.\n\n"
         "<b>Бонусы:</b>\n"
         f"{_build_promo_rules_text()}",
@@ -662,7 +662,7 @@ async def topup_process_promo(message: types.Message, state: FSMContext):
     promo = await get_promo_code_by_code(code, active_only=True)
     if not promo:
         await message.answer(
-            "❌ Промокод не найден или выключен. Проверьте написание и отправьте код ещё раз.",
+            "❌ Промокод не найден или выключен. Проверьте написание и пришли код ещё раз.",
             reply_markup=get_back_keyboard("menu_topup"),
         )
         return
@@ -674,7 +674,7 @@ async def topup_process_promo(message: types.Message, state: FSMContext):
     await message.answer(
         "✅ <b>Промокод применён</b>\n\n"
         f"Код: <code>{promo.code}</code>\n"
-        "Теперь выберите пакет. Бонус добавится автоматически по количеству бананов.\n\n"
+        "Теперь выбери пакет. Бонус добавится автоматически по количеству бананов.\n\n"
         f"{_build_promo_rules_text()}",
         reply_markup=get_payment_packages_keyboard(packages, promo_active=True),
         parse_mode="HTML",
@@ -735,7 +735,7 @@ async def choose_payment_method(callback: types.CallbackQuery, state: FSMContext
     bonus_text = "\n".join(bonus_lines)
     bonus_text = f"\n{bonus_text}" if bonus_text else ""
     await callback.message.edit_text(
-        f"💳 <b>Выберите способ оплаты</b>\n\n"
+        f"💳 <b>Выбери способ оплаты</b>\n\n"
         f"Пакет: <b>{package['name']}</b>\n"
         f"Бананы: <code>{total_credits}</code>🍌\n"
         f"Сумма: <code>{package['price_rub']}</code>₽ / <code>{stars_amount}</code>⭐"
@@ -779,7 +779,7 @@ async def initiate_payment(callback: types.CallbackQuery, state: FSMContext):
 
     if provider == "yookassa" and not yookassa_service.enabled:
         await callback.message.edit_text(
-            "YooKassa временно недоступна. Попробуйте другой способ оплаты.",
+            "YooKassa временно недоступна. Попробуй другой способ оплаты.",
             reply_markup=get_back_keyboard("menu_topup"),
             parse_mode="HTML",
         )
@@ -787,7 +787,7 @@ async def initiate_payment(callback: types.CallbackQuery, state: FSMContext):
 
     if provider in ("cryptobot", "cryptopay") and not cryptobot_service.enabled:
         await callback.message.edit_text(
-            "CryptoBot временно недоступен. Попробуйте другой способ оплаты.",
+            "CryptoBot временно недоступен. Попробуй другой способ оплаты.",
             reply_markup=get_back_keyboard("menu_topup"),
             parse_mode="HTML",
         )
@@ -795,7 +795,7 @@ async def initiate_payment(callback: types.CallbackQuery, state: FSMContext):
 
     if provider == TELEGRAM_STARS_PROVIDER and not config.TELEGRAM_STARS_ENABLED:
         await callback.message.edit_text(
-            "Оплата Telegram Stars временно отключена. Попробуйте другой способ оплаты.",
+            "Оплата Telegram Stars временно отключена. Попробуй другой способ оплаты.",
             reply_markup=get_back_keyboard("menu_topup"),
             parse_mode="HTML",
         )
@@ -849,7 +849,7 @@ async def initiate_payment(callback: types.CallbackQuery, state: FSMContext):
         )
         if not created:
             await callback.message.edit_text(
-                "Не удалось создать платёж. Попробуйте выбрать пакет ещё раз.",
+                "Не удалось создать платёж. Попробуй выбрать пакет ещё раз.",
                 reply_markup=get_back_keyboard("menu_topup"),
                 parse_mode="HTML",
             )
@@ -907,7 +907,7 @@ async def initiate_payment(callback: types.CallbackQuery, state: FSMContext):
         if not offer_id:
             await callback.message.edit_text(
                 "Не удалось создать оплату: для пакета не задан Lava offerId.\n"
-                "Добавьте <code>lava_offer_id</code> в <code>data/price.json</code> "
+                "Добавь <code>lava_offer_id</code> в <code>data/price.json</code> "
                 f"или проверьте переменную окружения <code>LAVA_OFFER_ID_{package_id.upper()}</code>.",
                 reply_markup=get_back_keyboard("menu_topup"),
                 parse_mode="HTML",
@@ -1043,7 +1043,7 @@ async def initiate_payment(callback: types.CallbackQuery, state: FSMContext):
         f"• Пакет: <code>{package['name']}</code>\n"
         f"• Бананов: <code>{total_credits}</code>{bonus_text}\n"
         f"• Сумма: <code>{package['price_rub']}</code> ₽\n\n"
-        "Нажмите кнопку ниже и завершите оплату.",
+        "Нажми кнопку ниже и завершите оплату.",
         reply_markup=get_payment_confirmation_keyboard(payment_url, order_id),
         parse_mode="HTML",
     )
