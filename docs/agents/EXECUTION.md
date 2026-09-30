@@ -1,3 +1,21 @@
+# Active: Telegram green buttons + animated custom emoji
+
+Baseline: main/prod `df5ee673aab5a08cd888c4501d7cb47c5433b391`, branch `feat/telegram-green-animated-buttons-20260930`. Production evidence: `foxgen-happyfox-bot` on `archibot-prod` is healthy and runs aiogram 3.31.0; `InlineKeyboardButton` exposes `style` and `icon_custom_emoji_id`.
+
+Fresh audit: the public Telegram text-bot main menu and scenario hubs are built in `bot/keyboards.py`; tests cover their visible layout in `tests/test_happyfox_main_menu.py`. Current buttons use ordinary Unicode emoji and no native Telegram button style. MAX uses a separate button contract and Mini App uses web UI, so Telegram styling is platform-specific; shared generation/billing behavior is unchanged.
+
+Intended outcome: Telegram public text-bot primary navigation uses native `success` styling (green in supporting clients) and a configurable custom-emoji icon so supported Telegram clients can render an animated icon. Preserve callback/web-app routes, existing semantic Unicode emoji fallbacks, layout, prices, balances and business logic. Admin/destructive controls are out of scope. If custom emoji rendering is unavailable for the bot/client, buttons must still function and retain the ordinary emoji/text fallback.
+
+No-hardcode/config: the Telegram custom emoji ID is exposed through configuration with a documented safe default/example; no pricing/provider/business value is introduced. Button color uses Telegram's documented semantic style `success`, not an RGB hardcode.
+
+Test seam: public keyboard factories in `bot/keyboards.py`, asserted through returned `InlineKeyboardMarkup`. TDD: first add assertions for `style` + custom emoji icon on the main/public hubs and dependency floor, then implement the smallest shared helper. Telegram applicability: required. MAX/Mini App: behavior parity N/A for visual styling because their UI stacks do not consume Telegram Bot API button style; regression compatibility still required. Instagram: N/A.
+
+Verification plan: focused keyboard tests, compile/Ruff, relevant Telegram regressions, exact-head CI, two-axis review against main/spec, PR merge, canonical deploy, then production revision/health + real Telegram keyboard smoke if available without mutating user data.
+
+Skills/guides: Bambale0/skills ask-matt + TDD + code-review; Bambale0/claw AGENTS; wondelai clean-code; anthropics frontend-design. Current Telegram Bot API docs were checked for `success` button style and custom emoji button icons.
+
+---
+
 # Active: optional landing gate on unified production origin
 
 Baseline: main d2dcb28a283b84450fc3c23b2eead7bf14d81a48, branch fix/optional-production-landing-20260927.
