@@ -145,3 +145,37 @@ def test_max_creator_flows_share_the_same_direct_voice() -> None:
     assert "🎵 <b>Создать музыку</b>" in _read("bot/max_suno_channel.py")
     assert "🎙 <b>Создать голос</b>" in _read("bot/max_omni_channel.py")
     assert "🐾 <b>Твои лапки</b>" in _read("bot/max_parity_channel.py")
+
+
+
+def test_telegram_public_flows_use_direct_second_person_voice() -> None:
+    paths = (
+        "bot/handlers/common.py",
+        "bot/handlers/payments.py",
+        "bot/handlers/quick_commands.py",
+        "bot/handlers/suno.py",
+        "bot/handlers/support.py",
+        "bot/handlers/image_analyzer.py",
+        "bot/handlers/prompt_analyzer_v2.py",
+        "bot/handlers/video_generation_compat.py",
+        "bot/handlers/seedance_25_preview.py",
+        "bot/handlers/seedance_25_fullstack.py",
+        "bot/handlers/seedance_25_public_release.py",
+        "bot/handlers/seedance_25_telegram_compat.py",
+        "bot/miniapp.py",
+    )
+    combined = "\n".join(_read(path) for path in paths)
+
+    for stale in (
+        "Выберите",
+        "Загрузите",
+        "Отправьте",
+        "Пополните",
+        "Пришлите",
+        "выберите",
+        "загрузите",
+        "отправьте",
+        "пополните",
+        "пришлите",
+    ):
+        assert stale not in combined
