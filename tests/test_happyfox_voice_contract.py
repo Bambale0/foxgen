@@ -106,3 +106,33 @@ def test_miniapp_uses_the_same_action_language_and_channel_neutral_launch_copy()
     combined = "\n".join((photo, video, motion))
     assert "Откройте Mini App через Telegram" not in combined
     assert "Открой HappyFox из Telegram или MAX" in combined
+
+
+
+def test_max_creator_flows_share_the_same_direct_voice() -> None:
+    paths = (
+        "bot/max_channel.py",
+        "bot/max_creator_channel.py",
+        "bot/max_creation_parity.py",
+        "bot/max_suno_channel.py",
+        "bot/max_omni_channel.py",
+        "bot/max_parity_channel.py",
+    )
+    combined = "\n".join(_read(path) for path in paths)
+
+    for stale in (
+        "Выберите",
+        "Загрузите",
+        "Отправьте",
+        "Попробуйте",
+        "Пополните",
+        "Создавайте",
+        "🍌 Баланс",
+        "3🍌",
+    ):
+        assert stale not in combined
+
+    assert "🎯 <b>Повторить движение</b>" in _read("bot/max_creator_channel.py")
+    assert "🎵 <b>Создать музыку</b>" in _read("bot/max_suno_channel.py")
+    assert "🎙 <b>Создать голос</b>" in _read("bot/max_omni_channel.py")
+    assert "🐾 <b>Твои лапки</b>" in _read("bot/max_parity_channel.py")
