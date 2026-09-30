@@ -71,40 +71,40 @@ def main_menu(
     rows: list[list[dict[str, Any]]] = []
     if mini_app_url:
         rows.append(
-            [open_app_button("🚀 Открыть Mini App", web_app=mini_app_bot_name)]
+            [open_app_button("🚀 Открыть HappyFox", web_app=mini_app_bot_name)]
         )
 
     video_prompt_price = _service_price(catalog, "video_prompt", default=3)
     rows.extend(
         [
             [
-                callback_button("🖼 Создать фото", "max:create_image"),
-                callback_button("🎬 Создать видео", "max:create_video"),
+                callback_button("🖼 Сделать фото", "max:create_image"),
+                callback_button("🎬 Собрать видео", "max:create_video"),
             ],
             [
-                callback_button("🎯 Motion Control", "max:motion_control"),
-                callback_button("✍️ Промпт по описанию", "max:photo_prompt"),
+                callback_button("🎯 Повторить движение", "max:motion_control"),
+                callback_button("✍️ Разобрать фото", "max:photo_prompt"),
             ],
             [
                 callback_button(
-                    f"🎞 Промпт по видео • {_format_amount(video_prompt_price)}🍌",
+                    f"🎞 Разобрать видео • {_format_amount(video_prompt_price)}🐾",
                     "max:video_prompt",
                 ),
-                callback_button("🤖 AI-помощник", "max:assistant"),
+                callback_button("🤖 Помочь с идеей", "max:assistant"),
             ],
             [
-                callback_button("📚 Библиотека промптов", "max:prompts"),
+                callback_button("📚 Готовые идеи", "max:prompts"),
                 callback_button("🖼 Лента", "max:feed"),
             ],
             [
                 callback_button(
-                    f"🍌 Баланс: {_format_amount(balance)}",
+                    f"🐾 Баланс: {_format_amount(balance)}",
                     "max:balance",
                 ),
-                callback_button("💬 Поддержка", "max:support"),
+                callback_button("💬 Нужна помощь", "max:support"),
             ],
             [
-                callback_button("🤝 Партнёрам", "max:partners"),
+                callback_button("🤝 Партнёрка", "max:partners"),
                 callback_button("⋯ Ещё", "max:more"),
             ],
         ]
@@ -118,11 +118,11 @@ def more_menu() -> list[dict[str, Any]]:
         inline_keyboard(
             [
                 [
-                    callback_button("❓ Как пользоваться", "max:help"),
+                    callback_button("❓ Как это работает", "max:help"),
                     callback_button("💬 Поддержка", "max:support"),
                 ],
-                [callback_button("💰 Пополнить", "max:topup")],
-                [callback_button("🏠 Главное меню", "max:home")],
+                [callback_button("🐾 Добавить лапки", "max:topup")],
+                [callback_button("🏠 На главную", "max:home")],
             ]
         )
     ]
@@ -136,12 +136,12 @@ def image_model_menu(
         label = IMAGE_LABELS.get(model, model)
         buttons.append(
             callback_button(
-                f"{label} • {_format_amount(cost)}🍌",
+                f"{label} • {_format_amount(cost)}🐾",
                 f"max:image:{model}",
             )
         )
     rows = [[button] for button in buttons]
-    rows.append([callback_button("🏠 Главное меню", "max:home")])
+    rows.append([callback_button("🏠 На главную", "max:home")])
     return [inline_keyboard(rows)]
 
 
@@ -172,7 +172,7 @@ def video_model_selection_menu(
                 quality=pricing_quality,
             )
             per_second = cost / max(duration, 1)
-            price_label = f"{_format_amount(per_second)}🍌/с"
+            price_label = f"{_format_amount(per_second)}🐾/с"
         except (KeyError, TypeError, ValueError, RuntimeError):
             price_label = "🍌"
         rows.append(
@@ -183,7 +183,7 @@ def video_model_selection_menu(
                 )
             ]
         )
-    rows.append([callback_button("🏠 Главное меню", "max:home")])
+    rows.append([callback_button("🏠 На главную", "max:home")])
     return [inline_keyboard(rows)]
 
 
@@ -202,8 +202,8 @@ def video_type_menu(
         for generation_type in supported
     ]
     rows = _rows(buttons, width=3)
-    rows.append([callback_button("🤖 Сменить модель", "max:create_video")])
-    rows.append([callback_button("🏠 Главное меню", "max:home")])
+    rows.append([callback_button("↩️ Сменить модель", "max:create_video")])
+    rows.append([callback_button("🏠 На главную", "max:home")])
     return [inline_keyboard(rows)]
 
 
@@ -220,9 +220,9 @@ def _video_price_label(
     )
     try:
         cost = catalog.video_cost(model, duration=duration, quality=quality)
-        return f"от {_format_amount(cost)}🍌"
+        return f"от {_format_amount(cost)}🐾"
     except (KeyError, TypeError, ValueError, RuntimeError):
-        return "🍌"
+        return "🐾"
 
 
 def video_model_menu(
@@ -240,8 +240,8 @@ def video_model_menu(
             )
         )
     rows = [[button] for button in buttons]
-    rows.append([callback_button("🤖 Сменить модель", "max:create_video")])
-    rows.append([callback_button("🏠 Главное меню", "max:home")])
+    rows.append([callback_button("↩️ Сменить модель", "max:create_video")])
+    rows.append([callback_button("🏠 На главную", "max:home")])
     return [inline_keyboard(rows)]
 
 
@@ -254,13 +254,13 @@ def topup_menu(
         rows.append(
             [
                 callback_button(
-                    f"{package['name']}: {package['credits']}🍌 за "
+                    f"{package['name']}: {package['credits']}🐾 за "
                     f"{package['price_rub']}₽{popular}",
                     f"max:package:{package['id']}",
                 )
             ]
         )
-    rows.append([callback_button("🏠 Главное меню", "max:home")])
+    rows.append([callback_button("🏠 На главную", "max:home")])
     return [inline_keyboard(rows)]
 
 
@@ -269,14 +269,14 @@ def generation_confirm_menu() -> list[dict[str, Any]]:
         inline_keyboard(
             [
                 [
-                    callback_button("✅ Подтвердить", "max:generate"),
-                    callback_button("❌ Отмена", "max:cancel"),
+                    callback_button("✨ Запустить", "max:generate"),
+                    callback_button("↩️ Отмена", "max:cancel"),
                 ],
-                [callback_button("🏠 Главное меню", "max:home")],
+                [callback_button("🏠 На главную", "max:home")],
             ]
         )
     ]
 
 
 def back_home_menu() -> list[dict[str, Any]]:
-    return [inline_keyboard([[callback_button("🏠 Главное меню", "max:home")]])]
+    return [inline_keyboard([[callback_button("🏠 На главную", "max:home")]])]
