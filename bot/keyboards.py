@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+from functools import lru_cache
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from aiogram import types
@@ -20,15 +21,8 @@ logger = logging.getLogger(__name__)
 TELEGRAM_MENU_EMOJI_IDS_ENV = "HAPPYFOX_TELEGRAM_MENU_EMOJI_IDS"
 
 
-def _telegram_menu_emoji_ids() -> dict[str, str]:
-    """Return validated custom-emoji IDs for the Telegram main menu.
-
-    Telegram custom emoji document IDs cannot be derived from Unicode emoji,
-    so operations may provide a JSON object through the runtime environment,
-    for example {"photo": "123456789"}. Invalid configuration safely falls
-    back to the ordinary Unicode icon already used by the menu.
-    """
-    raw = str(os.getenv(TELEGRAM_MENU_EMOJI_IDS_ENV, "")).strip()
+@lru_cache(maxsize=8)
+def _parse_telegram_menu_emoji_ids(raw: str) -> dict[str, str]:
     if not raw:
         return {}
     try:
@@ -52,6 +46,18 @@ def _telegram_menu_emoji_ids() -> dict[str, str]:
         if emoji_id.isdigit():
             result[str(key)] = emoji_id
     return result
+
+
+def _telegram_menu_emoji_ids() -> dict[str, str]:
+    """Return validated custom-emoji IDs for the Telegram main menu.
+
+    Telegram custom emoji document IDs cannot be derived from Unicode emoji,
+    so operations may provide a JSON object through the runtime environment,
+    for example {"photo": "123456789"}. Invalid configuration safely falls
+    back to the ordinary Unicode icon already used by the menu.
+    """
+    raw = str(os.getenv(TELEGRAM_MENU_EMOJI_IDS_ENV, "")).strip()
+    return _parse_telegram_menu_emoji_ids(raw)
 
 
 def _telegram_main_menu_button(
