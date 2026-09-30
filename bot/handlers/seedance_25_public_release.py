@@ -153,10 +153,10 @@ async def _public_show_screen(target, state: FSMContext, *, edit: bool = True) -
     is_admin = bool(user_id and config.is_admin(int(user_id)))
 
     if scenario == "first_frame":
-        media_hint = f"Загрузите <b>1 фото</b> как первый кадр. Сейчас: {'✅' if first else '—'}"
+        media_hint = f"Загрузи <b>1 фото</b> как первый кадр. Сейчас: {'✅' if first else '—'}"
     elif scenario == "first_last":
         media_hint = (
-            "Загрузите последовательно <b>2 фото</b>: первый и последний кадры. "
+            "Загрузи последовательно <b>2 фото</b>: первый и последний кадры. "
             f"Сейчас: первый {'✅' if first else '—'}, последний {'✅' if last else '—'}"
         )
     elif scenario == "multimodal":
@@ -166,7 +166,7 @@ async def _public_show_screen(target, state: FSMContext, *, edit: bool = True) -
             f"аудио <code>{audios}/10</code>. Видео суммарно ≤30с."
         )
     else:
-        media_hint = "Медиа не требуется — отправьте текстовый промпт."
+        media_hint = "Медиа не требуется — пришли текстовый промпт."
 
     billing_line = (
         f"💰 Цена: <code>{quote}</code>🍌. Для администратора списание отключено."
@@ -174,7 +174,7 @@ async def _public_show_screen(target, state: FSMContext, *, edit: bool = True) -
         else f"💰 Цена: <code>{quote}</code>🍌 — будет списана при запуске."
     )
     auto_note = (
-        "\n⚠️ Auto сейчас доступен только администратору: для пользователей выберите 4–30с."
+        "\n⚠️ Auto сейчас доступен только администратору: для пользователей выбери 4–30с."
         if duration == -1 and not is_admin
         else ""
     )
@@ -192,7 +192,7 @@ async def _public_show_screen(target, state: FSMContext, *, edit: bool = True) -
         f"{media_hint}\n\n"
         "🎥 Движение камеры и lock объектива задавайте прямо в промпте.\n\n"
         f"{billing_line}{auto_note}\n\n"
-        "После настройки отправьте промпт до 5000 символов."
+        "После настройки пришли промпт до 5000 символов."
     )
     markup = preview_module._seedance_25_keyboard(data)
 
@@ -239,15 +239,15 @@ async def _validate_public_payload(payload: dict[str, Any], *, is_admin: bool) -
     if scenario == "text" and not payload["prompt"]:
         raise ValueError("Для Text-to-Video нужен промпт")
     if scenario in {"first_frame", "first_last"} and not payload["first_frame"]:
-        raise ValueError("Сначала загрузите первый кадр")
+        raise ValueError("Сначала загрузи первый кадр")
     if scenario == "first_last" and not payload["last_frame"]:
         raise ValueError("Для этого режима нужен последний кадр")
     if scenario == "multimodal" and not (
         payload["image_urls"] or payload["video_urls"] or payload["audio_urls"]
     ):
-        raise ValueError("Добавьте хотя бы один мультимодальный референс")
+        raise ValueError("Добавь хотя бы один мультимодальный референс")
     if payload["duration"] == -1 and not is_admin:
-        raise ValueError("Auto-длительность пока доступна только администратору; выберите 4–30 секунд")
+        raise ValueError("Auto-длительность пока доступна только администратору; выбери 4–30 секунд")
     await fullstack._validate_seedance_sources(
         first_frame_url=payload["first_frame"],
         last_frame_url=payload["last_frame"],
