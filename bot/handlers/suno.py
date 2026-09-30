@@ -151,7 +151,7 @@ async def suno_generation_mode(callback: types.CallbackQuery, state: FSMContext)
     await callback.answer()
     if callback.message:
         await callback.message.edit_text(
-            "🧠 <b>Выберите версию Suno</b>",
+            "🧠 <b>Выбери версию Suno</b>",
             reply_markup=await _model_keyboard("generate_custom" if custom else "generate"),
             parse_mode="HTML",
         )
@@ -176,7 +176,7 @@ async def suno_model(callback: types.CallbackQuery, state: FSMContext) -> None:
         if bool(data.get("custom_mode")):
             await state.set_state(SunoStates.waiting_custom)
             text = (
-                "🎚 <b>Custom Suno</b>\n\nПришлите одним сообщением:\n"
+                "🎚 <b>Custom Suno</b>\n\nПришли одним сообщением:\n"
                 "1-я строка — название\n"
                 "2-я строка — стиль\n"
                 "с 3-й строки — ваш текст песни.\n\n"
@@ -190,7 +190,7 @@ async def suno_model(callback: types.CallbackQuery, state: FSMContext) -> None:
     if operation in _UPLOAD_OPERATIONS:
         await state.set_state(SunoStates.waiting_audio)
         await callback.message.edit_text(
-            "🎧 Пришлите аудио как Telegram-аудио или файл. Можно также отправить публичную HTTPS-ссылку.",
+            "🎧 Пришли аудио как Telegram-аудио или файл. Можно также отправить публичную HTTPS-ссылку.",
             reply_markup=_home_keyboard(),
             parse_mode="HTML",
         )
@@ -207,7 +207,7 @@ async def _enqueue_and_reply(message: types.Message, state: FSMContext, operatio
         )
     except ValueError as exc:
         if "insufficient_balance" in str(exc):
-            await message.answer("🍌 Баланса не хватает для этой Suno-задачи. Пополните баланс и повторите запуск.")
+            await message.answer("🍌 Баланса не хватает для этой Suno-задачи. Пополни баланс и повторите запуск.")
         else:
             await message.answer(f"Не удалось запустить Suno: {html.escape(str(exc)[:300])}", parse_mode="HTML")
         return
@@ -226,7 +226,7 @@ async def _enqueue_and_reply(message: types.Message, state: FSMContext, operatio
 async def suno_simple_prompt(message: types.Message, state: FSMContext) -> None:
     prompt = str(message.text or "").strip()
     if not prompt:
-        await message.answer("Пришлите описание трека текстом.")
+        await message.answer("Пришли описание трека текстом.")
         return
     data = await state.get_data()
     model = str(data.get("model") or "V5_5")
@@ -255,7 +255,7 @@ async def suno_custom_prompt(message: types.Message, state: FSMContext) -> None:
     instrumental = bool(data.get("instrumental"))
     lyrics = "\n".join(lines[2:]).strip()
     if not instrumental and not lyrics:
-        await message.answer("Для Custom с вокалом добавьте текст песни с третьей строки.")
+        await message.answer("Для Custom с вокалом добавь текст песни с третьей строки.")
         return
     model = str(data.get("model") or "V5_5")
     request: dict[str, Any] = {
@@ -291,7 +291,7 @@ async def suno_generic_text(message: types.Message, state: FSMContext) -> None:
         return
     prompt = str(message.text or "").strip()
     if not prompt:
-        await message.answer("Пришлите описание текста.")
+        await message.answer("Пришли описание текста.")
         return
     await _enqueue_and_reply(message, state, "lyrics", {"prompt": prompt[:3000]})
 
@@ -325,7 +325,7 @@ async def suno_upload_operation(callback: types.CallbackQuery, state: FSMContext
     await callback.answer()
     if callback.message:
         await callback.message.edit_text(
-            "🧠 Сначала выберите модель.",
+            "🧠 Сначала выбери модель.",
             reply_markup=await _model_keyboard(operation),
         )
 
@@ -354,7 +354,7 @@ async def suno_audio_input(message: types.Message, state: FSMContext) -> None:
         await message.answer(f"Не удалось загрузить аудио: {html.escape(str(exc)[:300])}", parse_mode="HTML")
         return
     if not url:
-        await message.answer("Пришлите аудио, файл или публичную HTTPS-ссылку.")
+        await message.answer("Пришли аудио, файл или публичную HTTPS-ссылку.")
         return
     await state.update_data(upload_url=url)
     await state.set_state(SunoStates.waiting_audio_params)
@@ -365,9 +365,9 @@ async def suno_audio_input(message: types.Message, state: FSMContext) -> None:
     elif operation == "upload_cover":
         prompt = "Опишите новый стиль кавера."
     elif operation == "add_vocals":
-        prompt = "Пришлите: первая строка — название, вторая — стиль, с третьей — текст вокала."
+        prompt = "Пришли: первая строка — название, вторая — стиль, с третьей — текст вокала."
     else:
-        prompt = "Пришлите: первая строка — название, вторая — стиль инструментала."
+        prompt = "Пришли: первая строка — название, вторая — стиль инструментала."
     await message.answer(prompt)
 
 
@@ -375,7 +375,7 @@ async def suno_audio_input(message: types.Message, state: FSMContext) -> None:
 async def suno_audio_params(message: types.Message, state: FSMContext) -> None:
     text = str(message.text or "").strip()
     if not text:
-        await message.answer("Добавьте параметры текстом.")
+        await message.answer("Добавь параметры текстом.")
         return
     data = await state.get_data()
     operation = str(data.get("operation") or "")
@@ -407,7 +407,7 @@ async def suno_tools(callback: types.CallbackQuery, state: FSMContext) -> None:
     await callback.answer()
     if callback.message:
         await callback.message.edit_text(
-            "🧰 <b>Suno Tools</b>\n\nДля инструментов по готовому треку можно использовать кнопки под результатом. Либо пришлите Task ID и Audio ID вручную.",
+            "🧰 <b>Suno Tools</b>\n\nДля инструментов по готовому треку можно использовать кнопки под результатом. Либо пришли Task ID и Audio ID вручную.",
             reply_markup=_kb(
                 [
                     [InlineKeyboardButton(text="🎚 Вокал / инструментал", callback_data="suno:ids:separate_vocal")],
@@ -432,7 +432,7 @@ async def suno_ids(callback: types.CallbackQuery, state: FSMContext) -> None:
     await state.set_state(SunoStates.waiting_id_pair)
     await callback.answer()
     if callback.message:
-        await callback.message.edit_text("Пришлите одной строкой: <code>TaskID AudioID</code>", reply_markup=_home_keyboard(), parse_mode="HTML")
+        await callback.message.edit_text("Пришли одной строкой: <code>TaskID AudioID</code>", reply_markup=_home_keyboard(), parse_mode="HTML")
 
 
 @router.message(SunoStates.waiting_id_pair)
@@ -492,7 +492,7 @@ async def suno_voice_generate(callback: types.CallbackQuery, state: FSMContext) 
     await callback.answer()
     if callback.message:
         await callback.message.edit_text(
-            "🎙 Пришлите запись проверочной фразы как аудио/файл. В подписи укажите имя будущего голоса.",
+            "🎙 Пришли запись проверочной фразы как аудио/файл. В подписи укажите имя будущего голоса.",
             reply_markup=_home_keyboard(),
         )
 
@@ -505,7 +505,7 @@ async def suno_voice_audio(message: types.Message, state: FSMContext) -> None:
         await message.answer(f"Не удалось загрузить запись: {html.escape(str(exc)[:300])}", parse_mode="HTML")
         return
     if not url:
-        await message.answer("Пришлите запись как аудио или файл.")
+        await message.answer("Пришли запись как аудио или файл.")
         return
     name = str(message.caption or "My Voice").strip()[:80]
     await _enqueue_and_reply(message, state, "voice_generate", {"uploadUrl": url, "name": name})
@@ -542,7 +542,7 @@ async def suno_from_result(callback: types.CallbackQuery, state: FSMContext) -> 
         await state.update_data(source_task_id=source.provider_task_id, source_audio_id=audio_id)
         await callback.answer()
         if callback.message:
-            await callback.message.answer("🎭 Пришлите 3 строки: имя Persona, описание, стиль.")
+            await callback.message.answer("🎭 Пришли 3 строки: имя Persona, описание, стиль.")
         return
     try:
         job = await enqueue_suno_job("telegram", callback.from_user.id, operation=operation, request_data=request, model=model)
