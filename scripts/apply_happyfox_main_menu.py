@@ -93,6 +93,8 @@ NEW_MAIN_MENU = '''def get_main_menu_keyboard(user_credits: int = 0, telegram_id
     return _apply_public_telegram_button_theme(builder.as_markup())
 '''
 
+BRANDED_NEW_MAIN_MENU = NEW_MAIN_MENU.replace("🍌 Баланс", "🐾 Баланс")
+
 OLD_MORE_MENU = '''def get_more_menu_keyboard():
     builder = InlineKeyboardBuilder()
     builder.button(text="❓ Как пользоваться", callback_data="menu_help")
@@ -190,12 +192,13 @@ def _patch_keyboards() -> None:
     text = KEYBOARDS_PATH.read_text(encoding="utf-8")
     if "def _apply_public_telegram_button_theme(" not in text:
         raise RuntimeError("HappyFox Telegram button theme helper is missing")
-    text = _replace_once_or_verify(
-        text,
-        OLD_MAIN_MENU,
-        NEW_MAIN_MENU,
-        context="HappyFox main menu",
-    )
+    if BRANDED_NEW_MAIN_MENU not in text:
+        text = _replace_once_or_verify(
+            text,
+            OLD_MAIN_MENU,
+            NEW_MAIN_MENU,
+            context="HappyFox main menu",
+        )
     text = _replace_once_or_verify(
         text,
         OLD_MORE_MENU,
