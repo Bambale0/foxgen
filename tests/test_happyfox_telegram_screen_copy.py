@@ -9,16 +9,16 @@ def _read(path: str) -> str:
 
 def test_telegram_primary_screens_use_current_happyfox_copy() -> None:
     common = _read("bot/handlers/common.py")
-    assert "Создавайте фото, видео, озвучку и музыку с AI." in common
-    assert "Можно начать с идеи или загрузить готовый файл." in common
-    assert "<i>Выберите действие ниже 👇</i>" in common
-    assert "🐾 <b>Баланс:</b>" in common
-    assert "Что создаём? Выберите результат" in common
-    assert "🐾 <b>Баланс HappyFox</b>" in common
-    assert (
-        "Опишите проблему одним сообщением. AI-поддержка попробует решить её сразу."
-        in common
-    )
+    assert "Создавай то, что нужно прямо сейчас" in common
+    assert "<b>Сделать фото</b>" in common
+    assert "<b>Собрать видео</b>" in common
+    assert "<b>Оживить персонажа</b>" in common
+    assert "<b>Создать музыку</b>" in common
+    assert "<b>Повторить движение</b>" in common
+    assert "<b>Разобрать идею</b>" in common
+    assert "Выбирай, что создаём" in common
+    assert "🐾 <b>Твои лапки</b>" in common
+    assert "💬 <b>Что случилось?</b>" in common
     assert "🤖 <b>HappyFox:</b>" in common
 
 
@@ -26,10 +26,11 @@ def test_telegram_primary_screens_drop_stale_copy() -> None:
     common = _read("bot/handlers/common.py")
     stale = (
         "Создавайте фото, видео и анимацию по описанию или референсам.",
+        "Создавайте фото, видео, озвучку и музыку с AI.",
         "Скажите, что хотите получить: изображение, ролик, озвучку или музыку.",
+        "Выберите действие ниже",
         "<b>Быстрый старт</b>",
         "🖼 Фото — создать с нуля или изменить по референсу",
-        "🎁 <b>Новым пользователям",
         "Реферальный бонус не начислен",
         "Если вы ещё не нажимали «Запустить»",
         "💎 <b>Баланс и статистика</b>",
@@ -50,11 +51,11 @@ def test_referral_status_copy_is_short_and_does_not_claim_extra_welcome_credit()
 def test_telegram_partner_and_payment_screens_are_current() -> None:
     partner = _read("bot/partner_copy.py")
     payments = _read("bot/handlers/payments.py")
-    assert "🤝 <b>Партнёрская программа</b>" in partner
-    assert "<b>Ваше вознаграждение</b>" in partner
+    assert "🤝 <b>Зарабатывай с HappyFox</b>" in partner
+    assert "<b>Как начисляется</b>" in partner
     assert "Это практическое руководство по участию" not in partner
     assert (
-        "Выберите пакет лапок. Итоговую сумму увидите до перехода к оплате." in payments
+        "Выбери пакет — сумму увидишь до перехода к оплате." in payments
     )
     assert "Выберите пакет бананов ниже." not in payments
 
