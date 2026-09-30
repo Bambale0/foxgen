@@ -84,6 +84,7 @@ from bot.services.callback_ack import (
     EarlyCallbackAckMiddleware,
     install_early_callback_ack_session_middleware,
 )
+from bot.services.telegram_button_theme import install_telegram_button_theme
 from bot.services.telegram_rich_message import RichMessageNormalizerMiddleware
 from bot.services.telegram_telemetry import (
     TelegramResolvedHandlerTelemetryMiddleware,
@@ -4801,6 +4802,7 @@ async def main():
     # Register ACK reuse first so duplicate legacy callback.answer() calls are
     # intercepted before request telemetry and never hit Telegram twice.
     install_early_callback_ack_session_middleware(bot)
+    install_telegram_button_theme(bot)
     install_telegram_bot_api_telemetry(bot)
 
     try:
