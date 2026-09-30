@@ -77,37 +77,37 @@ def get_main_menu_keyboard(user_credits: int = 0, telegram_id: int | None = None
     if config.mini_app_url:
         builder.row(
             InlineKeyboardButton(
-                text="🚀 Mini App",
+                text="🚀 Открыть HappyFox",
                 web_app=WebAppInfo(url=_mini_app_url_with_referral(mini_app_referral_code) or config.mini_app_url),
             )
         )
 
     builder.row(
-        InlineKeyboardButton(text="🖼 Создать фото", callback_data="create_image_text_new"),
-        InlineKeyboardButton(text="🎙 Создать озвучку", callback_data="omni_mode_audio"),
+        InlineKeyboardButton(text="🖼 Сделать фото", callback_data="create_image_text_new"),
+        InlineKeyboardButton(text="🎙 Оживить персонажа", callback_data="omni_mode_audio"),
     )
     builder.row(
-        InlineKeyboardButton(text="🎬 Создать видео", callback_data="create_video_new"),
-        InlineKeyboardButton(text="🎵 Создать музыку · Suno", callback_data="happyfox_music"),
+        InlineKeyboardButton(text="🎬 Собрать видео", callback_data="create_video_new"),
+        InlineKeyboardButton(text="🎵 Создать музыку", callback_data="happyfox_music"),
     )
     builder.row(
-        InlineKeyboardButton(text="🎯 Motion Control", callback_data="motion_control"),
-        InlineKeyboardButton(text="✨ Промпты", callback_data="menu_prompts"),
+        InlineKeyboardButton(text="🎯 Повторить движение", callback_data="motion_control"),
+        InlineKeyboardButton(text="✨ Разобрать идею", callback_data="menu_prompts"),
     )
     builder.row(
         InlineKeyboardButton(text="🔷 Gemini Omni", callback_data="v_model_gemini_omni"),
-        InlineKeyboardButton(text="🤖 AI-помощник", callback_data="menu_ai_assistant"),
+        InlineKeyboardButton(text="🤖 Помочь с идеей", callback_data="menu_ai_assistant"),
     )
     builder.row(
-        InlineKeyboardButton(text="🔗 Ссылки на работы", callback_data="menu_feed"),
-        InlineKeyboardButton(text="💬 Поддержка", callback_data="menu_support"),
+        InlineKeyboardButton(text="🔗 Мои результаты", callback_data="menu_feed"),
+        InlineKeyboardButton(text="💬 Нужна помощь", callback_data="menu_support"),
     )
     builder.row(
-        InlineKeyboardButton(text=f"🍌 Баланс: {user_credits}", callback_data="menu_balance"),
-        InlineKeyboardButton(text="🤝 Партнёры", callback_data="menu_partner"),
+        InlineKeyboardButton(text=f"🐾 {user_credits} лапок", callback_data="menu_balance"),
+        InlineKeyboardButton(text="🤝 Партнёрка", callback_data="menu_partner"),
     )
     builder.row(
-        InlineKeyboardButton(text="💳 Тарифы", callback_data="menu_topup")
+        InlineKeyboardButton(text="💳 Добавить лапки", callback_data="menu_topup")
     )
 
     return builder.as_markup()
