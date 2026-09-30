@@ -1,7 +1,12 @@
 from pathlib import Path
 
 from bot.config import config
-from bot.keyboards import get_main_menu_keyboard, get_more_menu_keyboard
+from bot.keyboards import (
+    get_ai_assistant_keyboard,
+    get_confirm_keyboard,
+    get_main_menu_keyboard,
+    get_more_menu_keyboard,
+)
 
 
 def _texts(markup):
@@ -100,3 +105,18 @@ def test_telegram_system_menu_exposes_quick_commands():
     assert "await bot.set_my_commands(" in main_text
     for command in ("photo", "video", "music", "motion", "feed", "trends", "balance", "start"):
         assert f'BotCommand(command="{command}"' in main_text
+
+
+def test_text_bot_action_keyboards_are_green_and_destructive_actions_are_danger():
+    assistant = get_ai_assistant_keyboard(telegram_id=None)
+    assistant_buttons = _buttons(assistant)
+
+    assert assistant_buttons
+    assert {button.style for button in assistant_buttons} == {"success"}
+
+    confirm = get_confirm_keyboard("confirm_action", "cancel_action")
+    by_text = {button.text: button.style for button in _buttons(confirm)}
+
+    assert by_text["✅ Подтвердить"] == "success"
+    assert by_text["❌ Отмена"] == "danger"
+    assert by_text["🏠 Главное меню"] == "success"
