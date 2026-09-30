@@ -17,32 +17,32 @@ const primaryServices = [
   {
     id: 'prompt-by-photo',
     icon: Wand2,
-    title: 'Промпт по фото',
-    description: 'Загрузите фото — получите готовый промпт, который передаст стиль и детали.',
+    title: 'Разобрать фото',
+    description: 'Пришли кадр — получишь промпт с его стилем и деталями.',
     badge: '1 ₽ · 0,1 🐾',
     tone: 'gold',
   },
   {
     id: 'avatar',
     icon: Mic2,
-    title: 'Говорящий аватар',
-    description: 'Загрузите фото и аудио — персонаж заговорит и оживёт в кадре.',
+    title: 'Оживить персонажа',
+    description: 'Фото + голос — персонаж заговорит и оживёт в кадре.',
     badge: 'Фото + аудио',
     tone: 'cyan',
   },
   {
     id: 'edit-photo',
     icon: Pencil,
-    title: 'Изменить фото',
-    description: 'Загрузите исходник и напишите, что изменить: фон, стиль, одежду или детали.',
+    title: 'Изменить кадр',
+    description: 'Покажи исходник и скажи, что поменять: фон, стиль, одежду или детали.',
     badge: 'Правки',
     tone: 'cyan',
   },
   {
     id: 'animate',
     icon: Play,
-    title: 'Оживить фото',
-    description: 'Превратите изображение в короткое видео с нужным движением и камерой.',
+    title: 'Добавить движение',
+    description: 'Преврати изображение в ролик с нужным движением и камерой.',
     badge: 'Анимация',
     tone: 'success',
   },
@@ -52,20 +52,20 @@ const secondaryServices = [
   {
     id: 'support',
     icon: HeadphonesIcon,
-    title: 'Поддержка',
-    description: 'Поможем с генерацией, оплатой или результатом.',
+    title: 'Нужна помощь',
+    description: 'Опиши проблему — разберёмся с генерацией, оплатой или результатом.',
   },
   {
     id: 'partners',
     icon: Users,
-    title: 'Партнёрам',
-    description: 'Приглашайте пользователей и получайте вознаграждение.',
+    title: 'Партнёрка',
+    description: 'Делись ссылкой и получай вознаграждение с покупок приглашённых.',
   },
   {
     id: 'more',
     icon: MoreHorizontal,
     title: 'Ещё',
-    description: 'История, настройки и дополнительные возможности.',
+    description: 'История, настройки и всё, что не нужно держать на главном экране.',
   },
 ]
 
@@ -90,20 +90,20 @@ export function ServiceGrid({ activeServiceId, onServiceClick }: ServiceGridProp
 
         <div className="relative">
           <p className="text-[11px] uppercase tracking-[0.18em] text-gold">
-            Инструменты
+            Ещё возможности
           </p>
           <h2 className="mt-2 font-serif text-2xl font-semibold text-foreground">
-            Сервисы
+            Что хочешь сделать?
           </h2>
           <p className="mt-2 text-sm leading-6 text-muted-foreground">
-            Выберите задачу — подготовим промпт, изменим фото, оживим кадр или поможем разобраться.
+            Можно разобрать референс, изменить кадр, оживить персонажа или быстро решить проблему.
           </p>
         </div>
       </div>
 
       <section className="space-y-3">
         <div className="flex items-center justify-between">
-          <h3 className="font-serif text-lg text-foreground">Основные</h3>
+          <h3 className="font-serif text-lg text-foreground">Для результата</h3>
           <span className="text-xs text-muted-foreground">4 сценария</span>
         </div>
 
