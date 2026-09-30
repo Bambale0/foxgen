@@ -409,7 +409,7 @@ class MaxChannelService:
             {"kind": "image", "model": model},
         )
         reference_note = (
-            " Для этой модели обязательно приложите изображение-референс."
+            " Для этой модели обязательно приложи изображение-референс."
             if model in _IMAGE_REFERENCE_REQUIRED
             else " Можно приложить изображение-референс в том же сообщении."
         )
@@ -666,7 +666,7 @@ class MaxChannelService:
             await clear_max_session(user_id)
             await self._respond(
                 user_id,
-                "🎬 <b>Создать видео</b>\n\nСначала выберите сценарий.",
+                "🎬 <b>Создать видео</b>\n\nСначала выбери сценарий.",
                 attachments=video_type_menu(),
                 callback_id=callback_id,
             )
