@@ -1,7 +1,13 @@
 from pathlib import Path
 
 from bot.config import config
-from bot.keyboards import get_main_menu_keyboard, get_more_menu_keyboard
+from bot.keyboards import (
+    get_animate_hub_keyboard,
+    get_create_hub_keyboard,
+    get_edit_hub_keyboard,
+    get_main_menu_keyboard,
+    get_more_menu_keyboard,
+)
 
 
 def _texts(markup):
@@ -13,6 +19,32 @@ def _callbacks(markup):
         [button.callback_data for button in row]
         for row in markup.inline_keyboard
     ]
+
+
+def _buttons(markup):
+    return [button for row in markup.inline_keyboard for button in row]
+
+
+def test_public_telegram_navigation_uses_green_buttons_and_custom_emoji_icons(monkeypatch):
+    monkeypatch.setattr(config, "MINI_APP_URL", "https://app.happy-fox.online/mini-app/")
+
+    markups = [
+        get_main_menu_keyboard(user_credits=42),
+        get_create_hub_keyboard(),
+        get_edit_hub_keyboard(),
+        get_animate_hub_keyboard(),
+        get_more_menu_keyboard(),
+    ]
+
+    assert config.TELEGRAM_BUTTON_CUSTOM_EMOJI_ID
+    for markup in markups:
+        buttons = _buttons(markup)
+        assert buttons
+        assert all(button.style == "success" for button in buttons)
+        assert all(
+            button.icon_custom_emoji_id == config.TELEGRAM_BUTTON_CUSTOM_EMOJI_ID
+            for button in buttons
+        )
 
 
 def test_happyfox_main_menu_matches_product_layout(monkeypatch):
