@@ -120,7 +120,7 @@ async def prompt_analyzer_handler(callback: CallbackQuery, state: FSMContext) ->
     text = (
         "✨ <b>Анализ и создание промпта</b>\n\n"
         f"Стоимость анализа: <b>{photo_prompt_price_label()}</b>\n\n"
-        "Отправьте одним сообщением:\n"
+        "Пришли одним сообщением:\n"
         "• текстовое описание или просто свои мысли\n"
         "• фотографию\n"
         "• голосовое сообщение\n"
@@ -273,7 +273,7 @@ async def analyze_photo_prompt_v2(message: Message, state: FSMContext) -> None:
                     await _safe_edit_or_answer(
                         processing,
                         message,
-                        "🎙 Голосовое сообщение ещё загружается. Отправьте фото повторно через несколько секунд.",
+                        "🎙 Голосовое сообщение ещё загружается. Пришли фото повторно через несколько секунд.",
                         reply_markup=get_back_keyboard("back_main"),
                         parse_mode="HTML",
                     )
@@ -297,7 +297,7 @@ async def analyze_photo_prompt_v2(message: Message, state: FSMContext) -> None:
             await _safe_edit_or_answer(
                 processing,
                 message,
-                "❌ Не удалось сохранить фото. Попробуйте другое изображение.",
+                "❌ Не удалось сохранить фото. Попробуй другое изображение.",
                 reply_markup=get_main_menu_button_keyboard(),
             )
             return
@@ -396,6 +396,6 @@ async def analyze_text_prompt_v2(message: Message, state: FSMContext) -> None:
 @router.message(ImageAnalyzerStates.waiting_for_photo)
 async def prompt_analyzer_wrong_input(message: Message) -> None:
     await message.answer(
-        "Отправьте текстовое описание, фотографию или голосовое сообщение.",
+        "Пришли текстовое описание, фотографию или голосовое сообщение.",
         reply_markup=get_back_keyboard("back_main"),
     )
