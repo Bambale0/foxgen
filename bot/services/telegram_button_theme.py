@@ -6,7 +6,7 @@ import os
 from functools import lru_cache
 from typing import Any, Awaitable, Callable
 
-from aiogram import Bot, types
+from aiogram import Bot
 from aiogram.client.session.middlewares.base import BaseRequestMiddleware
 from aiogram.methods import TelegramMethod
 from aiogram.methods.base import TelegramType
