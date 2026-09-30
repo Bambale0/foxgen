@@ -51,7 +51,7 @@ def test_public_telegram_navigation_uses_green_buttons_and_custom_emoji_icons(mo
 
     # Icons are semantic, not the same animated glyph repeated on every button.
     assert len({button.icon_custom_emoji_id for button in all_buttons}) >= 10
-    assert all(not button.text[:1] in {"🚀", "🖼", "🎙", "🎬", "🎵", "🎯", "✨", "🔷", "🤖", "🔗", "💬", "🍌", "🤝", "💳", "📱", "🛍", "⚡", "⚙", "🏠", "🎨", "🧩", "🧠", "🎞"} for button in all_buttons)
+    assert all(button.text[:1] not in {"🚀", "🖼", "🎙", "🎬", "🎵", "🎯", "✨", "🔷", "🤖", "🔗", "💬", "🍌", "🤝", "💳", "📱", "🛍", "⚡", "⚙", "🏠", "🎨", "🧩", "🧠", "🎞"} for button in all_buttons)
 
 
 def test_happyfox_main_menu_matches_product_layout(monkeypatch):
