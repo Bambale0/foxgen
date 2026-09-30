@@ -124,14 +124,14 @@ _TELEGRAM_WEBHOOK_SEMAPHORE = asyncio.Semaphore(TELEGRAM_WEBHOOK_CONCURRENCY_LIM
 _NEXUS_POLL_IN_FLIGHT: set[str] = set()
 
 USER_BOT_COMMANDS = [
-    BotCommand(command="photo", description="🖼 Создать фото"),
-    BotCommand(command="video", description="🎬 Создать видео"),
+    BotCommand(command="photo", description="🖼 Сделать фото"),
+    BotCommand(command="video", description="🎬 Собрать видео"),
     BotCommand(command="music", description="🎵 Создать музыку"),
-    BotCommand(command="motion", description="🎯 Motion Control"),
+    BotCommand(command="motion", description="🎯 Повторить движение"),
     BotCommand(command="feed", description="🔥 Лента работ"),
     BotCommand(command="trends", description="🔥 Тренды"),
-    BotCommand(command="balance", description="🐾 Баланс и пополнение"),
-    BotCommand(command="start", description="🏠 Главное меню"),
+    BotCommand(command="balance", description="🐾 Лапки и пополнение"),
+    BotCommand(command="start", description="🏠 HappyFox"),
 ]
 USER_BOT_COMMAND_SCOPES = (
     BotCommandScopeDefault(),
