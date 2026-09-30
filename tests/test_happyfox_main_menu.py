@@ -5,6 +5,7 @@ from bot.keyboards import (
     get_animate_hub_keyboard,
     get_create_hub_keyboard,
     get_edit_hub_keyboard,
+    get_main_menu_button_keyboard,
     get_main_menu_keyboard,
     get_more_menu_keyboard,
 )
@@ -30,6 +31,7 @@ def test_public_telegram_navigation_uses_green_buttons_and_custom_emoji_icons(mo
 
     markups = [
         get_main_menu_keyboard(user_credits=42),
+        get_main_menu_button_keyboard(),
         get_create_hub_keyboard(),
         get_edit_hub_keyboard(),
         get_animate_hub_keyboard(),
