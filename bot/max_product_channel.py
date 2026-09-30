@@ -125,7 +125,7 @@ def _prompt_menu(
         ],
     ]
     if mini_app_url:
-        rows.append([open_app_button("🚀 Библиотека в Mini App", web_app=mini_app_bot_name)])
+        rows.append([open_app_button("🚀 Открыть библиотеку", web_app=mini_app_bot_name)])
     rows.append([callback_button("🏠 На главную", "max:home")])
     return [inline_keyboard(rows)]
 
@@ -273,15 +273,14 @@ class MaxProductChannelService(MaxSeedance25ChannelService):
         await clear_max_session(user_id)
         await self._respond(
             user_id,
-            "❓ <b>Как пользоваться HappyFox в MAX</b>\n\n"
-            "<b>Фото</b> — выберите модель → пришлите prompt и, если нужно, референс → подтвердите запуск.\n\n"
-            "<b>Видео</b> — сначала выберите сценарий (текст / фото / видео), затем модель и отправьте нужные материалы.\n\n"
-            "<b>Motion Control</b> — фото персонажа → видео движения → ориентация → качество → запуск.\n\n"
-            "<b>Озвучка</b> — создайте Gemini Omni Audio ID и используйте его в поддерживаемых сценариях.\n\n"
-            "<b>Suno</b> — создавайте треки, тексты, cover, sounds и обрабатывайте готовое аудио.\n\n"
-            "<b>Промпты</b> — листайте готовые примеры прямо в MAX; полный prompt открывается отдельной кнопкой.\n\n"
-            "<b>AI-помощник</b> — спросите, какую модель и настройки выбрать.\n\n"
-            "Стоимость всегда показывается до запуска, а результат приходит в этот же чат.",
+            "❓ <b>Что хочешь сделать?</b>\n\n"
+            "🖼 <b>Фото</b> — выбери модель, опиши кадр и при желании добавь референс.\n\n"
+            "🎬 <b>Видео</b> — начни с текста, фото или готового ролика.\n\n"
+            "🎯 <b>Движение</b> — пришли персонажа и видео с нужным движением.\n\n"
+            "🎙 <b>Голос</b> — создай голос или говорящего персонажа.\n\n"
+            "🎵 <b>Музыка</b> — собери трек через Suno.\n\n"
+            "✨ <b>Идеи</b> — возьми готовый промпт или расскажи задумку помощнику.\n\n"
+            "Перед запуском всегда увидишь стоимость. Готовый результат придёт в этот же чат.",
             attachments=_assistant_menu(),
             callback_id=callback_id,
         )
@@ -354,7 +353,7 @@ class MaxProductChannelService(MaxSeedance25ChannelService):
         preview = html.escape(_short(prompt.get("prompt_text"), 800))
         await self._respond(
             user_id,
-            f"✨ <b>Промпты · {_prompt_mode_label(mode)}</b> "
+            f"✨ <b>Готовые идеи · {_prompt_mode_label(mode)}</b> "
             f"<code>{index + 1}/{total}</code>\n\n"
             f"<b>{title}</b>\n"
             f"{description}\n\n"
