@@ -26,26 +26,26 @@ export function QuickActionGrid({
 }: QuickActionGridProps) {
   const items = [
     {
-      label: 'Создать фото',
-      description: 'Опишите идею или добавьте референс — получите готовое изображение',
+      label: 'Сделать фото',
+      description: 'Начни с идеи или референса — получишь готовое изображение',
       icon: Image,
       onClick: onPhotoClick,
     },
     {
-      label: 'Создать видео',
-      description: 'Создайте ролик по тексту, фото или видео-референсу',
+      label: 'Собрать видео',
+      description: 'Опиши сцену или добавь фото и ролик — дальше выберем движение',
       icon: Video,
       onClick: onVideoClick,
     },
     {
-      label: 'Оживить фото',
-      description: 'Добавьте движение, мимику и камеру к готовому изображению',
+      label: 'Оживить кадр',
+      description: 'Добавь движение, мимику или работу камеры к изображению',
       icon: Sparkles,
       onClick: onMotionClick || onVideoClick,
     },
     {
-      label: 'AI-помощник',
-      description: 'Поможет с идеей, промптом и выбором подходящей модели',
+      label: 'Помочь с идеей',
+      description: 'Опиши задумку — подберём модель и соберём промпт',
       icon: Bot,
       onClick: onAssistantClick,
     },
