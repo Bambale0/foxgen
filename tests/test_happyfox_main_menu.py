@@ -38,15 +38,18 @@ def test_public_telegram_navigation_uses_green_buttons_and_custom_emoji_icons(mo
         get_more_menu_keyboard(),
     ]
 
-    assert config.TELEGRAM_BUTTON_CUSTOM_EMOJI_ID
+    assert config.TELEGRAM_BUTTON_ANIMATED_ICONS_ENABLED
+    all_buttons = []
     for markup in markups:
         buttons = _buttons(markup)
+        all_buttons.extend(buttons)
         assert buttons
         assert all(button.style == "success" for button in buttons)
-        assert all(
-            button.icon_custom_emoji_id == config.TELEGRAM_BUTTON_CUSTOM_EMOJI_ID
-            for button in buttons
-        )
+        assert all(button.icon_custom_emoji_id for button in buttons)
+
+    # Icons are semantic, not the same animated glyph repeated on every button.
+    assert len({button.icon_custom_emoji_id for button in all_buttons}) >= 10
+    assert all(not button.text[:1] in {"🚀", "🖼", "🎙", "🎬", "🎵", "🎯", "✨", "🔷", "🤖", "🔗", "💬", "🍌", "🤝", "💳", "📱", "🛍", "⚡", "⚙", "🏠", "🎨", "🧩", "🧠", "🎞"} for button in all_buttons)
 
 
 def test_happyfox_main_menu_matches_product_layout(monkeypatch):
@@ -55,14 +58,14 @@ def test_happyfox_main_menu_matches_product_layout(monkeypatch):
     markup = get_main_menu_keyboard(user_credits=42, mini_app_referral_code="FOX42")
 
     assert _texts(markup) == [
-        ["🚀 Mini App"],
-        ["🖼 Создать фото", "🎙 Создать озвучку"],
-        ["🎬 Создать видео", "🎵 Создать музыку · Suno"],
-        ["🎯 Motion Control", "✨ Промпты"],
-        ["🔷 Gemini Omni", "🤖 AI-помощник"],
-        ["🔗 Ссылки на работы", "💬 Поддержка"],
-        ["🐾 Баланс: 42", "🤝 Партнёры"],
-        ["💳 Тарифы"],
+        ["Mini App"],
+        ["Создать фото", "Создать озвучку"],
+        ["Создать видео", "Создать музыку · Suno"],
+        ["Motion Control", "Промпты"],
+        ["Gemini Omni", "AI-помощник"],
+        ["Ссылки на работы", "Поддержка"],
+        ["Баланс: 42", "Партнёры"],
+        ["Тарифы"],
     ]
     assert _callbacks(markup)[1:] == [
         ["create_image_text_new", "omni_mode_audio"],
@@ -84,9 +87,9 @@ def test_other_ai_menu_is_a_three_scenario_hub():
     markup = get_more_menu_keyboard()
 
     assert _texts(markup) == [
-        ["🎬 Видео", "🖼 Фото"],
-        ["✨ Улучшение"],
-        ["🏠 Главное меню"],
+        ["Видео", "Фото"],
+        ["Улучшение"],
+        ["Главное меню"],
     ]
     assert _callbacks(markup) == [
         ["create_video_new", "create_image_text_new"],
@@ -114,7 +117,7 @@ def test_aiogram_requirement_supports_styled_buttons():
 
 
 def test_public_telegram_theme_keeps_green_fallback_without_custom_emoji(monkeypatch):
-    monkeypatch.setattr(config, "TELEGRAM_BUTTON_CUSTOM_EMOJI_ID", "")
+    monkeypatch.setattr(config, "TELEGRAM_BUTTON_ANIMATED_ICONS_ENABLED", False)
 
     markup = get_more_menu_keyboard()
     buttons = _buttons(markup)
@@ -122,3 +125,8 @@ def test_public_telegram_theme_keeps_green_fallback_without_custom_emoji(monkeyp
     assert buttons
     assert all(button.style == "success" for button in buttons)
     assert all(button.icon_custom_emoji_id is None for button in buttons)
+    assert _texts(markup) == [
+        ["🎬 Видео", "🖼 Фото"],
+        ["✨ Улучшение"],
+        ["🏠 Главное меню"],
+    ]
