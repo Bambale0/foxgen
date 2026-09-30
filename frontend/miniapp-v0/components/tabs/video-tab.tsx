@@ -89,7 +89,7 @@ export function VideoTab() {
     audioReference: string | null
   }) => {
     if (state.mode !== 'live') {
-      const modeError = new Error('Откройте Mini App через Telegram, чтобы запустить генерацию.')
+      const modeError = new Error('Открой HappyFox из Telegram или MAX, чтобы запустить генерацию.')
       setError(modeError.message)
       throw modeError
     }
@@ -105,7 +105,7 @@ export function VideoTab() {
       }
       selectTask(result.task)
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Не удалось запустить видео')
+      setError(e instanceof Error ? e.message : 'Видео не запустилось. Попробуй ещё раз.')
       throw e
     } finally {
       setIsSubmitting(false)
@@ -114,7 +114,7 @@ export function VideoTab() {
 
   const handleUploadImageReference = async (file: File): Promise<UploadedFile> => {
     if (state.mode !== 'live') {
-      throw new Error('Откройте Mini App через Telegram, чтобы загрузить референс.')
+      throw new Error('Открой HappyFox из Telegram или MAX, чтобы загрузить референс.')
     }
     const uploaded = await uploadFile('image_reference', file)
     addSavedReference(uploaded)
@@ -123,7 +123,7 @@ export function VideoTab() {
 
   const handleUploadVideoReference = async (file: File): Promise<UploadedFile> => {
     if (state.mode !== 'live') {
-      throw new Error('Откройте Mini App через Telegram, чтобы загрузить видео.')
+      throw new Error('Открой HappyFox из Telegram или MAX, чтобы загрузить видео.')
     }
     const uploaded = await uploadFile('video_reference', file)
     addSavedReference(uploaded)
@@ -132,7 +132,7 @@ export function VideoTab() {
 
   const handleUploadAudioReference = async (file: File): Promise<UploadedFile> => {
     if (state.mode !== 'live') {
-      throw new Error('Откройте Mini App через Telegram, чтобы загрузить аудио.')
+      throw new Error('Открой HappyFox из Telegram или MAX, чтобы загрузить аудио.')
     }
     const uploaded = await uploadFile('audio_reference', file)
     addSavedReference(uploaded)
@@ -157,9 +157,9 @@ export function VideoTab() {
             <VideoIcon className="h-3 w-3" />
             Видео
           </div>
-          <h2 className="text-2xl font-black tracking-[-0.035em] text-foreground">Создайте видео</h2>
+          <h2 className="text-2xl font-black tracking-[-0.035em] text-foreground">Собрать видео</h2>
           <p className="mt-1 max-w-xl text-xs leading-relaxed text-muted-foreground">
-            Опишите сцену и выберите подходящую модель. Если делаете видео из фото, добавьте стартовый кадр.
+            Опиши сцену. Если ролик начинается с фото — добавь стартовый кадр, модель выберем рядом.
           </p>
         </div>
       </div>
@@ -167,7 +167,7 @@ export function VideoTab() {
       {canUseSeedance25 ? (
         <div className="mx-auto mb-4 max-w-xl space-y-2">
           <div className="px-1 text-[11px] font-black uppercase tracking-[0.16em] text-muted-foreground">
-            Быстрый выбор модели
+            Выбери модель
           </div>
           <div className="fox-surface grid grid-cols-2 gap-2 rounded-[18px] p-1.5">
             <button
@@ -251,7 +251,7 @@ export function VideoTab() {
                 </div>
               ) : (
                 <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-                  После запуска здесь появится статус последнего видео. Готовый ролик бот пришлёт автоматически.
+                  После запуска здесь появится статус. Готовый ролик HappyFox пришлёт автоматически.
                 </p>
               )}
             </div>
@@ -266,9 +266,9 @@ export function VideoTab() {
                 <VideoIcon className="h-5 w-5 text-gold" />
               </div>
               <p className="mb-2 text-[11px] font-black uppercase tracking-[0.16em] text-gold">Результат</p>
-              <h3 className="text-lg font-bold text-foreground">Видео-панель</h3>
+              <h3 className="text-lg font-bold text-foreground">Здесь появится видео</h3>
               <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-                Запустите генерацию — здесь появятся статус и готовое видео. Результат сохранится в истории.
+                Запусти генерацию — готовый ролик появится здесь и сохранится в истории.
               </p>
             </div>
           )}
