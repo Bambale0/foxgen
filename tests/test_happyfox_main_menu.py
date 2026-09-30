@@ -106,3 +106,19 @@ def test_telegram_system_menu_exposes_quick_commands():
     assert "await bot.set_my_commands(" in main_text
     for command in ("photo", "video", "music", "motion", "feed", "trends", "balance", "start"):
         assert f'BotCommand(command="{command}"' in main_text
+
+
+def test_aiogram_requirement_supports_styled_buttons():
+    requirements = Path("requirements.txt").read_text(encoding="utf-8")
+    assert "aiogram>=3.31.0,<4.0.0" in requirements
+
+
+def test_public_telegram_theme_keeps_green_fallback_without_custom_emoji(monkeypatch):
+    monkeypatch.setattr(config, "TELEGRAM_BUTTON_CUSTOM_EMOJI_ID", "")
+
+    markup = get_more_menu_keyboard()
+    buttons = _buttons(markup)
+
+    assert buttons
+    assert all(button.style == "success" for button in buttons)
+    assert all(button.icon_custom_emoji_id is None for button in buttons)
