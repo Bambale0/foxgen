@@ -15,6 +15,9 @@ load_project_env()
 class Config:
     # Telegram
     BOT_TOKEN: str = os.getenv("BOT_TOKEN", "")
+    TELEGRAM_BUTTON_CUSTOM_EMOJI_ID: str = os.getenv(
+        "TELEGRAM_BUTTON_CUSTOM_EMOJI_ID", "5368324170671202286"
+    ).strip()
 
     # T-Bank (legacy)
     TBANK_TERMINAL_KEY: str = os.getenv("TBANK_TERMINAL_KEY", "")
