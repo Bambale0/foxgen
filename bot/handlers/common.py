@@ -1465,10 +1465,10 @@ def _ai_assistant_audio_error_text(error: Exception) -> str:
     message = str(error).lower()
     if "too large" in message:
         max_mb = max(1, config.PHOTO_PROMPT_MAX_AUDIO_BYTES // (1024 * 1024))
-        return f"⚠️ Аудио слишком большое. Отправьте файл до {max_mb}MB."
+        return f"⚠️ Аудио слишком большое. Пришли файл до {max_mb}MB."
     if "not supported" in message:
-        return "⚠️ Этот аудиоформат не поддерживается. Лучше отправьте голосовое Telegram или mp3/ogg/wav."
-    return "⚠️ Не удалось прочитать аудио. Попробуйте отправить голосовое ещё раз."
+        return "⚠️ Этот аудиоформат не поддерживается. Лучше пришли голосовое Telegram или mp3/ogg/wav."
+    return "⚠️ Не удалось прочитать аудио. Попробуй отправить голосовое ещё раз."
 
 
 ADMIN_ASSISTANT_FINANCE_SECTIONS = {
@@ -1642,7 +1642,7 @@ def _format_ai_admin_user_stats(telegram_id: int, stats: dict) -> str:
 🎁 Заработано по рефке: <code>{stats['referral_earned']}</code> 🐾
 🔗 Рефкод: <code>{stats['referral_code'] or '—'}</code>
 
-Для изменения баланса используйте кнопки ниже.
+Для изменения баланса используй кнопки ниже.
 """.strip()
 
 
@@ -2007,7 +2007,7 @@ async def _answer_ai_assistant_message(
 
     if not user_message and not audio_bytes:
         await message.answer(
-            "Напишите вопрос текстом или отправьте голосовое/аудио для BotAI.",
+            "Напишите вопрос текстом или пришли голосовое/аудио для BotAI.",
             reply_markup=get_ai_assistant_keyboard(telegram_id=user_id),
             parse_mode="HTML",
         )
@@ -3717,7 +3717,7 @@ async def check_required_subscription(callback: types.CallbackQuery, state: FSMC
         text = (
             "🔐 Доступ к боту открыт только подписчикам канала "
             f"@{REQUIRED_CHANNEL_USERNAME}.\n\n"
-            "Подпишитесь на канал и нажмите «Проверить подписку»."
+            "Подпишитесь на канал и нажми «Проверить подписку»."
         )
         try:
             await callback.message.edit_text(
@@ -4033,7 +4033,7 @@ async def cmd_help(message: types.Message):
         "<b>Как получить хороший результат</b>\n"
         "• пишите простыми фразами, что хотите увидеть\n"
         "• добавляйте стиль, свет, ракурс и настроение\n"
-        "• используйте референсы, если важно сохранить человека или стиль\n\n"
+        "• используй референсы, если важно сохранить человека или стиль\n\n"
         "<b>Поддержка</b>\n"
         f"{html.escape(product.support_contact) if product.support_contact else 'через встроенную поддержку'}"
     )
@@ -4410,7 +4410,7 @@ async def partner_withdraw(callback: types.CallbackQuery, state: FSMContext):
         "🎟️ <b>Заявка на вывод</b>\n\n"
         f"Сейчас доступно: <code>{available_amount:.2f}</code> ₽\n"
         f"Минимальная сумма вывода: <code>{min_withdraw}</code> ₽\n\n"
-        "Шаг 1 из 2. Отправьте платёжные данные одним сообщением.\n"
+        "Шаг 1 из 2. Пришли платёжные данные одним сообщением.\n"
         "Например: номер карты / СБП / USDT TRC20 и имя получателя.",
         reply_markup=get_back_keyboard("menu_partner"),
         parse_mode="HTML",
@@ -4453,7 +4453,7 @@ async def partner_exchange(callback: types.CallbackQuery, state: FSMContext):
         f"Доступно для обмена: <code>{available_amount:.2f}</code> ₽\n"
         f"Курс: <code>{rub_per_credit:g}</code> ₽ → <code>1</code> 🐾\n"
         f"Максимум сейчас: <code>{max_credits}</code> 🐾 за <code>{max_debit:.2f}</code> ₽\n\n"
-        "Отправьте сумму в рублях, которую хотите обменять.\n"
+        "Пришли сумму в рублях, которую хотите обменять.\n"
         "Если сумма не кратна курсу, я округлю вниз до целого числа лапок.",
         reply_markup=get_back_keyboard("menu_partner"),
         parse_mode="HTML",
@@ -4522,7 +4522,7 @@ async def partner_exchange_amount(message: types.Message, state: FSMContext):
                 f"❌ Минимум для обмена: <code>{rub_per_credit:g}</code> ₽ за <code>1</code> 🐾."
             )
         else:
-            error_text = "❌ Не удалось выполнить обмен. Попробуйте ещё раз."
+            error_text = "❌ Не удалось выполнить обмен. Попробуй ещё раз."
         await message.answer(
             error_text,
             reply_markup=get_back_keyboard("menu_partner"),
@@ -4556,7 +4556,7 @@ async def partner_withdraw_requisites(message: types.Message, state: FSMContext)
     requisites = (message.text or "").strip()
     if len(requisites) < 8:
         await message.answer(
-            "❌ Слишком короткие платёжные данные. Отправьте реквизиты одним сообщением.",
+            "❌ Слишком короткие платёжные данные. Пришли реквизиты одним сообщением.",
             reply_markup=get_back_keyboard("menu_partner"),
         )
         return
@@ -4629,7 +4629,7 @@ async def partner_withdraw_amount(message: types.Message, state: FSMContext):
     )
     if not withdrawal:
         await message.answer(
-            "❌ Не удалось создать заявку. Проверьте сумму и попробуйте ещё раз.",
+            "❌ Не удалось создать заявку. Проверьте сумму и попробуй ещё раз.",
             reply_markup=get_back_keyboard("menu_partner"),
         )
         await state.clear()
@@ -5151,7 +5151,7 @@ async def back_to_category(callback: types.CallbackQuery, state: FSMContext):
         f"📂 <b>{categories[category]['name']}</b>\n"
         f"📝 {categories[category].get('description', '')}"
         f"🐾 Ваш баланс: <code>{user_credits}</code> лапок"
-        f"Выберите пресет:",
+        f"Выбери пресет:",
         reply_markup=get_category_keyboard(category, presets, user_credits),
         parse_mode="HTML",
     )
@@ -5244,7 +5244,7 @@ async def open_ai_assistant_main(callback: types.CallbackQuery, state: FSMContex
             "\n\n<b>Для админа:</b>\n"
             "• напишите <code>статистика</code>, <code>финансы</code>, "
             "<code>пользователь 123456789</code>\n"
-            "• или нажмите «Админ-функции» ниже"
+            "• или нажми «Админ-функции» ниже"
         )
 
     welcome_ai = f"""🤖 <b>Расскажи идею</b>
@@ -5353,7 +5353,7 @@ async def handle_motion_character_upload(message: types.Message, state: FSMConte
     await state.update_data(v_image_url=v_image_url)
     await message.answer(
         "✅ <b>Фото персонажа загружено!</b>"
-        "📹 <b>Шаг 2:</b> Загрузите видео с движением\n"
+        "📹 <b>Шаг 2:</b> Загрузи видео с движением\n"
         "(3-10 секунд, четкое движение)",
         parse_mode="HTML",
     )
@@ -5377,7 +5377,7 @@ async def handle_motion_video_upload(message: types.Message, state: FSMContext):
     data = await state.get_data()
     v_image_url = data.get("v_image_url")
     if not v_image_url:
-        await message.answer("❌ Сначала загрузите фото персонажа!", parse_mode="HTML")
+        await message.answer("❌ Сначала загрузи фото персонажа!", parse_mode="HTML")
         return
 
     video = message.video
@@ -5466,7 +5466,7 @@ async def handle_motion_video_upload(message: types.Message, state: FSMContext):
 async def invalid_motion_character_upload(message: types.Message, state: FSMContext):
     """Невалидный ввод при загрузке фото персонажа"""
     await message.answer(
-        "⚠️ <b>Пожалуйста, отправьте фото персонажа</b>", parse_mode="HTML"
+        "⚠️ <b>Пожалуйста, пришли фото персонажа</b>", parse_mode="HTML"
     )
 
 
@@ -5474,7 +5474,7 @@ async def invalid_motion_character_upload(message: types.Message, state: FSMCont
 async def invalid_motion_video_upload(message: types.Message, state: FSMContext):
     """Невалидный ввод при загрузке видео движения"""
     await message.answer(
-        "⚠️ <b>Пожалуйста, отправьте видео (3-10 сек)</b>", parse_mode="HTML"
+        "⚠️ <b>Пожалуйста, пришли видео (3-10 сек)</b>", parse_mode="HTML"
     )
 
 
