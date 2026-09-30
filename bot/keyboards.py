@@ -17,26 +17,70 @@ from bot.services.preset_manager import preset_manager
 logger = logging.getLogger(__name__)
 
 
+# Verified against Telegram's animated RestrictedEmoji/HandEmoji packs via
+# getStickerSet/getCustomEmojiStickers on 2026-09-30. These are Telegram
+# document identifiers for UI assets, not mutable business values.
+_TELEGRAM_ANIMATED_BUTTON_ICONS = {
+    "🚀": "5445284980978621387",
+    "🖼": "5375074927252621134",
+    "🎙": "5382013970905309819",
+    "🎬": "5375464961822695044",
+    "🎵": "5188621441926438751",
+    "🎯": "5350460637182993292",
+    "✨": "5472164874886846699",
+    "🔷": "5471952986970267163",  # animated diamond
+    "🤖": "5372981976804366741",
+    "🔗": "5375129357373165375",
+    "💬": "5465300082628763143",
+    "🍌": "5390950002551954897",
+    "🐾": "5188308218551475917",
+    "🤝": "5357080225463149588",
+    "💳": "5373052667671093676",  # animated shopping/payment icon
+    "📱": "5407025283456835913",
+    "🛍": "5373052667671093676",
+    "⚡": "5445284980978621387",  # animated rocket for quick start
+    "⚙️": "5237799019329105246",  # animated brain for settings
+    "⚙": "5237799019329105246",
+    "🏠": "5465226866321268133",
+    "🎨": "5431456208487716895",
+    "🧩": "5375129357373165375",  # animated link for references
+    "🧠": "5237799019329105246",
+    "🎞": "5375464961822695044",  # animated clapperboard
+}
+
+
 def _apply_public_telegram_button_theme(
     markup: types.InlineKeyboardMarkup,
 ) -> types.InlineKeyboardMarkup:
-    """Apply HappyFox's native Telegram theme to public navigation buttons."""
-    custom_emoji_id = str(config.TELEGRAM_BUTTON_CUSTOM_EMOJI_ID or "").strip() or None
-    return types.InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
+    """Apply green buttons and semantic custom emoji icons to public navigation."""
+    animated_icons_enabled = bool(config.TELEGRAM_BUTTON_ANIMATED_ICONS_ENABLED)
+    themed_rows: list[list[InlineKeyboardButton]] = []
+
+    for row in markup.inline_keyboard:
+        themed_row: list[InlineKeyboardButton] = []
+        for button in row:
+            text = button.text
+            icon_custom_emoji_id = None
+
+            if animated_icons_enabled:
+                for prefix, emoji_id in _TELEGRAM_ANIMATED_BUTTON_ICONS.items():
+                    if text.startswith(prefix):
+                        text = text[len(prefix):].lstrip()
+                        icon_custom_emoji_id = emoji_id
+                        break
+
+            themed_row.append(
                 button.model_copy(
                     update={
+                        "text": text,
                         "style": "success",
-                        "icon_custom_emoji_id": custom_emoji_id,
+                        "icon_custom_emoji_id": icon_custom_emoji_id,
                     }
                 )
-                for button in row
-            ]
-            for row in markup.inline_keyboard
-        ]
-    )
+            )
+        themed_rows.append(themed_row)
 
+    return types.InlineKeyboardMarkup(inline_keyboard=themed_rows)
 
 def _mini_app_url_with_start_param(start_param: str | None = None, referral_code: str | None = None) -> str:
     base_url = str(config.mini_app_url or "").strip()
