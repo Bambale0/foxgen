@@ -2,14 +2,14 @@ from pathlib import Path
 
 
 EXPECTED_COMMANDS = {
-    "photo": "🖼 Создать фото",
-    "video": "🎬 Создать видео",
+    "photo": "🖼 Сделать фото",
+    "video": "🎬 Собрать видео",
     "music": "🎵 Создать музыку",
-    "motion": "🎯 Motion Control",
+    "motion": "🎯 Повторить движение",
     "feed": "🔥 Лента работ",
     "trends": "🔥 Тренды",
-    "balance": "🐾 Баланс и пополнение",
-    "start": "🏠 Главное меню",
+    "balance": "🐾 Лапки и пополнение",
+    "start": "🏠 HappyFox",
 }
 
 
