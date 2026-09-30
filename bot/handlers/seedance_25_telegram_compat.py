@@ -137,7 +137,7 @@ async def _persist_image(message: types.Message, obj) -> str | None:
         with Image.open(io.BytesIO(raw)) as image:
             width, height = image.size
     except (OSError, UnidentifiedImageError):
-        await message.answer("❌ Не удалось прочитать фото. Попробуйте другое.")
+        await message.answer("❌ Не удалось прочитать фото. Попробуй другое.")
         return None
 
     if not preview_module._valid_dimensions(width, height):
@@ -350,7 +350,7 @@ async def seedance25_public_image_upload(message: types.Message, state: FSMConte
     if scenario == "text":
         await message.answer(
             "Фото получено, но сейчас выбран режим «✨ С нуля». "
-            "Нажмите «🖼 Оживить фото» или «🧩 По референсам» и отправьте фото ещё раз."
+            "Нажми «🖼 Оживить фото» или «🧩 По референсам» и пришли фото ещё раз."
         )
         return
 
@@ -359,7 +359,7 @@ async def seedance25_public_image_upload(message: types.Message, state: FSMConte
         return
     url = await _persist_image(message, obj)
     if not url:
-        await message.answer("❌ Не удалось сохранить фото. Попробуйте ещё раз.")
+        await message.answer("❌ Не удалось сохранить фото. Попробуй ещё раз.")
         return
 
     if scenario == "first_frame":
@@ -370,15 +370,15 @@ async def seedance25_public_image_upload(message: types.Message, state: FSMConte
             v_reference_videos=[],
             seedance25_reference_audio_urls=[],
         )
-        notice = "✅ Первый кадр сохранён. Теперь отправьте промпт — будет создано видео из этого фото."
+        notice = "✅ Первый кадр сохранён. Теперь пришли промпт — будет создано видео из этого фото."
     elif scenario == "first_last":
         first = str(data.get("seedance25_first_frame_url") or "").strip()
         if not first:
             await state.update_data(seedance25_first_frame_url=url)
-            notice = "✅ Первый кадр сохранён. Теперь отправьте второе фото — оно станет последним кадром."
+            notice = "✅ Первый кадр сохранён. Теперь пришли второе фото — оно станет последним кадром."
         else:
             await state.update_data(seedance25_last_frame_url=url)
-            notice = "✅ Последний кадр сохранён. Теперь отправьте промпт."
+            notice = "✅ Последний кадр сохранён. Теперь пришли промпт."
     elif scenario == "multimodal":
         refs = preview_module._clean_urls(
             [*(data.get("reference_images") or []), url],
@@ -387,7 +387,7 @@ async def seedance25_public_image_upload(message: types.Message, state: FSMConte
         await state.update_data(reference_images=refs)
         notice = f"✅ Фото-референс добавлен: {len(refs)}/30."
     else:
-        await message.answer("❌ Неизвестный сценарий Seedance 2.5. Выберите режим заново.")
+        await message.answer("❌ Неизвестный сценарий Seedance 2.5. Выбери режим заново.")
         return
 
     await message.answer(notice)
