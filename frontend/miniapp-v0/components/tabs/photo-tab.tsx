@@ -27,7 +27,7 @@ export function PhotoTab() {
     references: string[]
   }) => {
     if (state.mode !== 'live') {
-      setError('Откройте Mini App через Telegram, чтобы запустить генерацию.')
+      setError('Открой HappyFox из Telegram или MAX, чтобы запустить генерацию.')
       return
     }
     setIsSubmitting(true)
@@ -71,7 +71,7 @@ export function PhotoTab() {
         selectTask(lastTask)
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Не удалось запустить фото')
+      setError(e instanceof Error ? e.message : 'Фото не запустилось. Попробуй ещё раз.')
     } finally {
       setIsSubmitting(false)
     }
@@ -79,7 +79,7 @@ export function PhotoTab() {
 
   const handleUploadReference = async (file: File): Promise<UploadedFile> => {
     if (state.mode !== 'live') {
-      throw new Error('Откройте Mini App через Telegram, чтобы загрузить референс.')
+      throw new Error('Открой HappyFox из Telegram или MAX, чтобы загрузить референс.')
     }
     const uploaded = await uploadFile('image_reference', file)
     addSavedReference(uploaded)
@@ -94,9 +94,9 @@ export function PhotoTab() {
             <ImageIcon className="h-3 w-3" />
             Фото
           </div>
-          <h2 className="text-2xl font-black tracking-[-0.035em] text-foreground">Создайте изображение</h2>
+          <h2 className="text-2xl font-black tracking-[-0.035em] text-foreground">Сделать фото</h2>
           <p className="mt-1 max-w-xl text-xs leading-relaxed text-muted-foreground">
-            Опишите, что хотите получить. При желании добавьте фото — оно поможет сохранить стиль, персонажа или детали.
+            Опиши результат. Если нужен персонаж, стиль или деталь из другого кадра — добавь референс.
           </p>
         </div>
       </div>
@@ -131,9 +131,9 @@ export function PhotoTab() {
                 <Sparkles className="h-5 w-5 text-gold" />
               </div>
               <p className="mb-2 text-[11px] font-black uppercase tracking-[0.16em] text-gold">Результат</p>
-              <h3 className="text-lg font-bold text-foreground">Готово к запуску</h3>
+              <h3 className="text-lg font-bold text-foreground">Здесь появится результат</h3>
               <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-                Запустите генерацию — здесь появятся статус и готовое изображение. Результат сохранится в истории.
+                Запусти генерацию — готовое изображение появится здесь и сохранится в истории.
               </p>
             </div>
           )}
