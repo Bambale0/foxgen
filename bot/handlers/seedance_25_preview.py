@@ -219,10 +219,10 @@ async def _show_seedance_25_screen(target, state: FSMContext, *, edit: bool = Tr
     quote = _price_quote(data)
 
     if scenario == "first_frame":
-        media_hint = f"Загрузите <b>1 фото</b> как первый кадр. Сейчас: {'✅' if first else '—'}"
+        media_hint = f"Загрузи <b>1 фото</b> как первый кадр. Сейчас: {'✅' if first else '—'}"
     elif scenario == "first_last":
         media_hint = (
-            "Загрузите последовательно <b>2 фото</b>: первый и последний кадр. "
+            "Загрузи последовательно <b>2 фото</b>: первый и последний кадр. "
             f"Сейчас: первый {'✅' if first else '—'}, последний {'✅' if last else '—'}"
         )
     elif scenario == "multimodal":
@@ -232,7 +232,7 @@ async def _show_seedance_25_screen(target, state: FSMContext, *, edit: bool = Tr
             f"аудио <code>{audios}/10</code>. Видео суммарно ≤30с."
         )
     else:
-        media_hint = "Медиа не требуется — отправьте текстовый промпт."
+        media_hint = "Медиа не требуется — пришли текстовый промпт."
 
     auto_note = " (ориентир за 5с)" if duration == -1 else ""
     text = (
@@ -251,7 +251,7 @@ async def _show_seedance_25_screen(target, state: FSMContext, *, edit: bool = Tr
         "движение камеры и lock объектива задавайте в промпте.\n\n"
         f"💰 Текущая цена из админ-прайса: <code>{quote}</code>🍌{auto_note}.\n"
         "Администратору списание не производится.\n\n"
-        "После настройки просто отправьте промпт (до 5000 символов)."
+        "После настройки просто пришли промпт (до 5000 символов)."
     )
     markup = _seedance_25_keyboard(data)
 
@@ -285,8 +285,8 @@ def install_seedance_25_preview() -> None:
         text = (
             "🎬 <b>Создание видео</b>\n"
             f"🍌 Баланс: <code>{user_credits}</code> бананов\n\n"
-            "<b>Шаг 1. Выберите модель</b>\n"
-            "Сначала выберите модель видео.\n"
+            "<b>Шаг 1. Выбери модель</b>\n"
+            "Сначала выбери модель видео.\n"
             "После этого бот покажет следующий шаг именно для неё."
         )
         keyboard = generation_module.get_video_model_selection_keyboard(
@@ -369,10 +369,10 @@ async def _run_seedance_25_message(message: types.Message, state: FSMContext, pr
     audio_urls = _clean_urls(data.get("seedance25_reference_audio_urls"), 10) if scenario == "multimodal" else []
 
     if scenario in {"first_frame", "first_last"} and not first_frame:
-        await message.answer("❌ Сначала загрузите первый кадр.")
+        await message.answer("❌ Сначала загрузи первый кадр.")
         return
     if scenario == "first_last" and not last_frame:
-        await message.answer("❌ Для этого режима загрузите и последний кадр.")
+        await message.answer("❌ Для этого режима загрузи и последний кадр.")
         return
     if len(str(prompt or "")) > seedance_25_service.MAX_PROMPT_LENGTH:
         await message.answer("❌ Промпт Seedance 2.5 — максимум 5000 символов.")
@@ -625,7 +625,7 @@ async def seedance25_image_upload(message: types.Message, state: FSMContext):
         raise SkipHandler
     scenario = data.get("seedance25_scenario", "text")
     if scenario == "text":
-        await message.answer("В режиме Text-to-Video фото не используется. Выберите другой сценарий.")
+        await message.answer("В режиме Text-to-Video фото не используется. Выбери другой сценарий.")
         return
 
     obj = message.document or (message.photo[-1] if message.photo else None)
