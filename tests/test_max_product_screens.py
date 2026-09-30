@@ -132,17 +132,17 @@ def test_max_main_menu_visually_mirrors_telegram_contract() -> None:
     )[0]["payload"]["buttons"]
     assert menu[0][0] == {
         "type": "open_app",
-        "text": "🚀 Открыть Mini App",
+        "text": "🚀 Открыть HappyFox",
     }
 
     assert _visible_button_rows() == [
-        ["🚀 Открыть Mini App"],
-        ["🖼 Создать фото", "🎬 Создать видео"],
-        ["🎯 Motion Control", "✍️ Промпт по описанию"],
-        ["🎞 Промпт по видео • 3🐾", "🤖 AI-помощник"],
-        ["📚 Библиотека промптов", "🖼 Лента"],
-        ["🐾 Баланс: 42", "💬 Поддержка"],
-        ["🤝 Партнёрам", "⋯ Ещё"],
+        ["🚀 Открыть HappyFox"],
+        ["🖼 Сделать фото", "🎬 Собрать видео"],
+        ["🎯 Повторить движение", "✍️ Разобрать фото"],
+        ["🎞 Разобрать видео • 3🐾", "🤖 Помочь с идеей"],
+        ["📚 Готовые идеи", "🖼 Лента"],
+        ["🐾 Баланс: 42", "💬 Нужна помощь"],
+        ["🤝 Партнёрка", "⋯ Ещё"],
     ]
 
     assert set(_callback_payloads()) == {
@@ -209,11 +209,11 @@ def test_every_max_main_menu_screen_is_actionable(tmp_path, monkeypatch) -> None
         if item.get("message")
     )
     assert "ещё переносится" not in rendered
-    assert "AI-помощник HappyFox" in rendered
+    assert "Расскажи идею" in rendered
     assert "Промпты · Лучшие" in rendered
-    assert "Поддержка HappyFox" in rendered
-    assert "Промпт по описанию" in rendered
-    assert "Промпт по видео" in rendered
+    assert "Что случилось?" in rendered
+    assert "Разобрать фото" in rendered
+    assert "Разобрать видео" in rendered
     assert "Лента" in rendered
     assert "Ещё" in rendered
 
