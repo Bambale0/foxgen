@@ -1,3 +1,27 @@
+# Active: Telegram green buttons + DB-backed animated custom-emoji icons
+
+Baseline: rewritten public main `f818b937674643843e8884fe83030ff150d95b8d`, branch `feat/telegram-green-animated-menu`, PR #286.
+
+Fresh audit: production was still on the pre-theme revision, so Telegram emitted legacy dark inline buttons and the old fallback path answered `/emoji_id 😃` as Unicode instead of returning a Telegram custom-emoji document ID. aiogram 3.31.0 supports native inline-button `style` and `icon_custom_emoji_id`. Keyboards are created both in `bot/keyboards.py` and directly in handlers, so factory-only theming would be incomplete.
+
+Acceptance: every outgoing Telegram `InlineKeyboardMarkup` passes through one request-session middleware. Normal actions/navigation use `style="success"`; cancel/delete/remove/reject/ban/disable/clear/reset actions use `style="danger"`; explicitly configured styles stay unchanged. Existing callback data, URLs, WebApp targets and row layouts are preserved. Custom emoji are mapped by literal Unicode prefix (for example `🏠`) to Telegram `custom_emoji_id`; the static prefix is removed only when the custom icon is present. Plain Unicode remains the safe fallback.
+
+Control plane / no-hardcode: routine custom-emoji mappings are stored in the existing DB-backed `bot_settings` key `telegram_button_emoji_ids` with `updated_by_telegram_id` and `updated_at`. Admin-only commands: `/emoji_id` extracts true Telegram custom-emoji IDs, `/emoji_map` shows the active mapping, `/emoji_set <prefix>` stores/updates a mapping without redeploy, and `/emoji_unset <prefix>` removes it. `HAPPYFOX_TELEGRAM_MENU_EMOJI_IDS` remains only an emergency/bootstrap fallback when no DB setting exists. No production IDs are committed.
+
+Architecture: global Bot API request middleware is the single theming seam; the earlier approach that wrapped every keyboard factory was removed to avoid shotgun edits and keep handlers/factories unchanged. DB reads are cached for 5 seconds and fail open to the environment fallback so a temporary settings read failure cannot block message delivery.
+
+Observability: invalid config emits `telegram_button_custom_emoji_config_invalid*`; DB read failures emit `telegram_button_custom_emoji_setting_read_failed` with exception context. No secret values are logged.
+
+Review evidence: Bambale0/skills `code-review` fixed point is `main`; Bambale0/claw `09-code-reviewer` and `release-hardening` were applied. Codex review P1 (normalizer helper mismatch) was addressed, then made obsolete by removing factory-level theming; P2 findings were addressed by moving mappings into the DB-backed admin control plane and classifying clear/reset actions as danger. Wondelai `working-with-legacy-code` guidance supported keeping the change behind one tested seam. Anthropic `webapp-testing` guidance is covered by the repository Playwright CI rather than a separate ad-hoc browser harness.
+
+Parity: Telegram-only visual capability. MAX has no equivalent Telegram Bot API style/custom-emoji fields; business/callback outcomes are unchanged. Mini App and Instagram behavior are unchanged. Release CI still verifies MAX + Telegram + Mini App startup/browser compatibility.
+
+Verification evidence so far: local production-compatible aiogram smoke verified `success`/`danger` serialization and custom emoji serialization; focused compile + Ruff clean; focused theme/custom-emoji suite 13 passed; prior focused suite before review fixes 16 passed; frontend lint had 0 errors, 20 suites / 86 tests passed, production build succeeded; `npm audit --omit=dev --audit-level=high` reports 0 vulnerabilities after Next.js 16.3.8; `pip-audit --strict` reports no known vulnerabilities after urllib3 2.8.0. Exact-head CI run `36782622585` on `9311179359542cc055bf1177f92608e1d0a5cbd2` completed green: Python dependency audit, Backend regression, Callback load test, Mini App build/browser E2E (Telegram + MAX + Chromium + iPhone WebKit + native launch recovery), and Production Docker image all succeeded. This evidence is now recorded before the final docs-only head re-run required for exact-head release gating.
+
+Deployment/rollback: normal path only — exact-head CI green → reviewed PR merge → canonical main auto-deploy → verify exact production SHA, health, Telegram webhook/channel reconciliation and logs. Rollback is the canonical deploy of the previous verified main SHA; no schema migration is required.
+
+---
+
 # Active: optional landing gate on unified production origin
 
 Baseline: main d2dcb28a283b84450fc3c23b2eead7bf14d81a48, branch fix/optional-production-landing-20260927.

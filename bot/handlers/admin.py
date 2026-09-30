@@ -56,6 +56,12 @@ from bot.keyboards import (
     get_main_menu_button_keyboard,
 )
 from bot.services.preset_manager import preset_manager
+from bot.services.telegram_custom_emoji import extract_custom_emoji_ids
+from bot.services.telegram_button_theme import (
+    TELEGRAM_BUTTON_EMOJI_MAX_ENTRIES,
+    get_configured_telegram_emoji_ids,
+    set_configured_telegram_emoji_ids,
+)
 from bot.services.subscription_service import (
     REQUIRED_CHANNEL_USERNAME,
     clear_required_subscription_cache,
@@ -2274,6 +2280,142 @@ def _build_admin_partner_xls(report: dict) -> tuple[bytes, str]:
     return "".join(parts).encode("utf-8"), filename
 
 
+@router.message(Command("emoji_id"))
+async def cmd_emoji_id(message: types.Message):
+    """Показывает Telegram custom_emoji_id для настройки анимированных кнопок."""
+    if not message.from_user or not is_admin(message.from_user.id):
+        await message.answer("⛔ У вас нет доступа к этой команде.")
+        return
+
+    emoji_ids = extract_custom_emoji_ids(message)
+    if not emoji_ids:
+        await message.answer(
+            "Пришлите команду вместе с анимированным emoji, например "
+            "<code>/emoji_id 🦊</code>, или ответьте <code>/emoji_id</code> "
+            "на сообщение с custom emoji.",
+            parse_mode="HTML",
+        )
+        return
+
+    lines = ["🎨 <b>Telegram custom emoji</b>"]
+    for index, emoji_id in enumerate(emoji_ids, start=1):
+        prefix = f"{index}. " if len(emoji_ids) > 1 else ""
+        lines.append(f"{prefix}<code>{emoji_id}</code>")
+
+    await message.answer("\n".join(lines), parse_mode="HTML")
+
+
+def _telegram_emoji_target_from_command(message: types.Message) -> str:
+    raw = str(message.text or message.caption or "").strip()
+    parts = raw.split(maxsplit=2)
+    if len(parts) < 2:
+        return ""
+    return parts[1].strip()
+
+
+def _validate_telegram_emoji_target(target: str) -> str | None:
+    if not target:
+        return "Укажите обычный emoji-префикс, например <code>🏠</code>."
+    if target.isascii() or len(target) > 32 or any(char.isspace() for char in target):
+        return "Префикс должен быть коротким Unicode emoji без пробелов."
+    return None
+
+
+@router.message(Command("emoji_map"))
+async def cmd_emoji_map(message: types.Message):
+    """Показывает текущую DB-backed карту анимированных иконок кнопок."""
+    if not message.from_user or not is_admin(message.from_user.id):
+        await message.answer("⛔ У вас нет доступа к этой команде.")
+        return
+
+    mapping = await get_configured_telegram_emoji_ids()
+    if not mapping:
+        await message.answer(
+            "🎨 Анимированные иконки кнопок пока не настроены.\n"
+            "Ответьте <code>/emoji_set 🏠</code> на сообщение с Premium/custom emoji.",
+            parse_mode="HTML",
+        )
+        return
+
+    lines = ["🎨 <b>Анимированные иконки кнопок</b>"]
+    for prefix, emoji_id in sorted(mapping.items()):
+        lines.append(f"{_html(prefix)} → <code>{emoji_id}</code>")
+    lines.append(
+        "\nИзменить: ответьте <code>/emoji_set 🏠</code> на custom emoji. "
+        "Удалить: <code>/emoji_unset 🏠</code>."
+    )
+    await message.answer("\n".join(lines), parse_mode="HTML")
+
+
+@router.message(Command("emoji_set"))
+async def cmd_emoji_set(message: types.Message):
+    """Сохраняет custom_emoji_id для Unicode-префикса кнопок без redeploy."""
+    if not message.from_user or not is_admin(message.from_user.id):
+        await message.answer("⛔ У вас нет доступа к этой команде.")
+        return
+
+    target = _telegram_emoji_target_from_command(message)
+    validation_error = _validate_telegram_emoji_target(target)
+    if validation_error:
+        await message.answer(validation_error, parse_mode="HTML")
+        return
+
+    emoji_ids = extract_custom_emoji_ids(message)
+    if not emoji_ids:
+        await message.answer(
+            f"Ответьте <code>/emoji_set {_html(target)}</code> на сообщение с "
+            "Premium/custom emoji или добавьте custom emoji в ту же команду.",
+            parse_mode="HTML",
+        )
+        return
+
+    mapping = await get_configured_telegram_emoji_ids()
+    if target not in mapping and len(mapping) >= TELEGRAM_BUTTON_EMOJI_MAX_ENTRIES:
+        await message.answer("⛔ Достигнут лимит настроенных иконок.")
+        return
+
+    mapping[target] = emoji_ids[0]
+    saved = await set_configured_telegram_emoji_ids(
+        mapping,
+        updated_by_telegram_id=message.from_user.id,
+    )
+    await message.answer(
+        f"✅ {_html(target)} сохранён как анимированная иконка "
+        f"<code>{saved[target]}</code>.\n"
+        "Новые клавиатуры подхватят настройку без redeploy.",
+        parse_mode="HTML",
+    )
+
+
+@router.message(Command("emoji_unset"))
+async def cmd_emoji_unset(message: types.Message):
+    """Удаляет custom emoji mapping для указанного Unicode-префикса."""
+    if not message.from_user or not is_admin(message.from_user.id):
+        await message.answer("⛔ У вас нет доступа к этой команде.")
+        return
+
+    target = _telegram_emoji_target_from_command(message)
+    validation_error = _validate_telegram_emoji_target(target)
+    if validation_error:
+        await message.answer(validation_error, parse_mode="HTML")
+        return
+
+    mapping = await get_configured_telegram_emoji_ids()
+    if target not in mapping:
+        await message.answer(f"ℹ️ Для {_html(target)} mapping не задан.", parse_mode="HTML")
+        return
+
+    mapping.pop(target, None)
+    await set_configured_telegram_emoji_ids(
+        mapping,
+        updated_by_telegram_id=message.from_user.id,
+    )
+    await message.answer(
+        f"✅ Mapping для {_html(target)} удалён. Вернулся обычный Unicode emoji.",
+        parse_mode="HTML",
+    )
+
+
 @router.message(Command("admin"))
 async def cmd_admin(message: types.Message):
     """Открывает админ-панель"""
@@ -3927,7 +4069,7 @@ async def admin_process_credits_amount(message: types.Message, state: FSMContext
         )
     else:
         await message.answer(
-            f"❌ Ошибка! Возможно, недостаточно кредитов для списания.",
+            "❌ Ошибка! Возможно, недостаточно кредитов для списания.",
             reply_markup=get_admin_keyboard(),
         )
 
