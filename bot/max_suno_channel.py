@@ -96,7 +96,7 @@ class MaxSunoChannelService(MaxOmniChannelService):
         except MaxInsufficientBalanceError:
             await self._respond(
                 user_id,
-                "🐾 Баланса MAX не хватает для этой Suno-задачи.",
+                "🐾 Лапок не хватает для этой задачи.",
                 attachments=topup_menu(self.catalog),
                 callback_id=callback_id,
             )
@@ -117,7 +117,7 @@ class MaxSunoChannelService(MaxOmniChannelService):
             f"Задача: <code>{job.id[:12]}</code>\n"
             f"Списано: <b>{_format_cost(job.cost)} 🐾</b>\n"
             f"Осталось: <b>{_format_cost(balance)} 🐾</b>\n\n"
-            "Результат придёт сюда автоматически. Новую генерацию можно запускать сразу.",
+            "Готовый результат пришлю сюда автоматически. Следующий трек можно запускать сразу.",
             attachments=await _suno_menu(),
             callback_id=callback_id,
         )
@@ -130,7 +130,7 @@ class MaxSunoChannelService(MaxOmniChannelService):
 
         if session.state == "suno:simple":
             if not text:
-                await self._respond(user_id, "Опишите будущий трек текстом.", attachments=back_home_menu())
+                await self._respond(user_id, "Опиши будущий трек своими словами.", attachments=back_home_menu())
                 return True
             model = str(data.get("model") or "V5_5")
             return await self._enqueue(
@@ -195,7 +195,7 @@ class MaxSunoChannelService(MaxOmniChannelService):
             await save_max_session(user_id, "suno:upload_params", data)
             operation = str(data.get("operation") or "")
             if operation == "upload_extend":
-                prompt = "Опишите, как продолжить трек."
+                prompt = "Расскажи, как продолжить трек."
             elif operation == "upload_cover":
                 prompt = "Опишите новый стиль cover."
             elif operation == "add_vocals":
@@ -207,7 +207,7 @@ class MaxSunoChannelService(MaxOmniChannelService):
 
         if session.state == "suno:upload_params":
             if not text:
-                await self._respond(user_id, "Добавьте параметры текстом.")
+                await self._respond(user_id, "Добавь параметры текстом.")
                 return True
             operation = str(data.get("operation") or "")
             model = str(data.get("model") or "V5_5")
@@ -267,7 +267,7 @@ class MaxSunoChannelService(MaxOmniChannelService):
             await clear_max_session(user_id)
             await self._respond(
                 user_id,
-                "🎵 <b>Suno Studio в MAX</b>\n\nСоздавайте музыку и обрабатывайте готовые треки прямо в чате.",
+                "🎵 <b>Создать музыку</b>\n\nСобери новый трек или доработай готовый прямо здесь.",
                 attachments=await _suno_menu(),
                 callback_id=callback_id,
             )
@@ -300,7 +300,7 @@ class MaxSunoChannelService(MaxOmniChannelService):
             await save_max_session(user_id, "suno:choosing_model", {"custom_mode": custom, "instrumental": instrumental})
             await self._respond(
                 user_id,
-                "🧠 <b>Выберите версию Suno</b>",
+                "🧠 <b>Какой Suno используем?</b>",
                 attachments=await _model_menu("generate_custom" if custom else "generate"),
                 callback_id=callback_id,
             )
@@ -341,7 +341,7 @@ class MaxSunoChannelService(MaxOmniChannelService):
         if payload == "max:suno:uploads":
             await self._respond(
                 user_id,
-                "🎧 <b>Работа со своим аудио</b>",
+                "🎧 <b>Доработать аудио</b>",
                 attachments=[
                     inline_keyboard(
                         [
@@ -363,13 +363,13 @@ class MaxSunoChannelService(MaxOmniChannelService):
                 await self._respond(user_id, "Операция недоступна.", callback_id=callback_id)
                 return
             await save_max_session(user_id, "suno:choosing_model", {"operation": operation})
-            await self._respond(user_id, "🧠 Выберите модель.", attachments=await _model_menu(operation), callback_id=callback_id)
+            await self._respond(user_id, "🧠 Выбери модель.", attachments=await _model_menu(operation), callback_id=callback_id)
             return
 
         if payload == "max:suno:tools":
             await self._respond(
                 user_id,
-                "🧰 <b>Suno Tools</b>\n\nПод готовым треком есть быстрые кнопки. Для ручного запуска укажите Task ID + Audio ID.",
+                "🧰 <b>Инструменты трека</b>\n\nБыстрые действия есть под готовым треком. Для ручного запуска можно указать Task ID и Audio ID.",
                 attachments=[
                     inline_keyboard(
                         [
@@ -395,7 +395,7 @@ class MaxSunoChannelService(MaxOmniChannelService):
         if payload == "max:suno:voice":
             await self._respond(
                 user_id,
-                "🎙 <b>Suno Voice</b>\n\nСоздание Voice ID требует аудиозаписи проверочной фразы. В MAX сейчас безопаснее использовать публичную ссылку на запись.",
+                "🎙 <b>Голос для Suno</b>\n\nДля Voice ID нужна запись проверочной фразы. Пришли ссылку на неё — дальше проведу по шагам.",
                 attachments=[inline_keyboard([[callback_button("1️⃣ Получить фразу", "max:suno:voice_validate")], [callback_button("⬅️ Suno", "max:music")]])],
                 callback_id=callback_id,
             )
