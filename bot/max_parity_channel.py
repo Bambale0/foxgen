@@ -56,7 +56,7 @@ def _balance_menu(balance: float) -> list[dict[str, Any]]:
     return [
         inline_keyboard(
             [
-                [callback_button(f"У тебя: {_format_cost(balance)} 🍌", "max:home")],
+                [callback_button(f"У тебя: {_format_cost(balance)} 🐾", "max:home")],
                 [
                     callback_button("💰 Пополнить", "max:topup"),
                     callback_button("📋 История", "max:history"),
@@ -68,10 +68,10 @@ def _balance_menu(balance: float) -> list[dict[str, Any]]:
 
 def _prompt_result_menu(kind: str, price: float = 0) -> list[dict[str, Any]]:
     if kind == "video":
-        label = f"🆕 Новый видео-промпт • {_format_cost(price)}🍌"
+        label = f"🆕 Разобрать новое видео • {_format_cost(price)}🐾"
         payload = "max:video_prompt"
     else:
-        label = "🆕 Новый промпт"
+        label = "🆕 Разобрать ещё"
         payload = "max:photo_prompt"
     return [
         inline_keyboard(
@@ -88,7 +88,7 @@ def _format_photo_prompt_result(result: dict[str, Any]) -> str:
     prompt_en = html.escape(str(result.get("prompt_en") or "—").strip())
     negative = html.escape(str(result.get("negative_prompt") or "—").strip())
     return (
-        "✅ <b>Промпт по фото готов</b>\n\n"
+        "✅ <b>Фото разобрано</b>\n\n"
         "<b>Prompt RU:</b>\n"
         f"<pre>{prompt_ru[:1500]}</pre>\n\n"
         "<b>Prompt EN:</b>\n"
@@ -105,7 +105,7 @@ def _format_video_prompt_result(result: dict[str, Any]) -> str:
     style = html.escape(str(result.get("visual_style_ru") or "—").strip())
     negative = html.escape(str(result.get("negative_prompt") or "—").strip())
     return (
-        "✅ <b>Промпт по видео готов</b>\n\n"
+        "✅ <b>Видео разобрано</b>\n\n"
         "<b>Prompt RU:</b>\n"
         f"<pre>{prompt_ru[:1200]}</pre>\n\n"
         "<b>Prompt EN:</b>\n"
@@ -170,7 +170,7 @@ class MaxTelegramParityChannelService(MaxProductChannelService):
         await self._respond(
             user_id,
             "🦊 <b>HappyFox</b>\n\n"
-            "Создавайте фото, видео и промпты — все основные сценарии доступны кнопками ниже.",
+            "Фото, видео, движение и идеи — всё нужное уже в кнопках ниже.",
             attachments=main_menu(
                 balance,
                 mini_app_url=self.settings.mini_app_url,
@@ -184,8 +184,8 @@ class MaxTelegramParityChannelService(MaxProductChannelService):
         balance = await get_max_balance(user_id)
         await self._respond(
             user_id,
-            "🍌 <b>Баланс</b>\n\n"
-            f"У тебя: <b>{_format_cost(balance)} 🍌</b>",
+            "🐾 <b>Твои лапки</b>\n\n"
+            f"У тебя: <b>{_format_cost(balance)} 🐾</b>",
             attachments=_balance_menu(balance),
             callback_id=callback_id,
         )
@@ -199,7 +199,7 @@ class MaxTelegramParityChannelService(MaxProductChannelService):
         await clear_max_session(user_id)
         await self._respond(
             user_id,
-            "🎬 <b>Создать видео</b>\n\nВыберите модель.",
+            "🎬 <b>Собрать видео</b>\n\nВыбери модель.",
             attachments=video_model_selection_menu(self.catalog),
             callback_id=callback_id,
         )
@@ -226,7 +226,7 @@ class MaxTelegramParityChannelService(MaxProductChannelService):
         )
         await self._respond(
             user_id,
-            f"🎬 <b>{html.escape(model)}</b>\n\nВыберите исходник для видео.",
+            f"🎬 <b>{html.escape(model)}</b>\n\nС чего начнём ролик?",
             attachments=video_type_menu(model=model, catalog=self.catalog),
             callback_id=callback_id,
         )
@@ -255,7 +255,7 @@ class MaxTelegramParityChannelService(MaxProductChannelService):
         await save_max_session(user_id, "prompt:photo:waiting_media", {})
         await self._respond(
             user_id,
-            "✍️ <b>Промпт по описанию</b>\n\n"
+            "✍️ <b>Разобрать фото</b>\n\n"
             "Пришлите фотографию. Я разберу композицию, свет, стиль и детали "
             "и соберу готовый prompt на русском и английском.",
             attachments=back_home_menu(),
@@ -268,8 +268,8 @@ class MaxTelegramParityChannelService(MaxProductChannelService):
         await save_max_session(user_id, "prompt:video:waiting_media", {})
         await self._respond(
             user_id,
-            "🎞 <b>Промпт по видео</b>\n\n"
-            f"Стоимость анализа: <b>{_format_cost(price)}🍌</b>.\n"
+            "🎞 <b>Разобрать видео</b>\n\n"
+            f"Стоимость анализа: <b>{_format_cost(price)}🐾</b>.\n"
             "Пришлите видео — я разберу движение камеры, темп, композицию, свет и стиль.",
             attachments=back_home_menu(),
             callback_id=callback_id,
@@ -303,7 +303,7 @@ class MaxTelegramParityChannelService(MaxProductChannelService):
         except MaxInsufficientBalanceError:
             await self._respond(
                 user_id,
-                "🍌 Баланса не хватает для анализа фотографии.",
+                "🐾 Лапок не хватает, чтобы разобрать фото.",
                 attachments=topup_menu(self.catalog),
             )
             return True
@@ -324,7 +324,7 @@ class MaxTelegramParityChannelService(MaxProductChannelService):
             )
             await self._respond(
                 user_id,
-                "Не удалось разобрать фотографию. Списание возвращено, можно попробовать ещё раз.",
+                "Фото не разобралось. Лапки возвращены — можно попробовать ещё раз.",
                 attachments=_prompt_result_menu("photo"),
             )
             return True
@@ -378,7 +378,7 @@ class MaxTelegramParityChannelService(MaxProductChannelService):
         except MaxInsufficientBalanceError:
             await self._respond(
                 user_id,
-                "🍌 Баланса не хватает для анализа видео.",
+                "🐾 Лапок не хватает, чтобы разобрать видео.",
                 attachments=topup_menu(self.catalog),
             )
             return True
@@ -399,7 +399,7 @@ class MaxTelegramParityChannelService(MaxProductChannelService):
             )
             await self._respond(
                 user_id,
-                "Не удалось разобрать видео. Списание возвращено, можно попробовать ещё раз.",
+                "Видео не разобралось. Лапки возвращены — можно попробовать ещё раз.",
                 attachments=_prompt_result_menu("video", cost),
             )
             return True
@@ -479,7 +479,7 @@ class MaxTelegramParityChannelService(MaxProductChannelService):
         if session.state == "video:select_type":
             await self._respond(
                 user_id,
-                "Выберите тип исходника кнопками ниже.",
+                "Выбери, с чего начать, кнопками ниже.",
                 attachments=video_type_menu(
                     model=str(session.data.get("model") or ""),
                     catalog=self.catalog,
