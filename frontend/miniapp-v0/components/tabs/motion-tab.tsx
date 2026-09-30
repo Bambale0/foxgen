@@ -123,7 +123,7 @@ export function MotionTab() {
 
   async function uploadImage(file: File) {
     if (state.mode !== 'live') {
-      setError('Откройте Mini App через Telegram, чтобы загрузить фото.')
+      setError('Открой HappyFox из Telegram или MAX, чтобы загрузить фото.')
       return
     }
 
@@ -146,7 +146,7 @@ export function MotionTab() {
     setVideoDuration(duration)
 
     if (state.mode !== 'live') {
-      setError('Откройте Mini App через Telegram, чтобы загрузить видео.')
+      setError('Открой HappyFox из Telegram или MAX, чтобы загрузить видео.')
       return
     }
 
@@ -157,17 +157,17 @@ export function MotionTab() {
     setError(null)
 
     if (state.mode !== 'live') {
-      setError('Откройте Mini App через Telegram, чтобы запустить Motion Control.')
+      setError('Открой HappyFox из Telegram или MAX, чтобы запустить перенос движения.')
       return
     }
 
     if (!characterImage) {
-      setError('Загрузите фото персонажа')
+      setError('Сначала добавь фото персонажа')
       return
     }
 
     if (!motionVideo) {
-      setError('Загрузите видео движения')
+      setError('Теперь добавь видео с движением')
       return
     }
 
@@ -193,7 +193,7 @@ export function MotionTab() {
         setTaskDetail(result.detail)
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Не удалось запустить Motion Control')
+      setError(e instanceof Error ? e.message : 'Движение не запустилось. Попробуй ещё раз.')
     } finally {
       setIsSubmitting(false)
     }
@@ -214,11 +214,11 @@ export function MotionTab() {
           </div>
 
           <h2 className="font-serif text-2xl font-semibold leading-tight text-foreground">
-            Перенос движения
+            Повторить движение
           </h2>
 
           <p className="mt-2 text-sm leading-6 text-muted-foreground">
-            Загрузите фото персонажа и ролик с нужным движением — HappyFox перенесёт его на ваш образ.
+            Добавь персонажа и ролик с нужным движением — HappyFox перенесёт его в новую сцену.
           </p>
         </div>
       </div>
