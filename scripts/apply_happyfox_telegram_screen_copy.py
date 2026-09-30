@@ -20,6 +20,13 @@ def _replace(path: str, old: str, new: str, *, context: str) -> None:
 
 def _patch_common() -> None:
     path = "bot/handlers/common.py"
+    current = (ROOT / path).read_text(encoding="utf-8")
+    if (
+        "Создавай то, что нужно прямо сейчас" in current
+        and "🐾 <b>Твои лапки</b>" in current
+        and "💬 <b>Что случилось?</b>" in current
+    ):
+        return
     replacements = (
         (
             '        "Выберите, что хотите получить — дальше покажу только подходящие настройки."\n',
@@ -75,9 +82,24 @@ def _patch_common() -> None:
     for old, new, context in replacements:
         _replace(path, old, new, context=context)
 
+    target = ROOT / path
+    current = target.read_text(encoding="utf-8")
+    current = current.replace(
+        "🐾 <b>Баланс HappyFox</b>",
+        "🐾 <b>Твои лапки</b>",
+    )
+    current = current.replace(
+        "Что создаём? Выберите результат — дальше бот покажет только нужные шаги и настройки.",
+        "Выбери результат — дальше оставлю только нужные шаги.",
+    )
+    target.write_text(current, encoding="utf-8")
+
 
 def _patch_partner() -> None:
     path = "bot/partner_copy.py"
+    current = (ROOT / path).read_text(encoding="utf-8")
+    if "🤝 <b>Зарабатывай с HappyFox</b>" in current:
+        return
     replacements = (
         (
             '    "💼 <b>Партнёрам</b>\\n\\n"\n',
@@ -126,6 +148,9 @@ def _patch_partner() -> None:
 
 def _patch_payments() -> None:
     path = "bot/handlers/payments.py"
+    current = (ROOT / path).read_text(encoding="utf-8")
+    if "🐾 <b>Добавить лапки</b>" in current:
+        return
     replacements = (
         (
             '        "Выберите пакет бананов ниже.\\n\\n"\n',
