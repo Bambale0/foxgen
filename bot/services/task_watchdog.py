@@ -51,6 +51,7 @@ async def get_stuck_tasks(minutes: int = STUCK_THRESHOLD_MINUTES) -> list[Dict[s
             FROM generation_tasks
             WHERE status IN ('pending', 'processing')
               AND task_id NOT LIKE 'img_%'
+              AND task_id NOT LIKE 'nr_%'
               AND created_at <= ?
             ORDER BY created_at ASC
             LIMIT 50

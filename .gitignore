@@ -47,6 +47,7 @@ backups/
 tests/
 !tests/
 tests/*
+!tests/test_neironych_*.py
 !tests/live/
 tests/live/*
 !tests/live/test_kie_live_smoke.py

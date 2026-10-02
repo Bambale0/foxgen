@@ -1697,6 +1697,27 @@ async def _launch_video_generation_task(
             max_count=get_max_video_references(model),
         )
 
+    from bot.services import neironych_entrypoints as native
+    native_cost = preset_manager.get_video_cost_with_quality(
+        model, duration, _video_pricing_quality(model, veo_resolution, omni_resolution)
+    )
+    native_cost = apply_video_reference_cost(model, native_cost, video_references)
+    native_result = await native.video(
+        user=user, telegram_id=telegram_id, product=model, prompt=prompt, cost=native_cost,
+        options=native.video_options(
+            product=model, generation_type=generation_type, duration=duration,
+            ratio=normalized_ratio, resolution=grok_resolution if model == "grok_imagine_v15" else "720p",
+            images=image_references, videos=video_references, start=image_url,
+        ),
+        metadata={"source": "miniapp", "v_type": generation_type, "v_model": model,
+                  "v_image_url": image_url, "reference_images": image_references,
+                  "v_reference_videos": video_references},
+        source_feed_gen_id=source_feed_gen_id, parent_generation_id=parent_generation_id,
+        action_type=action_type,
+    )
+    if native_result is not None:
+        return native_result
+
     if model == "gemini_omni_video":
         omni_images = _collect_gemini_omni_images(image_url, image_references)
         omni_video_list = _build_gemini_omni_video_list(video_references, duration)
@@ -2589,6 +2610,8 @@ async def miniapp_client_log(request: web.Request) -> web.Response:
 
 
 async def miniapp_bootstrap(request: web.Request) -> web.Response:
+    from bot.services import neironych_routing
+
     try:
         body = await _miniapp_payload(request)
         init_data = body.get("init_data", "")
@@ -2638,6 +2661,11 @@ async def miniapp_bootstrap(request: web.Request) -> web.Response:
             "image_models": [
                 {
                     **item,
+                    "label": (
+                        neironych_routing.media_label(item["id"], item["label"])
+                        if item["id"] == "flux_pro"
+                        else item["label"]
+                    ),
                     "cost": (
                         _resolve_image_unit_cost(item["id"], "basic")
                         if item.get("id") == "seedream_5_pro"

@@ -18,6 +18,7 @@ from bot.max_store import (
     clear_max_session,
     get_max_balance,
     get_max_session,
+    max_event_key,
     save_max_session,
 )
 from bot.max_ui import (
@@ -240,6 +241,7 @@ class MaxProductChannelService(MaxSeedance25ChannelService):
             "user_credits": balance,
             "menu_location": "AI-помощник",
             "available_models": available_models,
+            "provider_request_key": f"max-assistant-{max_event_key(update)}",
         }
         try:
             answer = await max_ai_assistant_service.get_assistant_response(

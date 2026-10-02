@@ -1154,6 +1154,22 @@ async def _start_image_generation_task(
             "runtime_img_service": runtime_img_service,
             "error": "missing_local_references",
         }
+    from bot.services import neironych_entrypoints as native
+    native_result = await native.image(
+        user=user, telegram_id=telegram_id, product=runtime_img_service,
+        prompt=prompt, ratio=img_ratio, references=reference_images,
+        quality=img_quality, cost=unit_cost,
+        metadata={"source": "telegram_or_miniapp", "img_service": img_service,
+                  "img_ratio": img_ratio, "img_quality": img_quality,
+                  "reference_images": reference_images, "prompt_source_id": prompt_source_id},
+        source_feed_gen_id=source_feed_gen_id, parent_generation_id=parent_generation_id,
+        action_type=action_type,
+    )
+    if native_result is not None:
+        if on_task_created:
+            await on_task_created(native_result["task_id"])
+        return native_result
+
     source_reference_images = [
         ref for ref in reference_images if not is_reference_contact_sheet_url(ref)
     ]
@@ -6980,11 +6996,27 @@ async def run_no_preset_video_from_callback(
 
     user = await get_or_create_user(callback.from_user.id)
     
+    native_persisted = False
     try:
         from bot.services.kling_service import kling_service
         from bot.services.seedance_service import seedance_service
 
-        if v_model == "gemini_omni_video":
+        from bot.services import neironych_entrypoints as native
+        native_result = await native.video(
+            user=user, telegram_id=callback.from_user.id, product=v_model, prompt=prompt, cost=cost,
+            options=native.video_options(
+                product=v_model, generation_type=v_type, duration=v_duration, ratio=v_ratio,
+                resolution=str(data.get("grok_resolution") or "480p") if v_model == "grok_imagine_v15" else "720p",
+                images=reference_images, videos=v_reference_videos, start=v_image_url,
+            ),
+            metadata={"source": "telegram", "v_type": v_type, "v_model": v_model,
+                      "v_image_url": v_image_url, "reference_images": reference_images,
+                      "v_reference_videos": v_reference_videos},
+        )
+        native_persisted = native_result is not None
+        if native_result is not None:
+            result = native_result
+        elif v_model == "gemini_omni_video":
             omni_images = _collect_gemini_omni_image_urls(v_image_url, reference_images)
             omni_video_urls = _collect_gemini_omni_video_urls(v_reference_videos)
             omni_video_list = _build_gemini_omni_video_list(omni_video_urls, v_duration)
@@ -7136,30 +7168,31 @@ async def run_no_preset_video_from_callback(
             )
 
         if result and "task_id" in result:
-            await add_generation_task(
-                user.id,
-                callback.from_user.id,
-                result["task_id"],
-                "video",
-                "no_preset_video",
-                model=v_model,
-                duration=v_duration,
-                aspect_ratio=v_ratio,
-                prompt=prompt,
-                cost=cost,
-                request_data={
-                    "source": "telegram",
-                    "v_type": v_type,
-                    "v_model": v_model,
-                    "user_prompt": prompt,
-                    "v_duration": v_duration,
-                    "v_ratio": v_ratio,
-                    "v_image_url": v_image_url,
-                    "reference_images": reference_images,
-                    "v_reference_videos": v_reference_videos,
-                    "v_mode": data.get("v_mode", "720p"),
-                },
-            )
+            if not native_persisted:
+                await add_generation_task(
+                    user.id,
+                    callback.from_user.id,
+                    result["task_id"],
+                    "video",
+                    "no_preset_video",
+                    model=v_model,
+                    duration=v_duration,
+                    aspect_ratio=v_ratio,
+                    prompt=prompt,
+                    cost=cost,
+                    request_data={
+                        "source": "telegram",
+                        "v_type": v_type,
+                        "v_model": v_model,
+                        "user_prompt": prompt,
+                        "v_duration": v_duration,
+                        "v_ratio": v_ratio,
+                        "v_image_url": v_image_url,
+                        "reference_images": reference_images,
+                        "v_reference_videos": v_reference_videos,
+                        "v_mode": data.get("v_mode", "720p"),
+                    },
+                )
             model_label = get_video_model_label(v_model)
             await callback.message.answer(
                 "🚀 <b>Повторное видео запущено</b>\n"
@@ -7212,7 +7245,7 @@ async def run_no_preset_video_from_callback(
             )
     except Exception:
         logger.exception("Video repeat from callback failed")
-        if not is_admin:
+        if not is_admin and not native_persisted:
             await add_credits(callback.from_user.id, cost)
         await callback.message.answer(
             "❌ Не получилось повторить видео. Бананы за попытку уже возвращены."
@@ -7369,11 +7402,27 @@ async def run_no_preset_video_from_message(
         parse_mode="HTML",
     )
 
+    native_persisted = False
     try:
         from bot.services.kling_service import kling_service
         from bot.services.seedance_service import seedance_service
 
-        if v_model == "gemini_omni_video":
+        from bot.services import neironych_entrypoints as native
+        native_result = await native.video(
+            user=user, telegram_id=message.from_user.id, product=v_model, prompt=prompt, cost=cost,
+            options=native.video_options(
+                product=v_model, generation_type=v_type, duration=v_duration, ratio=v_ratio,
+                resolution=grok_resolution if v_model == "grok_imagine_v15" else "720p",
+                images=image_refs, videos=video_urls or [], start=image_url,
+            ),
+            metadata={"source": "telegram", "v_type": v_type, "v_model": v_model,
+                      "v_image_url": image_url, "reference_images": image_refs,
+                      "v_reference_videos": video_urls or []},
+        )
+        native_persisted = native_result is not None
+        if native_result is not None:
+            result = native_result
+        elif v_model == "gemini_omni_video":
             omni_video_list = _build_gemini_omni_video_list(
                 omni_video_urls,
                 v_duration,
@@ -7687,55 +7736,56 @@ async def run_no_preset_video_from_message(
                 if v_model == "gemini_omni_audio"
                 else "character" if v_model == "gemini_omni_character" else "video"
             )
-            await add_generation_task(
-                user.id,
-                message.from_user.id,
-                result["task_id"],
-                task_type,
-                "no_preset_video",
-                model=v_model,
-                duration=v_duration,
-                aspect_ratio=v_ratio,
-                prompt=prompt,
-                cost=cost,
-                request_data={
-                    "source": "telegram",
-                    "v_type": v_type,
-                    "v_model": v_model,
-                    "v_image_url": image_url,
-                    "reference_images": image_refs,
-                    "v_reference_videos": video_urls or [],
-                    "avatar_audio_url": avatar_audio_url,
-                    "grok_mode": data.get("grok_mode", "normal"),
-                    "grok_resolution": (
-                        grok_resolution if v_model == "grok_imagine_v15" else ""
-                    ),
-                    "resolution": (
-                        grok_resolution
-                        if v_model == "grok_imagine_v15"
-                        else "720p" if v_model == "grok_imagine" else ""
-                    ),
-                    "veo_generation_type": veo_generation_type,
-                    "veo_translation": veo_translation,
-                    "veo_resolution": veo_resolution,
-                    "veo_seed": veo_seed,
-                    "veo_watermark": veo_watermark,
-                    "kling_negative_prompt": data.get("kling_negative_prompt", ""),
-                    "kling_cfg_scale": data.get("kling_cfg_scale", 0.5),
-                    "motion_mode": motion_mode,
-                    "motion_direction": motion_direction,
-                    "omni_resolution": omni_resolution,
-                    "omni_seed": omni_seed,
-                    "omni_audio_ids": omni_audio_ids,
-                    "omni_character_ids": omni_character_ids,
-                    "omni_base_voice": omni_base_voice,
-                    "omni_voice_name": omni_voice_name,
-                    "omni_voice_description": omni_voice_description,
-                    "omni_example_dialogue": omni_example_dialogue,
-                    "omni_character_name": omni_character_name,
-                    "omni_character_audio_ids": omni_character_audio_ids,
-                },
-            )
+            if not native_persisted:
+                await add_generation_task(
+                    user.id,
+                    message.from_user.id,
+                    result["task_id"],
+                    task_type,
+                    "no_preset_video",
+                    model=v_model,
+                    duration=v_duration,
+                    aspect_ratio=v_ratio,
+                    prompt=prompt,
+                    cost=cost,
+                    request_data={
+                        "source": "telegram",
+                        "v_type": v_type,
+                        "v_model": v_model,
+                        "v_image_url": image_url,
+                        "reference_images": image_refs,
+                        "v_reference_videos": video_urls or [],
+                        "avatar_audio_url": avatar_audio_url,
+                        "grok_mode": data.get("grok_mode", "normal"),
+                        "grok_resolution": (
+                            grok_resolution if v_model == "grok_imagine_v15" else ""
+                        ),
+                        "resolution": (
+                            grok_resolution
+                            if v_model == "grok_imagine_v15"
+                            else "720p" if v_model == "grok_imagine" else ""
+                        ),
+                        "veo_generation_type": veo_generation_type,
+                        "veo_translation": veo_translation,
+                        "veo_resolution": veo_resolution,
+                        "veo_seed": veo_seed,
+                        "veo_watermark": veo_watermark,
+                        "kling_negative_prompt": data.get("kling_negative_prompt", ""),
+                        "kling_cfg_scale": data.get("kling_cfg_scale", 0.5),
+                        "motion_mode": motion_mode,
+                        "motion_direction": motion_direction,
+                        "omni_resolution": omni_resolution,
+                        "omni_seed": omni_seed,
+                        "omni_audio_ids": omni_audio_ids,
+                        "omni_character_ids": omni_character_ids,
+                        "omni_base_voice": omni_base_voice,
+                        "omni_voice_name": omni_voice_name,
+                        "omni_voice_description": omni_voice_description,
+                        "omni_example_dialogue": omni_example_dialogue,
+                        "omni_character_name": omni_character_name,
+                        "omni_character_audio_ids": omni_character_audio_ids,
+                    },
+                )
             queued_title = (
                 "Audio ID создается"
                 if v_model == "gemini_omni_audio"
@@ -7773,10 +7823,16 @@ async def run_no_preset_video_from_message(
             )
     except Exception as e:
         logger.exception(f"Video generation error: {e}")
-        if not is_admin:
+        if not is_admin and not native_persisted:
             await add_credits(message.from_user.id, cost)
         await message.answer(
-            "❌ Не получилось завершить запуск генерации. Бананы за попытку уже возвращены."
+            (
+                "⚠️ Задача уже сохранена и продолжит выполняться. "
+                "Повторный платный запрос не отправляю."
+                if native_persisted
+                else "❌ Не получилось завершить запуск генерации. "
+                "Бананы за попытку уже возвращены."
+            )
         )
 
     await state.clear()

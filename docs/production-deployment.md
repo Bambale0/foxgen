@@ -60,6 +60,56 @@ main CI success
 
 Never deploy an arbitrary branch head or dirty server checkout.
 
+## Neironych provider routing
+
+The partner adapter is fail-closed. Merely deploying the code or placing the secret
+does not move traffic.
+
+Protected runtime configuration:
+
+~~~dotenv
+NEURONYCH_API_ENABLED=1
+NEURONYCH_API_KEY_FILE=/run/secrets/neironych_api_key
+~~~
+
+NEURONYCH_API_KEY is supported for environments that cannot mount a secret file.
+The compatibility spelling NEIRONYCH_* is accepted, but new configuration should
+use NEURONYCH_*.
+
+Routine routing is DB-backed and audited through the Telegram admin command:
+
+~~~text
+/neironych
+/neironych media on
+/neironych text on
+/neironych model glm-5.3-flash
+/neironych model gpt-5.6-luna
+/neironych model grok-4.5
+~~~
+
+media on succeeds only when the protected key is loaded and live /v1/models
+contains every migrated HappyFox media contract. The same product keys, HappyFox
+retail prices, balance/history and channel ownership remain authoritative.
+Unsupported provider capabilities (for example Seedance 2.5 return-last-frame)
+stay on the existing provider rather than being approximated.
+
+Current native mapping:
+
+~~~text
+banana_2          -> nano-banana-2
+banana_pro        -> nano-banana-pro
+flux_pro          -> gpt-image-2.5-sunburst
+grok_imagine_v15  -> grok-imagine-video-1.5
+seedance_2        -> seedance-2.0
+seedance_2_5      -> seedance-2.5
+AI Assistant      -> glm-5.3-flash | gpt-5.6-luna | grok-4.5
+~~~
+
+Unknown synchronous image/text submission outcomes are held for reconciliation and
+are never silently retried against another provider. Video retries reuse the exact
+persisted request body and idempotency key. Authenticated video content is downloaded
+from the configured API origin with redirects disabled before normal HappyFox delivery.
+
 ## Runtime validation
 
 Post-deploy checks should include:

@@ -1,3 +1,59 @@
+# Active: Neironych migration across HappyFox Telegram, MAX and VK
+
+User scope: all currently available models from the Neironych partner guide in Telegram, MAX, VK, and applicable Mini App entry points. Do not touch KSU, newvk:8443, or other projects.
+
+## Fresh audit, 2026-10-02
+
+- Foxgen baseline: 13b06e4bec505a867956306a110adc0efad2d125 (main), feature branch feat/neironych-all-channels-20261002.
+- VK baseline: 2abe490ea8c3022ce0b2f7d5eb19e691cd01b528 (master), same feature branch name in Bambale0/alenavk.
+- Public /v1/models has nine IDs: glm-5.3-flash, gpt-5.6-luna, grok-4.5, gpt-image-2.5-sunburst, nano-banana-2, nano-banana-pro, grok-imagine-video-1.5, seedance-2.0, seedance-2.5. Source hashes and model/pricing snapshots are recorded under docs/providers. Only live IDs with an implemented contract may be enabled; examples of disabled models are not availability evidence.
+- Existing Foxgen media products: banana_2, banana_pro, flux_pro, grok_imagine_v15, seedance_2, seedance_2_5. Existing VK equivalents use nano_banana_2, nano_banana_pro, gpt_image_2, grok_imagine_v15, seedance_2; VK lacks Seedance 2.5 and native text-model selection.
+- Reuse existing generation task tables, channel-owned identities/ledgers, task/refund/delivery machinery, and authenticated settings. Do not create a second money ledger or copy the Telegram balance into MAX/VK.
+- Canonical Foxgen has no Neironych adapter. An earlier uncommitted prototype outside the currently permitted work area is NOT a release; recreate the reviewed implementation in the permitted /root worktrees. Do not bypass file access policy to recover that prototype.
+- Production foxgen-happyfox-bot is healthy. No Neironych partner key was found in verified HappyFox runtime variables. Model discovery is public and is not an authenticated generation smoke.
+- VK service alenavk-vk-bot.service is active on the checked production host, /srv/alenavk, listener 1778. Its checkout is dirty (main.py, vk_bot_lp.py, runtime settings test, and an untracked env loader). Preserve that state. Exact-SHA deploy is blocked until runtime drift has an approved reconciliation path; do not reset or overwrite it.
+- No overlapping open PRs found in either repository.
+- Mutable retail prices are not partner procurement costs. Preserve existing tariffs. New products without an approved tariff must fail closed, not borrow a different model's price.
+
+## Design and test seams
+
+A channel-neutral happyfox_neironych Python package owns the nine exact model contracts, validated request builders, safe HTTP client, idempotent request lifecycle, and result validation. Foxgen imports the same package shipped in its source; VK pins its dependency to an exact reviewed source commit. Only the provider package is packaged, never bot state or database backups.
+
+Adapters persist the exact provider payload and idempotency key before submission in existing durable task metadata. Recovery polls a saved video ID or repeats only the same video key/body. Uncertain synchronous image/text submissions are held for reconciliation, never retried with a new key or silently routed to KIE. Terminal rejection may use the existing once-only refund path. Result persistence precedes delivery; delivery errors do not create another generation.
+
+Enablement, model selection and tariff overrides use the existing authenticated settings/control plane with actor metadata; secrets use protected environment or _FILE settings, never ordinary settings tables. Missing key keeps the migration disabled. Existing routes stay intact for models outside the nine-ID scope.
+
+Tests at public seams: provider builders/client with mock transport; durable submission/recovery and concurrency; channel generation/assistant entry points; protected admin writes; catalog/bootstrap/keyboard behavior; existing full channel regression and browser gates. No test claims live provider success without a real authenticated call.
+
+## Acceptance and release gates
+
+1. Nine current models have correct executable contracts and available user/admin selection.
+2. Telegram/MAX/VK integration preserves charge/refund, references, history and final delivery; Mini App shares the same routes.
+3. Invalid combinations fail before a paid provider call; unknown outcomes never trigger duplicate charges/submissions.
+4. Images are decoded with real MIME/extension; protected video is downloaded with same-origin auth, no redirects, bounded streaming, then stored locally.
+5. Unit, adapter, workflow, DB, authorization, channel, full CI and two-axis review gates pass before merge. Canonical deployment only after key/tariff/runtime-drift preflight.
+6. Post-deploy exact revision, health, channels and correlated generation telemetry are verified before calling migration complete.
+
+## Verification applicability
+
+Unit/contract, task DB integration, retries/idempotency, authorization, TG/MAX/VK, Mini App, observability, configuration and documentation: required. Schema migrations: avoid new tables; use existing metadata/settings. Instagram: retain existing routes unless the shared provider change necessarily applies; do not assume it is unaffected without tests. Paid/live smoke: blocked pending a HappyFox-scoped key. Deployment: blocked by key provisioning and VK runtime drift; no manual production edits.
+
+Guidance read/applied: Bambale0/skills to-spec, TDD, code-review; Bambale0/claw api-integrator and release-hardening; wondelai/skills pragmatic-programmer; anthropics/skills webapp-testing and API error/key handling guidance. No external skill repository is copied into either product.
+
+## Progress
+
+- Fresh audit and acceptance criteria recorded before production code.
+- Provider contract package implemented for all nine live model IDs with bounded HTTP, exact persisted idempotency, protected video download and local artifact verification.
+- HappyFox routing is DB-backed/audited and fail-closed; deploy remains disabled until an operator enables media/text.
+- Telegram + Mini App image/video entry points use the existing HappyFox task/wallet rows; MAX uses the existing durable MAX job row and the same provider lifecycle.
+- Shared AI Assistant can route Telegram/MAX/Mini App text requests to any of the three live text models; audio remains on the existing provider because the partner guide does not advertise audio input for these text contracts.
+- Seedance 2.5 public/admin flows route only capabilities represented exactly by the partner contract. return-last-frame, non-MP4 output, web-search, NSFW checker, audio-off, or other incompatible combinations retain the existing provider.
+- Production secret is now provisioned and syntactically validated on the HappyFox host; provider routing is still disabled until reviewed code deploys.
+- Verification so far: 63 dedicated Neironych tests green; relevant focused/parity regression suite 127 passed in exact CI normalizer order; full backend suite 467 passed / 27 skipped after the same normalizers; changed-delta Ruff clean; compileall clean; provider wheel built and contains only happyfox_neironych + dist-info. No paid provider generation was used for pre-release smoke.
+- Next: complete changed-delta lint/package checks, two-axis review against baseline, exact-head CI/PR/merge/canonical deploy, then enable audited routing and verify production telemetry before VK promotion.
+
+---
+
 # Active: Telegram green buttons + DB-backed animated custom-emoji icons
 
 Baseline: rewritten public main `f818b937674643843e8884fe83030ff150d95b8d`, branch `feat/telegram-green-animated-menu`, PR #286.

@@ -56,6 +56,7 @@ from bot.keyboards import (
     get_main_menu_button_keyboard,
 )
 from bot.services.preset_manager import preset_manager
+from bot.services import neironych_routing
 from bot.services.telegram_custom_emoji import extract_custom_emoji_ids
 from bot.services.telegram_button_theme import (
     TELEGRAM_BUTTON_EMOJI_MAX_ENTRIES,
@@ -2414,6 +2415,68 @@ async def cmd_emoji_unset(message: types.Message):
         f"✅ Mapping для {_html(target)} удалён. Вернулся обычный Unicode emoji.",
         parse_mode="HTML",
     )
+
+
+@router.message(Command("neironych"))
+async def cmd_neironych(message: types.Message):
+    """Admin-only provider routing control plane; never prints the secret."""
+    if not message.from_user or not config.is_admin(message.from_user.id):
+        await message.answer("⛔ У вас нет доступа к этой команде.")
+        return
+
+    raw = str(message.text or "").strip()
+    parts = raw.split()
+    try:
+        if len(parts) >= 3 and parts[1] in {"media", "text"}:
+            flag = parts[2].casefold()
+            if flag not in {"on", "off"}:
+                raise ValueError("Используйте on или off")
+            settings = await neironych_routing.configure(
+                parts[1],
+                flag == "on",
+                actor=message.from_user.id,
+            )
+        elif len(parts) >= 3 and parts[1] == "model":
+            settings = await neironych_routing.configure(
+                "model",
+                parts[2],
+                actor=message.from_user.id,
+            )
+        elif len(parts) == 1:
+            settings = await neironych_routing.configuration()
+        else:
+            raise ValueError(
+                "Формат: /neironych | /neironych media on|off | "
+                "/neironych text on|off | /neironych model <model-id>"
+            )
+
+        live = set()
+        if neironych_routing.client.settings.ready:
+            try:
+                live = await neironych_routing.live_models()
+            except Exception:
+                live = set()
+        available = ", ".join(sorted(live)) if live else "не удалось получить"
+        await message.answer(
+            "🧠 <b>Нейроныч API</b>\n\n"
+            f"Ключ загружен: <b>{'да' if neironych_routing.client.settings.ready else 'нет'}</b>\n"
+            f"Media route: <b>{'on' if settings['media_enabled'] else 'off'}</b>\n"
+            f"Text route: <b>{'on' if settings['text_enabled'] else 'off'}</b>\n"
+            f"Text model: <code>{html_utils.escape(str(settings['text_model']))}</code>\n"
+            f"Live models: <code>{html_utils.escape(available)}</code>",
+            parse_mode="HTML",
+        )
+    except Exception as exc:
+        logger.warning(
+            "neironych_admin_config_failed admin_id=%s error_type=%s",
+            message.from_user.id,
+            type(exc).__name__,
+        )
+        await message.answer(
+            "❌ Настройка Нейроныча не применена: "
+            f"<code>{html_utils.escape(str(exc))[:700]}</code>",
+            parse_mode="HTML",
+        )
 
 
 @router.message(Command("admin"))

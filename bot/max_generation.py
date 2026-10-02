@@ -31,6 +31,8 @@ from bot.services.seedance_service import seedance_service
 from bot.services.seedream_service import seedream_service
 from bot.services.veo_service import veo_service
 from bot.services.wan27_service import wan27_service
+from bot.services import neironych_jobs, neironych_routing
+from happyfox_neironych import image_request, video_request
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +48,10 @@ _SCHEMA_READY: set[str] = set()
 
 class MaxGenerationRetry(RuntimeError):
     """Retry the same durable MAX job without refunding or regenerating."""
+
+
+class MaxGenerationHold(RuntimeError):
+    """Provider may have accepted a synchronous request; never resubmit it."""
 
 
 @dataclass(frozen=True)
@@ -605,6 +611,60 @@ def _video_refs(job: MaxGenerationJob) -> list[str]:
     return [str(value) for value in values if str(value or "").strip()]
 
 
+async def _native_request_for_job(job: MaxGenerationJob):
+    provider_model = await neironych_routing.media_model(job.model)
+    if provider_model is None:
+        return None
+
+    key = f"happyfox-max-{job.id}"
+    if job.kind == "image":
+        quality = str(job.options.get("quality") or "2K").strip()
+        quality_lower = quality.casefold()
+        resolution = quality_lower if quality_lower in {"1k", "2k", "4k"} else "2k"
+        provider_quality = (
+            "auto"
+            if quality_lower in {"basic", "2k", "4k", "1k"}
+            else quality_lower
+            if quality_lower in {"low", "medium", "high", "auto"}
+            else "auto"
+        )
+        return image_request(
+            provider_model,
+            job.prompt,
+            key=key,
+            images=_image_refs(job),
+            ratio=str(job.options.get("aspect_ratio") or "1:1"),
+            resolution=resolution,
+            quality=provider_quality,
+        )
+
+    duration = int(job.options.get("duration") or _default_video_duration(job.model))
+    ratio = str(job.options.get("aspect_ratio") or "16:9")
+    resolution = str(job.options.get("resolution") or "720p").lower()
+    images = _image_refs(job)
+    videos = _video_refs(job)
+    start_image = None
+    if job.generation_type == "imgtxt" and images:
+        start_image = images.pop(0)
+        if provider_model == "seedance-2.5":
+            ratio = "adaptive"
+    if provider_model.startswith("seedance-") and job.options.get("generate_audio") is False:
+        # The partner contract explicitly forbids generate_audio=false.
+        return None
+    return video_request(
+        provider_model,
+        job.prompt,
+        key=key,
+        duration=duration,
+        resolution=resolution,
+        ratio=ratio,
+        images=images,
+        videos=videos,
+        start_image=start_image,
+        generate_audio=True if provider_model.startswith("seedance-") else None,
+    )
+
+
 async def _submit_image(job: MaxGenerationJob) -> tuple[str, str]:
     refs = _image_refs(job)
     ratio = str(job.options.get("aspect_ratio") or "1:1")
@@ -900,16 +960,54 @@ class MaxGenerationService:
 
     async def _process(self, job: MaxGenerationJob) -> None:
         current = job
-        if not current.result_url and not current.provider_task_id:
-            provider_kind, task_id = await _submit_provider(current)
-            await _mark_provider_task(current.id, provider_kind, task_id)
-            current = await get_max_generation_job(current.id) or current
-
-        result_url = current.result_url
-        if not result_url:
-            result_url = await _poll_provider(current)
+        native_request = await _native_request_for_job(current)
+        if native_request is not None:
+            operation = await neironych_jobs.advance_max_operation(
+                current.id,
+                native_request,
+            )
+            external_id = str(operation.get("external_id") or "")
+            if external_id and (
+                current.provider_kind != "neironych"
+                or current.provider_task_id != external_id
+            ):
+                await _mark_provider_task(current.id, "neironych", external_id)
+            phase = str(operation.get("phase") or "")
+            if phase in {"prepared", "sending", "waiting"}:
+                raise MaxGenerationRetry(
+                    f"Neironych task is {phase}; retrying the same durable operation"
+                )
+            if phase == "held":
+                raise MaxGenerationHold(
+                    str(operation.get("error") or "submission outcome is unknown")
+                )
+            if phase == "failed":
+                raise RuntimeError(
+                    str(operation.get("error") or "Neironych generation failed")
+                )
+            if phase != "ready":
+                raise RuntimeError(f"Unexpected Neironych operation phase: {phase}")
+            assets = operation.get("assets") or []
+            result_url = (
+                str(assets[0].get("url") or "")
+                if assets and isinstance(assets[0], dict)
+                else ""
+            )
+            if not result_url:
+                raise RuntimeError("Neironych completed without a public result URL")
             await _mark_result(current.id, result_url)
             current = await get_max_generation_job(current.id) or current
+        else:
+            if not current.result_url and not current.provider_task_id:
+                provider_kind, task_id = await _submit_provider(current)
+                await _mark_provider_task(current.id, provider_kind, task_id)
+                current = await get_max_generation_job(current.id) or current
+
+            result_url = current.result_url
+            if not result_url:
+                result_url = await _poll_provider(current)
+                await _mark_result(current.id, result_url)
+                current = await get_max_generation_job(current.id) or current
 
         await self._deliver(current, result_url)
         await record_max_generation(
@@ -935,6 +1033,38 @@ class MaxGenerationService:
             await self._process(job)
         except MaxGenerationRetry as exc:
             await _retry_job(job.id, str(exc))
+        except MaxGenerationHold as exc:
+            logger.error(
+                "MAX Neironych synchronous outcome held: job_id=%s error=%s",
+                job.id,
+                type(exc).__name__,
+            )
+            current = await get_max_generation_job(job.id) or job
+            await _refund_job(current, str(exc))
+            await record_max_generation(
+                current.max_user_id,
+                generation_key=current.id,
+                kind=current.kind,
+                model=current.model,
+                prompt=current.prompt,
+                status="failed",
+                cost=current.cost,
+                provider_task_id=current.provider_task_id,
+                result_url=current.result_url,
+                request_data={
+                    "input": current.input_data,
+                    "options": current.options,
+                    "generation_type": current.generation_type,
+                    "error": "provider outcome is unknown; no automatic resubmit",
+                },
+            )
+            await _mark_job_failed(current.id, str(exc))
+            with contextlib.suppress(Exception):
+                await self.client.send_message(
+                    current.max_user_id,
+                    "Провайдер не подтвердил результат генерации. "
+                    "Повторный платный запрос не отправляю; баланс MAX восстановлен.",
+                )
         except Exception as exc:
             logger.exception("MAX generation failed: job_id=%s", job.id)
             current = await get_max_generation_job(job.id) or job
