@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 
 import pytest
 
@@ -84,7 +85,7 @@ async def test_max_native_route_disabled_keeps_existing_provider(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_max_held_native_outcome_refunds_without_second_submit(monkeypatch):
+async def test_max_held_native_outcome_stops_without_refund_or_second_submit(monkeypatch):
     import bot.max_generation as mod
 
     job = _job()
@@ -96,14 +97,14 @@ async def test_max_held_native_outcome_refunds_without_second_submit(monkeypatch
         return {"phase": "held", "error": "submission_outcome_unknown"}
 
     refunded = []
-    failed = []
+    held = []
     messages = []
 
     monkeypatch.setattr(mod, "_native_request_for_job", native_request)
     monkeypatch.setattr(mod.neironych_jobs, "advance_max_operation", advance)
     monkeypatch.setattr(mod, "get_max_generation_job", lambda _job_id: _async(job))
     monkeypatch.setattr(mod, "_refund_job", lambda current, reason: _record_async(refunded, reason))
-    monkeypatch.setattr(mod, "_mark_job_failed", lambda _job_id, reason: _record_async(failed, reason))
+    monkeypatch.setattr(mod, "_mark_job_held", lambda _job_id, reason: _record_async(held, reason))
     monkeypatch.setattr(mod, "record_max_generation", _noop_async)
 
     class Client:
@@ -113,9 +114,10 @@ async def test_max_held_native_outcome_refunds_without_second_submit(monkeypatch
     service = mod.MaxGenerationService(Client())
     await service._handle_job(job)
 
-    assert refunded
-    assert failed
+    assert refunded == []
+    assert held
     assert len(messages) == 1
+    assert "автоматический возврат" in messages[0][1]
 
 
 async def _async(value):
@@ -128,3 +130,27 @@ async def _record_async(target, value):
 
 async def _noop_async(*args, **kwargs):
     return None
+
+
+@pytest.mark.asyncio
+async def test_max_delivery_failure_after_persisted_result_retries_without_refund(monkeypatch):
+    import bot.max_generation as mod
+
+    job = replace(_job(), result_url="https://media.example/result.png")
+    refunded = []
+    retried = []
+
+    monkeypatch.setattr(mod, "_native_request_for_job", lambda _job: _async(None))
+    monkeypatch.setattr(mod, "get_max_generation_job", lambda _job_id: _async(job))
+    monkeypatch.setattr(mod, "_refund_job", lambda current, reason: _record_async(refunded, reason))
+    monkeypatch.setattr(mod, "_retry_job", lambda _job_id, reason: _record_async(retried, reason))
+
+    class Client:
+        async def send_media_url(self, *args, **kwargs):
+            raise RuntimeError("transport unavailable")
+
+    service = mod.MaxGenerationService(Client())
+    await service._handle_job(job)
+
+    assert refunded == []
+    assert retried

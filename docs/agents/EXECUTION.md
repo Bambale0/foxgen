@@ -50,7 +50,9 @@ Guidance read/applied: Bambale0/skills to-spec, TDD, code-review; Bambale0/claw 
 - Seedance 2.5 public/admin flows route only capabilities represented exactly by the partner contract. return-last-frame, non-MP4 output, web-search, NSFW checker, audio-off, or other incompatible combinations retain the existing provider.
 - Production secret is now provisioned and syntactically validated on the HappyFox host; provider routing is still disabled until reviewed code deploys.
 - Verification so far: 63 dedicated Neironych tests green; relevant focused/parity regression suite 127 passed in exact CI normalizer order; full backend suite 467 passed / 27 skipped after the same normalizers; changed-delta Ruff clean; compileall clean; provider wheel built and contains only happyfox_neironych + dist-info. No paid provider generation was used for pre-release smoke.
-- Next: complete changed-delta lint/package checks, two-axis review against baseline, exact-head CI/PR/merge/canonical deploy, then enable audited routing and verify production telemetry before VK promotion.
+- Two-axis pre-merge review found a material MAX finance issue: an uncertain synchronous provider outcome was being refunded even though the paid request could have succeeded. Fixed: MAX marks the job held, does not refund and does not resubmit; a delivery failure after a persisted result now retries delivery without refund/regeneration. Regression coverage added.
+- Verification after review fix: 64 dedicated Neironych tests green and changed-delta Ruff/diff checks clean.
+- Next: push the review-fix head, rerun exact-head CI and complete Standards/Spec review; merge/deploy only after all gates are green, then enable audited routing and verify production telemetry before VK promotion.
 
 ---
 

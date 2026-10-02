@@ -465,6 +465,22 @@ async def _mark_job_succeeded(job_id: str) -> None:
         await db.commit()
 
 
+async def _mark_job_held(job_id: str, error: str) -> None:
+    """Stop automatic retries when a paid provider outcome is uncertain."""
+    now = int(time.time())
+    async with db_backend.connect() as db:
+        await db.execute(
+            """
+            UPDATE max_generation_jobs
+            SET status = 'held', error = ?, lease_expires_at_epoch = NULL,
+                next_attempt_at_epoch = 0, updated_at_epoch = ?
+            WHERE id = ?
+            """,
+            (str(error)[:1000], now, job_id),
+        )
+        await db.commit()
+
+
 async def _mark_job_failed(job_id: str, error: str) -> None:
     now = int(time.time())
     async with db_backend.connect() as db:
@@ -1040,14 +1056,13 @@ class MaxGenerationService:
                 type(exc).__name__,
             )
             current = await get_max_generation_job(job.id) or job
-            await _refund_job(current, str(exc))
             await record_max_generation(
                 current.max_user_id,
                 generation_key=current.id,
                 kind=current.kind,
                 model=current.model,
                 prompt=current.prompt,
-                status="failed",
+                status="held",
                 cost=current.cost,
                 provider_task_id=current.provider_task_id,
                 result_url=current.result_url,
@@ -1055,19 +1070,28 @@ class MaxGenerationService:
                     "input": current.input_data,
                     "options": current.options,
                     "generation_type": current.generation_type,
-                    "error": "provider outcome is unknown; no automatic resubmit",
+                    "error": "provider outcome is unknown; no automatic resubmit or refund",
                 },
             )
-            await _mark_job_failed(current.id, str(exc))
+            await _mark_job_held(current.id, str(exc))
             with contextlib.suppress(Exception):
                 await self.client.send_message(
                     current.max_user_id,
-                    "Провайдер не подтвердил результат генерации. "
-                    "Повторный платный запрос не отправляю; баланс MAX восстановлен.",
+                    "Провайдер не подтвердил итог генерации. "
+                    "Повторный платный запрос и автоматический возврат не выполняю, "
+                    "чтобы не создать двойную операцию. Задача сохранена для сверки.",
                 )
         except Exception as exc:
             logger.exception("MAX generation failed: job_id=%s", job.id)
             current = await get_max_generation_job(job.id) or job
+            if current.result_url:
+                # The provider result is already durably persisted. A delivery
+                # failure must retry delivery, never refund or regenerate.
+                await _retry_job(
+                    current.id,
+                    f"delivery retry after persisted result: {type(exc).__name__}",
+                )
+                return
             await _refund_job(current, str(exc))
             await record_max_generation(
                 current.max_user_id,
