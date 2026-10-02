@@ -14,7 +14,7 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, Optional
 
 from bot import db as db_backend
-from bot.database import DATABASE_PATH, get_telegram_id_by_user_id
+from bot.database import DATABASE_PATH
 
 logger = logging.getLogger(__name__)
 

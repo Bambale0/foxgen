@@ -2509,10 +2509,15 @@ async def miniapp_index(request: web.Request) -> web.Response:
             '})();'
             '</script>'
         )
+        runtime_config_json = json.dumps(
+            runtime_config,
+            ensure_ascii=False,
+        ).replace("</", "<\\/")
         script = (
             '<script id="miniapp-runtime-config">'
             "window.__BANANO_MINIAPP_CONFIG__="
-            f"{json.dumps(runtime_config, ensure_ascii=False).replace('</', '<\\/')};"
+            + runtime_config_json
+            + ";"
             "</script>"
         )
         html_text = index_path.read_text(encoding="utf-8")
