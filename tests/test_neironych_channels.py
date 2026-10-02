@@ -114,3 +114,36 @@ async def test_capability_mismatch_keeps_existing_provider_without_truncating(mo
         ),
     )
     assert video is None
+
+
+@pytest.mark.asyncio
+async def test_gpt_image_quality_preserves_requested_ratio(monkeypatch):
+    from bot.services import neironych_entrypoints as entry
+
+    captured = {}
+
+    async def route(product):
+        assert product == "flux_pro"
+        return "gpt-image-2.5-sunburst"
+
+    async def enqueue(user, telegram_id, request, **kwargs):
+        captured["request"] = request
+        return "nr-test"
+
+    monkeypatch.setattr(entry.routing, "media_model", route)
+    monkeypatch.setattr(entry.jobs, "enqueue_telegram", enqueue)
+
+    result = await entry.image(
+        user=SimpleNamespace(id=1, telegram_id=1),
+        telegram_id=1,
+        product="flux_pro",
+        prompt="wide banner",
+        ratio="16:9",
+        references=[],
+        quality="basic",
+        cost=2,
+    )
+
+    assert result is not None
+    assert captured["request"].payload["size"] == "2048x1152"
+    assert captured["request"].payload["quality"] == "auto"

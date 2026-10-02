@@ -32,10 +32,16 @@ async def image(
         return None
     key = f'happyfox-image-{uuid.uuid4().hex}'
     options: dict[str, Any] = {'images': references, 'ratio': ratio}
-    if quality.lower() in {'1k', '2k', '4k'}:
-        options['resolution'] = quality.lower()
-    elif provider_model == 'gpt-image-2.5-sunburst' and quality in {'basic', 'auto', 'low', 'medium', 'high'}:
-        options.update(size='auto', quality='auto' if quality == 'basic' else quality)
+    quality_lower = str(quality or "").lower()
+    if quality_lower in {'1k', '2k', '4k'}:
+        options['resolution'] = quality_lower
+    elif (
+        provider_model == 'gpt-image-2.5-sunburst'
+        and quality_lower in {'basic', 'auto', 'low', 'medium', 'high'}
+    ):
+        # GPT image quality and geometry are independent. Preserve the chosen
+        # aspect ratio; "basic" is the HappyFox label for provider auto quality.
+        options['quality'] = 'auto' if quality_lower == 'basic' else quality_lower
     else:
         raise ContractError('Choose a supported image resolution')
     request = image_request(provider_model, prompt, key=key, **options)
