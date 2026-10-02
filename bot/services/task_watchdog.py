@@ -14,7 +14,7 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, Optional
 
 from bot import db as db_backend
-from bot.database import DATABASE_PATH, get_telegram_id_by_user_id
+from bot.database import DATABASE_PATH
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +51,7 @@ async def get_stuck_tasks(minutes: int = STUCK_THRESHOLD_MINUTES) -> list[Dict[s
             FROM generation_tasks
             WHERE status IN ('pending', 'processing')
               AND task_id NOT LIKE 'img_%'
+              AND task_id NOT LIKE 'nr_%'
               AND created_at <= ?
             ORDER BY created_at ASC
             LIMIT 50

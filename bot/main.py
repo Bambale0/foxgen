@@ -2371,6 +2371,8 @@ async def on_startup(bot: Bot, dispatcher: Dispatcher | None = None):
 
     # База данных уже инициализирована в main() функции
     logger.info("Database already initialized")
+    from bot.services import neironych_jobs
+    await neironych_jobs.start(bot)
 
     try:
         for scope in USER_BOT_COMMAND_SCOPES:
@@ -2473,6 +2475,8 @@ async def on_startup(bot: Bot, dispatcher: Dispatcher | None = None):
 async def on_shutdown(bot: Bot):
     """Действия при остановке"""
     logger.info("Bot shutting down...")
+    from bot.services import neironych_jobs
+    await neironych_jobs.stop()
     try:
         from bot.services.cryptobot_service import cryptobot_service
 

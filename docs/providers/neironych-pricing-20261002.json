@@ -1,0 +1,272 @@
+[
+  {
+    "model_slug": "glm-5.3-flash",
+    "model_name": "GLM-5.3 Flash",
+    "modality": "llm",
+    "mode": "cache_write_tokens",
+    "resolution": "default",
+    "price_rub": "0.00",
+    "billing_unit": "million_tokens"
+  },
+  {
+    "model_slug": "glm-5.3-flash",
+    "model_name": "GLM-5.3 Flash",
+    "modality": "llm",
+    "mode": "cached_input_tokens",
+    "resolution": "default",
+    "price_rub": "3.08",
+    "billing_unit": "million_tokens"
+  },
+  {
+    "model_slug": "glm-5.3-flash",
+    "model_name": "GLM-5.3 Flash",
+    "modality": "llm",
+    "mode": "input_tokens",
+    "resolution": "default",
+    "price_rub": "15.39",
+    "billing_unit": "million_tokens"
+  },
+  {
+    "model_slug": "glm-5.3-flash",
+    "model_name": "GLM-5.3 Flash",
+    "modality": "llm",
+    "mode": "output_tokens",
+    "resolution": "default",
+    "price_rub": "51.28",
+    "billing_unit": "million_tokens"
+  },
+  {
+    "model_slug": "gpt-5.6-luna",
+    "model_name": "GPT-5.6 Luna",
+    "modality": "llm",
+    "mode": "cache_write_tokens",
+    "resolution": "default",
+    "price_rub": "25.64",
+    "billing_unit": "million_tokens"
+  },
+  {
+    "model_slug": "gpt-5.6-luna",
+    "model_name": "GPT-5.6 Luna",
+    "modality": "llm",
+    "mode": "cached_input_tokens",
+    "resolution": "default",
+    "price_rub": "2.06",
+    "billing_unit": "million_tokens"
+  },
+  {
+    "model_slug": "gpt-5.6-luna",
+    "model_name": "GPT-5.6 Luna",
+    "modality": "llm",
+    "mode": "input_tokens",
+    "resolution": "default",
+    "price_rub": "20.52",
+    "billing_unit": "million_tokens"
+  },
+  {
+    "model_slug": "gpt-5.6-luna",
+    "model_name": "GPT-5.6 Luna",
+    "modality": "llm",
+    "mode": "output_tokens",
+    "resolution": "default",
+    "price_rub": "123.08",
+    "billing_unit": "million_tokens"
+  },
+  {
+    "model_slug": "gpt-image-2.5-sunburst",
+    "model_name": "GPT Image 2.5 Sunburst",
+    "modality": "image",
+    "mode": "default",
+    "resolution": "1K",
+    "price_rub": "1.93",
+    "billing_unit": "generation"
+  },
+  {
+    "model_slug": "gpt-image-2.5-sunburst",
+    "model_name": "GPT Image 2.5 Sunburst",
+    "modality": "image",
+    "mode": "default",
+    "resolution": "2K",
+    "price_rub": "1.93",
+    "billing_unit": "generation"
+  },
+  {
+    "model_slug": "gpt-image-2.5-sunburst",
+    "model_name": "GPT Image 2.5 Sunburst",
+    "modality": "image",
+    "mode": "default",
+    "resolution": "4K",
+    "price_rub": "2.57",
+    "billing_unit": "generation"
+  },
+  {
+    "model_slug": "grok-4.5",
+    "model_name": "Grok 4.5",
+    "modality": "llm",
+    "mode": "cache_write_tokens",
+    "resolution": "default",
+    "price_rub": "205.12",
+    "billing_unit": "million_tokens"
+  },
+  {
+    "model_slug": "grok-4.5",
+    "model_name": "Grok 4.5",
+    "modality": "llm",
+    "mode": "cached_input_tokens",
+    "resolution": "default",
+    "price_rub": "30.77",
+    "billing_unit": "million_tokens"
+  },
+  {
+    "model_slug": "grok-4.5",
+    "model_name": "Grok 4.5",
+    "modality": "llm",
+    "mode": "input_tokens",
+    "resolution": "default",
+    "price_rub": "205.12",
+    "billing_unit": "million_tokens"
+  },
+  {
+    "model_slug": "grok-4.5",
+    "model_name": "Grok 4.5",
+    "modality": "llm",
+    "mode": "output_tokens",
+    "resolution": "default",
+    "price_rub": "615.36",
+    "billing_unit": "million_tokens"
+  },
+  {
+    "model_slug": "grok-imagine-video-1.5",
+    "model_name": "Grok Imagine Video 1.5",
+    "modality": "video",
+    "mode": "default",
+    "resolution": "1080p",
+    "price_rub": "25.64",
+    "billing_unit": "second"
+  },
+  {
+    "model_slug": "grok-imagine-video-1.5",
+    "model_name": "Grok Imagine Video 1.5",
+    "modality": "video",
+    "mode": "default",
+    "resolution": "480p",
+    "price_rub": "8.21",
+    "billing_unit": "second"
+  },
+  {
+    "model_slug": "grok-imagine-video-1.5",
+    "model_name": "Grok Imagine Video 1.5",
+    "modality": "video",
+    "mode": "default",
+    "resolution": "720p",
+    "price_rub": "14.36",
+    "billing_unit": "second"
+  },
+  {
+    "model_slug": "nano-banana-2",
+    "model_name": "Nano Banana 2",
+    "modality": "image",
+    "mode": "default",
+    "resolution": "1K",
+    "price_rub": "1.93",
+    "billing_unit": "generation"
+  },
+  {
+    "model_slug": "nano-banana-2",
+    "model_name": "Nano Banana 2",
+    "modality": "image",
+    "mode": "default",
+    "resolution": "2K",
+    "price_rub": "1.93",
+    "billing_unit": "generation"
+  },
+  {
+    "model_slug": "nano-banana-2",
+    "model_name": "Nano Banana 2",
+    "modality": "image",
+    "mode": "default",
+    "resolution": "4K",
+    "price_rub": "1.93",
+    "billing_unit": "generation"
+  },
+  {
+    "model_slug": "nano-banana-pro",
+    "model_name": "Nano Banana Pro",
+    "modality": "image",
+    "mode": "default",
+    "resolution": "1K",
+    "price_rub": "3.85",
+    "billing_unit": "generation"
+  },
+  {
+    "model_slug": "nano-banana-pro",
+    "model_name": "Nano Banana Pro",
+    "modality": "image",
+    "mode": "default",
+    "resolution": "2K",
+    "price_rub": "3.85",
+    "billing_unit": "generation"
+  },
+  {
+    "model_slug": "nano-banana-pro",
+    "model_name": "Nano Banana Pro",
+    "modality": "image",
+    "mode": "default",
+    "resolution": "4K",
+    "price_rub": "3.85",
+    "billing_unit": "generation"
+  },
+  {
+    "model_slug": "seedance-2.0",
+    "model_name": "seedance-2.0",
+    "modality": "video",
+    "mode": "default",
+    "resolution": "1080p",
+    "price_rub": "35.90",
+    "billing_unit": "second"
+  },
+  {
+    "model_slug": "seedance-2.0",
+    "model_name": "seedance-2.0",
+    "modality": "video",
+    "mode": "default",
+    "resolution": "480p",
+    "price_rub": "6.80",
+    "billing_unit": "second"
+  },
+  {
+    "model_slug": "seedance-2.0",
+    "model_name": "seedance-2.0",
+    "modality": "video",
+    "mode": "default",
+    "resolution": "720p",
+    "price_rub": "14.11",
+    "billing_unit": "second"
+  },
+  {
+    "model_slug": "seedance-2.5",
+    "model_name": "Seedance 2.5",
+    "modality": "video",
+    "mode": "default",
+    "resolution": "1080p",
+    "price_rub": "55.13",
+    "billing_unit": "second"
+  },
+  {
+    "model_slug": "seedance-2.5",
+    "model_name": "Seedance 2.5",
+    "modality": "video",
+    "mode": "default",
+    "resolution": "480p",
+    "price_rub": "10.00",
+    "billing_unit": "second"
+  },
+  {
+    "model_slug": "seedance-2.5",
+    "model_name": "Seedance 2.5",
+    "modality": "video",
+    "mode": "default",
+    "resolution": "720p",
+    "price_rub": "21.80",
+    "billing_unit": "second"
+  }
+]

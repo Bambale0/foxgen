@@ -428,7 +428,62 @@ async def _miniapp_seedance25_generate(request: web.Request, body: dict[str, Any
         resolution,
     )
 
-    result = await seedance_25_service.generate_video(
+    from bot.services import neironych_entrypoints as native
+
+    native_payload = {
+        "scenario": scenario,
+        "duration": duration,
+        "ratio": ratio,
+        "resolution": resolution,
+        "first_frame": first_frame,
+        "last_frame": last_frame,
+        "image_urls": image_urls,
+        "video_urls": video_urls,
+        "audio_urls": audio_urls,
+        "return_last_frame": return_last_frame,
+        "generate_audio": generate_audio,
+        "output_format": output_format,
+        "web_search": web_search,
+        "nsfw_checker": nsfw_checker,
+    }
+    native_options = native.seedance25_native_options(native_payload)
+    native_result = None
+    if native_options is not None:
+        native_result = await native.video(
+            user=user,
+            telegram_id=telegram_id,
+            product=MODEL_KEY,
+            prompt=prompt,
+            cost=quote,
+            options=native_options,
+            metadata={
+                "source": "miniapp",
+                "preview": "seedance_2_5_admin",
+                "v_model": MODEL_KEY,
+                "v_type": (
+                    "text"
+                    if scenario == "text"
+                    else "imgtxt"
+                    if scenario in {"first_frame", "first_last"}
+                    else "video"
+                ),
+                "seedance25_scenario": scenario,
+                "first_frame_url": first_frame,
+                "last_frame_url": last_frame,
+                "reference_images": image_urls,
+                "v_reference_videos": video_urls,
+                "reference_audios": audio_urls,
+                "resolution": resolution,
+                "generate_audio": generate_audio,
+                "return_last_frame": return_last_frame,
+                "output_format": output_format,
+                "admin_price_quote": quote,
+                "admin_free": True,
+            },
+        )
+
+    native_persisted = native_result is not None
+    result = native_result or await seedance_25_service.generate_video(
         prompt=prompt,
         duration=duration,
         aspect_ratio=ratio,
@@ -450,40 +505,41 @@ async def _miniapp_seedance25_generate(request: web.Request, body: dict[str, Any
         return web.json_response({"ok": False, "error": str(error)}, status=502)
 
     task_id = str(result["task_id"])
-    await generation_module.add_generation_task(
-        user.id,
-        telegram_id,
-        task_id,
-        "video",
-        "no_preset_video",
-        model=MODEL_KEY,
-        duration=duration,
-        aspect_ratio=ratio,
-        prompt=prompt,
-        cost=quote,
-        request_data={
-            "source": "miniapp",
-            "preview": "seedance_2_5_admin",
-            "v_model": MODEL_KEY,
-            "v_type": "text" if scenario == "text" else "imgtxt" if scenario in {"first_frame", "first_last"} else "video",
-            "seedance25_scenario": scenario,
-            "first_frame_url": first_frame,
-            "last_frame_url": last_frame,
-            "reference_images": image_urls,
-            "v_reference_videos": video_urls,
-            "reference_audios": audio_urls,
-            "resolution": resolution,
-            "generate_audio": generate_audio,
-            "return_last_frame": return_last_frame,
-            "output_format": output_format,
-            "web_search": web_search,
-            "nsfw_checker": nsfw_checker,
-            "admin_price_quote": quote,
-            "admin_free": True,
-            "provider_model": seedance_25_service.MODEL_NAME,
-            "callback_url": get_seedance25_callback_url(),
-        },
-    )
+    if not native_persisted:
+        await generation_module.add_generation_task(
+            user.id,
+            telegram_id,
+            task_id,
+            "video",
+            "no_preset_video",
+            model=MODEL_KEY,
+            duration=duration,
+            aspect_ratio=ratio,
+            prompt=prompt,
+            cost=quote,
+            request_data={
+                "source": "miniapp",
+                "preview": "seedance_2_5_admin",
+                "v_model": MODEL_KEY,
+                "v_type": "text" if scenario == "text" else "imgtxt" if scenario in {"first_frame", "first_last"} else "video",
+                "seedance25_scenario": scenario,
+                "first_frame_url": first_frame,
+                "last_frame_url": last_frame,
+                "reference_images": image_urls,
+                "v_reference_videos": video_urls,
+                "reference_audios": audio_urls,
+                "resolution": resolution,
+                "generate_audio": generate_audio,
+                "return_last_frame": return_last_frame,
+                "output_format": output_format,
+                "web_search": web_search,
+                "nsfw_checker": nsfw_checker,
+                "admin_price_quote": quote,
+                "admin_free": True,
+                "provider_model": seedance_25_service.MODEL_NAME,
+                "callback_url": get_seedance25_callback_url(),
+            },
+        )
 
     return web.json_response(
         {
@@ -820,7 +876,7 @@ async def _seedance25_reconcile_loop(app: web.Application) -> None:
                     """
                     SELECT task_id
                     FROM generation_tasks
-                    WHERE model = ? AND status = 'pending'
+                    WHERE model = ? AND status = 'pending' AND task_id NOT LIKE 'nr_%'
                     ORDER BY created_at ASC
                     LIMIT 25
                     """,

@@ -1,0 +1,20 @@
+{
+  "checked_at": "2026-10-02T16:33:43.342205+00:00",
+  "sources": {
+    "guide": {
+      "url": "https://api.xn--e1aikcel5c5a.online/guide?lang=ru",
+      "sha256": "49ad6c449facad9b2d96de9101027673dcc04554272bc6609be203c91fc50a34",
+      "bytes": 85923
+    },
+    "models": {
+      "url": "https://api.xn--e1aikcel5c5a.online/v1/models",
+      "sha256": "8673be9025615787357a1608082cb5e6a8ec11e363351b3fb3949df8698f34c7",
+      "bytes": 605
+    },
+    "pricing": {
+      "url": "https://api.xn--e1aikcel5c5a.online/api/v1/catalog/pricing",
+      "sha256": "ae63b5b8708bfeac1452c1bc69f9f2df4c1b44cfc9b57cd472b83d6b6b7f4a1a",
+      "bytes": 5082
+    }
+  }
+}

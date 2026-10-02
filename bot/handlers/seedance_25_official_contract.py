@@ -44,7 +44,7 @@ def official_defaults() -> dict[str, Any]:
         "v_model": MODEL_KEY,
         "v_type": "text",
         "v_duration": 5,
-        "v_ratio": "adaptive",
+        "v_ratio": "16:9",
         "v_image_url": None,
         "reference_images": [],
         "v_reference_videos": [],

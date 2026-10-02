@@ -1,0 +1,50 @@
+{
+  "object": "list",
+  "data": [
+    {
+      "id": "glm-5.3-flash",
+      "object": "model",
+      "owned_by": "neironych"
+    },
+    {
+      "id": "gpt-5.6-luna",
+      "object": "model",
+      "owned_by": "neironych"
+    },
+    {
+      "id": "gpt-image-2.5-sunburst",
+      "object": "model",
+      "owned_by": "neironych"
+    },
+    {
+      "id": "grok-4.5",
+      "object": "model",
+      "owned_by": "neironych"
+    },
+    {
+      "id": "grok-imagine-video-1.5",
+      "object": "model",
+      "owned_by": "neironych"
+    },
+    {
+      "id": "nano-banana-2",
+      "object": "model",
+      "owned_by": "neironych"
+    },
+    {
+      "id": "nano-banana-pro",
+      "object": "model",
+      "owned_by": "neironych"
+    },
+    {
+      "id": "seedance-2.0",
+      "object": "model",
+      "owned_by": "neironych"
+    },
+    {
+      "id": "seedance-2.5",
+      "object": "model",
+      "owned_by": "neironych"
+    }
+  ]
+}

@@ -286,7 +286,12 @@ def get_video_type_label(v_type: str) -> str:
 
 
 def get_image_model_label(model: str) -> str:
-    return IMAGE_MODEL_LABELS.get(model, model)
+    label = IMAGE_MODEL_LABELS.get(model, model)
+    if model == "flux_pro":
+        from bot.services import neironych_routing
+
+        return neironych_routing.media_label(model, label)
+    return label
 
 
 def _video_pricing_quality(
@@ -710,7 +715,12 @@ def get_image_model_selection_keyboard(current_service: str = "banana_pro"):
         ("seedream_edit", "model_seedream_edit", "🖌 Seedream 4.5", preset_manager.get_generation_cost("seedream_edit")),
         ("grok_imagine_i2i", "model_grok_i2i", "🧠 Grok Imagine", preset_manager.get_generation_cost("grok_imagine_i2i")),
         ("wan_27", "model_wan_27", "🧪 Wan 2.7 Pro", preset_manager.get_generation_cost("wan_27")),
-        ("flux_pro", "model_flux_pro", "🧩 GPT Image 2", preset_manager.get_generation_cost("flux_pro")),
+        (
+            "flux_pro",
+            "model_flux_pro",
+            "🧩 " + get_image_model_label("flux_pro"),
+            preset_manager.get_generation_cost("flux_pro"),
+        ),
     ]
     for model_row in model_rows:
         model_key, callback_data, label, cost = model_row[:4]
@@ -1018,7 +1028,12 @@ def get_settings_keyboard(current_model: str = "flash", current_video_model: str
 
 def get_settings_keyboard_with_ai(current_model: str = "flash", current_video_model: str = "v3_std", current_i2v_model: str = "v3_std", image_service: str = "nanobanana", referral_purchase_notifications_enabled: bool = True):
     builder = InlineKeyboardBuilder()
-    image_services = [("nanobanana", "🍌 Nano Banana"), ("flux_pro", "💎 GPT Image 2"), ("seedream", "🖌 Seedream"), ("z_image_turbo", "⚡ Z-Image")]
+    image_services = [
+        ("nanobanana", "🍌 Nano Banana"),
+        ("flux_pro", "💎 " + get_image_model_label("flux_pro")),
+        ("seedream", "🖌 Seedream"),
+        ("z_image_turbo", "⚡ Z-Image"),
+    ]
     for service, label in image_services:
         check = "✅ " if image_service == service else ""
         builder.button(text=f"{check}{label}", callback_data=f"settings_service_{service}")

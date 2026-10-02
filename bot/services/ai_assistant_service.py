@@ -4,11 +4,14 @@ import base64
 import json
 import logging
 import os
+import uuid
 from typing import Any, Optional
 
 import aiohttp
 
 from bot.config import config
+from happyfox_neironych import ProviderError, text_request
+from bot.services import neironych_routing
 
 logger = logging.getLogger(__name__)
 
@@ -119,10 +122,6 @@ class AIAssistantService:
         context: dict = None,
     ) -> Optional[str]:
         """Получить ответ от AI-ассистента."""
-        if not config.KIE_AI_API_KEY:
-            logger.error("Kie.ai API key not configured for AI Assistant")
-            return None
-
         user_message = str(user_message or "").strip()
         if not user_message:
             logger.warning("AI Assistant text request is empty")
@@ -141,6 +140,52 @@ class AIAssistantService:
 {pricing_info}
 
 Вопрос пользователя: {user_message}"""
+
+        try:
+            native_model = await neironych_routing.text_model(
+                str(context.get("neironych_text_model") or "").strip() or None
+            )
+        except Exception as exc:
+            logger.warning(
+                "neironych_assistant_route_unavailable error_type=%s",
+                type(exc).__name__,
+            )
+            native_model = None
+
+        if native_model:
+            request_key = str(context.get("provider_request_key") or "").strip()
+            if not request_key:
+                request_key = f"assistant-{uuid.uuid4().hex}"
+            try:
+                request = text_request(
+                    native_model,
+                    full_message,
+                    key=request_key,
+                    instructions=system_prompt,
+                    max_output_tokens=4096,
+                )
+                outcome = await neironych_routing.client.submit(request)
+                logger.info(
+                    "neironych_assistant_completed model=%s correlation=%s",
+                    native_model,
+                    request_key[-24:],
+                )
+                return outcome.text
+            except ProviderError as exc:
+                logger.warning(
+                    "neironych_assistant_failed model=%s code=%s uncertain=%s request_id=%s",
+                    native_model,
+                    exc.code,
+                    exc.uncertain,
+                    exc.request_id,
+                )
+                # Once the native paid POST started, never silently create a
+                # second provider request through KIE.
+                return None
+
+        if not config.KIE_AI_API_KEY:
+            logger.error("Kie.ai API key not configured for AI Assistant")
+            return None
 
         try:
             session = await self._get_session()

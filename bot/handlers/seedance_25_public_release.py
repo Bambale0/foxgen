@@ -277,6 +277,36 @@ async def _launch_provider(payload: dict[str, Any]) -> dict[str, Any]:
     )
 
 
+async def _launch_native(
+    *,
+    user: Any,
+    telegram_id: int,
+    payload: dict[str, Any],
+    quote: float,
+    is_admin: bool,
+    source: str,
+) -> dict[str, Any] | None:
+    from bot.services import neironych_entrypoints as native
+
+    options = native.seedance25_native_options(payload)
+    if options is None:
+        return None
+    return await native.video(
+        user=user,
+        telegram_id=telegram_id,
+        product=MODEL_KEY,
+        prompt=payload["prompt"],
+        cost=quote,
+        options=options,
+        metadata=_request_data(
+            payload,
+            is_admin=is_admin,
+            quote=quote,
+            source=source,
+        ),
+    )
+
+
 def _request_data(payload: dict[str, Any], *, is_admin: bool, quote: float, source: str) -> dict[str, Any]:
     return {
         "source": source,
@@ -325,9 +355,10 @@ async def _public_message_launch(message: types.Message, state: FSMContext, prom
         return
 
     charged = False
+    native_persisted = False
     processing = await message.answer(
         "🆕 <b>Seedance 2.5 · NEW</b>\n"
-        f"Цена: <code>{quote:g}</code>🍌 · отправляю задачу в Kie.ai…",
+        f"Цена: <code>{quote:g}</code>🍌 · отправляю задачу провайдеру…",
         parse_mode="HTML",
     )
     try:
@@ -335,7 +366,17 @@ async def _public_message_launch(message: types.Message, state: FSMContext, prom
             await generation_module.deduct_credits(message.from_user.id, quote)
             charged = True
 
-        result = await _launch_provider(payload)
+        user = await generation_module.get_or_create_user(message.from_user.id)
+        native_result = await _launch_native(
+            user=user,
+            telegram_id=message.from_user.id,
+            payload=payload,
+            quote=quote,
+            is_admin=is_admin,
+            source="telegram",
+        )
+        native_persisted = native_result is not None
+        result = native_result or await _launch_provider(payload)
         if not result or not result.get("task_id"):
             if charged:
                 await generation_module.add_credits(message.from_user.id, quote)
@@ -349,21 +390,21 @@ async def _public_message_launch(message: types.Message, state: FSMContext, prom
             )
             return
 
-        user = await generation_module.get_or_create_user(message.from_user.id)
         task_id = str(result["task_id"])
-        await generation_module.add_generation_task(
-            user.id,
-            message.from_user.id,
-            task_id,
-            "video",
-            "no_preset_video",
-            model=MODEL_KEY,
-            duration=payload["duration"],
-            aspect_ratio=payload["ratio"],
-            prompt=payload["prompt"],
-            cost=quote,
-            request_data=_request_data(payload, is_admin=is_admin, quote=quote, source="telegram"),
-        )
+        if not native_persisted:
+            await generation_module.add_generation_task(
+                user.id,
+                message.from_user.id,
+                task_id,
+                "video",
+                "no_preset_video",
+                model=MODEL_KEY,
+                duration=payload["duration"],
+                aspect_ratio=payload["ratio"],
+                prompt=payload["prompt"],
+                cost=quote,
+                request_data=_request_data(payload, is_admin=is_admin, quote=quote, source="telegram"),
+            )
         await processing.delete()
         billing = "администратору бесплатно" if is_admin else f"списано {quote:g}🍌"
         await message.answer(
@@ -377,7 +418,7 @@ async def _public_message_launch(message: types.Message, state: FSMContext, prom
         )
     except Exception as exc:
         logger.exception("Public Seedance 2.5 Telegram launch failed")
-        if charged:
+        if charged and not native_persisted:
             try:
                 await generation_module.add_credits(message.from_user.id, quote)
             except Exception:
@@ -461,12 +502,22 @@ async def _public_miniapp_generate(request: web.Request, body: dict[str, Any]) -
         )
 
     charged = False
+    native_persisted = False
     try:
         if not is_admin:
             await miniapp_module.deduct_credits(telegram_id, quote)
             charged = True
 
-        result = await _launch_provider(payload)
+        native_result = await _launch_native(
+            user=user,
+            telegram_id=telegram_id,
+            payload=payload,
+            quote=quote,
+            is_admin=is_admin,
+            source="miniapp",
+        )
+        native_persisted = native_result is not None
+        result = native_result or await _launch_provider(payload)
         if not result or not result.get("task_id"):
             if charged:
                 await miniapp_module.add_credits(telegram_id, quote)
@@ -478,19 +529,20 @@ async def _public_miniapp_generate(request: web.Request, body: dict[str, Any]) -
             )
 
         task_id = str(result["task_id"])
-        await generation_module.add_generation_task(
-            user.id,
-            telegram_id,
-            task_id,
-            "video",
-            "no_preset_video",
-            model=MODEL_KEY,
-            duration=payload["duration"],
-            aspect_ratio=payload["ratio"],
-            prompt=payload["prompt"],
-            cost=quote,
-            request_data=_request_data(payload, is_admin=is_admin, quote=quote, source="miniapp"),
-        )
+        if not native_persisted:
+            await generation_module.add_generation_task(
+                user.id,
+                telegram_id,
+                task_id,
+                "video",
+                "no_preset_video",
+                model=MODEL_KEY,
+                duration=payload["duration"],
+                aspect_ratio=payload["ratio"],
+                prompt=payload["prompt"],
+                cost=quote,
+                request_data=_request_data(payload, is_admin=is_admin, quote=quote, source="miniapp"),
+            )
         fresh_user = await miniapp_module.get_or_create_user(telegram_id)
         return web.json_response(
             {
@@ -509,7 +561,7 @@ async def _public_miniapp_generate(request: web.Request, body: dict[str, Any]) -
         )
     except Exception as exc:
         logger.exception("Public Seedance 2.5 Mini App launch failed")
-        if charged:
+        if charged and not native_persisted:
             try:
                 await miniapp_module.add_credits(telegram_id, quote)
             except Exception:

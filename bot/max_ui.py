@@ -134,6 +134,13 @@ def image_model_menu(
     buttons: list[dict[str, Any]] = []
     for model, cost in catalog.image_models().items():
         label = IMAGE_LABELS.get(model, model)
+        if model == "flux_pro":
+            from bot.services import neironych_routing
+
+            label = "🧩 " + neironych_routing.media_label(
+                model,
+                label.removeprefix("🧩 "),
+            )
         buttons.append(
             callback_button(
                 f"{label} • {_format_amount(cost)}🍌",

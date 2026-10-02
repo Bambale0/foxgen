@@ -2020,6 +2020,9 @@ async def _answer_ai_assistant_message(
         return
 
     context = await _build_ai_assistant_context(user_id, ai_mode)
+    context["provider_request_key"] = (
+        f"telegram-assistant-{message.chat.id}-{message.message_id}"
+    )
 
     try:
         if audio_bytes:
