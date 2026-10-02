@@ -111,3 +111,5 @@ outputs/runtime/
 claw/
 claw-tools/
 /root/claw-tools
+# Safe-edit backups
+*.bak.*
